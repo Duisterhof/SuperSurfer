@@ -1,3 +1,9 @@
+# SuperSurfer 0.1.21 validation — October 7, 2026
+
+All 338 Python tests, 20 Node/SSH checks without skips, 16 Chromium browser suites and two native Linux Electron suites pass. All five agent skills were independently reviewed and revised. New regression coverage verifies cache bypass on open, latest-point tail inclusion, sparse validation samples, missing/failed reads without invented measurements, preserved data timestamps, host and report scoping, authenticated endpoint access, iframe message isolation, navigation races, preserved plot controls and stale document revisions. E15’s actual W&B histories were fetched read-only and rendered with its existing phase/smoothing controls. No research jobs are launched by these checks. Native macOS execution is not tested on this Linux host; Mac packages remain unsigned.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.20 validation — October 7, 2026
 
 All 332 Python tests, 20 Node/SSH checks without skips, 15 Chromium browser suites and two native Linux Electron suites pass. All five role skills were independently reviewed and revised. New coverage exercises signed-out and expired accounts, no inference or message acceptance before authentication, device-code expiry/retry and completion, reconnect without a repeated login, isolated host identities, account-check outages, preserved composer drafts and the Dock-menu callback creating independent windows.

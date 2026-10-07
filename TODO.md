@@ -1,3 +1,9 @@
+## Completed in 0.1.21
+
+- Fetch current W&B curves whenever Results opens, including immediate reopen.
+- Give custom HTML reports a scoped live-data bridge with sparse validation, recent history, stale-data handling and conflict protection.
+- Convert E15’s existing E14/E15 comparison to live sources while preserving controls, measured validation and protocol.
+
 ## Completed in 0.1.20
 
 - Add New Window to the macOS Dock context menu.

@@ -1,3 +1,11 @@
+## 0.1.21 live Results data
+
+`publish_result` accepts `wandb_sources`: up to six named individual W&B runs with explicit history keys and optional sparse metric/x-axis pairs. `SuperSurferResults.subscribe` receives loading, source data and failures; `SuperSurferResults.refresh()` requests another read. Sources are preserved on updates that omit them; an existing live report cannot be replaced with snapshot-only HTML unless its sources are explicitly removed. Optional `expected_sha256` rejects concurrent HTML changes. Static non-training artifacts can remain labeled snapshots.
+
+The authenticated parent requests `/api/result-data` only for the active report and its current revision. The opaque iframe gets declared rows and provenance through a source-checked message channel, never the bearer token or arbitrary API access. The server validates experiment/report ownership and W&B destination URLs. Old responses cannot overwrite a newly opened report. Data failures retain the last successful curves and original measurement/fetch times, with errors marked stale; a first failure stays missing. Raw history remains bounded/sampled, adds a recent tail so sampling does not omit the newest step, and requests sparse validation separately. Summary values only locate recent history and are never plotted as reconstructed curves.
+
+Opening the built-in W&B view forces a server refresh even inside the old 60-second cache window. Ordinary background UI polling may use the cache; opening Results does not launch a worker, authorize a run or alter an existing monitoring task. HTML plots retain their interactive state during data refresh and reload normally when reopened.
+
 ## 0.1.20 workspace authentication
 
 SSH/workspace access is separate from model authentication. The UI gates agent access until `account/read` confirms a ChatGPT account on that workspace host. No account, API-key-only authentication, or a failed account check leaves the sign-in gate in place. Device-code completion is verified by another account read; an expired code can be retried. Login codes are not persisted. Window partitions and per-host credentials remain separate. An authenticated reconnect skips onboarding, and a read-only service remains viewable.
@@ -223,7 +231,7 @@ Runner `started` and `finished` timestamps become durable `run.timing` events; c
 
 New `prepare_run`/`queue_run` tool drafts require `job_type: training|evaluation|data|other`. Training additionally requires `training_metrics {mfu_metric,mfu_unit,mfu_method,source_path}` with explicit fraction/percent units and a repository-relative source path. The server persists this declaration in the run configuration and W&B parameters. Older client submissions may omit the classification and remain unspecified. Validation of the declaration cannot prove an arbitrary training program logs correctly: the worker must implement the reviewed logger and check the individual run after launch. No historical measurement is manufactured.
 
-The Results skill is supplied to every owned role and linked from role guidance. Reports lead with comparable measured train/held-out curves across methods, followed by requested domain evidence and concise provenance. HTML publishing remains a saved page rather than an automatic live W&B subscription; authors identify refresh behavior and coordinate concurrent HTML edits.
+The Results skill is supplied to every owned role and linked from role guidance. Reports lead with comparable measured train/held-out curves across methods, followed by requested domain evidence and concise provenance. HTML layout remains saved; declared W&B sources refresh on opening through the read-only Results bridge; authors identify refresh behavior and coordinate concurrent HTML edits.
 
 ## Proposed next GPU scheduling iteration (not implemented)
 
