@@ -2,6 +2,20 @@
 
 Ongoing list of requested improvements. Unchecked items are planned, not implemented.
 
+## Completed in 0.1.17
+
+- [x] Let the manager add GPUs to existing registrations and register new hosts without a project.
+
+- [x] Fill the main pane with HTML Results and eliminate the outer scrollbar.
+- [x] Add a visible New workspace window action with isolated native sessions.
+- [x] Derive experiment progress from active work and explicit planning, preserving individual run outcomes.
+- [x] Initialize the bundled workspace manager automatically on a new connection, preserving live managers.
+- [x] Give direct user requests priority over unsolicited peer updates and retain requested replies.
+- [x] Route project research guidance to leads/workers and limit manager escalation to shared resources or explicit tasks.
+- [x] Deduplicate concurrent Stop requests and prevent stale cancellation of later turns.
+- [x] Permit explicit handoffs to an additional idle agent in a busy experiment.
+- [x] Review all five role/capability skills for the updated workflows.
+
 ## Completed in 0.1.16
 
 - [x] Show compact machine rows above Runs, with free/total counts and labeled bars for every registered GPU; preserve unknown readings and expand for utilization.

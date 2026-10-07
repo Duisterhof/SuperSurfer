@@ -563,6 +563,8 @@ class CodexBridge:
             chat["agent"].update(name=context.get("name", chat["agent"]["name"]), role=context.get("role", chat["agent"]["role"]))
             chat["agent"].update(approval_mode=approval_mode, runtime_approval_mode=None, active_sandbox=None)
             user_message = self._message(chat, message_role, display_text if display_text is not None else text.strip())
+            # Preserve direct-user priority through automatic goal continuations.
+            chat["user_priority_since"] = user_message["created"] if message_role == "user" else None
             if agent_sender:
                 user_message["agent_sender"] = agent_sender
             user_message["status"] = "pending"
@@ -702,7 +704,7 @@ class CodexBridge:
             if current and turn.get("status") in ("completed", "failed", "interrupted"):
                 self._event("turn/completed", {"threadId": new_thread_id, "turn": turn})
             elif cancel:
-                self.stop(scope)
+                self.stop(scope, expected_turn_id=turn.get("id"))
         except Exception as exc:
             with self._lock:
                 chat = self._chats[scope]
@@ -717,15 +719,20 @@ class CodexBridge:
             with self._lock:
                 self._workers.discard(threading.current_thread())
 
-    def stop(self, scope):
+    def stop(self, scope, *, expected_turn_id=None):
         self._validate_scope(scope)
         with self._lock:
             chat = self._chats.get(scope)
             if not chat or not chat["busy"]:
                 return {"stopped": False, "scope": scope}
+            if expected_turn_id is not None and chat.get("turn_id") != expected_turn_id:
+                return {"stopped": False, "scope": scope}
             waiting_between_turns = chat.get("status") == "awaiting_input" and not chat.get("turn_id")
             chat.update(cancel_requested=True, status="stopping")
             thread_id, turn_id = chat["thread_id"], chat["turn_id"]
+            interrupt = bool(thread_id and turn_id and chat.get("interrupt_requested_turn") != turn_id)
+            if interrupt:
+                chat["interrupt_requested_turn"] = turn_id
             approvals = [a["id"] for a in chat.get("approvals", []) if a["status"] == "pending"]
             question_replies = []
             for question in chat.get("questions", []):
@@ -747,12 +754,14 @@ class CodexBridge:
                 self._decide_approval(scope, approval_id, "deny", cancel=True)
             except CodexError:
                 pass  # A simultaneous completion/disconnect invalidates it.
-        if thread_id and turn_id:
+        if interrupt:
             try:
                 self._rpc("turn/interrupt", {"threadId": thread_id, "turnId": turn_id})
             except CodexError:
                 with self._lock:
-                    if self._chats[scope]["busy"]:
+                    if self._chats[scope]["busy"] and self._chats[scope].get("turn_id") == turn_id:
+                        self._chats[scope].pop("interrupt_requested_turn", None)
+                        self._save(self._chats[scope])
                         raise
         return {"stopped": True, "scope": scope}
 
@@ -775,6 +784,9 @@ class CodexBridge:
                 raise CodexError("This conversation cannot receive steering right now. Answer any pending question or approval, or wait for its current turn.", status=409)
             turn_id, thread_id, proc = chat["turn_id"], chat["thread_id"], self._proc
             message = self._message(chat, message_role, display_text if display_text is not None else text.strip())
+            previous_priority = chat.get("user_priority_since")
+            if message_role == "user":
+                chat["user_priority_since"] = message["created"]
             if agent_sender:
                 message["agent_sender"] = agent_sender
             message.update(status="steering", turn_id=turn_id, steering=True)
@@ -794,6 +806,8 @@ class CodexBridge:
         except Exception as exc:
             with self._lock:
                 uncertain = proc is not self._proc or "timed out" in str(exc) or "uncertain" in str(exc)
+                if message_role == "user" and not uncertain:
+                    chat["user_priority_since"] = previous_priority
                 message.update(status="uncertain" if uncertain else "failed", error=str(exc))
                 self._activity(chat, "steering", "Steering delivery is uncertain; it was not replayed." if uncertain else "Steering was rejected: " + str(exc), message["id"], message["status"])
                 self._save(chat)

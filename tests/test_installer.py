@@ -34,6 +34,8 @@ class InstallerTests(unittest.TestCase):
             archive.addfile(member, io.BytesIO(data))
         self.token = "test-token-" + "x" * 32
         self.calls = []
+        self.manager_setups = []
+        self.manager_error = None
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -44,6 +46,11 @@ class InstallerTests(unittest.TestCase):
             raise URLError(ConnectionRefusedError(errno.ECONNREFUSED, "No listener yet"))
         return io.BytesIO(json.dumps({"ok": True, "version": "0.1.0", "state_dir": str(self.state.resolve()), "read_only": False}).encode())
 
+    def ensure_manager(self, release, home):
+        self.manager_setups.append((release, home))
+        if self.manager_error:
+            raise self.manager_error
+
     def install(self, urlopen=None, systemd=False, popen=None, run=None):
         output = io.StringIO()
         if popen is None:
@@ -51,7 +58,7 @@ class InstallerTests(unittest.TestCase):
                 (self.state / "token").write_text(self.token)
                 return Mock(poll=lambda: None)
         config = {"remoteRoot": str(self.root), "remotePort": 8765, "amlHome": str(self.home / ".auto-ml")}
-        with patch.object(sys, "argv", ["bootstrap.py", json.dumps(config)]), patch.object(sys, "stdin", Mock(buffer=io.BytesIO(self.bundle.getvalue()))), patch.object(sys, "stdout", output), patch.object(bootstrap.Path, "home", return_value=self.home), patch.object(bootstrap.urllib.request, "urlopen", side_effect=urlopen or self.response), patch.object(bootstrap.shutil, "which", return_value="/usr/bin/systemctl" if systemd else None), patch.object(bootstrap.subprocess, "Popen", side_effect=popen) as spawned, patch.object(bootstrap.subprocess, "run", side_effect=run) as commands:
+        with patch.object(sys, "argv", ["bootstrap.py", json.dumps(config)]), patch.object(sys, "stdin", Mock(buffer=io.BytesIO(self.bundle.getvalue()))), patch.object(sys, "stdout", output), patch.object(bootstrap.Path, "home", return_value=self.home), patch.object(bootstrap.urllib.request, "urlopen", side_effect=urlopen or self.response), patch.object(bootstrap.shutil, "which", return_value="/usr/bin/systemctl" if systemd else None), patch.object(bootstrap.subprocess, "Popen", side_effect=popen) as spawned, patch.object(bootstrap.subprocess, "run", side_effect=run) as commands, patch.object(bootstrap, "ensure_manager", side_effect=self.ensure_manager):
             bootstrap.main()
         return json.loads(output.getvalue()), spawned, commands
 
@@ -77,6 +84,35 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse(commands.called)
         self.assertEqual(len(self.calls), 1)
         self.assertEqual(self.calls[0][0].get_header("Authorization"), "Bearer " + self.token)
+
+    def test_connection_initializes_manager_even_when_sidecar_was_already_running(self):
+        self.state.mkdir(parents=True)
+        (self.state / "token").write_text(self.token)
+        self.install()
+        self.assertEqual(len(self.manager_setups), 1)
+        release, home = self.manager_setups[0]
+        self.assertTrue((release / "server/app.py").is_file())
+        self.assertEqual(home, self.home / ".auto-ml")
+
+    def test_manager_failure_is_reported_before_opening_or_starting_workspace(self):
+        self.manager_error = RuntimeError("Workspace manager setup failed: fixture")
+        spawned = Mock()
+        with self.assertRaisesRegex(RuntimeError, "manager setup failed"):
+            self.install(popen=spawned)
+        spawned.assert_not_called()
+
+    def test_existing_read_only_workspace_does_not_start_a_manager(self):
+        self.state.mkdir(parents=True)
+        (self.state / "token").write_text(self.token)
+        self.install(urlopen=lambda *a, **k: io.BytesIO(json.dumps({"ok": True, "state_dir": str(self.state.resolve()), "read_only": True}).encode()))
+        self.assertEqual(self.manager_setups, [])
+
+    def test_existing_workspace_manager_path_must_match_before_any_setup(self):
+        self.state.mkdir(parents=True)
+        (self.state / "token").write_text(self.token)
+        with self.assertRaisesRegex(RuntimeError, "manager folder"):
+            self.install(urlopen=lambda *a, **k: io.BytesIO(json.dumps({"ok": True, "state_dir": str(self.state.resolve()), "aml_home": "/different/runtime"}).encode()))
+        self.assertEqual(self.manager_setups, [])
 
     def test_occupied_port_and_timeouts_never_spawn_competing_daemon(self):
         failures = [HTTPError("http://127.0.0.1:8765/api/session", 401, "Unauthorized", {}, None), URLError(TimeoutError("timed out"))]

@@ -1,3 +1,19 @@
+# SuperSurfer 0.1.17 validation — October 7, 2026
+
+All 320 Python tests pass in shuffled order (seed 20261007), along with 20 Node desktop/SSH checks, 13 browser suites and both native Linux Electron suites. All five skills received an independent bounded review and pass the capability/version checker.
+
+The fresh-install integration starts the actual bundled manager and app service in an isolated empty home with two simultaneous connections. It verifies one release/manager, connected empty state, survival after bootstrap exits, same PID and paused queue on reconnect, and no Codex process or credentials created. Installer/engine failure tests cover occupied ports, mismatched paths, read-only workspaces, unavailable systemd, missing prerequisites, uncertain ownership and nonreplacement of live managers.
+
+An exposed cancellation race now reserves one interrupt per turn and prevents a delayed cancellation from stopping a later turn. A synchronized regression covers concurrent Stop calls and stale turn IDs.
+
+Coordination regressions verify direct user priority, queued unsolicited inbox entries, delivery of explicitly requested replies, rejection of stale-task replies, one delivery per recipient/pass, priority across automatic continuations, and unchanged stop/archive/no-replay/permission boundaries. Explicit handoffs can start a named idle worker beside a busy conversation while duplicate and default-scope guards remain enforced.
+
+Experiment status regressions reproduce 52 succeeded runs plus 12 historical failures, include archived active workers, and preserve explicit planning and monitoring without inferring research completion from terminal jobs. Results browser checks verify full-pane frame bounds and no outer scroll at 1440×1100, 1440×680 and 850×900, sandbox isolation, widget state preservation, fullscreen chat and restored metrics/document scrolling. The native new-window bridge opens another independent host and rejects untrusted IPC.
+
+Native macOS rendering and Gatekeeper behavior remain untested on this Linux host; Mac packages are unsigned. Tests use isolated fixtures and do not launch or cancel research jobs. The bundled scheduling engine is unchanged. New host-registration tests exercise its actual observed-index check and confirm registration does not change busy-device observations or launch jobs; schema/service tests cover manager-only access, invalid indices, retries and registration without a project.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.16 validation — October 7, 2026
 
 All 297 Python tests, 20 Node desktop/SSH tests (no skips), 13 browser suites and both native Linux Electron suites pass. All five agent skills received an independent bounded capability review and pass the release checker. Research scheduling and the bundled engine are unchanged.

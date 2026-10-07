@@ -152,6 +152,46 @@ class WorkerComputeTests(unittest.TestCase):
         self.service.action('chat.send',{'scope':scope,'text':'Prepare and launch the requested two arms; onboard necessary capacity.'})
         return scope
 
+    def test_manager_adds_existing_gpu_capacity_preserving_registration_and_checks(self):
+        self.service.action('chat.send', {'scope': 'manager', 'text': 'Register all observed Trinity GPUs'})
+        current = self.service.aml.call
+        updates = []
+        def rpc(op, params=None):
+            if op == 'host.update':
+                updates.append(params)
+                host = next(h for h in self.manager.data['hosts'] if h['id'] == params['host'])
+                host['gpus'] = json.dumps(params['gpus'])
+                return host
+            return current(op, params)
+        original_host = dict(self.manager.data['hosts'][0])
+        with patch.object(self.service.aml, 'call', side_effect=rpc):
+            result = self.service.agent_action('manager', 'supersurfer_register_compute_gpus', {'host_id': 'h1', 'gpus': [2, 3]})
+            self.assertEqual(result['registered_gpu_indices'], [0, 1, 2, 3])
+            self.assertEqual(result['added_gpu_indices'], [2, 3])
+            retried = self.service.agent_action('manager', 'supersurfer_register_compute_gpus', {'host_id': 'h1', 'gpus': [3, 2]})
+            self.assertEqual(retried['added_gpu_indices'], [])
+        self.assertEqual(updates, [{'host': 'h1', 'gpus': [0, 1, 2, 3]}] * 2)
+        self.assertEqual({k:v for k,v in self.manager.data['hosts'][0].items() if k != 'gpus'}, {k:v for k,v in original_host.items() if k != 'gpus'})
+        self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))
+        with patch.object(self.service.aml, 'call', side_effect=lambda op, params=None: (_ for _ in ()).throw(ValueError('Cannot grant unobserved GPU indices')) if op == 'host.update' else current(op, params)):
+            with self.assertRaisesRegex(ValueError, 'unobserved'):
+                self.service.agent_action('manager', 'supersurfer_register_compute_gpus', {'host_id': 'h1', 'gpus': [999]})
+        for invalid in ([True], [-1], [2, 2], [], 'all', [1025]):
+            with self.assertRaises(APIError):
+                self.service.agent_action('manager', 'supersurfer_register_compute_gpus', {'host_id': 'h1', 'gpus': invalid})
+        self.service.turn_origins['manager'] = 'schedule'
+        with self.assertRaises(APIError): self.service.agent_action('manager', 'supersurfer_register_compute_gpus', {'host_id': 'h1', 'gpus': [2]})
+        worker = self.active()
+        with self.assertRaises(APIError): self.service.agent_action(worker, 'supersurfer_register_compute_gpus', {'host_id': 'h1', 'gpus': [2]})
+
+    def test_manager_new_host_registration_does_not_require_a_project(self):
+        self.manager.data['projects'] = []
+        self.service.action('chat.send', {'scope': 'manager', 'text': 'Register this new workspace node'})
+        with patch.object(self.service, 'action', return_value={'id': 'new-host'}) as action:
+            result = self.service.agent_compute_action('manager', 'supersurfer_register_compute_host', {'name': 'new-node', 'root': '/scratch', 'python': 'auto', 'target': 'unused-host', 'gpus': [0]})
+        self.assertEqual(result['id'], 'new-host')
+        self.assertEqual(action.call_args.args[0], 'host.add')
+
     def test_worker_gets_compute_tools_with_fixed_project_and_scheduled_mutations_denied(self):
         scope=self.active()
         overview=self.service.agent_action(scope,'supersurfer_inspect_project_compute',{})

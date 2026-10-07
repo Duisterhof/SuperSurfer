@@ -32,7 +32,7 @@ class AgentToolsTests(unittest.TestCase):
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         ]) + "\n"
-        for role, expected in [("lead", ["create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages"]), ("worker", ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages"]), ("manager", ["create_experiment", "queue_run", "create_experiment_agent", "handoff_experiment", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages"]), ("unknown", [])]:
+        for role, expected in [("lead", ["create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages"]), ("worker", ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages"]), ("manager", ["create_experiment", "queue_run", "create_experiment_agent", "handoff_experiment", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "register_compute_gpus", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages"]), ("unknown", [])]:
             with self.subTest(role=role):
                 process = subprocess.run([sys.executable, str(helper)], input=request, text=True, capture_output=True, timeout=5, env={**os.environ, "SUPERSURFER_AGENT_ROLE": role})
                 self.assertEqual(0, process.returncode, process.stderr)
@@ -82,6 +82,19 @@ class AgentToolsTests(unittest.TestCase):
                         result = self.call(name, arguments)
                     self.assertFalse(result["isError"], result)
                     self.assertEqual(arguments, json.loads(opener.open.call_args.args[0].data)["arguments"])
+
+    def test_gpu_registration_tool_is_manager_only_and_new_hosts_need_no_project(self):
+        args = {'host_id': 'h1', 'gpus': [0, 1]}
+        for role in ('manager', 'lead', 'worker'):
+            with patch.dict(os.environ, {'SUPERSURFER_AGENT_ROLE': role}):
+                opener = Mock(); opener.open.return_value = io.BytesIO(b'{"ok":true}')
+                with patch.object(agent_tools, 'build_opener', return_value=opener):
+                    result = self.call('register_compute_gpus', args)
+                self.assertEqual(result['isError'], role != 'manager')
+                self.assertEqual(opener.open.called, role == 'manager')
+        with patch.dict(os.environ, {'SUPERSURFER_AGENT_ROLE': 'manager'}):
+            tool = next(t for t in agent_tools.available_tools() if t['name'] == 'register_compute_host')
+            agent_tools.validate_arguments(tool, {'name': 'first', 'target': 'node', 'root': '/scratch', 'python': 'auto', 'gpus': [0]})
 
     def test_legacy_worker_role_remains_worker_only(self):
         with patch.dict(os.environ):

@@ -20,7 +20,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
   else if(url.pathname==='/api/worker-wakeups')body={rules:[]};
   else if(url.pathname==='/api/results')body={pages:[{id:'result_123',title:'Interactive evidence',preview_url:'/result-preview/fixture123'}]};
   else if(url.pathname==='/api/experiment-page')body={id:'page_123abc',title:'Method details',version:'v1',markdown:'# Architecture\n\nA focused explanation.\n\n<script>window.PWNED=true</script>'};
-  else if(url.pathname==='/result-preview/fixture123')return route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; connect-src https:; style-src 'unsafe-inline'; frame-ancestors 'self'"},body:`<!doctype html><body><h1>Measured evidence</h1><button id="counter">0</button><div id="isolation"></div><script>let n=0;document.querySelector('#counter').onclick=()=>document.querySelector('#counter').textContent=++n;try{parent.document.body.dataset.hacked='yes';document.querySelector('#isolation').textContent='unsafe';}catch{document.querySelector('#isolation').textContent='parent denied';}</script>`});
+  else if(url.pathname==='/result-preview/fixture123')return route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; connect-src https:; style-src 'unsafe-inline'; frame-ancestors 'self'"},body:`<!doctype html><body><h1>Measured evidence</h1><div style="height:1800px">Long result curves</div><button id="counter">0</button><div id="isolation"></div><script>let n=0;document.querySelector('#counter').onclick=()=>document.querySelector('#counter').textContent=++n;try{parent.document.body.dataset.hacked='yes';document.querySelector('#isolation').textContent='unsafe';}catch{document.querySelector('#isolation').textContent='parent denied';}</script>`});
   else if(url.pathname==='/api/action'){
    const call=req.postDataJSON();if(call.op==='chat.rename')name=call.params.name;else if(call.op==='experiment.brief.save'){Object.assign(exp.brief,call.params);exp.brief.version++;}else if(call.op!=='settings.save')throw Error('Unexpected mutation '+call.op);
   }else if(!url.pathname.startsWith('/api/')){const file=path.join(__dirname,'../ui',url.pathname==='/'?'index.html':url.pathname.slice(1));return route.fulfill({contentType:{'.js':'text/javascript','.css':'text/css','.json':'application/json'}[path.extname(file)]||'text/html',body:fs.readFileSync(file)});}
@@ -50,10 +50,30 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.getByRole('button',{name:'Results',exact:true}).click();
  const frame=page.frameLocator('#result-preview');await frame.getByText('parent denied',{exact:true}).waitFor();
  await frame.locator('#counter').click();assert.equal(await frame.locator('#counter').innerText(),'1');
+ exp.status='working';exp.status_detail='An experiment agent is working.';
  await page.getByRole('button',{name:'Refresh connection',exact:true}).click();
+ await page.locator('#main .metadata-line .badge.working').waitFor({state:'attached'});
  assert.equal(await frame.locator('#counter').innerText(),'1');
  assert.equal(await page.evaluate(()=>document.body.dataset.hacked),undefined);
  console.log('PASS interactive HTML executes in isolated frame and retains widget state across refresh');
+ for(const viewport of [{width:1440,height:1100},{width:1440,height:680},{width:850,height:900}]){
+  await page.setViewportSize(viewport);
+  const geometry=await page.evaluate(()=>{const main=document.querySelector('#main'),frame=document.querySelector('#result-preview');return {overflow:main.scrollHeight-main.clientHeight,width:main.clientWidth,frame:frame.getBoundingClientRect().toJSON(),main:main.getBoundingClientRect().toJSON()};});
+  assert.ok(geometry.overflow<=1,JSON.stringify(geometry));
+  assert.ok(geometry.frame.height>viewport.height-240,JSON.stringify(geometry));
+  assert.ok(Math.abs(geometry.frame.width-geometry.width)<=2,JSON.stringify(geometry));
+  assert.ok(Math.abs(geometry.frame.bottom-geometry.main.bottom)<=2,JSON.stringify(geometry));
+ }
+ await page.setViewportSize({width:1440,height:900});
+ await frame.getByRole('heading',{name:'Measured evidence',exact:true}).scrollIntoViewIfNeeded();
+ await page.screenshot({path:path.join(__dirname,'../../../work/ui017-full-pane-results.png')});
+ await page.getByRole('button',{name:'Maximize agent chat',exact:true}).click();
+ assert.equal(await page.locator('#main').isVisible(),false);
+ await page.getByRole('button',{name:'Restore agent panel',exact:true}).click();
+ assert.equal(await page.locator('#result-preview').isVisible(),true);
+ await page.getByRole('button',{name:'W&B metrics',exact:true}).click();
+ assert.equal(await page.locator('#main').evaluate(el=>el.classList.contains('results-full-page')),false);
+ console.log('PASS full-pane Results has one scrolling area at wide, short and narrow sizes; fullscreen chat and metrics remain usable');
  await page.getByRole('button',{name:'Overview',exact:true}).click();
  await page.getByRole('button',{name:'Edit brief',exact:true}).click();
  await page.getByLabel('Next steps',{exact:true}).fill('Analyze the final score.');

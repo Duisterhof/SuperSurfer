@@ -98,6 +98,19 @@ class ConversationTests(unittest.TestCase):
         self.assertFalse(any(op in {'agent.resume', 'agent.send'} for op, _ in self.manager.calls))
         self.assertTrue(any(row['scope'] == native for row in self.service.experiment_agents(self.exp['id'])['agents']))
 
+    def test_explicit_parallel_handoff_checks_only_named_owned_worker(self):
+        busy = 'experiment:' + self.exp['id']
+        self.service.action('chat.send', {'scope': busy, 'text': 'Continue original work'})
+        self.service.action('chat.send', {'scope': 'project:p1', 'text': 'Start a separate agent for parallel code review'})
+        scope = self.new_agent()['scope']
+        result = self.service.agent_action('project:p1', 'supersurfer_handoff_experiment', {'experiment_id': self.exp['id'], 'agent_scope': scope, 'task': 'Prepare isolated code review'})
+        self.assertEqual(scope, result['scope'])
+        self.assertIn(busy, self.service.codex.busy)
+        self.assertIn(scope, self.service.codex.busy)
+        with self.assertRaisesRegex(APIError, 'already working'):
+            self.service.start_experiment_work(self.exp['id'], 'Duplicate', draft_only=False, agent_scope=scope)
+        self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))
+
     def test_reviews_use_selected_owned_scope_and_keep_active_scope_when_selection_changes(self):
         first, second = self.new_agent()['scope'], self.new_agent()['scope']
         self.service.action('chat.settings', {'scope': second, 'model': 'model-b', 'approval_mode': 'yolo'})

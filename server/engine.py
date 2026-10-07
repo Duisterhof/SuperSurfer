@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -299,14 +300,66 @@ def upgrade_engine(engine_dir, aml_home, python=None, timeout=30):
             raise EngineError(f"Engine upgrade failed: {exc}." + suffix) from exc
 
 
+def ensure_engine(engine_dir, aml_home, timeout=25):
+    """Connection-time initialization. Reuse a live manager; never upgrade it."""
+    engine_dir = Path(engine_dir).expanduser().resolve()
+    home = Path(aml_home).expanduser().resolve()
+    home.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with (home / "engine-upgrade.lock").open("a+") as lock:
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise EngineError("Another connection is initializing this workspace; retry shortly")
+                time.sleep(.1)
+        try:
+            info = rpc(home, "ping")
+        except ManagerAbsent:
+            info = None
+        if info:
+            if type(info.get("pid")) is not int or info["pid"] <= 1 or Path(info.get("home", "")).resolve() != home:
+                raise EngineError("The manager did not identify the requested workspace; no replacement was started")
+            return {"status": "existing", "pid": info["pid"], "home": str(home)}
+        _assert_unowned(home)
+        # Sidecar Python can be 3.10 while the bundled manager needs 3.11+.
+        # Prefer a compatible installed interpreter, without touching training envs.
+        candidates = [sys.executable] + [shutil.which("python3." + str(v)) for v in range(14, 10, -1)]
+        candidates += [str(Path.home() / folder / "bin/python") for folder in ("miniforge3", "miniconda3", "anaconda3")]
+        identity = None
+        for candidate in dict.fromkeys(candidate for candidate in candidates if candidate):
+            executable = str(Path(candidate).absolute())
+            if not Path(executable).is_file() or not os.access(executable, os.X_OK):
+                continue
+            proposed = {"python": executable, "argv": [executable, "-m", "aml", "--home", str(home), "daemon", "serve"],
+                        "cwd": str(engine_dir), "environment": {}}
+            try:
+                _validate_engine(engine_dir, proposed)
+            except (EngineError, OSError, subprocess.SubprocessError):
+                continue
+            identity = proposed
+            break
+        if identity is None:
+            raise EngineError("The bundled workspace manager needs an installed Python 3.11+ interpreter. "
+                              "Install Python 3.11 or newer on this workspace computer and reconnect. "
+                              "AutoML is already bundled; no separate AML installation is needed.")
+        backup = backup_database(home)
+        info = _launch(home, identity, engine_dir, timeout, REQUIRED_CAPABILITIES)
+        return {"status": "started", "pid": info["pid"], "home": str(home), "backup": backup}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine-dir", required=True)
     parser.add_argument("--aml-home", required=True)
     parser.add_argument("--python")
+    parser.add_argument("--ensure", action="store_true", help="Start only if absent; never replace a running manager")
     args = parser.parse_args()
     try:
-        print(json.dumps(upgrade_engine(args.engine_dir, args.aml_home, args.python)))
+        print(json.dumps(ensure_engine(args.engine_dir, args.aml_home) if args.ensure else
+                         upgrade_engine(args.engine_dir, args.aml_home, args.python)))
     except EngineError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1)

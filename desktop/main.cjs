@@ -148,6 +148,7 @@ else {
   app.on('second-instance', () => { const context=focused();if (context) focus(context);else if (store) store.restore().forEach(makeWindow); });
   app.whenReady().then(() => {
     store=new WindowStore(app.getPath('userData'));nativeTheme.themeSource=themeSource(loadTheme());
+    ipcMain.handle('window:new',event => { ownWindow(event);makeWindow();return {opened:true}; });
     ipcMain.handle('configuration',event => ownWindow(event,true).record.config || {});
     ipcMain.handle('hosts:list',event => { ownWindow(event,true);return knownHosts(); });
     ipcMain.handle('connection:ready',event => {

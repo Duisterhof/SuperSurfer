@@ -65,6 +65,48 @@ class AgentMessageTests(unittest.TestCase):
         self.assertEqual(2, len(self.service.codex.sent))
         self.assertEqual('delivered', self.service.messages.get(message['id'])['status'])
 
+    def test_user_task_defers_unsolicited_mail_but_accepts_current_requested_reply(self):
+        worker = self.start(); self.start('manager')
+        original = self.service.codex.chat
+        current = {'busy': True, 'steerable': True, 'user_priority_since': 1.0}
+        with patch.object(self.service.codex, 'chat', side_effect=lambda scope: {**original(scope), **(current if scope == 'manager' else {})}), patch.object(self.service.codex, 'steer', return_value={'accepted': True}) as steer:
+            unrelated = self.send(worker)
+            self.service.messages.drain()
+            steer.assert_not_called()
+            self.assertEqual('queued', self.service.messages.get(unrelated['id'])['status'])
+            self.assertIn(unrelated['id'], [m['id'] for m in self.service.messages.list('manager', {})['messages']])
+            question = self.send('manager', worker, 'requested-evidence-0001')
+            reply = self.send(worker, 'manager', 'requested-evidence-reply-0001', reply_to=question['id'])
+            self.service.messages.drain(); self.service.messages.drain()
+            steer.assert_called_once()
+            self.assertEqual('delivered', self.service.messages.get(reply['id'])['status'])
+            self.assertEqual('queued', self.service.messages.get(unrelated['id'])['status'])
+            current.update(busy=False, steerable=False)
+            self.service.codex.busy.remove('manager')
+            self.service.messages.drain()
+            self.assertEqual('delivered', self.service.messages.get(unrelated['id'])['status'])
+
+    def test_new_user_direction_defers_replies_to_previous_task(self):
+        worker = self.start(); self.start('manager')
+        question = self.send('manager', worker, 'previous-task-question-0001')
+        reply = self.send(worker, 'manager', 'previous-task-reply-0001', reply_to=question['id'])
+        original = self.service.codex.chat
+        with patch.object(self.service.codex, 'chat', side_effect=lambda scope: {**original(scope), **({'steerable': True, 'user_priority_since': question['created_at'] + 1} if scope == 'manager' else {})}), patch.object(self.service.codex, 'steer') as steer:
+            self.service.messages.drain()
+            self.assertEqual('queued', self.service.messages.get(reply['id'])['status'])
+            steer.assert_not_called()
+
+    def test_one_coordination_delivery_per_target_per_pass(self):
+        worker = self.start(); self.start('manager')
+        first = self.send(worker)
+        second = self.send(worker, request_id='second-inbox-message-0001')
+        original = self.service.codex.chat
+        with patch.object(self.service.codex, 'chat', side_effect=lambda scope: {**original(scope), 'steerable': True, 'user_priority_since': None}), patch.object(self.service.codex, 'steer', return_value={'accepted': True}) as steer:
+            self.service.messages.drain()
+            steer.assert_called_once()
+            self.assertEqual('delivered', self.service.messages.get(first['id'])['status'])
+            self.assertEqual('queued', self.service.messages.get(second['id'])['status'])
+
     def test_message_request_id_survives_restart_and_rejects_changed_intent(self):
         worker = self.start()
         message = self.send(worker)
@@ -222,6 +264,25 @@ class PeerBridgeTests(unittest.TestCase):
     requests = bridge_fixtures.CodexBridgeTests.requests
     wait_for = bridge_fixtures.CodexBridgeTests.wait_for
     finished = bridge_fixtures.CodexBridgeTests.finished
+
+    def test_direct_user_priority_survives_followup_and_resets_for_peer_turn(self):
+        self.bridge.send('manager', 'hold')
+        self.wait_for(lambda: self.bridge.chat('manager').get('steerable'))
+        first = self.bridge.chat('manager')['user_priority_since']
+        self.assertIsInstance(first, float)
+        self.bridge.steer('manager', 'New direct priority')
+        later = self.bridge.chat('manager')['user_priority_since']
+        self.assertGreater(later, first)
+        self.bridge.stop('manager'); self.finished('manager')
+        with self.bridge._lock:
+            self.bridge._followup(self.bridge._chats['manager'], 'hold')
+        self.wait_for(lambda: self.bridge.chat('manager').get('steerable'))
+        self.assertEqual(later, self.bridge.chat('manager')['user_priority_since'])
+        self.bridge.stop('manager'); self.finished('manager')
+        self.bridge.send('manager', 'hold', message_role='system', agent_sender={'scope': 'project:p1'})
+        self.wait_for(lambda: self.bridge.chat('manager').get('steerable'))
+        self.assertIsNone(self.bridge.chat('manager')['user_priority_since'])
+        self.bridge.stop('manager'); self.finished('manager')
 
     def test_peer_input_keeps_identity_and_compact_display_in_new_and_active_turns(self):
         sender = {'name': 'E14 worker', 'scope': 'experiment:e14', 'message_id': 'msg1'}

@@ -1,6 +1,7 @@
-"""Install the bundled local or remote sidecar without touching AutoML."""
+"""Initialize the bundled workspace; reuse an existing research manager."""
 import hashlib
 import errno
+import fcntl
 import io
 import json
 import os
@@ -34,7 +35,20 @@ def systemctl_checked(arguments, timeout):
         raise RuntimeError(f'Systemd {" ".join(arguments)} failed (exit {result.returncode}): {detail.strip() or "no diagnostic output"}. No detached replacement was started.')
 
 
-def main():
+def ensure_manager(release, home):
+    command = [sys.executable, '-m', 'server.engine', '--ensure', '--engine-dir', str(release / 'engine'), '--aml-home', str(home)]
+    result = subprocess.run(command, cwd=release, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        raise RuntimeError('Workspace manager setup failed: ' + (result.stderr.strip()[-2000:] or 'No diagnostic output'))
+    try:
+        ready = json.loads(result.stdout)
+        if ready.get('status') not in {'existing', 'started'} or Path(ready.get('home', '')).resolve() != home.resolve():
+            raise ValueError('Wrong manager workspace')
+    except (ValueError, TypeError, AttributeError) as error:
+        raise RuntimeError('Workspace manager did not confirm startup. No replacement was attempted.') from error
+
+
+def _install():
     if sys.version_info < (3, 10):
         raise RuntimeError('The workspace computer needs Python 3.10 or newer.')
     config = json.loads(sys.argv[1])
@@ -71,6 +85,11 @@ def main():
     if not 1024 <= port <= 65535:
         raise RuntimeError('Choose a remote port between 1024 and 65535.')
 
+    session_info = {}
+    aml_home = Path(config.get('amlHome') or '~/.auto-ml').expanduser()
+    if not aml_home.is_absolute():
+        raise RuntimeError('Choose an absolute manager folder, or a path starting with ~/')
+
     def healthy():
         try:
             token = (state / 'token').read_text().strip()
@@ -91,9 +110,22 @@ def main():
             raise RuntimeError(f'Remote port {port} returned an invalid workspace response. No second service was started.') from error
         if not isinstance(result, dict) or not result.get('ok') or not token or result.get('state_dir') != str(state.resolve()):
             raise RuntimeError(f'Remote port {port} belongs to a different workspace. Choose its matching remote folder or another port.')
+        manager_home = result.get('aml_home')
+        if not manager_home and (state / 'release.json').is_file():
+            metadata = json.loads((state / 'release.json').read_text())
+            previous = metadata.get('command', [])
+            if '--aml-home' in previous:
+                manager_home = previous[previous.index('--aml-home') + 1]
+        if manager_home and Path(manager_home).expanduser().resolve() != aml_home.resolve():
+            raise RuntimeError(f'This workspace uses manager folder {manager_home}. Use that folder or choose a different workspace folder and port.')
+        session_info.update(result)
         return token
 
     token = healthy()
+    # Only the explicit connection/bootstrap flow initializes the engine. API
+    # reads and ordinary sidecar startup never start or replace a research manager.
+    if not session_info.get('read_only'):
+        ensure_manager(release, aml_home)
     if not token:
         command = [sys.executable, '-m', 'server.app', '--state-dir', str(state), '--port', str(port), '--aml-home', str(Path(config.get('amlHome') or '~/.auto-ml').expanduser())]
         env = dict(os.environ)
@@ -148,7 +180,27 @@ def main():
             details = ('journalctl --user -u ' + unit_name + ' -n 30 --no-pager') if mode == 'systemd' else str(state / 'service.log')
             raise RuntimeError('Remote service did not become ready. Inspect ' + details)
         (state / 'release.json').write_text(json.dumps({'path': str(release), 'python': sys.executable, 'command': command, 'mode': mode}))
-    print(json.dumps({'token': token, 'port': port, 'root': str(root), 'version': '0.1.8'}))
+    print(json.dumps({'token': token, 'port': port, 'root': str(root), 'version': session_info.get('version')}))
+
+
+def main():
+    config = json.loads(sys.argv[1])
+    root = Path(config['remoteRoot']).expanduser()
+    if not root.is_absolute():
+        raise RuntimeError('Choose an absolute remote folder, or a path starting with ~/')
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Two new windows can connect at the same time; only one installs/starts.
+    with (root / 'connection.lock').open('a+') as lock:
+        deadline = time.monotonic() + 60
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Another window is still initializing this workspace. Try connecting again shortly.')
+                time.sleep(.1)
+        _install()
 
 
 if __name__ == '__main__':

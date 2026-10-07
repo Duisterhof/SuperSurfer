@@ -185,6 +185,42 @@ class EngineTests(unittest.TestCase):
         self.assertNotIn('CALLER_ONLY', env)
 
 
+    def test_ensure_reuses_existing_manager_without_upgrade_or_queue_mutation(self):
+        with patch.object(engine, "rpc", side_effect=self.rpc), patch.object(engine, "_validate_engine") as validate, patch.object(engine, "_launch") as launch, patch.object(engine, "_stop") as stop:
+            result = engine.ensure_engine(self.bundle, self.home)
+        self.assertEqual(result["status"], "existing")
+        self.assertEqual(result["pid"], 101)
+        self.assertEqual(self.calls, ["ping"])
+        validate.assert_not_called(); launch.assert_not_called(); stop.assert_not_called()
+
+    def test_ensure_rejects_uncertain_or_wrong_workspace_without_replacement(self):
+        for response in (engine.EngineError("permission denied"), {"pid": 101, "home": "/other"}):
+            with self.subTest(response=response), patch.object(engine, "rpc", side_effect=response if isinstance(response, Exception) else None, return_value=response), patch.object(engine, "_launch") as launch:
+                with self.assertRaises(engine.EngineError): engine.ensure_engine(self.bundle, self.home)
+                launch.assert_not_called()
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Fixture daemon uses Linux process inspection')
+    def test_ensure_cold_start_then_reconnect_does_not_replace_manager_or_reset_queue(self):
+        (self.bundle / "aml/__init__.py").write_text("")
+        (self.bundle / "aml/__main__.py").write_text(FAKE_DAEMON)
+        first = None
+        try:
+            first = engine.ensure_engine(self.bundle, self.home, timeout=5)
+            self.assertEqual(first["status"], "started")
+            engine.rpc(self.home, "queue.pause")
+            newer = self.root / "another-release/engine"
+            shutil.copytree(self.bundle, newer)
+            second = engine.ensure_engine(newer, self.home, timeout=5)
+            self.assertEqual(second["status"], "existing")
+            self.assertEqual(second["pid"], first["pid"])
+            self.assertTrue(engine.rpc(self.home, "queue.status")["paused"])
+            with sqlite3.connect(self.db) as db:
+                self.assertEqual(db.execute("SELECT run_id FROM reservations").fetchall(), [("running-job",)])
+        finally:
+            if first:
+                try: engine._stop(engine.inspect_manager(self.home), 5)
+                except engine.ManagerAbsent: pass
+
     @unittest.skipUnless(sys.platform.startswith('linux'), 'Live PID identity proof requires Linux procfs')
     def test_real_detached_fixture_upgrade_preserves_database_and_has_one_owner(self):
         # This tiny RPC fixture implements no run/agent actions and never executes a job.

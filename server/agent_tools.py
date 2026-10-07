@@ -210,6 +210,15 @@ CONFIGURE_COMPUTE_TOOL = {
         "defaults": {"type": "object", "additionalProperties": False, "properties": PATH_FIELDS},
         "nodes": {"type": "array", "maxItems": 64, "items": POOL_NODE}}, "required": ["version", "defaults", "nodes"]},
 }
+REGISTER_GPUS_TOOL = {
+    "name": "register_compute_gpus",
+    "description": "Add authorized, observed physical GPU indices to an existing workspace host. Manager only, for user-requested capacity. Supply host_id and the GPU indices to add; existing registrations and reservations are preserved. This does not mark occupied GPUs free, alter utilization thresholds, change project pools or queued contracts, or launch jobs. The scheduler still checks current occupancy at admission. Repeating the same addition is safe. Inspect the host first; unobserved indices are rejected by AutoML.",
+    "annotations": {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False},
+    "inputSchema": {"type": "object", "additionalProperties": False, "required": ["host_id", "gpus"], "properties": {
+        "host_id": {"type": "string", "minLength": 1, "maxLength": 150},
+        "gpus": {"type": "array", "minItems": 1, "maxItems": 1024,
+                 "items": {"type": "integer", "minimum": 0, "maximum": 1024}}}},
+}
 INSPECT_COMPUTE_TOOL = {
     "name": "inspect_project_compute",
     "description": "Read this project's current pool version, node paths and all registered hosts with saved GPU observations, prepared pool nodes first. Does not probe GPUs or change anything. Prefer usable configured nodes; inspect exact required inputs before choosing to prepare another node. Stale/unknown capacity is not free capacity.",
@@ -227,7 +236,7 @@ WORKER_COMPUTE_TOOLS = [INSPECT_COMPUTE_TOOL, INSPECT_HOST_TOOL, REGISTER_HOST_T
 COMPUTE_TOOLS = [*WORKER_COMPUTE_TOOLS, CONFIGURE_COMPUTE_TOOL]
 MANAGER_COMPUTE_TOOLS = [{**tool, "inputSchema": {**tool["inputSchema"],
     "properties": {**tool["inputSchema"]["properties"], "project_id": {"type": "string", "minLength": 1, "maxLength": 150}},
-    "required": [*tool["inputSchema"].get("required", []), "project_id"]}} for tool in COMPUTE_TOOLS]
+    "required": [*tool["inputSchema"].get("required", []), *([] if tool["name"] in {"register_compute_host", "inspect_compute_host"} else ["project_id"])]}} for tool in COMPUTE_TOOLS] + [REGISTER_GPUS_TOOL]
 WAKEUP_TOOL = {
     "name": "configure_worker_wakeup",
     "description": "Save a check explicitly requested by the user for this experiment worker. Use interval minutes (for example 10) for recurring checks, metric for a W&B threshold, or run_status for a lifecycle event. Include the concrete task to perform (for example inspect progress and debug failures). Event rules fire once; update with enabled=true explicitly rearms. Omit run_id to bind the latest current or future run in this experiment. The service keeps rules across disconnects and waits for busy workers. A scheduled wakeup cannot queue/launch jobs, create agents or add more schedules. Use list to inspect, pause or remove to stop. Never claim a schedule exists before this tool succeeds.",
@@ -291,7 +300,7 @@ PAGE_TOOL = {
 PROJECT_PAGE_TOOL = {**PAGE_TOOL, "inputSchema": {**PAGE_TOOL["inputSchema"], "required": ["experiment_id"], "properties": {**PAGE_TOOL["inputSchema"]["properties"], "experiment_id": {"type": "string", "minLength": 1, "maxLength": 180}}}}
 MESSAGE_TOOL = {
     "name": "message_agent",
-    "description": "Contact another SuperSurfer agent directly about the user's existing goal. target is project_lead, workspace_manager, or an owned scope from list_agent_messages contacts. Use a stable request_id per message and reuse it on retry. Replies include reply_to and the original sender as target. Idle recipients start immediately; busy recipients receive steering when possible, otherwise messages wait durably. Explicitly stopped chats wait for the user to resume. Queued/delivered means accepted for delivery, not task completion. Coordination does not authorize new research, budget changes or launches, and scheduled origins remain restricted. Do not use the user as a messenger. Do not send acknowledgement-only replies.",
+    "description": "Contact another SuperSurfer agent directly about the user's existing goal. target is project_lead, workspace_manager, or an owned scope from list_agent_messages contacts. Use a stable request_id per message and reuse it on retry. Replies include reply_to and the original sender as target. Use project_lead or the relevant project peer for research methods, dataset questions, provenance and results. Reserve workspace_manager for shared compute/hosts, queue or budget conflicts, cross-project dependencies, or a task explicitly delegated by that manager; do not copy routine research updates there. Idle recipients start immediately. During a direct user task, unsolicited updates wait in the inbox; replies to requests sent since the latest instruction may steer that turn. Keep messages concise, send material changes only, and include detailed provenance only when requested. Explicitly stopped chats wait for the user to resume. Queued/delivered means accepted for delivery, not task completion. Coordination does not authorize new research, budget changes or launches, and scheduled origins remain restricted. Do not use the user as a messenger. Do not send acknowledgement-only replies.",
     "inputSchema": {"type": "object", "additionalProperties": False, "required": ["target", "request_id", "message"], "properties": {
         "target": {"type": "string", "minLength": 1, "maxLength": 256},
         "request_id": {"type": "string", "minLength": 16, "maxLength": 100, "pattern": "^[a-zA-Z0-9_-]{16,100}$"},
