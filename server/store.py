@@ -394,11 +394,11 @@ class Store:
             data["review_error"] = str(error) if error else None
             self._write_data(data)
 
-    def import_state(self, snapshot, normalized):
+    def import_state(self, snapshot, normalized, chats=()):
         with self.lock:
-            return self._import_state(snapshot, normalized)
+            return self._import_state(snapshot, normalized, chats)
 
-    def _import_state(self, snapshot, normalized):
+    def _import_state(self, snapshot, normalized, chats):
         projects = {p["id"]: p for p in normalized["projects"]}
         tasks = {t["id"]: t for t in snapshot.get("tasks", [])}
         groups = {}
@@ -444,18 +444,47 @@ class Store:
                 data = self._data(key)
                 data["task_ids"] = [t["id"] for t in group["tasks"]]
                 self._write_data(data)
+        # A run outcome is evidence about one attempt, not the research lifecycle.
+        # Include all owned conversations: archiving hides a chat without stopping it.
+        conversations = dict(self.db.execute("SELECT scope,experiment_id FROM conversations"))
+        workers = {}
+        for chat in chats:
+            scope = chat.get("scope", "")
+            key = scope.removeprefix("experiment:") if scope.startswith("experiment:") else conversations.get(scope)
+            if key in known and (chat.get("busy") or chat.get("message_count", 0)
+                                 or chat.get("task_state") not in {None, "ready"}):
+                workers.setdefault(key, []).append(chat)
+        retired = self.get("retired_native_agents", {})
         experiments = []
         for key in known:
             data = self.experiment(key)
             runs = [r for r in normalized["runs"] if r["experiment_id"] == key]
             statuses = {r["status"] for r in runs}
-            status = "running" if statuses & {"running", "starting", "cancelling"} else "attention" if statuses & {"unreachable", "orphaned"} else "queued" if "queued" in statuses else "completed" if statuses and statuses <= {"succeeded", "cancelled"} else "failed" if "failed" in statuses else "draft"
-            if status not in {"running", "attention", "queued"}:
-                status = data.get("planning_status") or status
+            owned = workers.get(key, [])
+            native_busy = any(a.get("task_id") in data["task_ids"] and a.get("project_id") == data["project_id"]
+                              and a.get("role") == "worker" and a.get("status") in {"busy", "interactive"}
+                              and a["id"] not in retired for a in normalized["agents"])
+            if statuses & {"running", "starting", "cancelling"}:
+                status, detail = "running", "An experiment run is active."
+            elif statuses & {"unreachable", "orphaned"}:
+                status, detail = "attention", "An active run cannot be verified; inspect Runs."
+            elif "queued" in statuses:
+                status, detail = "queued", "An experiment run is queued."
+            elif native_busy or any(chat.get("busy") for chat in owned):
+                status, detail = "working", "An experiment agent is working."
+            elif data.get("planning_status"):
+                status, detail = data["planning_status"], "Saved experiment planning status."
+            elif any(chat.get("task_state") == "monitoring" for chat in owned):
+                status, detail = "monitoring", "An experiment agent has a persistent monitoring deliverable."
+            elif runs or owned:
+                status, detail = "idle", "No run or agent is active. Run outcomes remain in Runs; completion is explicit."
+            else:
+                status, detail = "draft", "Work has not started."
+            run_summary = {value: sum(run["status"] == value for run in runs) for value in sorted(statuses)}
             worker = next((a["id"] for a in normalized["agents"] if a.get("task_id") in data["task_ids"] and a.get("status") not in {"archived", "paused"}), None)
             with self.db:
                 raw = self._data(key)
-                raw.update(run_ids=[r["id"] for r in runs], worker_id=worker, status=status)
+                raw.update(run_ids=[r["id"] for r in runs], worker_id=worker, status=status, status_detail=detail, run_summary=run_summary)
                 self._write_data(raw)
             experiments.append({**raw})
         for project in normalized["projects"]:

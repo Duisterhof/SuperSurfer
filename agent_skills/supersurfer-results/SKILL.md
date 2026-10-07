@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.16'
+  supersurfer-version: '0.1.17'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.16. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.17. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -64,6 +64,14 @@ may refuse framing, so supply a working source link and a useful local plot or
 preview. Do not replace requested figures with bare W&B group links. Never embed
 tokens, local filesystem URLs or app credentials.
 
+The HTML Results page fills the available main pane inside the existing sandbox.
+Build a responsive full-page document whose content scrolls naturally in that
+one area; avoid a second fixed-height scrolling dashboard inside it. Size plots
+to their container, wrap controls and legends, and give 3D/video widgets sensible
+responsive dimensions. Put the clear train/held-out comparison before extended
+prose so the extra space serves the evidence. Filling the pane does not grant
+parent-window, filesystem or authentication access.
+
 Use `publish_markdown_tab` with `title` and `markdown` for detailed protocols,
 derivations or analysis beyond the figures. For an existing tab, read with
 `page_id`, then update with that ID and its current `version`; reconcile a
@@ -78,6 +86,8 @@ that another worker is editing.
 
 Desktop windows restore their own workspace and selected tab. Reopening a saved
 Results page does not refresh a published snapshot or request a new publication.
+A release or larger result pane is also not an instruction to rewrite existing
+results; revise saved pages only within the requested reporting task.
 Read current experiment and page records before an authorized revision, preserving
 their IDs and any changes made while the desktop was closed. Keep provenance
 within the connected workspace; matching experiment names in another window do

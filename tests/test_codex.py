@@ -705,6 +705,33 @@ class CodexBridgeTests(unittest.TestCase):
         self.assertEqual(2,sum(r.get('method')=='turn/interrupt' for r in self.requests()))
         self.bridge.stop('project:vla');self.finished()
 
+    def test_concurrent_stop_sends_one_interrupt_and_cannot_stop_a_new_turn(self):
+        self.bridge.send('project:vla', 'hold')
+        self.wait_for(lambda: self.bridge.chat('project:vla').get('steerable'))
+        old = self.bridge.chat('project:vla')['turn_id']
+        entered, release = threading.Event(), threading.Event()
+        original = self.bridge._rpc
+        def rpc(method, params, **kwargs):
+            if method == 'turn/interrupt':
+                entered.set()
+                if not release.wait(3): raise RuntimeError('Fixture did not release interrupt')
+            return original(method, params, **kwargs)
+        with patch.object(self.bridge, '_rpc', side_effect=rpc):
+            first = threading.Thread(target=lambda: self.bridge.stop('project:vla'))
+            first.start()
+            try:
+                self.assertTrue(entered.wait(3))
+                self.assertTrue(self.bridge.stop('project:vla')['stopped'])
+            finally:
+                release.set(); first.join(3)
+        self.finished()
+        self.assertEqual(1, sum(r.get('method') == 'turn/interrupt' for r in self.requests()))
+        self.bridge.send('project:vla', 'hold')
+        self.wait_for(lambda: self.bridge.chat('project:vla').get('steerable'))
+        self.assertFalse(self.bridge.stop('project:vla', expected_turn_id=old)['stopped'])
+        self.assertTrue(self.bridge.chat('project:vla')['busy'])
+        self.bridge.stop('project:vla'); self.finished()
+
     def test_permission_change_during_thread_start_is_not_overwritten(self):
         original=self.bridge._rpc;entered=threading.Event();resume=threading.Event()
         def rpc(method,params,**kwargs):

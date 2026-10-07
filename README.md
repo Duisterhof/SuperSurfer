@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.16
+# SuperSurfer 0.1.17
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -6,20 +6,32 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.16-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.16-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** extract `SuperSurfer-0.1.17-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.17-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.16-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.17-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
 - **This machine** to run the persistent workspace service on the computer you're using. No SSH target is needed.
 - **Remote machine** to select an alias from your SSH configuration, including included config files, or enter another host. Your existing SSH keys/agent and known-host verification are used. Existing port forwards are preserved; harmless login banners and warnings do not fail a successful connection.
 
-The selected workspace computer needs Python 3.10+, Codex CLI, Git, and a running AutoML manager. Default AutoML data is `~/.auto-ml`. The service installs under `~/.local/share/supersurfer`. Connection options allow separate locations and ports. The installer does not install or replace AutoML. Reconnecting reuses a healthy service; updating the desktop alone does not restart an already-running service.
+The selected workspace computer needs Python 3.10+ for the app service, an installed Python 3.11+ for a new workspace manager, Codex CLI, and Git. On Connect, SuperSurfer initializes the bundled AutoML manager if absent; no separate AML installation is needed. Default manager data is `~/.auto-ml`; the app service installs under `~/.local/share/supersurfer`. Connection options allow separate locations and ports. Reconnecting reuses live services and never replaces an existing manager. Updating the desktop alone does not restart an already-running app service. Missing Python prerequisites or an incompatible occupied port are reported before opening the workspace.
 
 This release also bundles the compatible scheduler in `engine/`. For an existing detached Linux AutoML manager, an explicit administrator update from the extracted source folder is `python3 -m server.engine --engine-dir ./engine --aml-home ~/.auto-ml`. It uses the manager's existing Python 3.11+ environment, briefly pauses admission, preserves running jobs and current state, and backs up the database. It refuses an active legacy-agent turn or a manager owned by another service. A healthy connection never silently replaces your scheduler.
 
 SuperSurfer uses the workspace computer's existing Codex ChatGPT login. Otherwise choose **Connect ChatGPT** in Settings and complete device-code sign-in. No OpenAI API key is required. GitHub preparation uses that computer's existing `gh` authentication; creating a project folder does not require GitHub.
+
+## Changes in 0.1.17
+
+HTML Results fills the main pane with a compact experiment/tab header and a single page scroll area. Interactive state survives workspace refresh; embedded pages retain their sandbox. Use the visible **New workspace window** plus button in the top bar, or File → New Window, to connect another host independently.
+
+Historical failed attempts no longer mark the whole experiment failed, and successful runs do not silently complete the research goal. Active runs, queues, working agents (including archived chats) and explicit planning determine the experiment state; individual outcomes remain in Runs.
+
+Project leads and workers own research methods, datasets and results; the workspace manager handles shared compute and explicit workspace-wide tasks. Routine research updates should stay within the project. Your direct message takes priority over incoming agent coordination. Unsolicited peer updates wait in the durable inbox during that work; replies to requests sent since your latest instruction can still arrive immediately. Agents can inspect their inbox explicitly. Idle recipients receive messages automatically; Stop holds delivery and Archive only hides a chat. Explicit handoffs to an additional idle agent can run alongside another agent in the same experiment.
+
+The workspace manager can add hosts without a project and expand an existing host with `register_compute_gpus`. Additions preserve registered devices and reservations; observed busy GPUs remain unavailable at launch. Project pool masks remain explicit.
+
+First connection now initializes a missing bundled workspace manager, including when an older app service is already healthy. Concurrent new windows share installation locks, and a live manager and its queue remain untouched. Codex CLI and ChatGPT sign-in are separate prerequisites.
 
 ## Changes in 0.1.16
 

@@ -444,7 +444,7 @@ class BackendTests(unittest.TestCase):
         with self.assertRaisesRegex(APIError, "already working"): self.service.action("experiment.start", {"id": draft["id"]})
         self.service.read_only = True
         with self.assertRaises(APIError): self.service.action("experiment.start", {"id": draft["id"]})
-        self.assertEqual(self.service.store.experiment(draft["id"])["status"], "draft")
+        self.assertEqual(self.service.store.experiment(draft["id"])["status"], "working")
         self.assertEqual(self.service.codex.sent, [])
     def test_start_working_uses_native_owner_and_expected_task_binding(self):
         self.manager.data["tasks"].append({"id": "t3", "project_id": "p1", "name": "e14-new", "briefing": "A new draft"})

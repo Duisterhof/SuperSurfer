@@ -44,7 +44,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   app=await launch();let a=await app.firstWindow();await connect(a,'tulip');
   await a.evaluate(()=>superSurferDesktop.setWorkspace({projectId:'vla',tab:'page:page_abcdef',chatWidth:510}));
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setBounds({x:40,y:50,width:1120,height:740}));
-  let b=await newWindow();await connect(b,'trinity');
+  const newFromHeader=app.waitForEvent('window');await a.evaluate(()=>superSurferDesktop.newWindow());let b=await newFromHeader;await connect(b,'trinity');
   await b.evaluate(()=>superSurferDesktop.setWorkspace({projectId:'different',tab:'runs'}));
   assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');assert.equal((await probe(b)).authorization,'Bearer fixture-token-trinity');
   const foreign=await b.evaluate(async origin=>fetch(origin+'/api/probe').then(r=>r.json()),new URL(a.url()).origin);assert.equal(foreign.authorization,null,'Other host must not receive this window’s credentials');
@@ -89,6 +89,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle().startsWith('offline')).loadURL('data:text/html,<h1>Untrusted</h1>'));
   assert.equal((await hostile.evaluate(async origin=>fetch(origin+'/api/probe').then(r=>r.json()),origin)).authorization,null,'Untrusted main documents must not inherit native credentials');
   await assert.rejects(hostile.evaluate(()=>superSurferDesktop.getWorkspace()),/trusted workspace/);
+  await assert.rejects(hostile.evaluate(()=>superSurferDesktop.newWindow()),/trusted workspace/);
   await assert.rejects(hostile.evaluate(()=>superSurferDesktop.configuration()),/setup window/);
   console.log('PASS connection cancellation and untrusted-document IPC denial');
  }finally{if(app)await app.close();fs.rmSync(profile,{recursive:true,force:true});}

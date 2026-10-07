@@ -1,6 +1,7 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('superSurferDesktop', {
+  newWindow: () => ipcRenderer.invoke('window:new'),
   configuration: () => ipcRenderer.invoke('configuration'),
   connectionReady: () => ipcRenderer.invoke('connection:ready'),
   cancelConnection: () => ipcRenderer.invoke('connection:cancel'),

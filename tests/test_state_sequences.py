@@ -65,7 +65,7 @@ class StateSequenceTests(unittest.TestCase):
         self.assertEqual({item['id'] for item in receipts}, {send(i)['id'] for i in range(12)})
         original = self.service.codex.chat
         with patch.object(self.service.codex, 'chat', side_effect=lambda target: {**original(target), 'busy': False}):
-            self.service.messages.drain(); self.service.messages.drain()
+            for _ in range(13): self.service.messages.drain()
         messages = self.service.messages.list(scope, {})['messages']
         self.assertEqual(12, len(messages))
         self.assertTrue(all(message['status'] == 'delivered' for message in messages))

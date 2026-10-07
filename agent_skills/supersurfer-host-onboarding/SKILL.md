@@ -2,14 +2,16 @@
 name: supersurfer-host-onboarding
 description: Inspect project compute, reuse ready nodes, and onboard a compatible free local or SSH host with verified repository, environment and data paths for authorized work.
 metadata:
-  supersurfer-version: '0.1.16'
+  supersurfer-version: '0.1.17'
 ---
 
 # Onboard project compute
 
-Reviewed for SuperSurfer 0.1.16. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project; managers supply the registered `project_id`. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
+Reviewed for SuperSurfer 0.1.17. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project. Managers supply the registered `project_id` for project-pool actions, but may omit it for `inspect_compute_host` and `register_compute_host`, including in an empty workspace. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
 
 ## Choose capacity before changing it
+
+The workspace service and a compute node have different requirements. An explicit desktop connection initializes the bundled AML manager when it is absent, reuses an existing manager without upgrading it or changing queue settings, and requires no separate AML installation. Ordinary state reads do not start a manager. The workspace sidecar needs Python 3.10+; starting its bundled manager needs an installed Python 3.11+ interpreter, discovered separately from training environments. A compute-only node still needs the registered Python 3.9+ runner described below, not the workspace manager. Diagnose which component and interpreter failed before changing an environment; preserve existing jobs and do not launch a second manager to bypass an uncertain connection.
 
 A remembered desktop connection identifies the workspace service, not a registered compute node or a verified project environment. Reopening that window does not register a host, add it to a project pool or authorize setup work. Use the compute tools in the current workspace to establish those facts. If a window cannot reconnect, preserve its existing association and diagnose the connection; do not infer that its remote jobs stopped or register a replacement host to work around a desktop connection failure.
 
@@ -36,6 +38,8 @@ The tools validate and record configuration; they do not install dependencies or
 ## Register the runner and enable the project node
 
 `register_compute_host` records the name, SSH target (empty means local), runner directory, authorized physical GPU indices and a verified Python 3.9+ runner executable. Use `python: "auto"` to discover an existing compatible system or common Conda/Miniforge interpreter, or supply a verified executable. AML does not need installing on the node. This runner is separate from the project's training Python; changing a run override cannot repair an incompatible registered runner. A read-only probe can work with Python 3.6 and report its `inspection_python` as incompatible while another interpreter is suitable. Reuse existing registrations; do not create duplicates to evade runner-repair restrictions on active jobs or reservations.
+
+To add physical GPUs to an existing host registration, the manager uses `register_compute_gpus` with `host_id` and a nonempty list of unique `gpus` indices to add; no `project_id` is accepted. Inspect the host first, because AML validates that the requested devices were observed. The addition preserves existing registered devices and reservations, and repeating it is safe. It leaves host Python/target/root, project masks, queued contracts and occupancy checks unchanged and launches no job. Leads and workers request this bounded shared-registration change through `message_agent` to the workspace manager; do not duplicate the host or bypass the scoped tools. Then configure the project’s permitted devices where requested, separately from registration. This coordination is for the missing capacity change, not another approval for an already authorized worker launch.
 
 All three roles can use `onboard_project_node` with the current pool `version` and one `node` record; workers remain fixed to their own project. Include its registered `host_id`, repository and per-node Python/data/storage overrides, plus an optional GPU subset. Include task-specific `required_paths` and `python_packages` when applicable. It validates resolved paths, the selected Python runtime and supplied requirements before enabling the node and preserves shared defaults and unrelated nodes. Workers cannot replace the whole pool or configure another project. For requested changes to defaults or the entire pool, leads and managers can use `configure_project_compute` with the current version, shared defaults and complete intended node list, preserving unrelated entries. Reread current state after a version conflict or uncertain response before retrying.
 
