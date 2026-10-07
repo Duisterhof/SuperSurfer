@@ -1,3 +1,11 @@
+# SuperSurfer 0.1.22 validation — October 7, 2026
+
+All 352 Python tests, 20 Node/SSH checks without skips, 17 Chromium browser suites and two native Linux Electron suites pass. All five skills were independently reviewed, shortened and revised, including the final stop_run capability. Checks cover scoped budget edits, unlimited versus separate run budgets, durable temporary restoration, lost replies, later user changes, exact-run cancellation, pending versus terminal stops, quiet updates, bounded request/answer exchanges and stable-ID retries. Existing permission, authentication, PR, queue, persistence and multiwindow checks remain green.
+
+The new training Results suite exercises actual Chromium rendering with fast/slow sources, measured training/validation overlays, decimal axes, phase filtering, smoothing with raw values, retained zoom, legend toggles, expand/reset, narrow layout, stale sources and refresh on reopen. Backend tests verify boolean phase values survive history filtering, sparse validation and recent tails, read-only live-data scope and authenticated background polling. No research jobs are launched or cancelled by these tests. Native macOS execution remains unavailable on this Linux host; Mac packages are unsigned.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.21 validation — October 7, 2026
 
 All 338 Python tests, 20 Node/SSH checks without skips, 16 Chromium browser suites and two native Linux Electron suites pass. All five agent skills were independently reviewed and revised. New regression coverage verifies cache bypass on open, latest-point tail inclusion, sparse validation samples, missing/failed reads without invented measurements, preserved data timestamps, host and report scoping, authenticated endpoint access, iframe message isolation, navigation races, preserved plot controls and stale document revisions. E15’s actual W&B histories were fetched read-only and rendered with its existing phase/smoothing controls. No research jobs are launched by these checks. Native macOS execution is not tested on this Linux host; Mac packages remain unsigned.

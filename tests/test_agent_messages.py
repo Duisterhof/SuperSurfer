@@ -24,7 +24,7 @@ class AgentMessageTests(unittest.TestCase):
     def send(self, scope, target='workspace_manager', request_id='node-setup-request-0001', **fields):
         return self.service.agent_action(scope, 'supersurfer_message_agent', {
             'target': target, 'request_id': request_id,
-            'message': 'Where is the original protocol? Help stage it on the prepared node.', **fields})
+            'message': 'Where is the original protocol? Help stage it on the prepared node.', 'kind': 'answer' if fields.get('reply_to') else 'request', **fields})
 
     def test_worker_manager_reply_round_trip_is_system_input_with_recipient_preferences(self):
         worker = self.start()
@@ -48,6 +48,30 @@ class AgentMessageTests(unittest.TestCase):
         self.assertEqual(worker, self.service.codex.sent[-1][0])
         self.assertEqual('user', self.service.turn_origins[worker])
         self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))
+
+    def test_progress_updates_are_durable_without_waking_or_steering_recipients(self):
+        worker=self.start()
+        update=self.send(worker,kind='update',message='Same run remains queued; recorded in task progress.')
+        self.assertEqual('recorded',update['status']);self.service.messages.drain()
+        self.assertEqual(1,len(self.service.codex.sent))
+        self.service.close();self.open_service();self.service.messages.drain()
+        self.assertEqual([],self.service.codex.sent)
+        self.assertEqual('recorded',self.service.messages.get(update['id'])['status'])
+        self.start(worker)
+        default=self.service.agent_action(worker,'supersurfer_message_agent',{'target':'workspace_manager','request_id':'quiet-default-update-0001','message':'Recorded results are available.'})
+        self.assertEqual('recorded',default['status'])
+
+    def test_request_has_one_answer_and_does_not_start_an_acknowledgement_chain(self):
+        worker=self.start();request=self.send(worker)
+        self.service.messages.drain();self.service.codex.busy.remove(worker)
+        answer=self.send('manager',worker,'bounded-answer-0001',reply_to=request['id'])
+        self.service.messages.drain()
+        with self.assertRaisesRegex(ValueError,'Only a request'):
+            self.send(worker,'manager','no-acknowledgement-0001',reply_to=answer['id'])
+        with self.assertRaisesRegex(ValueError,'already has an answer'):
+            self.send('manager',worker,'duplicate-answer-0001',reply_to=request['id'])
+        self.assertEqual(answer['id'],self.send('manager',worker,'bounded-answer-0001',reply_to=request['id'])['id'])
+        self.assertIn('no acknowledgement',self.service.codex.sent[-1][1])
 
     def test_busy_target_defers_then_steers_once_without_interrupting_or_starting_new_turn(self):
         worker = self.start()

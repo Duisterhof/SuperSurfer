@@ -56,7 +56,7 @@ class StateSequenceTests(unittest.TestCase):
         def send(index):
             return self.service.agent_action(scope, 'supersurfer_message_agent', {
                 'target': 'workspace_manager', 'request_id': 'concurrent-request-%04d' % index,
-                'message': 'Locate original protocol part %d.' % index})
+                'kind': 'request', 'message': 'Locate original protocol part %d.' % index})
         with ThreadPoolExecutor(max_workers=6) as executor:
             receipts = list(executor.map(send, requests))
         self.assertEqual(12, len({item['id'] for item in receipts}))

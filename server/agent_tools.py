@@ -8,6 +8,10 @@ import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+if not __package__:
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from server.training_results import SCHEMA as TRAINING_RESULTS_SCHEMA
 
 MAX_REQUEST = 2 * 1024 * 1024
 REQUIREMENTS = {
@@ -283,6 +287,31 @@ RESULT_TOOL = {
 }
 PROJECT_RESULT_TOOL = {**RESULT_TOOL, "description": RESULT_TOOL["description"].replace("for this experiment", "for a registered experiment in your scope; supply experiment_id"),
     "inputSchema": {**RESULT_TOOL["inputSchema"], "required": ["experiment_id", "title", "html"], "properties": {**RESULT_TOOL["inputSchema"]["properties"], "experiment_id": {"type": "string", "minLength": 1, "maxLength": 180}}}}
+TRAINING_RESULT_TOOL = {
+    "name": "publish_training_results",
+    "description": "Publish training Results with the shared interactive renderer. Use this for new or redesigned training comparisons instead of writing chart HTML. Supply exact W&B sources (id/url/method label), plots with x_label/y_label and traces (source, metric key, x key, actual split). The app handles live refresh on open, partial/stale data, ordinary decimal axes, stable method colors, solid/dashed/dotted splits, scroll zoom/pan/hover, reset/expand and optional smoothing with raw traces. Training comparisons lead; declare held-out traces, including requested EEF errors, or explain unavailable measurements in missing_measurements. Compatible quantities may share a plot; distinguish phases/budgets with where and explicitly labelled offsets/scales. Sources/keys and sparse held-out reads are derived automatically. Put a short schematic/requested domain widgets in details_html after curves. Reuse result_id and current expected_sha256 to preserve concurrent changes; inspect existing content before replacing it. Never invent values or launch jobs to fill a missing curve.",
+    "inputSchema": TRAINING_RESULTS_SCHEMA,
+}
+PROJECT_TRAINING_RESULT_TOOL = {**TRAINING_RESULT_TOOL, "inputSchema": {**TRAINING_RESULTS_SCHEMA,
+    "required": ["experiment_id", *TRAINING_RESULTS_SCHEMA["required"]],
+    "properties": {**TRAINING_RESULTS_SCHEMA["properties"], "experiment_id": {"type": "string", "minLength": 1, "maxLength": 180}}}}
+LIMITS_TOOL = {
+    "name": "set_project_limits",
+    "description": "Apply the user's explicit GPU or concurrent-run budget decision directly within this conversation's project. gpu_limit accepts an integer or 'unlimited'; run_limit is separate. Omitted limits stay unchanged. Optional until_run restores only the changed limits after that existing project run succeeds/fails/is cancelled, preserving later user changes and surviving service restarts. This edits scheduler budgets, not physical GPU allocations or running jobs. A queue wait alone does not authorize raising a budget. Do not route an already-authorized edit through the manager. Read back the returned saved values.",
+    "inputSchema": {"type": "object", "additionalProperties": False, "properties": {
+        "gpu_limit": {"type": ["integer", "string"], "description": "0–1024 or the literal unlimited. Zero permits only CPU jobs."},
+        "run_limit": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "until_run": {"type": "string", "minLength": 1, "maxLength": 180}},
+        "anyOf": [{"required": ["gpu_limit"]}, {"required": ["run_limit"]}]},
+}
+MANAGER_LIMITS_TOOL = {**LIMITS_TOOL, "inputSchema": {**LIMITS_TOOL["inputSchema"], "required": ["project_id"],
+    "properties": {**LIMITS_TOOL["inputSchema"]["properties"], "project_id": {"type": "string", "minLength": 1, "maxLength": 150}}}}
+STOP_RUN_TOOL = {
+    "name": "stop_run",
+    "description": "Honor an explicit user stop request for one existing run. Workers are confined to their experiment, leads to their project, and the manager to this workspace. Cancels queued runs or asks the scheduler to stop a started run; never kills unrelated processes or deletes artifacts. Retry the same run_id after an uncertain response. Read status/terminal in the reply: cancelling is not yet stopped. Do not launch a replacement until the original stop is confirmed when the user requested replacement. An already-terminal run is a no-op. Never use this to free capacity without user authorization.",
+    "inputSchema": {"type": "object", "additionalProperties": False, "required": ["run_id"],
+        "properties": {"run_id": {"type": "string", "minLength": 1, "maxLength": 150}}},
+}
 BRIEF_TOOL = {
     "name": "update_experiment_brief",
     "description": "Update the experiment's bounded main-page brief using its current version from context. Call with no fields (only experiment_id for leads/managers) to read the current brief. Replace the current objective, method, findings or next_steps; do not append chronological status dumps. Put a short operational update in activity (separate history). Keep results/plots in publish_result, detailed protocol and provenance in technical notes, and current scheduler status in the app's live run list. State measurement denominators and uncertainty. A conflict requires rereading the current brief.",
@@ -307,16 +336,17 @@ PAGE_TOOL = {
 PROJECT_PAGE_TOOL = {**PAGE_TOOL, "inputSchema": {**PAGE_TOOL["inputSchema"], "required": ["experiment_id"], "properties": {**PAGE_TOOL["inputSchema"]["properties"], "experiment_id": {"type": "string", "minLength": 1, "maxLength": 180}}}}
 MESSAGE_TOOL = {
     "name": "message_agent",
-    "description": "Contact another SuperSurfer agent directly about the user's existing goal. target is project_lead, workspace_manager, or an owned scope from list_agent_messages contacts. Use a stable request_id per message and reuse it on retry. Replies include reply_to and the original sender as target. Use project_lead or the relevant project peer for research methods, dataset questions, provenance and results. Reserve workspace_manager for shared compute/hosts, queue or budget conflicts, cross-project dependencies, or a task explicitly delegated by that manager; do not copy routine research updates there. Idle recipients start immediately. During a direct user task, unsolicited updates wait in the inbox; replies to requests sent since the latest instruction may steer that turn. Keep messages concise, send material changes only, and include detailed provenance only when requested. Explicitly stopped chats wait for the user to resume. Queued/delivered means accepted for delivery, not task completion. Coordination does not authorize new research, budget changes or launches, and scheduled origins remain restricted. Do not use the user as a messenger. Do not send acknowledgement-only replies.",
+    "description": "Coordinate only when your own tools and records cannot resolve a concrete dependency or scope misalignment. kind=request asks one specific question or bounded action and wakes the recipient; kind=answer replies once with reply_to; kind=update records material progress without waking anyone (the default). Updates remain in list_agent_messages; do not use requests for routine reports or acknowledgements. Use project peers for missing research/artifacts. The workspace manager handles actual shared-resource conflicts and cross-project decisions; it cannot release SuperSurfer app fixes or supervise every research step. Continue independent work. Reuse request_id on retry. Direct user instructions and stopped chats retain priority; messages add no research, launch or budget authority.",
     "inputSchema": {"type": "object", "additionalProperties": False, "required": ["target", "request_id", "message"], "properties": {
         "target": {"type": "string", "minLength": 1, "maxLength": 256},
+        "kind": {"type": "string", "enum": ["request", "answer", "update"], "description": "Request a concrete dependency, answer it once, or record a quiet update. Defaults to update, or answer when reply_to is supplied."},
         "request_id": {"type": "string", "minLength": 16, "maxLength": 100, "pattern": "^[a-zA-Z0-9_-]{16,100}$"},
         "message": {"type": "string", "minLength": 1, "maxLength": 20000},
         "reply_to": {"type": "string", "minLength": 1, "maxLength": 100}}},
 }
 MESSAGES_TOOL = {
     "name": "list_agent_messages",
-    "description": "Read this chat's latest 50 sent/received messages and delivery status, plus permitted agent contacts. Optional message_id reads one older message belonging to this chat. Use for delivery evidence and finding a colleague; messages are delivered automatically, so do not repeatedly poll. Uncertain delivery is never automatically replayed: inspect the recipient history before deciding on a new message.",
+    "description": "Read this chat's latest 50 sent/received messages and delivery status, plus permitted agent contacts. Optional message_id reads one older message belonging to this chat. Use for delivery evidence and finding a colleague; requests and their answers are delivered automatically; updates are recorded without waking recipients. Do not repeatedly poll. Uncertain delivery is never automatically replayed: inspect the recipient history before deciding on a new message.",
     "inputSchema": {"type": "object", "additionalProperties": False, "properties": {
         "message_id": {"type": "string", "minLength": 1, "maxLength": 100}}},
 }
@@ -325,6 +355,9 @@ ROLE_TOOLS = {"worker": [TOOL, QUEUE_TOOL, *WORKER_COMPUTE_TOOLS, WAKEUP_TOOL, Q
               "manager": [MANAGER_CREATE_EXPERIMENT_TOOL, MANAGER_QUEUE_TOOL, MANAGER_CREATE_AGENT_TOOL, MANAGER_HANDOFF_TOOL, *MANAGER_COMPUTE_TOOLS, QUESTION_TOOL, TASK_TOOL, PROJECT_RESULT_TOOL, PROJECT_BRIEF_TOOL, PROJECT_PAGE_TOOL]}
 for _tools in ROLE_TOOLS.values():
     _tools.extend([MESSAGE_TOOL, MESSAGES_TOOL])
+for _role, _tools in ROLE_TOOLS.items():
+    _tools.extend([TRAINING_RESULT_TOOL if _role == 'worker' else PROJECT_TRAINING_RESULT_TOOL,
+                   MANAGER_LIMITS_TOOL if _role == 'manager' else LIMITS_TOOL, STOP_RUN_TOOL])
 
 
 def validate_questions(arguments):
@@ -373,6 +406,14 @@ def available_tools():
 
 def validate_value(value, field, label):
     kind = field.get("type")
+    if isinstance(kind, list):
+        for candidate in kind:
+            try:
+                validate_value(value, {**field, 'type': candidate}, label)
+                return
+            except ValueError:
+                pass
+        raise ValueError(f"Invalid {label}: expected one of {kind}.")
     valid = ((kind == "string" and isinstance(value, str) and "\0" not in value) or
              (kind == "boolean" and type(value) is bool) or
              (kind == "integer" and type(value) is int) or
@@ -401,6 +442,8 @@ def validate_value(value, field, label):
             validate_arguments({"name": "nested", "inputSchema": field}, value)
     elif ("minimum" in field and value < field["minimum"]) or ("maximum" in field and value > field["maximum"]):
         raise ValueError(f"Invalid {label}: value is outside the allowed range.")
+    elif "exclusiveMinimum" in field and value <= field["exclusiveMinimum"]:
+        raise ValueError(f"Invalid {label}: value must be above the minimum.")
 
 
 def validate_arguments(tool, arguments):

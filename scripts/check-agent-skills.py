@@ -6,13 +6,13 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from server.agent_tools import ROLE_TOOLS, COMPUTE_TOOLS, QUESTION_TOOL, RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL
+from server.agent_tools import ROLE_TOOLS, COMPUTE_TOOLS, QUESTION_TOOL, RESULT_TOOL, TRAINING_RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL
 
 
 def check(root=ROOT):
     version = json.loads((root / "package.json").read_text())["version"]
     errors = []
-    for role, tools in {**ROLE_TOOLS, "host-onboarding": [*COMPUTE_TOOLS, QUESTION_TOOL], "results": [RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL]}.items():
+    for role, tools in {**ROLE_TOOLS, "host-onboarding": [*COMPUTE_TOOLS, QUESTION_TOOL], "results": [RESULT_TOOL, TRAINING_RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL]}.items():
         name = "supersurfer-" + role
         path = root / "agent_skills" / name / "SKILL.md"
         if not path.is_file():

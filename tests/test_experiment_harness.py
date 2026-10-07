@@ -86,6 +86,9 @@ class ExperimentHarnessTests(unittest.TestCase):
             self.assertEqual(401,caught.exception.code);self.service.result_data.read.assert_not_called()
             with request(route) as response:self.assertEqual({'sources':[]},json.load(response))
             self.service.result_data.read.assert_called_once_with([SOURCE],refresh=True)
+            self.service.result_data.snapshot=Mock(return_value={'sources':[], 'loading':True})
+            with request(route+'&background=1') as response:self.assertTrue(json.load(response)['loading'])
+            self.service.result_data.snapshot.assert_called_once_with([SOURCE],refresh=True)
             with self.assertRaises(HTTPError):request(route.replace(row['id'],'unknown'))
             preview=self.service.results.list(self.exp['id'])[0]['preview_url']
             with urlopen(base+preview) as response:

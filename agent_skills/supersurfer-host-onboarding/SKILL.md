@@ -1,60 +1,127 @@
 ---
 name: supersurfer-host-onboarding
-description: Inspect project compute, reuse ready nodes, and onboard a compatible free local or SSH host with verified repository, environment and data paths for authorized work.
+description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.21'
+  supersurfer-version: '0.1.22'
 ---
 
-# Onboard project compute
+# Prepare project compute
 
-Reviewed for SuperSurfer 0.1.21. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project. Managers supply the registered `project_id` for project-pool actions, but may omit it for `inspect_compute_host` and `register_compute_host`, including in an empty workspace. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
+Reviewed for SuperSurfer 0.1.22. Necessary bounded node preparation belongs to the
+worker's existing authorized task. Use its own tools first; a missing environment,
+file or first candidate is work to investigate, not automatically a reason to stop
+or ask the manager. Leads remain in their project, workers in their experiment's
+project, and managers explicitly select the registered project. Suggestions and
+scheduled checks do not authorize setup, budget changes or launches.
 
-## Choose capacity before changing it
+## Separate the causes of a queue wait
 
-The workspace service and a compute node have different requirements. An explicit desktop connection initializes the bundled AML manager when it is absent, reuses an existing manager without upgrading it or changing queue settings, and requires no separate AML installation. Ordinary state reads do not start a manager. The workspace sidecar needs Python 3.10+; starting its bundled manager needs an installed Python 3.11+ interpreter, discovered separately from training environments. A compute-only node still needs the registered Python 3.9+ runner described below, not the workspace manager. Diagnose which component and interpreter failed before changing an environment; preserve existing jobs and do not launch a second manager to bypass an uncertain connection.
+Use `inspect_project_compute` for pool version/defaults, per-node paths, registered
+hosts, saved observations, `gpu_limit`, `run_limit`, active counts and `queue_paused`.
+This reads existing state rather than probing or reserving GPUs.
 
-Connecting a workspace host also requires ChatGPT sign-in on that host before agents can start model work. The app reuses a valid existing host account; otherwise the user completes the host’s device-code sign-in in their browser. SSH access, a working scheduler or another window’s signed-in account does not establish this authentication. Never copy tokens or account files between hosts, ask the user for credentials in chat, or send an agent to read them. A node used only for scheduled compute needs no ChatGPT account or Codex login; do not add an authentication step to compute onboarding. GitHub and W&B access are separate requirements when the requested task uses them.
+- A full project budget or paused queue is separate from physical capacity.
+  Adding a free node does not override it. Preserve active jobs and finish useful
+  independent preparation; do not manufacture a diagnostic launch.
+- For a concrete candidate-readiness failure, inspect prepared alternatives first.
+  If none are usable, inspect and prepare a compatible authorized host within the
+  task without waiting for another user nudge. Avoid duplicating staging already
+  underway by another owner.
+- Saved run contracts contain their candidate nodes. A later pool addition does
+  **not** extend an existing queued run. Check the actual run's candidates before
+  claiming onboarding solved placement. Do not silently cancel/requeue it or
+  create a duplicate; report an unavailable candidate-update capability honestly.
 
-Live Results pages read their declared individual W&B runs through the connected workspace's authenticated service whenever opened or refreshed. A Results fetch failure is not evidence that the compute node needs AML, another ChatGPT sign-in or a replacement training environment. Diagnose the reported W&B source/account error separately from node readiness, preserve running jobs, and keep cached observations visibly stale with their original times. The report sandbox receives declared metric rows, never account credentials. Do not put W&B tokens in report HTML or copy workspace account files to repair a chart. Opening Results starts no model turn, host probe, node setup or research run; live curves do not establish that another node is free or prepared.
+When the user explicitly requests stopping a run, all owned roles can use
+`stop_run(run_id)` directly within their scope (worker experiment, lead project,
+manager workspace). A queue wait alone does not authorize cancellation. Do not
+kill processes to free capacity or count cancelling GPUs as free before scheduler
+confirmation. Terminal retries are harmless; stopping a run does not launch its
+replacement or expand another queued run's candidates.
 
-A remembered desktop connection identifies the workspace service, not a registered compute node or a verified project environment. Reopening that window does not register a host, add it to a project pool or authorize setup work. Use the compute tools in the current workspace to establish those facts. If a window cannot reconnect, preserve its existing association and diagnose the connection; do not infer that its remote jobs stopped or register a replacement host to work around a desktop connection failure.
+The Compute page's free/total counts and device bars reflect observations and
+reservations, not project eligibility. Stale/unreachable readings do not establish
+free capacity. Refresh availability requests background probes, limited to once
+per ten seconds, and returns before every host answers. Routine idle probes remain
+five minutes apart. Check timestamps/errors; a reservation is not fresh telemetry.
 
-Use `inspect_project_compute` to read the current pool version, defaults, node overrides, registered hosts and saved GPU observations without probing hosts. Configured nodes appear first; inspect reported timestamps and compatibility rather than treating that ordering as proof of readiness. Also check the returned project `gpu_limit` and `run_limit`, `active_gpu_count`, `active_run_count` and `queue_paused` before expensive transfers or environment preparation. Free physical GPUs do not override a project budget or paused queue. Prefer completing independent preparation and queueing the already requested arms where accepted; if a resource guard leaves a draft held, retain its ID and continue other authorized preparation. Increasing a deliberate project limit requires a separate user decision; never raise it or bypass allocation to make a run fit. Prefer eligible nodes that already have the correct dataset and Python environment. If ready nodes cannot meet the request, inspect a compatible free registered host; register a new machine only when needed. Use known authorized SSH targets and the workspace's existing credentials. Do not scan unrelated networks or ask for passwords or private keys.
+## Apply the user's actual budget decision
 
-`inspect_compute_host` performs a read-only probe of a registered `host_id`, an SSH `target`, or the workspace machine by omitting both or using an empty target. Include known `repo_path`, `python`, `data_path` and `storage_path` hints. Add `required_paths` (absolute paths or using `{data}`) for actual required inputs, and `python_packages` mapping distribution names to exact versions for required dependencies. Inspection with only path hints checks metadata without executing the hinted Python; it reports `runtime_verified: false` and `ready: false` even when no path check fails. That means runtime verification is still pending, not that the node is broken. A nonempty `python_packages` map executes the selected trusted interpreter to check the requested distributions. `onboard_project_node` always verifies the runtime before saving, even without package requirements. The returned checks cover the supplied requirements, not unspecified dataset contents or research choices. Check physical GPU indices, VRAM, observations, active work and the required paths before setup. A stale reading is not proof that a node is free, and inspection does not reserve its GPUs. Avoid altering a node's shared or active environment to make your task fit.
+All owned roles have `set_project_limits`. Workers/leads omit `project_id`; managers
+supply it. Set only the fields the user decided: `gpu_limit` is an integer 0–1024
+or literal `unlimited`; `run_limit` independently allows 1–1024. GPU zero permits
+CPU jobs. Present the unlimited setting as unlimited, not its internal integer
+representation. Read back the returned saved values. This changes scheduler
+budgets, not physical GPU allocations, candidate contracts or running jobs.
 
-The Compute view's Refresh availability button requests background GPU probes, bypassing current probe/backoff delays at most once per 10 seconds. It returns before every host responds; check timestamps and host errors. Routine five-minute observations are reused until the scheduler needs fresher evidence. An unreachable host is a per-host failure; do not infer that all nodes behind a gateway are unavailable from one timeout.
+For an explicitly temporary decision, `until_run` must name an existing unfinished
+run in this project. The service durably restores only changed fields after that
+run succeeds, fails or is cancelled. Later changes take precedence. For example,
+if GPU and run limits were raised temporarily, then the user separately chooses
+unlimited GPUs, apply that GPU decision directly: retain only the prior temporary
+run-limit restoration. Never restore an obsolete GPU cap or create a monitoring
+agent just to implement restoration. A queue wait or peer assertion alone is not
+an explicit budget decision; use `ask_user` only if that essential decision remains.
 
-The compact Compute page places registered machines above Runs, with a labeled bar per registered GPU and a free/total count per host. Free means observed idle and unreserved; missing or stale host/device readings, host errors and disallowed devices are excluded. A recorded reservation remains Reserved even when its observation is stale; do not treat that label as fresh telemetry or clear the reservation to make a device look available. Expand a host for observation age, memory, utilization and errors. In the Floating Panels layout, rely on each GPU's label, host counts and timestamps when reporting availability; theme colors, glass effects and collapsed host details do not establish device state. These counts describe saved observations, not scheduler eligibility: still verify the project pool, dataset, Python environment, requested resources and project limits, and let allocation perform its own checks.
+## Inspect and prepare an eligible node
 
-## Resolve setup, preserving existing work
+`inspect_compute_host` accepts an existing `host_id`, SSH `target`, or the workspace
+machine by omitting both/using an empty target. Use known authorized targets, not
+network scans. Include `repo_path`, absolute training `python`, `data_path` and
+`storage_path`, with `required_paths` (absolute or `{data}`) and exact distribution
+versions in `python_packages` for the actual command.
 
-Coordinate missing source paths, environment specifications and overlapping node work directly with the owning agents. `list_agent_messages` returns permitted contacts and this chat's delivery records. Use `message_agent` with `target: "project_lead"` or `"workspace_manager"`, or an owned contact scope; the manager selects an explicit project-lead scope. Workers and leads stay within their project for peer-worker contact. Supply a concrete question or bounded setup request, known paths and checks, and a stable `request_id` (16–100 ASCII letters, digits, underscores or hyphens); reuse it unchanged after uncertain responses. Reply to the sender's scope with `reply_to` set to the received message ID and a new stable request ID. Do not ask the user to act as messenger.
+Path-only inspection does not execute the hinted Python. `runtime_verified: false`
+and `ready: false` without path failures mean runtime verification is pending;
+nonempty package requirements execute the trusted interpreter to verify them.
+`onboard_project_node` always verifies runtime. Both checkout roots and bare Git
+repositories are supported. Checks establish only the supplied requirements, not
+unverified scientific provenance or future free capacity.
 
-A queued or delivered message does not prove that setup is finished; verify the reported node and paths before saving or queueing. Continue independent checks while replies arrive automatically rather than polling or repeating requests. Explicit Stop holds delivery until user resumption; archiving only hides. Preserve the sender's original task scope and restrictions: peer messages do not authorize a higher GPU budget, new research, a missing user decision or a scheduler/PR bypass, and scheduled-origin messages remain restricted. Avoid acknowledgement-only exchanges and duplicate setup by multiple workers. Uncertain delivery is not automatically replayed; inspect recorded evidence before sending a replacement request.
+Find exact inputs in repository refs, notes, prior manifests and authorized source
+hosts before copying. Reuse compatible data/environments, or prepare isolated
+user-owned repositories/environments and resumable copies from verified sources.
+Check storage and relevant hashes/manifests. Do not overwrite shared/active
+installations, change drivers, delete another user's work or run training as a
+setup test. For overlapping work or missing provenance, use one concrete
+[dependency request](../supersurfer-worker/references/coordination.md); continue
+independent preparation while awaiting it. Honor normal permissions.
 
-Find existing verified paths before creating copies: inspect the project repository and Git refs, experiment technical notes and Markdown tabs, prior run commands/artifact manifests, and known source hosts. A protocol missing from one checkout may exist in reviewed source or recorded experiment context. Restore or reference that exact source when available. Do not invent scientific choices, change a dataset or substitute a checkpoint merely to bypass a failure. Use `ask_user` only when a necessary decision remains after available evidence has been checked; await its answer and continue independent work meanwhile.
+`register_compute_host` records a genuinely new host: name, target (empty means
+local), runner root, authorized physical GPU indices and verified Python 3.9+
+runner. `python: "auto"` discovers an existing compatible interpreter. AML needs
+no installation on compute nodes; runner Python is separate from training Python.
+A Python 3.6 read-only inspection can succeed while runner compatibility fails.
+Reuse existing registrations. Only the manager's `register_compute_gpus` adds
+observed indices to an existing host; request that specific missing capability
+rather than duplicating the host. It preserves reservations and does not update
+project masks or saved candidates.
 
-For a requested run, necessary bounded node preparation is part of completing that request. Use normal permitted shell commands to clone or prepare an isolated repository, reuse a compatible environment, create a user-owned environment from the project's recorded dependency specification, or resume a copy of the verified dataset/checkpoint from an authorized source. Check storage and source identity first; preserve partial progress and verify the resulting files against existing manifests or checksums where available. Do not overwrite shared datasets, replace an active environment, delete other users' work, change host-wide drivers/configuration or launch a training job as a setup test. Agents, including new workers, inherit the persisted permission level in Settings unless their conversation explicitly overrides it. The composer can show a selected YOLO mode while its transition notice reports that full access starts next turn: inspect the active sandbox before claiming a setup command can run now. Actual permission denials remain binding; ask for the narrow required permission instead of bypassing it.
+`onboard_project_node` validates and saves one registered node with current pool
+`version`, resolved paths, supplied runtime/input requirements and optional GPU
+subset, preserving defaults and unrelated nodes. Omitted GPU subset permits
+registered devices; an empty subset is CPU-only. Empty path overrides inherit
+shared defaults. Workers cannot replace the whole pool. Leads/managers may use
+`configure_project_compute` for a requested full-pool/default change; reread and
+reconcile version conflicts. These tools do not themselves install dependencies,
+copy data or launch jobs.
 
-The tools validate and record configuration; they do not install dependencies or move datasets themselves. Keep diagnostics tied to an observed failure rather than imposing a training smoke run or repeated test suite. Verify the selected interpreter and required imports/paths for the requested command, then proceed with usable configuration.
+## Finish the authorized task
 
-## Register the runner and enable the project node
+Prepare nodes before new submission, then continue through the role's scoped
+queue workflow and exact-source PR. Carry the same required paths/package versions
+into the run contract. The scheduler chooses an eligible node and stages the
+verified commit without modifying its registered worktree; it does not install
+an environment or copy datasets on demand. Preserve known request/run identities
+through failures; a missing run ID is not evidence that node setup must be repeated.
+For training, follow [telemetry guidance](../supersurfer-worker/references/training-metrics.md),
+including real MFU and individual W&B logging in the exact-source PR.
 
-`register_compute_host` records the name, SSH target (empty means local), runner directory, authorized physical GPU indices and a verified Python 3.9+ runner executable. Use `python: "auto"` to discover an existing compatible system or common Conda/Miniforge interpreter, or supply a verified executable. AML does not need installing on the node. This runner is separate from the project's training Python; changing a run override cannot repair an incompatible registered runner. A read-only probe can work with Python 3.6 and report its `inspection_python` as incompatible while another interpreter is suitable. Reuse existing registrations; do not create duplicates to evade runner-repair restrictions on active jobs or reservations.
-
-To add physical GPUs to an existing host registration, the manager uses `register_compute_gpus` with `host_id` and a nonempty list of unique `gpus` indices to add; no `project_id` is accepted. Inspect the host first, because AML validates that the requested devices were observed. The addition preserves existing registered devices and reservations, and repeating it is safe. It leaves host Python/target/root, project masks, queued contracts and occupancy checks unchanged and launches no job. Leads and workers request this bounded shared-registration change through `message_agent` to the workspace manager; do not duplicate the host or bypass the scoped tools. Then configure the project’s permitted devices where requested, separately from registration. This coordination is for the missing capacity change, not another approval for an already authorized worker launch.
-
-All three roles can use `onboard_project_node` with the current pool `version` and one `node` record; workers remain fixed to their own project. Include its registered `host_id`, repository and per-node Python/data/storage overrides, plus an optional GPU subset. Include task-specific `required_paths` and `python_packages` when applicable. It validates resolved paths, the selected Python runtime and supplied requirements before enabling the node and preserves shared defaults and unrelated nodes. Workers cannot replace the whole pool or configure another project. For requested changes to defaults or the entire pool, leads and managers can use `configure_project_compute` with the current version, shared defaults and complete intended node list, preserving unrelated entries. Reread current state after a version conflict or uncertain response before retrying.
-
-Each enabled node needs a registered host, repository path and resolved absolute training Python, data and storage paths. The registered repository may be a normal checkout root or a bare Git repository; preserve a valid bare repository mapping rather than replacing it because it has no worktree. Empty overrides inherit shared defaults; per-node differences are normal. Omitted `gpu_indices` permits registered devices, an explicit empty array is CPU-only, and a subset permits only those physical indices. Save only verified usable paths; configuration is not evidence of free capacity or successful execution. Report which node and paths were actually enabled and any remaining failed checks.
-
-## Finish the requested work
-
-Complete onboarding before creating the queued run: the run saves its eligible node contracts, and later pool changes do not expand that saved set. Dynamic eligibility for queued runs remains a proposal, not current behavior. Use the project pool with an exact Git revision, command argv and resource requirements; `{python}` and `{data}` resolve per node. Carry the required protocol/checkpoint paths and exact package versions into `prepare_run` or `queue_run` using `required_paths` and `python_packages`, so candidate-node checks cover the same requirements after onboarding. The scheduler selects a compatible available node, stages the verified commit's objects without changing the registered worktree, and performs allocation checks. It does not install environments or copy datasets on demand. Node preparation itself neither queues a diagnostic run nor releases held work. For an already requested launch, continue through the role's scoped `queue_run` workflow with the exact-source PR; do not add another manual release/confirmation step or bypass the queue with shell-launched training.
-
-For training readiness, read [the worker's telemetry guidance](../supersurfer-worker/references/training-metrics.md). New submissions declare `job_type`; training also needs `training_metrics` with `mfu_metric`, explicit `mfu_unit`, documented `mfu_method` and repository-relative logger `source_path`. Coordinate the logger's inclusion in the exact-source PR and verification against the individual W&B run after launch. Record the node's actual GPU model/precision information needed for MFU; do not substitute utilization or guess peak FLOPs. Path validation alone does not verify instrumentation. The visible run details refresh individual W&B history/system metrics every 10 seconds; that fetch interval is not the host-probe interval or evidence that every metric was just sampled. Check MFU, system and host observation times separately, preserving unknown and stale ages. A live chart cannot establish that a different candidate node is free or correctly prepared; validate that node through the compute tools. Idle host probing remains unchanged. Keep existing jobs running and prepare telemetry changes for their next requested launch, without modifying recorded source to retrofit them.
-
-A retained submission with no returned run ID is a queue recovery issue, not evidence that another host or environment is needed. Preserve the prepared node, original command and resource fields, and have the original submitting conversation retry `queue_run` with its same stable `request_id` after resolving the reported cause. Supported idempotent submission recovers or creates at most one held draft and retains normal PR and scheduler checks; a known `run_id` instead identifies the existing draft to retry. Do not reinstall node environments, alter pool candidates, invent a replacement request or edit service state merely to escape a missing ID. If the workspace engine lacks the required recovery capability, report that workspace engine requirement separately from compute-node Python or data readiness.
-
-Keep the existing `update_task` deliverable working while investigating or repairing recoverable failures. Record actual progress and retain task IDs across follow-ups and reconnects. Only mark blocked when available authorized routes cannot resolve a concrete external dependency, denied permission or essential decision. Supply `blocker_kind: "external"`, `"permission"` or `"decision"` and the actual blocker; an external blocker requires `attempts` explaining the checks and recovery attempts. A recoverable or unspecified blocker remains working. Do not call an unchecked file search an external dependency. Mark completed only after the requested setup or run outcome has been verified. Archiving a chat only hides it and does not cancel its outstanding work. A worker's persistent monitoring requires a confirmed wakeup rule rather than an ordinary model turn claiming to keep watching.
+A workspace service is different from a compute-only node. Explicit desktop
+connection initializes a missing bundled manager; the sidecar needs Python 3.10+
+and starting the bundled manager needs installed Python 3.11+. Existing managers
+are reused without changing queue settings. Ordinary state reads start no manager.
+A workspace host also needs its own ChatGPT sign-in through the app; compute-only
+nodes do not. GitHub/W&B access are separate, and a Results fetch failure does not
+prove compute readiness or ChatGPT access failed. Never copy tokens or weaken the
+Results sandbox to repair a chart; preserve existing jobs and genuine sample ages.
