@@ -85,7 +85,10 @@ async function fixture(t) {
   });
   servers.push(occupied);
   const occupiedPort = await listen(occupied);
-  const unwantedPort = await unusedPort();
+  // A released ephemeral port can be reused by sshd or the app's own tunnel,
+  // producing a false inherited-forward failure. A private Unix socket makes
+  // the unwanted listener unambiguous without reserving or probing user ports.
+  const unwantedForward = path.join(directory, 'unwanted-forward');
   const sshPort = await unusedPort();
   const daemonConfig = path.join(directory, 'sshd_config');
   fs.writeFileSync(daemonConfig, [
@@ -121,9 +124,9 @@ async function fixture(t) {
     '  StrictHostKeyChecking yes', '  ControlMaster auto', '  ControlPersist 600',
     `  ControlPath ${path.join(directory, 'user-master')}`, '  ForkAfterAuthentication yes',
     `  LocalForward 127.0.0.1:${occupiedPort} 127.0.0.1:${remotePort}`,
-    `  LocalForward 127.0.0.1:${unwantedPort} 127.0.0.1:${remotePort}`, '',
+    `  LocalForward ${unwantedForward} 127.0.0.1:${remotePort}`, '',
   ].join('\n'), { mode: 0o600 });
-  return { directory, children, occupiedPort, unwantedPort, received, token,
+  return { directory, children, occupiedPort, unwantedForward, received, token,
     config: { target: 'supersurfer-regression.invalid', remotePort },
     ready: { port: remotePort, token }, sshOptions: ['-F', clientConfig, ...SSH_OPTIONS] };
 }
@@ -135,7 +138,7 @@ test('private SSH master ignores inherited forwards and cleans up only its own t
   assert.equal(result.token, f.token);
   assert.equal(result.child.exitCode, null, 'Master must remain the owned foreground process');
   assert.equal(await isListening(f.occupiedPort), true, 'Original colliding listener must survive');
-  assert.equal(await isListening(f.unwantedPort), false, 'Unused inherited LocalForward must not appear');
+  assert.equal(fs.existsSync(f.unwantedForward), false, 'Unused inherited LocalForward must not appear');
   const response = await fetch(result.origin + '/probe', { headers: { Authorization: `Bearer ${result.token}` } });
   assert.deepEqual(await response.json(), { fixture: 'isolated-sshd' });
   assert.ok(f.received.some(r => r.url === '/api/session' && r.authorization === `Bearer ${f.token}`), 'Tunnel health must authenticate the remote session');
@@ -150,7 +153,16 @@ test('private SSH master ignores inherited forwards and cleans up only its own t
   assert.equal(await isListening(localPort), false, 'Own forwarded port must close');
   assert.equal(fs.existsSync(path.dirname(socketPath)), false, 'Own temporary socket directory must be removed');
   assert.equal(await isListening(f.occupiedPort), true, 'Disconnect must preserve unrelated listeners');
-  assert.equal(await isListening(f.unwantedPort), false);
+  assert.equal(fs.existsSync(f.unwantedForward), false);
+});
+
+test('fixture detects inherited forwarding when clearing is disabled', { skip, timeout: 45000 }, async t => {
+  const f = await fixture(t);
+  const sshOptions = f.sshOptions.map(value => value === 'ClearAllForwardings=yes' ? 'ClearAllForwardings=no' : value);
+  const result = await startTunnel(f.config, f.ready, { sshOptions });
+  f.children.push(result.child);
+  assert.equal(fs.existsSync(f.unwantedForward), true, 'The fixture must detect an inherited listener');
+  assert.equal(await isListening(f.occupiedPort), true, 'The unrelated listener is preserved');
 });
 
 test('rejected session credentials close the dedicated master and private socket', { skip, timeout: 45000 }, async t => {
@@ -172,6 +184,6 @@ test('rejected session credentials close the dedicated master and private socket
   assert.deepEqual(ownDirectories(), [], 'Failed connection must clean its owned master socket directory');
   assert.ok(f.received.some(r => r.url === '/api/session' && r.authorization === 'Bearer incorrect-test-token'));
   assert.equal(await isListening(f.occupiedPort), true, 'Failed connection must preserve unrelated listeners');
-  assert.equal(await isListening(f.unwantedPort), false);
+  assert.equal(fs.existsSync(f.unwantedForward), false);
   assert.equal(fs.existsSync(path.join(f.directory, 'user-master')), false);
 });

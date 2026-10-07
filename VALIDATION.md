@@ -1,3 +1,19 @@
+# SuperSurfer 0.1.14 validation — October 7, 2026
+
+All 297 Python regressions pass in shuffled order with seed 20261007. All 15 Node desktop/SSH checks pass without skips, including the real isolated SSH daemon. All 11 browser suites and native Linux Electron checks pass. The corrected three-case SSH integration suite also passes 30 consecutive repetitions. All five agent capability skills received a bounded independent review, substantive revisions and passing version/tool checks.
+
+The selected Tidal Glass connection screen passes all 24 design/viewport/color-scheme combinations plus reduced-motion, reduced-transparency and forced-color checks. All three design screenshots were visually inspected during the study. Setup resilience covers pending configuration, failed host discovery, malformed settings, repeated submissions and recovery. Native Electron uses an isolated profile with Chromium sandboxing enabled and verifies actual preload/main IPC, theme/layout/custom-tab persistence and connection denial from an untrusted document.
+
+Regression coverage reproduces early connection submission, failed discovery blocking remote entry, duplicate connection requests, lost custom-tab preferences and stale W&B summary values overwriting newer history. Additional MFU tests ensure a summary timestamp advanced by another metric cannot refresh an older MFU sample; changed summary-only values have unknown sample age. No metric is invented from host utilization.
+
+The six-hour overnight campaign stopped early at 23:38:53 America/New_York on October 6: three complete cycles passed, and the fourth stopped on an SSH assertion after 45 passing suite invocations. The fixture's unwanted port had been released before the test and could be reused by sshd or another listener; the original log does not identify which process owned it. This release removes that ambiguity with a private Unix socket. A negative-control case disables forwarding cleanup and confirms that the fixture then detects the inherited listener. The original failed report is retained; the full overnight duration is not claimed as completed.
+
+The campaign also passed all 212 isolated engine regressions. The bundled engine is unchanged from 0.1.13. Seeded state tests exercise permission defaults/overrides, archive/selection persistence and service restarts; concurrent retry tests preserve one durable peer receipt per request. Browser checks cover Compute, Results, queue/wakeup flows, chat/math/fullscreen layout, permissions, questions and experiment pages. These checks use isolated fixtures, never real research jobs or user chat mutations.
+
+Native macOS launch and Gatekeeper behavior remain untested on this Linux build host. Mac packages are unsigned. Controlled W&B responses test API behavior; existing training processes are not restarted to retrofit logging. External provider authentication and iframe restrictions still apply.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.13 validation
 
 All 291 Python regressions passed, followed by a focused schema regression for training classification/MFU requirements (292 tests in the resulting suite). All 212 isolated engine regressions and 11 Node desktop checks passed; two optional SSH-daemon checks were skipped. New backend coverage exercises durable peer delivery, restart/deduplication, privacy, explicit Stop, archive behavior, scheduled authority, inherited settings, real stdio catalogs, runner timestamps and W&B cache/error/units behavior. Tests use isolated fixtures; no live research job is launched or cancelled as validation.

@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.13
+# SuperSurfer 0.1.14
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -6,9 +6,9 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.13-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.13-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**.
+**Mac:** extract `SuperSurfer-0.1.14-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.14-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**.
 
-**Linux x64:** extract `SuperSurfer-0.1.13-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.14-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
@@ -20,6 +20,14 @@ The selected workspace computer needs Python 3.10+, Codex CLI, Git, and a runnin
 This release also bundles the compatible scheduler in `engine/`. For an existing detached Linux AutoML manager, an explicit administrator update from the extracted source folder is `python3 -m server.engine --engine-dir ./engine --aml-home ~/.auto-ml`. It uses the manager's existing Python 3.11+ environment, briefly pauses admission, preserves running jobs and current state, and backs up the database. It refuses an active legacy-agent turn or a manager owned by another service. A healthy connection never silently replaces your scheduler.
 
 SuperSurfer uses the workspace computer's existing Codex ChatGPT login. Otherwise choose **Connect ChatGPT** in Settings and complete device-code sign-in. No OpenAI API key is required. GitHub preparation uses that computer's existing `gh` authentication; creating a project folder does not require GitHub.
+
+## Changes in 0.1.14
+
+Tidal Glass is the new connection screen: a translucent panel, quiet blue-green background, and light/dark variants. It adapts to smaller windows and reduced-motion, reduced-transparency and high-contrast preferences. The workspace themes and existing connection choices remain available.
+
+Connection setup now waits for saved preferences, remains usable when SSH-host discovery fails, and prevents duplicate attempts. Custom experiment tabs survive desktop restarts. W&B history and summary readings merge chronologically; MFU reports its own observed sample time, or an unknown age when only summary data is available.
+
+The release includes expanded browser, native Electron and randomized persistence checks, plus a review of all five agent skills. See [Validation](VALIDATION.md) for actual coverage and the overnight campaign's early stop.
 
 ## Changes in 0.1.13
 
@@ -159,3 +167,14 @@ SUPERSURFER_SSHD_TEST=1 node --test tests/ssh.integration.test.cjs
 This remains a single-user prototype. Full PR diff review, native Rerun integration, multi-user permissions, and automatic preemption are future work. Sandboxed HTML pages can already host compatible HTTPS viewers and WebGL widgets; external login, CORS and framing restrictions still apply. Existing AutoML chat history is a bounded recent transcript; SuperSurfer-owned history is persisted completely. Agent instructions and scoped queue controls do not constitute an operating-system isolation boundary.
 
 Codex integration references: [app-server protocol](https://learn.chatgpt.com/docs/app-server), [Fast mode](https://learn.chatgpt.com/docs/agent-configuration/speed), and [automatic approval review](https://learn.chatgpt.com/docs/sandboxing/auto-review).
+
+
+## Development: extended QA and login studies
+
+Tidal Glass ships as the default connection screen. The developer preview retains the Observatory and Field Notes alternatives for comparison. Build it with `node scripts/preview-login.cjs`, then open `dist/login-designs.html`. Its local simulation uses the real form code but never contacts a workspace. ChatGPT sign-in and SSH authentication are unchanged.
+
+The glass treatment follows [Apple's materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials): visual depth with readable controls and reduced-transparency, reduced-motion and higher-contrast alternatives. This is a CSS interpretation in Electron, not a native macOS Liquid Glass API.
+
+Run the ordinary suite with `npm test`. `python3 scripts/qa-shuffle.py --seed 20261007` randomizes the Python test order and the durable-state/concurrent-retry scenarios. Browser tests use installed Playwright and Chrome at `CHROME_PATH` (new suites) or `/opt/google/chrome/chrome` (existing suites). Build the login preview before its browser test. The native Electron smoke uses an isolated user profile and a Linux package runtime at `ELECTRON_PATH` or `dist/SuperSurfer-linux-x64/SuperSurfer`, under `xvfb-run` when headless. Chromium sandboxing remains enabled in that native check.
+
+A bounded campaign is `python3 scripts/qa-campaign.py --hours 6 --output /absolute/path/to/qa-report`. It changes the seed and test order every cycle, runs the loopback SSH cases, saves JSON/HTML reports after each command and stops on the first failure. Optional `--engine-tests` and `--engine-source` point to matching isolated AML test/source directories. Development Node/Python must be on PATH. It exercises temporary fixtures, never research jobs; logs include the exact source commit and seed. Running the campaign in a process supervisor preserves it across client disconnects. A running report is not a completed overnight result.

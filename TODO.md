@@ -2,6 +2,16 @@
 
 Ongoing list of requested improvements. Unchecked items are planned, not implemented.
 
+## Completed in 0.1.14
+
+- [x] Reproduce/fix setup initialization, failed host discovery and repeated-submit races.
+- [x] Preserve custom experiment tabs through native desktop restarts.
+- [x] Prevent stale W&B summaries replacing newer data; expose MFU sample age separately.
+- [x] Add seeded state/restart/concurrent-delivery tests, broaden browser coverage and run actual Electron isolation/persistence checks.
+- [x] Build three interactive connection-screen studies with responsive/accessibility variants.
+- [x] Review the stopped overnight campaign; remove ambiguous SSH test port reuse and add an inherited-forward negative control.
+- [x] Ship the selected Tidal Glass connection screen.
+
 ## Completed in 0.1.13
 
 - [x] Direct durable worker/lead/manager messages with contacts, receipts, scope checks and preserved Stop/launch authority.

@@ -6,6 +6,7 @@ const { pathToFileURL } = require('node:url');
 const { connect } = require('./connection.cjs');
 const { knownHosts } = require('./hosts.cjs');
 const themes = require('./themes.cjs');
+const { workspacePreference } = require('./preferences.cjs');
 let window, connection, connecting = false, shuttingDown = false;
 const setupPath = path.join(__dirname, 'setup.html');
 const setupUrl = pathToFileURL(setupPath).href;
@@ -67,15 +68,7 @@ else {
     });
     ipcMain.handle('workspace:set', (event, value) => {
       if (event.sender !== window?.webContents || !value || typeof value !== 'object') throw new Error('Invalid workspace preference.');
-      const preference = {
-        view: ['workspace','compute','settings'].includes(value.view) ? value.view : 'workspace',
-        tab: ['overview','runs','results','compute'].includes(value.tab) ? value.tab : 'overview',
-        projectId: typeof value.projectId === 'string' ? value.projectId.slice(0,200) : null,
-        experimentId: typeof value.experimentId === 'string' ? value.experimentId.slice(0,200) : null,
-        chatVisible: value.chatVisible !== false,
-        chatWidth: Number.isFinite(value.chatWidth) ? Math.max(280, Math.min(760, value.chatWidth)) : 390,
-        chatMaximized: value.chatMaximized === true,
-      };
+      const preference = workspacePreference(value);
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
       fs.writeFileSync(path.join(app.getPath('userData'), 'workspace.json'), JSON.stringify(preference), {mode:0o600});
       return preference;
