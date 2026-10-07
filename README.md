@@ -1,3 +1,7 @@
+## 0.1.19 Floating Panels
+
+The selected Floating Panels design is now the main workspace: a compact full-width header and separate glass navigation, document and agent panels over a quiet tidal background. Light/dark and imported VS Code themes, full-page Results, resizing and fullscreen chats remain available. Reduced-transparency and forced-color system preferences receive opaque readable surfaces.
+
 ## 0.1.18 queue recovery
 
 A rejected cache/run submission no longer strands its request without a run ID. Retry `queue_run` in the original conversation with the same `request_id` and unchanged fields: SuperSurfer reuses the recorded run or safely submits that identity once. Resolved node contracts and W&B identity survive retries. Existing held run IDs still use normal PR verification and release. Existing workspaces need the bundled manager update for safe recovery when no receipt exists; connecting alone does not restart their manager.

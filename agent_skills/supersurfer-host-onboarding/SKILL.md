@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Inspect project compute, reuse ready nodes, and onboard a compatible free local or SSH host with verified repository, environment and data paths for authorized work.
 metadata:
-  supersurfer-version: '0.1.18'
+  supersurfer-version: '0.1.19'
 ---
 
 # Onboard project compute
 
-Reviewed for SuperSurfer 0.1.18. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project. Managers supply the registered `project_id` for project-pool actions, but may omit it for `inspect_compute_host` and `register_compute_host`, including in an empty workspace. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
+Reviewed for SuperSurfer 0.1.19. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project. Managers supply the registered `project_id` for project-pool actions, but may omit it for `inspect_compute_host` and `register_compute_host`, including in an empty workspace. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
 
 ## Choose capacity before changing it
 
@@ -21,7 +21,7 @@ Use `inspect_project_compute` to read the current pool version, defaults, node o
 
 The Compute view's Refresh availability button requests background GPU probes, bypassing current probe/backoff delays at most once per 10 seconds. It returns before every host responds; check timestamps and host errors. Routine five-minute observations are reused until the scheduler needs fresher evidence. An unreachable host is a per-host failure; do not infer that all nodes behind a gateway are unavailable from one timeout.
 
-The compact Compute page places registered machines above Runs, with a labeled bar per registered GPU and a free/total count per host. Free means observed idle and unreserved; missing or stale host/device readings, host errors and disallowed devices are excluded. A recorded reservation remains Reserved even when its observation is stale; do not treat that label as fresh telemetry or clear the reservation to make a device look available. Expand a host for observation age, memory, utilization and errors. These counts describe saved observations, not scheduler eligibility: still verify the project pool, dataset, Python environment, requested resources and project limits, and let allocation perform its own checks.
+The compact Compute page places registered machines above Runs, with a labeled bar per registered GPU and a free/total count per host. Free means observed idle and unreserved; missing or stale host/device readings, host errors and disallowed devices are excluded. A recorded reservation remains Reserved even when its observation is stale; do not treat that label as fresh telemetry or clear the reservation to make a device look available. Expand a host for observation age, memory, utilization and errors. In the Floating Panels layout, rely on each GPU's label, host counts and timestamps when reporting availability; theme colors, glass effects and collapsed host details do not establish device state. These counts describe saved observations, not scheduler eligibility: still verify the project pool, dataset, Python environment, requested resources and project limits, and let allocation perform its own checks.
 
 ## Resolve setup, preserving existing work
 

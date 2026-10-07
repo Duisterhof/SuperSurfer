@@ -1,3 +1,7 @@
+## Completed in 0.1.19
+
+- Ship the selected Floating Panels design across the main workspace, with theme/accessibility and narrow/fullscreen regression coverage.
+
 ## Completed in 0.1.18
 
 - Recover E16-style retained queue requests without a missing-ID dead end; preserve one run per scoped durable request across retries and restarts.
