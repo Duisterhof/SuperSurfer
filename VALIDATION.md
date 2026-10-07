@@ -1,3 +1,15 @@
+# SuperSurfer 0.1.23 validation — October 7, 2026
+
+All 360 Python tests, 20 Node/SSH checks without skips, 17 Chromium suites, two native Linux Electron suites and the preserved 212-test engine regression suite pass. The targeted node suite also passes after final fixes for creating missing registered roots and repairing previously acquired nodes. All five skills were independently reviewed and revised, including the roles/tools/authority schematic.
+
+New tests use real disposable Git repositories, a non-tip requested commit, a dirty user worktree, local checksum rsync and an isolated Python venv. They verify exact committed code, missing inputs, repair with the same acquisition identity, cancellation before admission, recovery ownership, ordinary-schedule denial, bounded linked retries, and unowned destination rejection. The bundled scheduler integration verifies candidate admission without a shared repository mapping, unchanged queue identity/order/resources/review, rejection after starting/running/cancellation or revision mismatch, and one simulated launch on the added node. No live research jobs are submitted or cancelled by tests.
+
+E12's live Failure analysis videos report was inspected after its worker moved the six GIFs above the large chart. All six loaded with nonzero image dimensions; the first preview was visible at 1600- and 1200-pixel window widths, with no browser errors. Existing recordings/provenance were preserved. This confirms browser GIF display, not direct video rendering in chat or native Mac playback.
+
+Limits: source/data transfer and venv installation are tested on a local fixture; generic SSH transport has separate integration coverage, but this release does not stage a large research dataset onto a real additional host as a test. Advanced conda/container setup remains agent shell work followed by the same readiness check. Mac packages are cross-built and unsigned; native Mac execution is unavailable on this Linux host.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.22 validation — October 7, 2026
 
 All 352 Python tests, 20 Node/SSH checks without skips, 17 Chromium browser suites and two native Linux Electron suites pass. All five skills were independently reviewed, shortened and revised, including the final stop_run capability. Checks cover scoped budget edits, unlimited versus separate run budgets, durable temporary restoration, lost replies, later user changes, exact-run cancellation, pending versus terminal stops, quiet updates, bounded request/answer exchanges and stable-ID retries. Existing permission, authentication, PR, queue, persistence and multiwindow checks remain green.

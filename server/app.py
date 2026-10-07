@@ -145,6 +145,9 @@ def directory_suggestions(value, limit=50, scan_limit=10000):
         raise APIError(f"Cannot read directory: {exc}") from exc
 
 
+from .node_setup import NodeSetup
+from .run_recovery import RunRecovery
+
 class Service:
     def __init__(self, state_dir, aml_home, read_only=False, aml=None, codex=None, start_monitor=True, tracking=None):
         self.store = Store(state_dir)
@@ -190,6 +193,8 @@ class Service:
             codex = CodexBridge(self.directory / "codex", self.context_provider, action_handler=self.agent_action)
         self.codex = codex
         self.shutdown = threading.Event()
+        self.nodes = NodeSetup(self)
+        self.recovery = RunRecovery(self)
         self.message_event = threading.Event()
         self.messages = AgentMessages(self)
         self.message_thread = None
@@ -308,6 +313,7 @@ class Service:
                 if not self.shutdown.is_set():
                     self.store.put("project_limits_error", str(exc))
             try:
+                self.recovery.tick()
                 self.wakeups.tick(self.state(), self.start_worker_wakeup)
             except Exception as exc:
                 if not self.shutdown.is_set():
@@ -546,7 +552,7 @@ class Service:
             instructions.append("Use configure_worker_wakeup when the user requests a recurring check or event wakeup. "
                 "Examples: interval minutes=10 with the user's debug task; metric name='validation/loss', operator='lt', value=0.1; "
                 "run_status status='failed'. Metric and status events fire once until explicitly rearmed. Rules stay on the workspace computer "
-                "and wait when a worker is busy. Never claim a wakeup is saved before the tool succeeds. Scheduled checks cannot queue runs.")
+                "and wait when a worker is busy. Never claim a wakeup is saved before the tool succeeds. Ordinary scheduled checks cannot queue runs.")
             tracking = self.tracking.get(experiment["id"]) or {}
             context["wandb_url"] = experiment.get("wandb_url") or tracking.get("url")
             instructions.append("Experiment W&B tracking: " + json.dumps({"url": context["wandb_url"],
@@ -607,7 +613,7 @@ class Service:
             onboarding = Path(__file__).resolve().parents[1] / "agent_skills" / "supersurfer-host-onboarding" / "SKILL.md"
             context["instructions"] += ("\n\nFor requested host onboarding or project compute setup, read the host-onboarding skill at "
                 + str(onboarding) + ". Use inspect_project_compute to find prepared nodes, inspect_compute_host to check candidates, register_compute_host for necessary new capacity within authorized work, "
-                "and onboard_project_node to validate and add one prepared node to the project. "
+                "and onboard_project_node to validate and add one prepared node to the project. For a queued run, use check_available_node for its exact checkout and acquire_new_node to stage source/environment/data, call that same check and add the candidate to the existing run. recover_run enables owner-bound recovery wakeups and retries confirmed failed attempts. "
                 "Inspection is read-only; actual setup for authorized work uses isolated user-owned paths and preserves shared environments, original data and existing research worktrees.")
             context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. They can also set_project_limits directly after an explicit user budget decision, using gpu_limit=unlimited when requested and a separate run_limit. until_run restores only that temporary change after the named run ends; later budget edits win. A capacity wait is not authorization to raise limits. Use stop_run(run_id) directly for explicit user stop requests within your scope; cancelling is pending until terminal status is confirmed. Never stop other jobs to free capacity without authorization. "
                 "Workers are fixed to their experiment's project and merge one validated node at a time; only leads/managers use configure_project_compute. "
@@ -618,7 +624,7 @@ class Service:
                 "Pass required_paths (with {data}) and python_packages for known exact requirements to pooled queue_run so allocation verifies them. "
                 "For multiple explicitly requested arms, queue_run accepts a separate stable request_id per new run, reused across reconnects and retries. "
                 "Without request_id the older one-new-run-per-turn rule applies. Existing held runs use run_id and pr_url. "
-                "Node registration/configuration affects future contracts, not already queued runs. A missing artifact at one location is recoverable: search and repair before declaring a real blocker.")
+                "Pool edits affect future submissions; acquire_new_node verifies and adds a candidate to the same queued run. Use recover_run to inspect setup progress, save the existing task, or retry a confirmed failed attempt. A missing artifact at one location is recoverable: search and repair before declaring a real blocker.")
         if role == "manager":
             context["instructions"] += "\nUse register_compute_host for new hosts (no project is required). Use register_compute_gpus(host_id, gpus) to add observed, user-authorized GPUs to existing hosts. Preserve existing project masks and launch occupancy checks. Registration is not allocation; do not declare busy GPUs free. Never replace registrations with duplicates."
         if role in {"manager", "lead"}:
@@ -678,6 +684,24 @@ class Service:
                 return self.messages.send(scope, arguments)
             if name == "supersurfer_list_agent_messages":
                 return self.messages.list(scope, arguments)
+            if name in {"supersurfer_check_available_node", "supersurfer_acquire_new_node", "supersurfer_recover_run"}:
+                info = self._chat_scope(scope)
+                if "agent" in info or not isinstance(arguments, dict) or not self.codex.chat(scope).get("busy"):
+                    raise APIError("Run workflow tools require an active owned conversation", 403)
+                run = self.lookup("runs", text_field(arguments, "run_id", 150), fresh=True)
+                if info["role"] == "lead" and run["project_id"] != scope.removeprefix("project:"):
+                    raise APIError("Run belongs to another project", 403)
+                if info["role"] == "worker" and run.get("experiment_id") != self.experiment_for_scope(scope)["id"]:
+                    raise APIError("Run belongs to another experiment", 403)
+                read = name == "supersurfer_check_available_node" or (name == "supersurfer_recover_run" and arguments.get("action", "status") == "status")
+                if not read and self.turn_origins.get(scope) != "user" and not (self.turn_origins.get(scope) == "recovery" and self.recovery.allowed(scope, run["id"])):
+                    raise APIError("Mutation requires user-requested work or this run's saved recovery grant", 403)
+                if name == "supersurfer_check_available_node":
+                    if set(arguments) - {"run_id", "host_id", "node"}: raise APIError("Check accepts run_id, host_id and node")
+                    return self.nodes.check(run, text_field(arguments, "host_id", 150), arguments.get("node"))
+                if name == "supersurfer_acquire_new_node":
+                    return self.nodes.acquire(scope, run, arguments)
+                return self.recovery.action(scope, run, arguments)
             if name == "supersurfer_stop_run":
                 information = self._chat_scope(scope)
                 if ("agent" in information or not self.codex.chat(scope).get("busy")
@@ -691,6 +715,7 @@ class Service:
                     raise APIError("Run belongs to another project", 403)
                 if role == "worker" and run.get("experiment_id") != self.experiment_for_scope(scope)["id"]:
                     raise APIError("Run belongs to another experiment", 403)
+                self.recovery.pause(run_id=run["id"])
                 terminal = {"succeeded", "failed", "cancelled"}
                 unchanged = run["status"] in terminal
                 if not unchanged:
@@ -837,7 +862,10 @@ class Service:
         if not self.codex.chat(scope).get("busy"):
             raise APIError("Compute tools require an active conversation", 403)
         read = name in {"supersurfer_inspect_project_compute", "supersurfer_inspect_compute_host"}
-        if not read and self.turn_origins.get(scope) != "user":
+        recovery = self.recovery.active.get(scope)
+        recovering = (name == "supersurfer_register_compute_host" and self.turn_origins.get(scope) == "recovery"
+                      and recovery and self.recovery.allowed(scope, (self.recovery.get(recovery) or {}).get("runs", [None])[-1]))
+        if not read and self.turn_origins.get(scope) != "user" and not recovering:
             raise APIError("Only user-requested work may configure compute", 403)
         if name == "supersurfer_register_compute_gpus":
             if role != "manager":
@@ -881,7 +909,7 @@ class Service:
             project = next(row for row in snapshot["projects"] if row["id"] == project_id)
             active = [row for row in snapshot["runs"] if row["project_id"] == project_id and row["status"] in {"starting", "running", "unreachable", "orphaned", "cancelling"}]
             hosts.sort(key=lambda host: (host["id"] not in enabled, host.get("stale", True), host["name"]))
-            return {"pool": pool, "hosts": hosts, "project": display_limits(project),
+            return {"pool": pool, "hosts": hosts, "prepared_nodes": self.nodes.prepared_nodes(project_id), "project": display_limits(project),
                 "active_run_count": len(active), "active_gpu_count": sum(row.get("gpu_count", 0) or 0 for row in active),
                 "queue_paused": snapshot["queue"]["paused"], "note": "Configured nodes first. Check exact required inputs with inspect_compute_host. Saved GPU readings include age/reservations; this call does not probe or allocate."}
         if name == "supersurfer_inspect_compute_host":
@@ -902,6 +930,7 @@ class Service:
         """Explicit user queue requests retain AML's exact-source review and scheduler."""
         if not isinstance(arguments, dict):
             raise APIError("queue_run requires run parameters")
+        owner_scope = scope
         existing = "run_id" in arguments
         fields = {"run_id", "pr_url"} if existing else {"request_id", "name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics"}
         if set(arguments) - fields:
@@ -980,6 +1009,7 @@ class Service:
             raise APIError("Run belongs to another experiment; it cannot be queued for the selected experiment", 403)
         if run.get("ready"):
             if str(run.get("pr_url") or "").rstrip("/") == review_url.rstrip("/"):
+                self.enable_run_recovery(owner_scope, run)
                 return {"queued": True, "ready": True, "already_queued": True, "run_id": run_id, "status": run["status"], "message": f"Run was already released; current status is {run['status']}. No additional run was created.", "run": run}
             raise APIError(f"Run {run_id} is already released with a different PR; this tool will not change it", 409)
         if run["status"] != "queued":
@@ -995,7 +1025,14 @@ class Service:
             error = APIError(f"Run {run_id} was not confirmed released: {exc}. Reuse queue_run with run_id={run_id!r} and pr_url to retry; do not create another run.", getattr(exc, "status", 503))
             error.run_id = run_id
             raise error from exc
+        self.enable_run_recovery(owner_scope, run)
         return {"queued": True, "ready": True, "already_queued": False, "run_id": run_id, "run": released}
+
+    def enable_run_recovery(self, scope, run):
+        if (scope.startswith(("experiment:", "conversation:")) and self.turn_origins.get(scope) == "user"
+                and run.get("config", {}).get("host_contracts") and not self.recovery.get(run["id"]) and scope not in self.recovery.submitting):
+            self.recovery.enable(scope, run, "Complete the existing user-requested run " + run["name"] +
+                ". Consult this conversation's task and preserve its protocol, inputs, resource limits and stop orders.")
 
     def prepare_run_submission(self, params):
         """Validate and build a held submission before crossing the manager RPC boundary."""
@@ -1032,7 +1069,8 @@ class Service:
                 raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
             resolved = self.compute.resolve_run(project["id"], params, project)
             config.update(host_contracts=resolved["host_contracts"], project_compute=resolved["pool_snapshot"],
-                          source_repo=resolved["source_repo"], stage_source=True)
+                          source_repo=resolved["source_repo"], stage_source=True,
+                          supersurfer_run_request={key: value for key, value in params.items() if not key.startswith("_")})
             payload.update(host=resolved["preferred_host"], allowed_hosts=resolved["allowed_hosts"],
                            repo=resolved["source_repo"], revision=resolved["revision"])
         else:
@@ -1511,6 +1549,7 @@ class Service:
             context = self.context_provider(scope)
             if op == "chat.stop":
                 self.store.put("agent_messages_paused:" + scope, True)
+                self.recovery.pause(scope=scope)
                 return self.codex.stop(scope)
             preferences = self.chat_preferences(scope, strict=True)
             content = text_field(params, "text", 100000)
@@ -1561,6 +1600,7 @@ class Service:
         elif op in {"run.ready", "run.hold", "run.cancel", "run.review", "run.move"}:
             run = self.lookup("runs", text_field(params, "run_id", 150), fresh=True)
             payload = {"run": run["id"]}
+            if op in {"run.cancel", "run.hold"}: self.recovery.pause(run_id=run["id"])
             if op != "run.cancel" and run["status"] != "queued":
                 raise APIError("Only queued runs can be changed", 409)
             if op == "run.ready":
@@ -1601,10 +1641,11 @@ class Service:
             self.tracking_thread.join(timeout=20)
         if self.monitor_thread:
             self.monitor_thread.join(timeout=30)
+        self.nodes.close()
         self.codex.close()
         # A bounded external call may still be unwinding on process shutdown.
         # Do not close SQLite underneath a live background writer.
-        threads = (self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread)
+        threads = (self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread, *self.nodes.threads)
         if not any(thread and thread.is_alive() for thread in threads):
             self.store.close()
 
@@ -1744,7 +1785,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(request, dict):
                 raise APIError("Expected a JSON object")
             if path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

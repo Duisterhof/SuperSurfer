@@ -193,7 +193,7 @@ class ComputePools:
         return {"pool": saved, "inspection": inspection, "host_id": node["host_id"], "ready": True,
                 "note": "Configured for future run submissions; existing queued contracts are unchanged."}
 
-    def resolve_run(self, project_id, params, project):
+    def resolve_run(self, project_id, params, project, pool=None):
         """Return pool contract pieces, leaving actual placement to AutoML."""
         project_id = _text(project_id, "project_id", 150)
         if not isinstance(params, dict) or not isinstance(project, dict) or project.get("id") != project_id:
@@ -205,7 +205,7 @@ class ComputePools:
             raise ComputeError("Cannot verify AutoML compute-pool support: " + str(exc), 503) from exc
         if not isinstance(capabilities, list) or not all(isinstance(item, str) for item in capabilities) or not {CONTRACT_CAPABILITY, STAGING_CAPABILITY} <= set(capabilities):
             raise ComputeError("This AutoML manager does not support project compute pools with reviewed source staging. Update AutoML before submitting a pooled run.", 409)
-        pool = self.get(project_id)
+        pool = self.get(project_id) if pool is None else pool
         # Revalidate saved masks against today's registered resources.
         self._validate(project_id, {"version": pool["version"]}, pool, snapshot)
         command = params.get("command")

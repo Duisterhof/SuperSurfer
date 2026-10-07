@@ -1,10 +1,18 @@
+## 0.1.23 complete node acquisition and run recovery
+
+Workers can use `check_available_node` to verify an existing run's exact committed checkout, Python environment, required data, storage and observed GPU capacity. `acquire_new_node` reuses a prepared node or stages source, an isolated Python venv and data under the node's registered root, then calls the same check and adds the candidate to the **existing queued run**. Transfers run in the background; `recover_run(status)` reports progress, and repeating identical acquisition fields resumes interrupted setup. Prepared nodes remain discoverable for later work.
+
+New pooled worker queue requests save an owner-bound recovery task. Queue blockers and confirmed failures wake that worker, which can acquire capacity or retry the same task through `recover_run`, with a separate reviewed run/W&B identity and at most three retries. GPU/storage requests remain fixed. Chat Stop, run cancellation and recovery pause revoke continuation; archiving still only hides the chat. Existing runs can opt in with `recover_run(enable, task)`. Ordinary monitoring wakeups retain their existing permissions.
+
+See the [roles, tools and workflow schematic](agent_skills/supersurfer-host-onboarding/references/run-recovery.md). Custom conda/container setups remain ordinary authorized shell work, followed by the same node check. Neither AML installation nor ChatGPT login is required on compute-only nodes. E12's failure report now places its six recorded GIFs near the top; all six were verified in the live Results pane. Results guidance requires visible, loaded media and preserves recording provenance.
+
 ## 0.1.22 direct controls and consistent Results
 
 Agents can apply an explicit project GPU/run budget decision with `set_project_limits` and stop an authorized run with `stop_run`. Workers stay inside their experiment for stops, leads inside their project, and the manager inside the workspace. GPU and concurrent-run limits are separate; an optional run-bound temporary change restores only those fields when the run ends, without reverting later edits. A stop reply distinguishes pending cancellation from confirmed termination.
 
 New training Results use `publish_training_results`: named methods, exact W&B metric keys and labeled axes produce live interactive overlays. Training/validation/test use consistent colors and distinct line styles; ordinary decimal axes, scroll zoom, pan, hover, reset, expand and optional smoothing with raw traces are built in. Requested schematics and domain views follow the curves. Unavailable measurements must be stated. Available/cached curves appear while slower sources load.
 
-Routine agent updates are recorded quietly. A concrete request wakes its recipient and accepts one answer; answers do not solicit acknowledgements. Direct tools come first, with manager escalation for genuine shared conflicts or missing dependencies. All five skills have been shortened and reviewed against the release's actual capabilities. Onboarding a node still affects future submissions: extending an already queued run's eligible nodes remains planned.
+Routine agent updates are recorded quietly. A concrete request wakes its recipient and accepts one answer; answers do not solicit acknowledgements. Direct tools come first, with manager escalation for genuine shared conflicts or missing dependencies. All five skills have been shortened and reviewed against the release's actual capabilities. In 0.1.22, node onboarding affected only future submissions; 0.1.23 adds queued-run candidate updates.
 
 ## 0.1.21 live W&B Results
 

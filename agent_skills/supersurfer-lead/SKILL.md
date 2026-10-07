@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.22'
+  supersurfer-version: '0.1.23'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.22. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.23. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -50,6 +50,13 @@ manager. Use [run submission](../supersurfer-worker/references/run-submission.md
 for requirements to include in a handoff. Necessary setup within that authorized
 task needs no invented extra approval.
 
+For an existing run, this lead has `check_available_node`, `acquire_new_node`
+and `recover_run` within its project. Prefer the worker's existing recovery owner;
+do not take over or duplicate its setup. When explicitly handling an unowned
+existing run, enable recovery with its actual user task. This permits bounded
+same-lineage repair/retry, not an initial lead launch or additional experiment.
+See the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
+
 This lead can directly `stop_run` when the user requests cancellation of a run in
 this project. Supply only its exact `run_id`; no worker/manager relay is needed.
 Queued work cancels immediately; active work stays cancelling until scheduler
@@ -68,8 +75,9 @@ SuperSurfer app fixes or supply missing user decisions.
 
 Read [host onboarding](../supersurfer-host-onboarding/SKILL.md) for capacity/setup.
 Separate exhausted budgets from unusable candidates, prefer prepared nodes, and
-let the worker perform necessary bounded onboarding. Pool changes do not extend
-saved queued-run candidates. Apply an explicit user budget change directly with
+let the worker perform necessary bounded onboarding. `acquire_new_node` stages
+missing inputs, calls the same exact-run readiness check, and adds a verified
+candidate to the existing queued run; a pool edit alone does not. Apply an explicit user budget change directly with
 `set_project_limits`; do not request manager review of that same decision.
 GPU and concurrent-run limits are independent; later user changes take precedence
 over temporary restoration.
@@ -85,6 +93,7 @@ identity when revising a report; do not treat a comparison request as launch int
 Supply `experiment_id` from this project for experiment/document actions, including
 empty brief reads. Compute actions and experiment creation infer this project;
 omit `project_id`. `stop_run` accepts only `run_id` and checks its project itself.
+Node/recovery tools also infer scope from their `run_id`.
 
 | Tools | Use |
 |---|---|
@@ -94,6 +103,7 @@ omit `project_id`. `stop_run` accepts only `run_id` and checks its project itsel
 | `stop_run` | User-requested cancellation of one project run through the scheduler. |
 | `update_task` | Track the lead's requested outcome through verified delivery. |
 | `inspect_project_compute`, `inspect_compute_host` | Budgets/pool and candidate hardware, paths/runtime. |
+| `check_available_node`, `acquire_new_node`, `recover_run` | Exact-run readiness, durable acquisition and owner-bound recovery for existing project runs. |
 | `register_compute_host`, `onboard_project_node` | New authorized host or one validated project node. |
 | `configure_project_compute` | Requested complete pool/default change; preserve unrelated nodes and use current version. |
 | `set_project_limits` | Explicit user GPU/run budget decision; optional restoration after `until_run`. |

@@ -1,3 +1,11 @@
+## Completed in 0.1.23
+
+- Exact-commit node check, prepared-node reuse and isolated source/environment/data acquisition.
+- Verified candidate additions to the same queued run with scheduler wakeup and cancellation race checks.
+- Durable, owner-bound queue/failure recovery, scoped retry and stop revocation.
+- Revised all five skills, including role/tool authority schematic and visible in-app media checks.
+- Verified all six E12 failure GIFs after the report worker moved them above the large chart.
+
 ## Completed in 0.1.22
 
 - Direct agent project limits, explicit unlimited GPU budgets and durable per-run temporary restoration.

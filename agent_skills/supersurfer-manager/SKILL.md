@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.22'
+  supersurfer-version: '0.1.23'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.22. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.23. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -59,12 +59,23 @@ do not make the manager a required relay. Queued cancellation is immediate;
 running work remains cancelling until the scheduler confirms termination. A
 terminal retry is a no-op, not permission for a replacement run or wider stops.
 
+Existing-run `check_available_node`, `acquire_new_node` and `recover_run` are
+available directly to workers and leads within their scopes. Preserve an existing
+recovery owner; manager access does not transfer that grant. For recovery explicitly
+assigned here on an unowned run, enable it with the existing user task and follow
+the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
+Dedicated recovery wakeups are limited to that lineage, not general launch rights.
+
 ## Resources without extra gates
 
 Read [host onboarding](../supersurfer-host-onboarding/SKILL.md). Prefer prepared
 nodes, inspect budget and placement constraints separately, and allow workers to
 perform their own necessary bounded setup. Pool additions do not extend existing
-queued-run candidate contracts. For genuinely missing physical registration,
+queued-run candidates by themselves; `acquire_new_node` verifies the exact checkout,
+environment and data, then adds the candidate to the same queued run. It stages
+missing inputs when requested and reports durable status without a manager relay.
+Intervene only for a real shared conflict or capability outside the owner's scope.
+For genuinely missing physical registration,
 manager-only `register_compute_gpus` adds observed authorized indices to an
 existing host while preserving reservations; it changes neither project masks
 nor queued candidates and starts no job. Do not duplicate registrations.
@@ -88,6 +99,7 @@ Manager project-pool/budget operations require `project_id`; host inspection and
 new-host registration may omit it for workspace setup. Document/run/handoff tools
 require the intended registered `experiment_id`. Registration of extra GPUs uses
 only `host_id` and `gpus`; `stop_run` takes only `run_id`.
+Node/recovery tools use `run_id` to derive project/experiment scope, with no extra IDs.
 
 | Tools | Use |
 |---|---|
@@ -96,6 +108,7 @@ only `host_id` and `gpus`; `stop_run` takes only `run_id`.
 | `queue_run` | Explicit manager-assigned launch through the verified-PR queue. |
 | `stop_run` | User-requested scheduler cancellation of one workspace run. |
 | `inspect_project_compute`, `inspect_compute_host` | Budgets, pool, observations and candidate readiness. |
+| `check_available_node`, `acquire_new_node`, `recover_run` | Existing-run readiness, acquisition and owner-bound recovery without taking over another owner. |
 | `register_compute_host`, `register_compute_gpus` | New authorized host or additional observed GPUs on an existing host. |
 | `onboard_project_node`, `configure_project_compute` | One validated node or an authorized versioned full-pool/default edit. |
 | `set_project_limits` | Apply the user's GPU/run limits and requested temporary restoration. |

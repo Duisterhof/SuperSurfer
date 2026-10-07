@@ -108,6 +108,7 @@ class Manager:
             "host.update": self.host_update,
             "run.submit": self.run_submit, "run.list": self.run_list, "run.show": self.run_show,
             "run.cancel": self.run_cancel, "run.logs": self.run_logs,
+            "run.add_candidate": self.run_add_candidate,
             "run.queue": self.run_queue, "run.reorder": self.run_reorder,
             "run.move": self.run_move, "run.ready": self.run_ready, "run.hold": self.run_hold,
             "run.priority": self.run_priority, "run.review": self.run_review, "queue.status": self.queue_status,
@@ -128,7 +129,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -884,6 +885,52 @@ class Manager:
             order.insert(position, selected["id"])
         return await self.run_reorder(order)
 
+    async def run_add_candidate(self, run, host, contract, expected_revision):
+        """Merge one candidate without changing run identity, source or queue priority."""
+        row = self.store.get("runs", run)
+        node = self.store.get("hosts", host)
+        key = (row["id"], node["id"])
+        if row["status"] != "queued" or row["revision"] != expected_revision:
+            raise ValueError("Only a still-queued run at the expected revision can change candidates")
+        config = json.loads(row["config"])
+        if "host_contracts" not in config:
+            raise ValueError("Candidate updates require a portable project-pool run")
+        if not isinstance(contract, dict):
+            raise ValueError("Candidate contract must be an object")
+        if len(config["host_contracts"]) >= 64 and node["id"] not in config["host_contracts"]:
+            raise ValueError("A run supports at most 64 candidates")
+        previous = config["host_contracts"].get(node["id"])
+        if previous == contract:
+            self.placement_observations.pop(key, None)
+            self.wake_scheduler(row["id"])
+            return {"run_id": row["id"], "host_id": node["id"], "status": row["status"], "unchanged": True}
+        candidate_config = placement.normalize_contract(self.store, node, contract.get("command"),
+            {"host_contracts": {node["id"]: contract}}, [node["id"]])
+        checked = candidate_config["host_contracts"][node["id"]]
+        if not checked.get("repo"):
+            raise ValueError("A new candidate needs its exact-source repository")
+        if len(checked.get("allowed_gpu_indices", json.loads(node["gpus"]))) < row["gpu_count"]:
+            raise ValueError("Candidate has fewer registered GPUs than the run requests")
+        task = self.placement_checks.pop(key, None)
+        if task and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        with self.store.transaction():
+            current = self.store.get("runs", row["id"])
+            if current["status"] != "queued" or current["revision"] != expected_revision:
+                raise ValueError("Run changed during candidate preparation; no candidate was added")
+            config = json.loads(current["config"])
+            config["host_contracts"][node["id"]] = checked
+            if node["id"] not in config["allowed_hosts"]:
+                config["allowed_hosts"].append(node["id"])
+            self.store.execute("UPDATE runs SET config=?,updated=? WHERE id=?",
+                               (json.dumps(config), time.time(), row["id"]))
+            self.store.event("run.candidate", {"id": row["id"], "host_id": node["id"],
+                                               "revision": expected_revision}, row["project_id"])
+        self.placement_observations.pop(key, None)
+        self.wake_scheduler(row["id"])
+        return {"run_id": row["id"], "host_id": node["id"], "status": "queued", "unchanged": False}
+
     async def run_cancel(self, run):
         row = self.store.get("runs", run)
         if row["status"] in TERMINAL_RUNS:
@@ -1154,9 +1201,9 @@ class Manager:
         try:
             mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                      (host_id, run["project_id"]))
-            if not mapping:
+            if not mapping and not resolved.get("repo"):
                 raise ValueError("Register this project's repository on candidate " + host["name"])
-            spec = {"repo": mapping["path"], "revision": run["revision"], "root": host["root"], **resolved}
+            spec = {"repo": mapping["path"] if mapping else resolved["repo"], "revision": run["revision"], "root": host["root"], **resolved}
             result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
             self.record_admission(key, result)
             codes = {item["code"] for item in result["blockers"]}
@@ -1262,7 +1309,7 @@ class Manager:
                 self.store.event("run.starting", {"id": current["id"], "gpus": gpus}, current["project_id"])
             mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                      (host["id"], current["project_id"]))
-            spec = {"id": current["id"], "repo": mapping["path"], "revision": current["revision"],
+            spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved["repo"], "revision": current["revision"],
                     **resolved, "gpus": gpus}
             try:
                 result = await self.transport.request(host, {"op": "launch", "directory": job_dir, "spec": spec}, timeout=150)
