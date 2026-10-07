@@ -12,7 +12,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.addInitScript(()=>{if(window!==window.top)return;localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:'p1',experimentId:'e12',tab:'overview',chatVisible:true}));});
  await page.route('http://workspace.test/**',async route=>{
   const req=route.request(),url=new URL(req.url());let body={};
-  if(url.pathname==='/api/state')body=data;
+  if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
+  else if(url.pathname==='/api/state')body=data;
   else if(url.pathname==='/api/experiment')body=exp;
   else if(url.pathname==='/api/experiment-agents')body={selected_scope:scope,agents:[{scope,name,archived,owner:'supersurfer',status:'completed',task_state:taskStatus==='completed'?'completed':'incomplete',busy:false,can_resume:true}]};
   else if(url.pathname==='/api/chat')body={archived,busy:true,status:'working',agent:{name,model:'fixture'},tasks:[{id:'t1',title:'Produce failure videos',status:taskStatus,summary:taskStatus==='completed'?'Playback verified.':'Implementation in progress.'}],messages:[{id:'m1',role:'assistant',text:'Current work.',created:1}],questions:[],approvals:[],preferences:{editable:true,defaults:{model:'',reasoning:'medium',approval_mode:'ask'},overrides:{},effective:{model:'fixture',reasoning:'medium',approval_mode:'ask'},supported_reasoning:['medium']}};

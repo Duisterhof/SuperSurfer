@@ -19,7 +19,8 @@ async function install(page,{tab='results',theme='light',desktop=false}={}){
  await page.addInitScript(({tab,theme,desktop})=>{if(window!==window.top)return;localStorage.setItem('supersurfer-theme',theme);localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:'demo-vla',experimentId:'demo-e14',tab,chatVisible:true,chatWidth:350}));if(desktop)window.superSurferDesktop={};},{tab,theme,desktop});
  await page.route('http://demo.test/**',async route=>{
   const req=route.request(),url=new URL(req.url());let body={};
-  if(url.pathname==='/api/state')body=data;
+  if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
+  else if(url.pathname==='/api/state')body=data;
   else if(url.pathname==='/api/experiment')body=exp;
   else if(url.pathname==='/api/results')body={pages:[{id:'demo-result',title:'Method comparison',preview_url:'/result-preview/demo'}]};
   else if(url.pathname==='/result-preview/demo')return route.fulfill({contentType:'text/html',body:report(await page.evaluate(()=>document.documentElement.dataset.theme==='dark'))});

@@ -15,7 +15,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.addInitScript(()=>localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'compute',chatVisible:false})));
  await page.route('http://capacity.test/**',async route=>{
   const url=new URL(route.request().url());let body={};
-  if(url.pathname==='/api/state')body=data;
+  if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
+  else if(url.pathname==='/api/state')body=data;
   else if(url.pathname==='/api/action'){const call=route.request().postDataJSON();calls.push(call);if(call.op==='compute.refresh'){hosts[0].devices[1].occupied=false;}}
   else if(url.pathname==='/api/chat')body={messages:[],tasks:[],questions:[],approvals:[],busy:false};
   else if(url.pathname==='/api/models')body={models:[]};

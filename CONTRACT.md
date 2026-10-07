@@ -1,3 +1,11 @@
+## 0.1.20 workspace authentication
+
+SSH/workspace access is separate from model authentication. The UI gates agent access until `account/read` confirms a ChatGPT account on that workspace host. No account, API-key-only authentication, or a failed account check leaves the sign-in gate in place. Device-code completion is verified by another account read; an expired code can be retried. Login codes are not persisted. Window partitions and per-host credentials remain separate. An authenticated reconnect skips onboarding, and a read-only service remains viewable.
+
+The Codex bridge refreshes account state before accepting a message and before starting a turn, including automatic continuations. Unauthenticated work is rejected before any inference; existing scheduled work and GPU processes are not cancelled. A rejected direct message leaves the composer draft intact. The supported device flow is documented in the [Codex App Server reference](https://developers.openai.com/codex/app-server).
+
+The macOS Dock menu uses the same independent-window creation path as File → New Window. It does not clone another window’s host credentials or send agent messages.
+
 ## Floating Panels (0.1.19)
 
 Layout changes do not change agent scope, permissions, resource checks or launch behavior. The right panel keeps its existing compact, collapsed agent list and deliverables; Results keeps one document scrolling surface. Panel width uses actual available space, including outer margins. Imported theme foregrounds and selection contrast are preserved; system accessibility preferences suppress decorative glass. The synthetic workspace fixture is used only in tests/product footage, never as a live-data fallback.

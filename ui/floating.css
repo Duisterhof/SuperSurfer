@@ -166,3 +166,12 @@ body { background:var(--sidebar); }
   :root .topbar,:root .sidebar,:root .main,:root .chat-panel { background:Canvas; border:1px solid CanvasText; box-shadow:none; backdrop-filter:none; }
   :root .tab.active { border:1px solid Highlight; }
 }
+
+/* A host is not ready for agent work until its own account is connected. */
+.account-gate { width:min(520px,calc(100vw - 40px)); border-radius:24px; }
+.account-gate .modal-body { padding:32px; }
+.account-gate h2 { font-size:26px; margin:12px 0; }
+.account-gate p { line-height:1.6; color:var(--text-secondary); }
+.account-gate .modal-footer { flex-wrap:wrap; }
+#account-gate-code:not([hidden]) { display:grid; gap:24px; justify-items:center; padding:20px 0; }
+#account-gate-code code { font-size:28px; letter-spacing:4px; user-select:all; }

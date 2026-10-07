@@ -1,3 +1,11 @@
+# SuperSurfer 0.1.20 validation — October 7, 2026
+
+All 332 Python tests, 20 Node/SSH checks without skips, 15 Chromium browser suites and two native Linux Electron suites pass. All five role skills were independently reviewed and revised. New coverage exercises signed-out and expired accounts, no inference or message acceptance before authentication, device-code expiry/retry and completion, reconnect without a repeated login, isolated host identities, account-check outages, preserved composer drafts and the Dock-menu callback creating independent windows.
+
+Native macOS Dock presentation cannot be exercised on this Linux host; the menu callback is tested through an injected Dock API in real Electron. Mac packages remain unsigned.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.19 validation — October 7, 2026
 
 All 330 Python tests, 20 Node/SSH checks without skips, 14 Chromium browser suites and two native Linux Electron suites pass. All five agent capability skills received an independent review and substantive revisions and pass release checks. Backend queue and scheduling behavior is unchanged from 0.1.18.

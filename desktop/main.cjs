@@ -135,6 +135,7 @@ function connectionSettings() {
 }
 function updateMenu() {
   const recent=store.recent().map(record => ({label:windowLabel(record)+(record.config.remoteRoot !== '~/.local/share/supersurfer' ? ' · '+record.config.remoteRoot : ''),click:() => makeWindow(record)}));
+  if (app.dock) app.dock.setMenu(Menu.buildFromTemplate([{label:'New Window',click:() => makeWindow()}]));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{label:'SuperSurfer',submenu:[{role:'about'},{type:'separator'},{label:'Connection Settings…',accelerator:'CmdOrCtrl+,',click:connectionSettings},{type:'separator'},{role:'hide'},{role:'hideOthers'},{role:'unhide'},{type:'separator'},{role:'quit'}]}] : []),
     {label:'File',submenu:[{label:'New Window',accelerator:'CmdOrCtrl+Shift+N',click:() => makeWindow()},{label:'Open Recent',submenu:recent.length?recent:[{label:'No recent workspaces',enabled:false}]},{label:'Connection Settings…',click:connectionSettings},{type:'separator'},{role:'close'},...(process.platform === 'darwin' ? [] : [{role:'quit'}])]},

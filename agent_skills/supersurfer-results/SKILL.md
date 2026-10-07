@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.19'
+  supersurfer-version: '0.1.20'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.19. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.20. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -62,7 +62,11 @@ W&B subscription, so describe whether charts are snapshots or explicitly refresh
 or available over an appropriate HTTPS URL. An authenticated W&B or Rerun embed
 may refuse framing, so supply a working source link and a useful local plot or
 preview. Do not replace requested figures with bare W&B group links. Never embed
-tokens, local filesystem URLs or app credentials.
+tokens, local filesystem URLs or app credentials. Workspace ChatGPT sign-in
+enables model work on that host; it does not authenticate a W&B/Rerun embed or
+grant the Results sandbox account access. Diagnose a refused embed separately
+from agent sign-in, and preserve the measured fallback instead of requesting
+ChatGPT credentials or republishing a page to bypass that boundary.
 
 The HTML Results page fills the available main pane inside the existing sandbox.
 Build a responsive full-page document whose content scrolls naturally in that

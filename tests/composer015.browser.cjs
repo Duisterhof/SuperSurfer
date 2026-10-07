@@ -14,7 +14,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('http://composer.test/**',async route=>{
    const req=route.request(),url=new URL(req.url());let body={};
-   if(url.pathname==='/api/state')body=data;
+   if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
+  else if(url.pathname==='/api/state')body=data;
    else if(url.pathname==='/api/project-agents')body={agents:[{scope:'project:p1',name:'VLA lead',owner:'supersurfer',busy,status:busy?'working':'idle'}]};
    else if(url.pathname==='/api/chat')body={busy,steerable:busy,agent:{name:'VLA lead'},messages:[{id:'m1',role:'assistant',text:'Comparing the measured training curves.',created:1}],questions:question?[{id:'q',status:'pending',can_answer:true,questions:[{id:'choice',question:'Which comparison?',options:[]}]}]:[],approvals:approval?[{id:'a',status:'pending',message:'Read the results?'}]:[],preferences:{editable:true,role:'lead',defaults:{model:'gpt-6-astra',reasoning:'medium',approval_mode:'ask'},overrides,effective:{...overrides},supported_reasoning:['medium','high','xhigh'],runtime:{...runtime,active:busy},...(settingsError?{error:'Settings could not be saved. Try again.'}:{})}};
    else if(url.pathname==='/api/models')body={models:[{id:'gpt-6-astra',displayName:'GPT-6 Astra',supported_reasoning:['medium','high','xhigh']},{id:'long-model-name',displayName:'An unusually long model display name for overflow coverage',supported_reasoning:['medium','high','xhigh']}]};

@@ -2,16 +2,18 @@
 name: supersurfer-host-onboarding
 description: Inspect project compute, reuse ready nodes, and onboard a compatible free local or SSH host with verified repository, environment and data paths for authorized work.
 metadata:
-  supersurfer-version: '0.1.19'
+  supersurfer-version: '0.1.20'
 ---
 
 # Onboard project compute
 
-Reviewed for SuperSurfer 0.1.19. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project. Managers supply the registered `project_id` for project-pool actions, but may omit it for `inspect_compute_host` and `register_compute_host`, including in an empty workspace. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
+Reviewed for SuperSurfer 0.1.20. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project. Managers supply the registered `project_id` for project-pool actions, but may omit it for `inspect_compute_host` and `register_compute_host`, including in an empty workspace. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
 
 ## Choose capacity before changing it
 
 The workspace service and a compute node have different requirements. An explicit desktop connection initializes the bundled AML manager when it is absent, reuses an existing manager without upgrading it or changing queue settings, and requires no separate AML installation. Ordinary state reads do not start a manager. The workspace sidecar needs Python 3.10+; starting its bundled manager needs an installed Python 3.11+ interpreter, discovered separately from training environments. A compute-only node still needs the registered Python 3.9+ runner described below, not the workspace manager. Diagnose which component and interpreter failed before changing an environment; preserve existing jobs and do not launch a second manager to bypass an uncertain connection.
+
+Connecting a workspace host also requires ChatGPT sign-in on that host before agents can start model work. The app reuses a valid existing host account; otherwise the user completes the host’s device-code sign-in in their browser. SSH access, a working scheduler or another window’s signed-in account does not establish this authentication. Never copy tokens or account files between hosts, ask the user for credentials in chat, or send an agent to read them. A node used only for scheduled compute needs no ChatGPT account or Codex login; do not add an authentication step to compute onboarding. GitHub and W&B access are separate requirements when the requested task uses them.
 
 A remembered desktop connection identifies the workspace service, not a registered compute node or a verified project environment. Reopening that window does not register a host, add it to a project pool or authorize setup work. Use the compute tools in the current workspace to establish those facts. If a window cannot reconnect, preserve its existing association and diagnose the connection; do not infer that its remote jobs stopped or register a replacement host to work around a desktop connection failure.
 
