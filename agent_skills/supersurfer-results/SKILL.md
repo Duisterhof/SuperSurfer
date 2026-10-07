@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.13'
+  supersurfer-version: '0.1.14'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.13. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.14. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -89,7 +89,13 @@ MFU, VRAM and throughput support a compute-efficiency question; they do not repl
 the primary train/held-out comparison. Scheduler state belongs in Runs.
 
 Put source run links/IDs, commit/PR, data split, protocol, extraction time and
-refresh behavior in a compact provenance section. Keep a reproducible plotting
+refresh behavior in a compact provenance section. The built-in W&B view is sampled;
+a latest summary value alone cannot reconstruct a learning curve. If sampled
+history and summary disagree, compare their timestamps and metric definitions
+before choosing a value, and preserve missing intervals. For live efficiency
+figures, use the MFU sample time independently of loss and system timestamps. A
+recent page refresh or another metric's update does not refresh an older MFU
+measurement; label unknown sample ages instead of implying live data. Keep a reproducible plotting
 script or source data reference in the project when practical. Preserve other
 workers' edits and unrelated evidence.
 

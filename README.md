@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.13
+# SuperSurfer 0.1.14
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -6,9 +6,9 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.13-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.13-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**.
+**Mac:** extract `SuperSurfer-0.1.14-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.14-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**.
 
-**Linux x64:** extract `SuperSurfer-0.1.13-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.14-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
@@ -20,6 +20,14 @@ The selected workspace computer needs Python 3.10+, Codex CLI, Git, and a runnin
 This release also bundles the compatible scheduler in `engine/`. For an existing detached Linux AutoML manager, an explicit administrator update from the extracted source folder is `python3 -m server.engine --engine-dir ./engine --aml-home ~/.auto-ml`. It uses the manager's existing Python 3.11+ environment, briefly pauses admission, preserves running jobs and current state, and backs up the database. It refuses an active legacy-agent turn or a manager owned by another service. A healthy connection never silently replaces your scheduler.
 
 SuperSurfer uses the workspace computer's existing Codex ChatGPT login. Otherwise choose **Connect ChatGPT** in Settings and complete device-code sign-in. No OpenAI API key is required. GitHub preparation uses that computer's existing `gh` authentication; creating a project folder does not require GitHub.
+
+## Changes in 0.1.14
+
+Tidal Glass is the new connection screen: a translucent panel, quiet blue-green background, and light/dark variants. It adapts to smaller windows and reduced-motion, reduced-transparency and high-contrast preferences. The workspace themes and existing connection choices remain available.
+
+Connection setup now waits for saved preferences, remains usable when SSH-host discovery fails, and prevents duplicate attempts. Custom experiment tabs survive desktop restarts. W&B history and summary readings merge chronologically; MFU reports its own observed sample time, or an unknown age when only summary data is available.
+
+The release includes expanded browser, native Electron and randomized persistence checks, plus a review of all five agent skills. See [Validation](VALIDATION.md) for actual coverage and the overnight campaign's early stop.
 
 ## Changes in 0.1.13
 
@@ -163,7 +171,7 @@ Codex integration references: [app-server protocol](https://learn.chatgpt.com/do
 
 ## Development: extended QA and login studies
 
-The `overnight-qa-designs` branch contains candidate fixes and three connection-screen studies; it is not a new packaged release. Build the standalone interactive comparison with `node scripts/preview-login.cjs`, then open `dist/login-designs.html`. Its local simulation never contacts a workspace. The studies are Tidal glass, Observatory and Field notes; they use the same real form code. Tidal glass is the candidate default on this branch, with no change to ChatGPT sign-in or SSH authentication.
+Tidal Glass ships as the default connection screen. The developer preview retains the Observatory and Field Notes alternatives for comparison. Build it with `node scripts/preview-login.cjs`, then open `dist/login-designs.html`. Its local simulation uses the real form code but never contacts a workspace. ChatGPT sign-in and SSH authentication are unchanged.
 
 The glass treatment follows [Apple's materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials): visual depth with readable controls and reduced-transparency, reduced-motion and higher-contrast alternatives. This is a CSS interpretation in Electron, not a native macOS Liquid Glass API.
 

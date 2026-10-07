@@ -120,8 +120,14 @@ class WandBReader:
                 # time so stale summary values cannot look like fresh measurements.
                 for row in rows([summary, *history]):
                     values = {key: value for key, value in row.items() if not key.startswith('_') and numeric(value)}
+                    for key, value in values.items():
+                        # A summary-wide timestamp may be advanced by another
+                        # metric. Only history rows establish a sample's age.
+                        if row is not summary:
+                            result['metric_observed_at'][key] = row.get('_timestamp') if numeric(row.get('_timestamp')) else None
+                        elif result['metrics'].get(key) != value:
+                            result['metric_observed_at'][key] = None
                     result['metrics'].update(values)
-                    result['metric_observed_at'].update({key: row.get('_timestamp') if numeric(row.get('_timestamp')) else None for key in values})
                     if numeric(row.get('_timestamp')):
                         result['observed_at'] = max(result['observed_at'] or 0, row['_timestamp'])
                 for row in system:

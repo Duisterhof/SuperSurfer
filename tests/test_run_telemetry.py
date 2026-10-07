@@ -98,7 +98,22 @@ class RunTelemetryTests(unittest.TestCase):
         self.assertEqual(1.2, result['metrics']['train/loss'])
         self.assertEqual(200, result['observed_at'])
         self.assertEqual(.3, result['metrics']['train/mfu'])
+        self.assertIsNone(result['metric_observed_at']['train/mfu'])
+
+    def test_summary_timestamp_cannot_refresh_an_older_mfu_sample(self):
+        data = self.sample()
+        data['project']['run']['history'].append({'_timestamp': 50, 'train/mfu': .375})
+        result = WandBReader(Mock(return_value=data)).live_metrics('https://wandb.ai/a/b/runs/r1')
+        self.assertEqual(200, result['observed_at'])
         self.assertEqual(50, result['metric_observed_at']['train/mfu'])
+        self.assertEqual(200, result['metric_observed_at']['train/loss'])
+
+    def test_changed_summary_only_mfu_has_unknown_sample_time(self):
+        data = self.sample()
+        data['project']['run']['history'].append({'_timestamp': 50, 'train/mfu': .1})
+        result = WandBReader(Mock(return_value=data)).live_metrics('https://wandb.ai/a/b/runs/r1')
+        self.assertEqual(.375, result['metrics']['train/mfu'])
+        self.assertIsNone(result['metric_observed_at']['train/mfu'])
 
 
 class TrainingSubmissionTests(unittest.TestCase):

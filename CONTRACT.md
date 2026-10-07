@@ -1,6 +1,12 @@
-# SuperSurfer 0.1.13 integration contract
+# SuperSurfer 0.1.14 integration contract
 
 Single-user Electron client on Mac/Linux; Python stdlib sidecar on the current or an SSH-accessible machine. AutoML owns GPU scheduling and run execution. Retired native agents remain read-only history; active owned research conversations run through SuperSurfer. SuperSurfer owns durable chats, documents, reviews and planning metadata. An explicit user queue/run request permits an experiment worker or the workspace manager to release a verified PR-backed run through the appropriately scoped tool. Suggested ideas and recurring reviews never authorize autonomous launches.
+
+## Desktop setup and metric freshness
+
+The default connection screen is Tidal Glass, with accessible reduced-effects and high-contrast fallbacks. Initialization settles saved configuration and host discovery before enabling submission. Failed host discovery still permits manual remote entry or local connection; duplicate submissions are ignored while connecting. Native workspace preferences preserve validated custom Markdown page tabs across restarts.
+
+Live W&B values merge summary and sampled history in timestamp order. Each metric's observation time comes from a history row containing that metric. A summary-wide timestamp cannot refresh an unchanged metric; a changed summary-only value has unknown sample age. Cached errors preserve the prior values and ages. MFU age is displayed independently of other training, system and fetch timestamps.
 
 ## Transport and persistence
 
