@@ -28,11 +28,12 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   const child=new EventEmitter();child.exitCode=null;child.kill=()=>{if(child.exitCode!==null)return;child.exitCode=0;__fixture.killed.push(id);setImmediate(()=>child.emit('exit',0));};__fixture.children.set(id,child);
   return {config,origin,token:'fixture-token-'+id,child};
  };
+ Object.defineProperty(require('electron').app,'dock',{value:{setMenu:menu=>{__fixture.dockMenu=menu;}}});
  require(root+'/desktop/main.cjs');
  `);
  const launch=()=>electron.launch({executablePath:path.join(runtime,path.basename(process.env.ELECTRON_PATH||'SuperSurfer')),chromiumSandbox:true,colorScheme:null,args:['--disable-dev-shm-usage'],env:{...process.env,HOME:profile,XDG_CONFIG_HOME:path.join(profile,'config'),XDG_CACHE_HOME:path.join(profile,'cache')}});
  const menu=async(label)=>app.evaluate(({Menu},label)=>{const visit=items=>{for(const item of items){if(item.label===label){item.click();return true;}if(item.submenu&&visit(item.submenu.items))return true;}return false;};if(!visit(Menu.getApplicationMenu().items))throw new Error('Missing menu '+label);},label);
- const newWindow=async()=>{const opened=app.waitForEvent('window');await menu('New Window');return opened;};
+ const newWindow=async()=>{const opened=app.waitForEvent('window');await app.evaluate(()=>{const item=global.__fixture.dockMenu.items.find(item=>item.label==='New Window');if(!item)throw new Error('Dock New Window missing');item.click();});return opened;};
  const waitWindows=async n=>{for(let i=0;i<300;i++){const pages=await app.windows();if(pages.length===n)return pages;await new Promise(resolve=>setTimeout(resolve,20));}throw new Error('Window count did not reach '+n);};
  const connect=async(page,target)=>{
   await page.waitForFunction(()=>!document.querySelector('#connect-button')?.disabled);

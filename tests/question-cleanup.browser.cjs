@@ -31,7 +31,8 @@ const root = path.resolve(__dirname, '..');
     await page.route('http://questions.test/**', async route => {
       const request = route.request(), url = new URL(request.url());
       let body = {};
-      if (url.pathname === '/api/state') body = data;
+      if (url.pathname === '/api/account') body = {account:{type:'chatgpt'}};
+      else if (url.pathname === '/api/state') body = data;
       else if (url.pathname === '/api/project-agents') body = { project_id: 'p1', agents: [{ scope, name: 'VLA lead', owner: 'supersurfer', status: busy ? 'working' : 'idle', busy }] };
       else if (url.pathname === '/api/chat') {
         if (disconnected) return route.abort('connectionfailed');

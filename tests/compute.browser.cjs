@@ -14,6 +14,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  const messages={'experiment:e1':[{role:'assistant',text:'Earlier work survives failure.',created:now-500}], 'agent:old':[{role:'assistant',text:'Historical native findings.',created:now-999}]};let newCount=0;const busyScopes=new Set();
  await page.route('http://compute017.test/**',async route=>{const req=route.request(),url=new URL(req.url());let body;
   if(url.pathname==='/api/project-compute')body=pools[url.searchParams.get('project_id')];
+  else if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
   else if(url.pathname==='/api/state')body=state;
   else if(url.pathname==='/api/experiment')body=state.experiments.find(x=>x.id===url.searchParams.get('id'));
   else if(url.pathname==='/api/experiment-agents')body=lists[url.searchParams.get('experiment_id')];

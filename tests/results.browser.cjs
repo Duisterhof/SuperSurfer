@@ -12,6 +12,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  const messages={'experiment:e1':[{role:'assistant',text:'Earlier work survives failure.',created:now-500}], 'agent:old':[{role:'assistant',text:'Historical native findings.',created:now-999}]};let newCount=0;const busyScopes=new Set();
  await page.route('http://results017.test/**',async route=>{const req=route.request(),url=new URL(req.url());let body;
   if(url.pathname==='/api/metrics'){if(metricsMode==='error')return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'W&B account is unavailable'})});body=metricsMode==='empty'?{series:[],runs:[],updated_at:now}:{series:[{run_id:'r1',run_name:'Run <baseline>',key:'train/loss',points:[{x:0,y:1},{x:1,y:.5}]},{run_id:'r2',run_name:'Run two',key:'train/loss',points:[{x:0,y:.8},{x:1,y:.3}]}],runs:[{id:'r1'},{id:'r2'}],updated_at:now};}
+  else if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
   else if(url.pathname==='/api/state')body=state;
   else if(url.pathname==='/api/experiment')body=state.experiments.find(x=>x.id===url.searchParams.get('id'));
   else if(url.pathname==='/api/experiment-agents')body=lists[url.searchParams.get('experiment_id')];

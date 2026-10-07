@@ -40,6 +40,7 @@ for line in sys.stdin:
     if not method or 'id' not in request: continue
     p, result = request.get('params', {}), {}
     if method == 'initialize': result = {'userAgent':'fake'}
+    elif method == 'account/read' and os.environ.get('SS_FAKE_SIGNED_OUT'): result = {'account': None, 'requiresOpenaiAuth':True}
     elif method == 'account/read': result = {'account': {'type':'chatgpt','email':'test@example.com','planType':'pro','accessToken':'SECRET'}, 'requiresOpenaiAuth':True,'token':'SECRET'}
     elif method == 'config/read': result = {'config':{} if os.environ.get('SS_FAKE_CONFIG_EMPTY') else {'model':'model-a','model_reasoning_effort':'medium','api_key':'SECRET'},'origins':{}}
     elif method == 'model/list': result = {'data':[{'id':'model-b' if p.get('cursor') else 'model-a','displayName':'Test model','isDefault':not bool(p.get('cursor')),'defaultReasoningEffort':'low'}], 'nextCursor':None if p.get('cursor') else 'page2'}
@@ -183,6 +184,30 @@ class CodexBridgeTests(unittest.TestCase):
             except Exception as error: result['error'] = error
         worker = threading.Thread(target=ask,daemon=True); worker.start()
         return worker,result
+
+    def test_signed_out_host_cannot_start_an_agent_turn(self):
+        with patch.dict(os.environ, {'SS_FAKE_SIGNED_OUT': '1'}):
+            with self.assertRaisesRegex(CodexError, 'Sign in to ChatGPT') as caught:
+                self.bridge.send('project:vla', 'do my work')
+            self.assertEqual(403, caught.exception.status)
+            self.assertTrue(self.bridge.account()['login_required'])
+            self.assertFalse(any(r.get('method') in ('thread/start', 'turn/start') for r in self.requests()))
+            self.assertFalse(self.bridge.chat('project:vla')['busy'])
+            self.assertFalse(self.bridge.chat('project:vla')['messages'])
+
+    def test_expired_account_requires_login_even_when_account_metadata_remains(self):
+        self.bridge.send('project:vla', 'hold')
+        self.wait_for(lambda: self.bridge.chat('project:vla').get('steerable'))
+        tid=self.bridge.chat('project:vla')['thread_id']
+        self.bridge._event('error', {'threadId':tid, 'error':{'message':'unexpected status 401 Unauthorized'}, 'willRetry':False})
+        self.assertTrue(self.bridge.account()['login_required'])
+        self.bridge.stop('project:vla'); self.finished()
+        with self.assertRaisesRegex(CodexError, 'Sign in to ChatGPT'):
+            self.bridge.send('project:vla', 'continue')
+        self.bridge.login()
+        self.wait_for(lambda: not self.bridge.account()['login_required'])
+        self.bridge.send('project:vla', 'continue')
+        self.finished()
 
     def test_lazy_reads_account_models_login_without_turns(self):
         self.assertEqual([], self.bridge.chat('project:vla')['messages']); self.assertFalse(self.log.exists())

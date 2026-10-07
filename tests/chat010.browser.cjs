@@ -38,7 +38,8 @@ Incomplete streaming: \(x_{t+1}`;
  await page.addInitScript(()=>{window.superSurferDesktop={};if(!localStorage.getItem('supersurfer-workspace'))localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:'p1',experimentId:'e12',tab:'overview',chatVisible:true}));});
  await page.route('http://chat.test/**',async route=>{
   const url=new URL(route.request().url());let body={};
-  if(url.pathname==='/api/state')body=data;
+  if(url.pathname==='/api/account')body={account:{type:'chatgpt'},login_required:false};
+  else if(url.pathname==='/api/state')body=data;
   else if(url.pathname==='/api/experiment')body=exp;
   else if(url.pathname==='/api/experiment-agents')body={selected_scope:scope,agents:[{scope,name:'E12 worker',owner:'supersurfer',status:'completed',task_state:'incomplete',busy:false,can_resume:true},...Array.from({length:9},(_,i)=>({scope:'conversation:'+i,name:'Previous worker '+i,owner:'supersurfer',status:'completed',busy:false}))]};
   else if(url.pathname==='/api/chat')body={busy:!!(questions.length||approvals.length),status:'completed',agent:{name:'E12 worker',model:'fixture'},tasks:[{id:'t1',title:'Evaluate the checkpoint and report measured evidence',status:'working',summary:'Scoring is in progress. '+taskUpdate},{id:'t2',title:'Watch the loss every ten minutes',status:'watching',summary:'Monitoring is enabled.'}],messages,questions,approvals,preferences:{editable:true,defaults:{model:'',reasoning:'medium',approval_mode:'ask'},overrides:{},effective:{model:'fixture',reasoning:'medium',approval_mode:'ask'},supported_reasoning:['medium']}};

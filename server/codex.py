@@ -116,6 +116,7 @@ class CodexBridge:
         self._closed = False
         self._db_closed = False
         self._login_status = None
+        self._authentication_error = None
         self._db = sqlite3.connect(self.state_dir / "codex.sqlite3", check_same_thread=False)
         os.chmod(self.state_dir / "codex.sqlite3", 0o600)
         self._db.execute("PRAGMA journal_mode=WAL")
@@ -490,16 +491,22 @@ class CodexBridge:
                 proc.kill()
                 proc.wait(timeout=2)
 
-    def account(self):
-        result = self._rpc("account/read", {"refreshToken": False})
+    def account(self, refresh=False):
+        result = self._rpc("account/read", {"refreshToken": refresh})
         account = result.get("account")
         # Explicitly exclude all credential fields, including future additions.
         safe = {"account": ({key: account[key] for key in ("type", "email", "planType") if key in account} if isinstance(account, dict) else None),
                 "requiresOpenaiAuth": result.get("requiresOpenaiAuth", True)}
         with self._lock:
+            safe["login_required"] = not isinstance(account, dict) or account.get("type") != "chatgpt" or bool(self._authentication_error)
+            safe["error"] = self._authentication_error
             if self._login_status is not None:
                 safe["login"] = copy.deepcopy(self._login_status)
         return safe
+
+    def require_chatgpt(self):
+        if self.account(refresh=True)["login_required"]:
+            raise CodexError("Sign in to ChatGPT on this workspace host before starting agent work. Use the SuperSurfer sign-in screen.", status=403)
 
     def models(self):
         models, cursor, seen = [], None, set()
@@ -553,6 +560,7 @@ class CodexBridge:
             if value is not None and (not isinstance(value, str) or len(value) > 200):
                 raise ValueError(f"Invalid {label} setting.")
         context = self._context(scope)
+        self.require_chatgpt()
         with self._lock:
             if self._closed:
                 raise CodexError("The Codex bridge is closed.")
@@ -578,6 +586,7 @@ class CodexBridge:
     def _run(self, scope, message_id, text, context, model, reasoning, fast_mode=False, approval_mode="ask"):
         try:
             self._start()
+            self.require_chatgpt()
             if not model or not reasoning:
                 defaults = self.model_defaults(context["cwd"])
                 model = model or defaults["model"]
@@ -910,6 +919,8 @@ class CodexBridge:
         with self._lock:
             if method == "account/login/completed":
                 self._login_status = {"loginId": params.get("loginId"), "status": "completed" if params.get("success") else "failed", "error": params.get("error")}
+                if params.get("success"):
+                    self._authentication_error = None
                 return
             if method == "account/updated":
                 # account() always performs a fresh, credential-free account/read.
@@ -956,6 +967,8 @@ class CodexBridge:
             elif method == "error":
                 error = params.get("error") or {}
                 label = str(error.get("message", error) if isinstance(error, dict) else error)
+                if "401" in label or "token_expired" in label or "token_invalidated" in label:
+                    self._authentication_error = "Your ChatGPT session needs attention. Sign in again on this workspace host."
                 self._activity(chat, "error", label, status="retrying" if params.get("willRetry") else "failed")
                 if not params.get("willRetry"):
                     chat["error"] = label

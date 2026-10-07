@@ -1,3 +1,8 @@
+## Completed in 0.1.20
+
+- Add New Window to the macOS Dock context menu.
+- Require ChatGPT sign-in on each workspace host before agent work, with automatic completion, saved authenticated reconnects, expired-code retry and server-side enforcement.
+
 ## Completed in 0.1.19
 
 - Ship the selected Floating Panels design across the main workspace, with theme/accessibility and narrow/fullscreen regression coverage.
