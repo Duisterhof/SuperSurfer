@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.14
+# SuperSurfer 0.1.15
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -6,9 +6,9 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.14-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.14-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**.
+**Mac:** extract `SuperSurfer-0.1.15-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.15-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.14-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.15-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
@@ -20,6 +20,10 @@ The selected workspace computer needs Python 3.10+, Codex CLI, Git, and a runnin
 This release also bundles the compatible scheduler in `engine/`. For an existing detached Linux AutoML manager, an explicit administrator update from the extracted source folder is `python3 -m server.engine --engine-dir ./engine --aml-home ~/.auto-ml`. It uses the manager's existing Python 3.11+ environment, briefly pauses admission, preserves running jobs and current state, and backs up the database. It refuses an active legacy-agent turn or a manager owned by another service. A healthy connection never silently replaces your scheduler.
 
 SuperSurfer uses the workspace computer's existing Codex ChatGPT login. Otherwise choose **Connect ChatGPT** in Settings and complete device-code sign-in. No OpenAI API key is required. GitHub preparation uses that computer's existing `gh` authentication; creating a project folder does not require GitHub.
+
+## Changes in 0.1.15
+
+The chat composer uses one aligned toolbar on wide panels and two intentional rows on narrow panels. Send and Steer share an unclipped arrow control; Stop has its own square icon. Model, effort, permissions, Fast and Reset remain available. Permission-transition and error notices occupy a separate full-width row, and stable YOLO status no longer adds a permanent explanation beneath the toolbar. Current-turn permission mismatches remain visible with Apply now when applicable. Keyboard entry, steering, stop and permission semantics are unchanged.
 
 ## Changes in 0.1.14
 

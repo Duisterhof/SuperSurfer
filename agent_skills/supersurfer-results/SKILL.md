@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.14'
+  supersurfer-version: '0.1.15'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.14. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.15. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -102,5 +102,7 @@ workers' edits and unrelated evidence.
 Before reporting completion, inspect the rendered page: verify that the leading
 curves really compare methods and splits, legend colors/units are consistent,
 requested domain visuals are present or explicitly unavailable, and links and
-widgets work at the app's normal width. Describe unavailable evidence precisely;
+widgets work at the app's normal width, including with the agent panel open.
+Use responsive plots and wrapping legends; a figure that only works after closing
+the chat is not a usable in-app comparison. Describe unavailable evidence precisely;
 do not claim a screenshot or interactive test was performed unless it was.

@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Inspect project compute, reuse ready nodes, and onboard a compatible free local or SSH host with verified repository, environment and data paths for authorized work.
 metadata:
-  supersurfer-version: '0.1.14'
+  supersurfer-version: '0.1.15'
 ---
 
 # Onboard project compute
 
-Reviewed for SuperSurfer 0.1.14. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project; managers supply the registered `project_id`. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
+Reviewed for SuperSurfer 0.1.15. Use for requested host setup or necessary capacity/setup work within an already authorized experiment task. Workers remain scoped to their experiment's project; leads remain scoped to their project; managers supply the registered `project_id`. A new research idea or scheduled review does not authorize host registration, pool mutation or a run. Continue the existing deliverable through recoverable setup problems; a missing path or dependency alone is not a reason to return a plan and stop.
 
 ## Choose capacity before changing it
 
@@ -25,7 +25,7 @@ A queued or delivered message does not prove that setup is finished; verify the 
 
 Find existing verified paths before creating copies: inspect the project repository and Git refs, experiment technical notes and Markdown tabs, prior run commands/artifact manifests, and known source hosts. A protocol missing from one checkout may exist in reviewed source or recorded experiment context. Restore or reference that exact source when available. Do not invent scientific choices, change a dataset or substitute a checkpoint merely to bypass a failure. Use `ask_user` only when a necessary decision remains after available evidence has been checked; await its answer and continue independent work meanwhile.
 
-For a requested run, necessary bounded node preparation is part of completing that request. Use normal permitted shell commands to clone or prepare an isolated repository, reuse a compatible environment, create a user-owned environment from the project's recorded dependency specification, or resume a copy of the verified dataset/checkpoint from an authorized source. Check storage and source identity first; preserve partial progress and verify the resulting files against existing manifests or checksums where available. Do not overwrite shared datasets, replace an active environment, delete other users' work, change host-wide drivers/configuration or launch a training job as a setup test. Agents, including new workers, inherit the persisted permission level in Settings unless their conversation explicitly overrides it. Actual permission denials remain binding; ask for the narrow required permission instead of bypassing it.
+For a requested run, necessary bounded node preparation is part of completing that request. Use normal permitted shell commands to clone or prepare an isolated repository, reuse a compatible environment, create a user-owned environment from the project's recorded dependency specification, or resume a copy of the verified dataset/checkpoint from an authorized source. Check storage and source identity first; preserve partial progress and verify the resulting files against existing manifests or checksums where available. Do not overwrite shared datasets, replace an active environment, delete other users' work, change host-wide drivers/configuration or launch a training job as a setup test. Agents, including new workers, inherit the persisted permission level in Settings unless their conversation explicitly overrides it. The composer can show a selected YOLO mode while its transition notice reports that full access starts next turn: inspect the active sandbox before claiming a setup command can run now. Actual permission denials remain binding; ask for the narrow required permission instead of bypassing it.
 
 The tools validate and record configuration; they do not install dependencies or move datasets themselves. Keep diagnostics tied to an observed failure rather than imposing a training smoke run or repeated test suite. Verify the selected interpreter and required imports/paths for the requested command, then proceed with usable configuration.
 

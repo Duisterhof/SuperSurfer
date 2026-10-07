@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.14 integration contract
+# SuperSurfer 0.1.15 integration contract
 
 Single-user Electron client on Mac/Linux; Python stdlib sidecar on the current or an SSH-accessible machine. AutoML owns GPU scheduling and run execution. Retired native agents remain read-only history; active owned research conversations run through SuperSurfer. SuperSurfer owns durable chats, documents, reviews and planning metadata. An explicit user queue/run request permits an experiment worker or the workspace manager to release a verified PR-backed run through the appropriately scoped tool. Suggested ideas and recurring reviews never authorize autonomous launches.
 
@@ -23,6 +23,10 @@ Host registration verifies a Python3.9+ runner executable before calling AutoML.
 ## Markdown presentation
 
 The bundled KaTeX 0.18.7 renderer supports inline `\(...\)` / `$...$` and standalone display `\[...\]` / `$$...$$` equations. Code spans/fences bypass math. Invalid/incomplete text remains readable. `trust:false`, isolated per-expression macros, expansion and size limits protect the existing escaped Markdown renderer; no CDN, trusted TeX HTML or resource loading is enabled. Accessible MathML accompanies rendered HTML. The local vendor directory includes KaTeX's MIT notice and all referenced font files.
+
+## Composer layout
+
+Model, reasoning, permission and Fast controls share the action baseline in wide panels. Panels at or below 620 CSS pixels use a model row and a separate permission/action row. Pending permission changes and errors span their own notice row. The arrow retains an accessible Send message or Steer current work label; Stop current work is a separate square-icon button. Existing question/approval gating, save disabling, draft persistence and current-versus-next-turn permission semantics remain unchanged. Stable YOLO status is available from the permission selector instead of a permanent notice.
 
 ## Conversations
 
