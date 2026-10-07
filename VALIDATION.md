@@ -1,3 +1,13 @@
+# SuperSurfer 0.1.18 validation — October 7, 2026
+
+All 330 SuperSurfer Python regressions pass in shuffled order (seed 20261007), including 10 new real-manager recovery cases. All 212 matching bundled-engine regressions pass with fixture daemons loading the patched engine. The Chromium queue flow passes. All five capability skills were independently reviewed, substantively revised and checked for this release.
+
+Coverage includes E16's dirty-source rejection followed by the same request after service restart, migration of a legacy null receipt, local untyped preparation failure, lost responses, offline/old-manager guards, preserved resolved payloads, changed intent/ownership rejection, concurrent first submissions, manager restart and failure after durable insertion. Recovery does not release on its own; normal PR verification and authorization remain required. Tests use isolated state and do not launch research jobs.
+
+An initial supplemental run against the separate older AutoML checkout's tests produced three fixture/baseline mismatches (CLI task binding, host-probe expectations and legacy HTML icon count). The exact same three failures reproduce with the unmodified 0.1.17 bundle. The matching release suite above passes all 212 cases; those external fixtures are not claimed fixed. Native desktop/UI code is unchanged in this patch. Mac packages remain unsigned; native macOS execution is not tested on this Linux host.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.17 validation — October 7, 2026
 
 All 320 Python tests pass in shuffled order (seed 20261007), along with 20 Node desktop/SSH checks, 13 browser suites and both native Linux Electron suites. All five skills received an independent bounded review and pass the capability/version checker.

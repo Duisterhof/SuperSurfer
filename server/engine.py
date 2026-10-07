@@ -21,7 +21,7 @@ import sys
 import time
 import uuid
 
-REQUIRED_CAPABILITIES = frozenset({"placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1"})
+REQUIRED_CAPABILITIES = frozenset({"placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1"})
 PROC_ROOT = Path("/proc")
 _DETACHED_CHILDREN = {}
 

@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.17'
+  supersurfer-version: '0.1.18'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.17. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.18. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -104,6 +104,14 @@ Avoid launch logs, lengthy recaps, congratulatory prose, generic cards, invented
 scores, unexplained acronyms and repeated claims that an experiment is important.
 MFU, VRAM and throughput support a compute-efficiency question; they do not replace
 the primary train/held-out comparison. Scheduler state belongs in Runs.
+
+A retained queue request or recovered draft is not a measurement. Link the actual
+run ID once confirmed, and preserve that identity through submission retries;
+do not count retries as independent runs, seeds or evidence. If feature-cache
+preparation blocks training, state which measured curves are unavailable without
+replacing the comparison with queue diagnostics or labelling the research failed.
+Have the owning worker resolve its original request through the scoped workflow;
+publishing Results never authorizes a replacement run.
 
 Put source run links/IDs, commit/PR, data split, protocol, extraction time and
 refresh behavior in a compact provenance section. The built-in W&B view is sampled;
