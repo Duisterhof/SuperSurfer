@@ -1,3 +1,7 @@
+## Idempotent queue recovery (0.1.18)
+
+Submission preparation finishes before a new request is retained. Durable requests save the resolved payload before RPC. On an unknown outcome, reconciliation requires fresh manager state and checks exact request/experiment ownership. A positive receipt is reused; absent receipts may be resubmitted only with `run.submit_idempotent.v1`. The manager serializes receipt lookup and insertion with its command lock, uses the run row as a durable receipt, and rejects conflicting identities. Retries never release without the existing exact-source PR workflow, broaden node contracts or change launch authority. Legacy retained null receipts recover through the same original conversation/request ID; no raw database reset or replacement identity is needed.
+
 # SuperSurfer 0.1.17 integration contract
 
 Single-user Electron client on Mac/Linux; Python stdlib sidecar on the current or an SSH-accessible machine. AutoML owns GPU scheduling and run execution. Retired native agents remain read-only history; active owned research conversations run through SuperSurfer. SuperSurfer owns durable chats, documents, reviews and planning metadata. An explicit user queue/run request permits an experiment worker or the workspace manager to release a verified PR-backed run through the appropriately scoped tool. Suggested ideas and recurring reviews never authorize autonomous launches.

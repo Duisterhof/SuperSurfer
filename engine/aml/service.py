@@ -128,7 +128,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -620,6 +620,29 @@ class Manager:
                          revision=None, env=None, config=None, priority=None, allowed_hosts=None,
                          environment=None, storage=None, inputs=None, pr_url=None):
         project = self.project(project)
+        request_id = config.get("supersurfer_request_id") if isinstance(config, dict) else None
+        if request_id is not None:
+            if not isinstance(request_id, str) or not re.fullmatch(r"[a-zA-Z0-9:_-]{1,256}", request_id):
+                raise ValueError("Invalid submission request identity")
+            fingerprint = config.get("supersurfer_request_fingerprint")
+            if fingerprint is not None and (not isinstance(fingerprint, str) or not re.fullmatch(r"[0-9a-f]{64}", fingerprint)):
+                raise ValueError("Invalid submission request fingerprint")
+            # call() holds command_lock across lookup, validation and insertion.
+            # The run row itself is the durable receipt: a lost response, late
+            # retry or manager restart cannot produce another row for this key.
+            matches = self.store.rows("SELECT * FROM runs WHERE json_extract(config,'$.supersurfer_request_id')=?", (request_id,))
+            if len(matches) > 1:
+                raise ValueError("Submission request has duplicate receipts; inspect before continuing")
+            if matches:
+                row = matches[0]
+                recorded = json.loads(row["config"])
+                if (row["project_id"] != project["id"] or
+                        recorded.get("supersurfer_experiment_id") != config.get("supersurfer_experiment_id") or
+                        recorded.get("supersurfer_request_fingerprint") != fingerprint or
+                        row["name"] != name_ or row["gpu_count"] != gpu_count or
+                        json.loads(row["command"]) != command or (revision and row["revision"] != revision)):
+                    raise ValueError("Submission request already belongs to different run fields")
+                return row
         task = self.task(task, project["id"])
         host = self.store.get("hosts", host)
         name(name_)

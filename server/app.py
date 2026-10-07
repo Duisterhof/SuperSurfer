@@ -552,7 +552,7 @@ class Service:
             runs = [run for run in current["runs"] if run.get("experiment_id") == experiment["id"]]
             hosts = [host for host in current["hosts"] if host["id"] in {run["host_id"] for run in runs}]
             instructions.append("Current scheduler evidence (a status is not a scientific result): " + json.dumps({"runs": self.run_context(runs), "hosts": hosts, "observed_at": current["updated_at"], "connected": current["connected"], "error": current["error"]}))
-            instructions.append("When the user asks only to prepare a draft, use prepare_run; it stays HELD and may omit the PR. When the user explicitly asks you to queue or run this experiment, use queue_run to finish the task: it creates or reuses a held run, verifies its exact-source PR, then releases through AutoML. A separate click on Release run is not needed for this explicit request. Supply either existing {run_id,pr_url} or complete new-run fields with mandatory pr_url. Use committed source and explicit GPU, memory and storage requirements. If a known run ID is returned with an error, reuse it instead of creating another run. Never use queue_run for a scheduled review or an unsolicited idea. Never bypass the tools or launch a process directly.")
+            instructions.append("When the user asks only to prepare a draft, use prepare_run; it stays HELD and may omit the PR. When the user explicitly asks you to queue or run this experiment, use queue_run to finish the task: it creates or reuses a held run, verifies its exact-source PR, then releases through AutoML. A separate click on Release run is not needed for this explicit request. Supply either existing {run_id,pr_url} or complete new-run fields with mandatory pr_url. Use committed source and explicit GPU, memory and storage requirements. If a known run ID is returned with an error, reuse it instead of creating another run. If creation returns no run ID, retry the same request_id and unchanged original fields in this conversation; the current bundled manager reconciles that identity without duplication. Do not move the request to another worker or manager to recover it. Never use queue_run for a scheduled review or an unsolicited idea. Never bypass the tools or launch a process directly.")
             instructions.append("Registered hosts available for a user-requested held draft: " + json.dumps([{key: host.get(key) for key in ("id", "name", "target", "root", "gpus", "status", "stale")} for host in current["hosts"]]))
         else:
             documents = [e for e in self.state()["experiments"] if e["project_id"] == project["id"]]
@@ -885,38 +885,50 @@ class Service:
                         raise APIError("This run request_id already records different run fields. Reuse its run_id or use a different ID for another explicitly requested run.", 409)
                     raise APIError("Only one new queued run can be created in this conversation turn. Continue with an existing run_id or ask for another run in a new turn.", 409)
                 if not prior.get("run_id") and durable_key:
-                    matches = [run for run in self.state(force=True)["runs"] if run.get("config", {}).get("supersurfer_request_id") == scope]
-                    if len(matches) == 1 and matches[0].get("project_id") == experiment["project_id"]:
+                    snapshot = self.state(force=True)
+                    if not snapshot["connected"]:
+                        raise APIError("Cannot reconcile this request while the manager is unavailable. Retry the same request_id when it reconnects.", 503)
+                    matches = [run for run in snapshot["runs"] if run.get("config", {}).get("supersurfer_request_id") == scope]
+                    if len(matches) > 1 or (matches and (matches[0].get("project_id") != experiment["project_id"] or matches[0].get("experiment_id") != experiment["id"])):
+                        raise APIError("This request has conflicting run ownership or duplicate receipts; no run was created or released.", 409)
+                    if matches:
                         prior["run_id"] = matches[0]["id"]
                         self.store.bind_run(prior["run_id"], experiment["id"])
                         self.store.put(durable_key, prior)
                 if not prior.get("run_id"):
-                    raise APIError("The earlier run creation could not be confirmed. Inspect this experiment's runs before retrying with an existing run_id; no second run was created automatically.", 409)
+                    if not durable_key or "run.submit_idempotent.v1" not in self.aml.call("ping").get("capabilities", []):
+                        raise APIError("The earlier run creation could not be confirmed; no second run was created. A missing run ID with a durable request requires the bundled manager's idempotent-submit update, then retry the same request_id and original fields.", 409)
+            if prior and prior.get("run_id"):
                 run_id = prior["run_id"]
             else:
-                record = {"fingerprint": fingerprint, "run_id": None}
-                if not durable_key:
-                    self.turn_queue_requests[scope] = record
-                if durable_key:
-                    self.store.put(durable_key, record)
-                try:
-                    # AML validates supplied PR metadata before inserting. Keep
-                    # creation held and PR-free so review failures retain an ID.
+                record = prior or {"fingerprint": fingerprint, "run_id": None}
+                # Validation, path resolution and local tracking preparation can
+                # all fail. None sends run.submit, so none may poison a new ID.
+                payload = record.get("payload")
+                if payload is None:
                     draft = {key: value for key, value in arguments.items() if key != "pr_url"}
                     if durable_key:
-                        draft["_request_id"] = scope
-                    created = self.action("run.submit", {**draft, "project_id": experiment["project_id"], "experiment_id": experiment["id"]})
+                        draft.update(_request_id=scope, _request_fingerprint=hashlib.sha256(fingerprint.encode()).hexdigest())
+                    payload, _ = self.prepare_run_submission({**draft, "project_id": experiment["project_id"], "experiment_id": experiment["id"]})
+                    record["payload"] = payload
+                # Freeze resolved node contracts and W&B identity across retries.
+                if durable_key:
+                    self.store.put(durable_key, record)
+                else:
+                    self.turn_queue_requests[scope] = record
+                try:
+                    created = self.aml.call("run.submit", payload)
                     run_id = record["run_id"] = created["id"]
+                    self.aml.invalidate()
                     if durable_key:
                         self.store.put(durable_key, record)
-                except (APIError, ComputeError):
-                    # Local validation failed before run.submit could reach AML.
-                    self.turn_queue_requests.pop(scope, None)
-                    if durable_key:
-                        self.store.put(durable_key, None)
-                    raise
+                    self.store.bind_run(run_id, experiment["id"])
                 except Exception as exc:
-                    raise APIError(f"Run creation could not be confirmed: {exc}. Inspect this experiment's runs before retrying; the tool will not create a duplicate in this turn.", 503) from exc
+                    hint = "Retry the same request_id and unchanged original fields; the service reconciles it without creating a duplicate." if durable_key else "Inspect this experiment's runs before retrying; no second run will be created automatically."
+                    error = APIError(f"Run creation could not be confirmed: {exc}. {hint}", 503)
+                    if record.get("run_id"):
+                        error.run_id = record["run_id"]
+                    raise error from exc
         try:
             run = self.lookup("runs", run_id, fresh=True)
         except Exception as exc:
@@ -943,6 +955,63 @@ class Service:
             error.run_id = run_id
             raise error from exc
         return {"queued": True, "ready": True, "already_queued": False, "run_id": run_id, "run": released}
+
+    def prepare_run_submission(self, params):
+        """Validate and build a held submission before crossing the manager RPC boundary."""
+        project = self.lookup("projects", text_field(params, "project_id", 150), fresh=True)
+        experiment = self.store.experiment(text_field(params, "experiment_id", 180))
+        if experiment["project_id"] != project["id"]:
+            raise APIError("Experiment belongs to another project")
+        use_pool = params.get("use_project_pool", False)
+        if not use_pool and any(key in params for key in ("required_paths", "python_packages")):
+            raise APIError("Input requirements use project-pool contracts; set use_project_pool")
+        if type(use_pool) is not bool:
+            raise APIError("use_project_pool must be boolean")
+        command = params.get("command")
+        if not isinstance(command, list) or not command or len(command) > 1000 or any(not isinstance(x, str) or "\x00" in x or len(x) > 32000 for x in command) or not command[0]:
+            raise APIError("Command must be a nonempty JSON argv array, such as [\"python\", \"train.py\"]")
+        storage = params.get("storage_gib")
+        if isinstance(storage, bool) or not isinstance(storage, (float, int)) or not math.isfinite(storage) or storage < 0:
+            raise APIError("storage_gib must be a nonnegative finite number")
+        count = integer(params, "gpu_count", 0, 1024)
+        if count > project["gpu_limit"]:
+            raise APIError("GPU request exceeds the project limit")
+        config = {"supersurfer_experiment_id": experiment["id"], "experiment": experiment["name"], "min_free_mib": integer(params, "min_free_mib", 0, 100000000, 1024)}
+        try:
+            config["telemetry"] = telemetry.contract(params)
+        except ValueError as exc:
+            raise APIError(str(exc)) from exc
+        if params.get("_request_id"):
+            config["supersurfer_request_id"] = params["_request_id"]
+            config["supersurfer_request_fingerprint"] = params["_request_fingerprint"]
+        review_url = text_field(params, "pr_url", 2048, required=False)
+        payload = {"project": project["id"], "name_": text_field(params, "name", 100), "gpu_count": count, "command": command, "config": config}
+        if use_pool:
+            if params.get("host_id"):
+                raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
+            resolved = self.compute.resolve_run(project["id"], params, project)
+            config.update(host_contracts=resolved["host_contracts"], project_compute=resolved["pool_snapshot"],
+                          source_repo=resolved["source_repo"], stage_source=True)
+            payload.update(host=resolved["preferred_host"], allowed_hosts=resolved["allowed_hosts"],
+                           repo=resolved["source_repo"], revision=resolved["revision"])
+        else:
+            host = self.lookup("hosts", text_field(params, "host_id", 150))
+            if count > len(host["gpus"]):
+                raise APIError("GPU request exceeds the registered host limit")
+            payload.update(host=host["id"], repo=text_field(params, "repo", 4096),
+                           storage={"directory": host["root"], "min_free_gib": storage})
+            if params.get("revision"):
+                payload["revision"] = text_field(params, "revision", 80)
+        if review_url:
+            payload["pr_url"] = pr_url(review_url)
+        # Persist intent before submission; the background synchronizer handles
+        # network writes. A W&B outage must not delay or block a valid run.
+        tracking_id = params.get("_request_id", "").removeprefix("manual:").removeprefix("agent-request:") or uuid.uuid4().hex
+        tracking = self.tracking.defer_run(project, experiment, {**{key: value for key, value in params.items() if not key.startswith("_")}, "tracking_id": tracking_id})
+        config["wandb_tracking"] = {key: value for key, value in tracking.items() if key != "env"}
+        config["wandb_url"] = tracking["run_url"]
+        payload["env"] = tracking["env"]
+        return payload, experiment
 
     def check_experiment_idle(self, experiment, scope=None):
         for entry in self.experiment_agents(experiment["id"])["agents"]:
@@ -1440,58 +1509,7 @@ class Service:
             runner_python = resolve_runner_python(target or None, text_field(params, "python", 4096))
             result = self.aml.call(op, {"name_": text_field(params, "name", 100), "target": target or None, "root": root, "gpus": gpus, "python": runner_python})
         elif op == "run.submit":
-            project = self.lookup("projects", text_field(params, "project_id", 150), fresh=True)
-            experiment = self.store.experiment(text_field(params, "experiment_id", 180))
-            if experiment["project_id"] != project["id"]:
-                raise APIError("Experiment belongs to another project")
-            use_pool = params.get("use_project_pool", False)
-            if not use_pool and any(key in params for key in ("required_paths", "python_packages")):
-                raise APIError("Input requirements use project-pool contracts; set use_project_pool")
-            if type(use_pool) is not bool:
-                raise APIError("use_project_pool must be boolean")
-            command = params.get("command")
-            if not isinstance(command, list) or not command or len(command) > 1000 or any(not isinstance(x, str) or "\x00" in x or len(x) > 32000 for x in command) or not command[0]:
-                raise APIError("Command must be a nonempty JSON argv array, such as [\"python\", \"train.py\"]")
-            storage = params.get("storage_gib")
-            if isinstance(storage, bool) or not isinstance(storage, (float, int)) or not math.isfinite(storage) or storage < 0:
-                raise APIError("storage_gib must be a nonnegative finite number")
-            count = integer(params, "gpu_count", 0, 1024)
-            if count > project["gpu_limit"]:
-                raise APIError("GPU request exceeds the project limit")
-            config = {"supersurfer_experiment_id": experiment["id"], "experiment": experiment["name"], "min_free_mib": integer(params, "min_free_mib", 0, 100000000, 1024)}
-            try:
-                config["telemetry"] = telemetry.contract(params)
-            except ValueError as exc:
-                raise APIError(str(exc)) from exc
-            if params.get("_request_id"):
-                config["supersurfer_request_id"] = params["_request_id"]
-            review_url = text_field(params, "pr_url", 2048, required=False)
-            payload = {"project": project["id"], "name_": text_field(params, "name", 100), "gpu_count": count, "command": command, "config": config}
-            if use_pool:
-                if params.get("host_id"):
-                    raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
-                resolved = self.compute.resolve_run(project["id"], params, project)
-                config.update(host_contracts=resolved["host_contracts"], project_compute=resolved["pool_snapshot"],
-                              source_repo=resolved["source_repo"], stage_source=True)
-                payload.update(host=resolved["preferred_host"], allowed_hosts=resolved["allowed_hosts"],
-                               repo=resolved["source_repo"], revision=resolved["revision"])
-            else:
-                host = self.lookup("hosts", text_field(params, "host_id", 150))
-                if count > len(host["gpus"]):
-                    raise APIError("GPU request exceeds the registered host limit")
-                payload.update(host=host["id"], repo=text_field(params, "repo", 4096),
-                               storage={"directory": host["root"], "min_free_gib": storage})
-                if params.get("revision"):
-                    payload["revision"] = text_field(params, "revision", 80)
-            if review_url:
-                payload["pr_url"] = pr_url(review_url)
-            # Persist intent before submission; the background synchronizer handles
-            # network writes. A W&B outage must not delay or block a valid run.
-            tracking_id = params.get("_request_id", "").removeprefix("manual:").removeprefix("agent-request:") or uuid.uuid4().hex
-            tracking = self.tracking.defer_run(project, experiment, {**{key: value for key, value in params.items() if not key.startswith("_")}, "tracking_id": tracking_id})
-            config["wandb_tracking"] = {key: value for key, value in tracking.items() if key != "env"}
-            config["wandb_url"] = tracking["run_url"]
-            payload["env"] = tracking["env"]
+            payload, experiment = self.prepare_run_submission(params)
             result = self.aml.call("run.submit", payload)
             self.store.bind_run(result["id"], experiment["id"])
             # AutoML's run.submit always creates held records. Never call run.ready here.
