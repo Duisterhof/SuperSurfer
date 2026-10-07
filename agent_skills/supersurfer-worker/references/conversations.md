@@ -21,7 +21,11 @@ overlap; metric/run-status events fire once per explicit arm. A specified run ID
 pins the run; otherwise the newest current/future run is tracked. Uncertain wakeup
 delivery pauses for inspection. Do not recreate paused/removed rules. Scheduled
 checks allow the saved observation/analysis only, not runs, compute mutations,
-new workers or more schedules. Publishing live curves needs no wakeup.
+new workers or more schedules. Dedicated run-recovery wakeups are separate: their
+saved owner/lineage grant permits only the bounded operations described in
+[run recovery](../../supersurfer-host-onboarding/references/run-recovery.md), never
+a generic user-origin turn. Do not attach their grant as a monitoring wakeup ID.
+Publishing live curves needs no wakeup.
 
 `ask_user` gathers one to three essential decisions, not credentials or permission
 grants. Await its result; keep waiting if an execution wrapper yields a running
@@ -33,7 +37,8 @@ A desktop disconnect alone does not cancel a still-live remote question.
 Desktop windows restore connection/navigation without replaying instructions.
 Closing, fullscreen, collapsed Deliverables and Archive are presentation changes;
 remote work and monitoring remain active. Chat Stop interrupts the agent turn;
-it does not cancel a research run. A requested run cancellation uses `stop_run`
+it also pauses saved recovery and setup transfers, but does not itself cancel a
+research run. A requested run cancellation uses `stop_run`
 with its exact run ID and waits for the scheduler's state. Preserve
 existing history, task/run/request IDs and uncertainty after reconnecting rather
 than creating replacement owners. Retired native AutoML conversations remain

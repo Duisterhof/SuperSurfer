@@ -111,7 +111,7 @@ def normalize_contract(store, preferred, command, config, allowed_hosts=None, en
         for host in hosts:
             value = host_contracts[host["id"]]
             required = {"command", "environment", "storage"}
-            if not isinstance(value, dict) or not required.issubset(value) or set(value) - required - {"env", "allowed_gpu_indices"}:
+            if not isinstance(value, dict) or not required.issubset(value) or set(value) - required - {"env", "allowed_gpu_indices", "repo"}:
                 raise ValueError("Each host contract requires command, environment and storage; optional env and allowed_gpu_indices")
             argv = value["command"]
             if not isinstance(argv, list) or not argv or len(argv) > 1000 or any(not isinstance(item, str) or "\0" in item or len(item) > 32000 for item in argv) or not argv[0]:
@@ -121,6 +121,8 @@ def normalize_contract(store, preferred, command, config, allowed_hosts=None, en
             # Reuse the legacy environment, storage and input validation.
             child = normalize_contract(store, host, argv, {}, [host["id"]], value["environment"], value["storage"], config.get("inputs"))
             row = {"command": list(argv), "environment": child["environment"], "storage": child["storage"]}
+            if "repo" in value:
+                row["repo"] = absolute_path(value["repo"], "Candidate repository")
             env = value.get("env", {})
             if not isinstance(env, dict) or len(env) > 200 or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) or key == "CUDA_VISIBLE_DEVICES" or not isinstance(item, str) or "\0" in item or len(item) > 32000 for key, item in env.items()):
                 raise ValueError("Host env must map variable names to strings; GPUs are set by the scheduler")
@@ -162,4 +164,7 @@ def resolve(run, host_id):
         config.pop("allowed_gpu_indices", None)
         if "allowed_gpu_indices" in contract:
             config["allowed_gpu_indices"] = list(contract["allowed_gpu_indices"])
-    return {"command": command, "env": env, "config": config}
+    result = {"command": command, "env": env, "config": config}
+    if "host_contracts" in config and config["host_contracts"][host_id].get("repo"):
+        result["repo"] = config["host_contracts"][host_id]["repo"]
+    return result

@@ -533,7 +533,7 @@ class BackendTests(unittest.TestCase):
             process = subprocess.run([config["command"], *config["args"]], input="\n".join(json.dumps(item) for item in requests) + "\n", text=True, capture_output=True, timeout=15, env={**os.environ, **config["env"]})
             self.assertEqual(process.returncode, 0, process.stderr)
             responses = [json.loads(line) for line in process.stdout.splitlines()]
-            self.assertEqual({tool["name"] for tool in responses[0]["result"]["tools"]}, {"create_experiment", "update_experiment", "handoff_experiment", "create_experiment_agent", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "publish_training_results", "set_project_limits", "stop_run"})
+            self.assertEqual({tool["name"] for tool in responses[0]["result"]["tools"]}, {"create_experiment", "update_experiment", "handoff_experiment", "create_experiment_agent", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"})
             self.assertFalse(responses[1]["result"]["isError"])
             self.assertFalse(responses[2]["result"]["isError"])
             handoff = json.loads(responses[2]["result"]["content"][0]["text"])
@@ -759,7 +759,7 @@ class BackendTests(unittest.TestCase):
             process = subprocess.run([config["command"], *config["args"]], input="\n".join(json.dumps(request) for request in requests) + "\n", text=True, capture_output=True, timeout=15, env={**os.environ, **config["env"]})
             self.assertEqual(process.returncode, 0, process.stderr)
             responses = [json.loads(line) for line in process.stdout.splitlines()]
-            self.assertEqual([tool["name"] for tool in responses[1]["result"]["tools"]], ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "publish_training_results", "set_project_limits", "stop_run"])
+            self.assertEqual([tool["name"] for tool in responses[1]["result"]["tools"]], ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"])
             self.assertFalse(responses[2]["result"]["isError"])
             held = json.loads(responses[2]["result"]["content"][0]["text"])
             self.assertFalse(held["ready"])

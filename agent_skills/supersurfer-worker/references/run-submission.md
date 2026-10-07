@@ -26,7 +26,10 @@ command. Do not impose extra admission jobs, repeated test suites or a manual
 confirmation/release ceremony. Diagnostics are appropriate for a concrete
 unresolved defect, not because a run is being launched. Honor actual permissions
 and tool errors. Onboarding or a recent reading does not guarantee allocation;
-pool edits do not expand already saved queued-run candidate contracts.
+pool edits alone do not expand saved queued-run candidates. For an existing
+queued pooled run, `check_available_node` verifies exact source/runtime/data and
+`acquire_new_node` reuses or prepares a node, calls that same check and adds the
+candidate to the same run. Inspect progress with `recover_run` status.
 
 Every new run declares `job_type`: training/evaluation/data/other. Training also
 requires `training_metrics` with `mfu_metric`, explicit `mfu_unit`, documented
@@ -68,7 +71,16 @@ legacy one-new-run-per-turn limit; IDs do not authorize extra runs or experiment
 Read project budget, queue pause and candidate readiness when blocked. Continue
 independent preparation, preserve accepted/held IDs, and use the onboarding skill
 for necessary node setup or an explicit budget decision. Do not cancel/requeue
-existing jobs or change original contracts simply to escape a placement wait.
+existing jobs simply to escape a placement wait; use supported candidate addition.
+
+Worker queueing saves an owner-bound recovery grant for pooled jobs. Subsequent
+confirmed execution failures use `recover_run` with the latest failed run ID and
+its diagnosed repair, rather than inventing another initial submission identity.
+Follow [the recovery contract](../../supersurfer-host-onboarding/references/run-recovery.md)
+for the three-retry limit, exact-source review, fresh/resume outputs and new linked
+run/W&B identities. This is distinct from reconciling an uncertain first submission.
+A dedicated recovery wakeup has only that grant; ordinary monitoring remains
+observation-only and never acquires broad user-origin permissions.
 
 ## Stop a requested run through the scheduler
 
@@ -76,7 +88,9 @@ existing jobs or change original contracts simply to escape a placement wait.
 actual user request to stop that work: workers are confined to their experiment,
 leads to their project, and the manager to this workspace. Use it directly within
 scope rather than asking another agent to relay the same authorized action.
-Scheduled observations and peer status updates do not authorize cancellation.
+Scheduled observations, recovery wakeups and peer status updates do not authorize
+cancellation. Chat Stop, run cancellation and `recover_run` pause revoke saved
+recovery; pausing recovery alone leaves the research run untouched.
 
 Queued cancellation is immediate. For running work, report cancelling until the
 scheduler confirms termination; an accepted request is not proof that its process

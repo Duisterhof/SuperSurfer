@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.22'
+  supersurfer-version: '0.1.23'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.22. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.23. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -17,6 +17,12 @@ Cancellation does not erase a run's measured evidence or establish experiment
 failure. Preserve its curves and label the actual run state. A reporting request
 does not authorize `stop_run`; requested cancellations use the role's scheduler
 tool separately and may remain cancelling until confirmed.
+
+Node acquisition preserves the existing queued run. A confirmed-failure recovery
+creates a linked attempt with a new run/W&B identity; keep both attempts' provenance
+and identify the repaired revision or resume point. Do not silently select the
+newest run, splice restarted steps into one uninterrupted curve, or count a retry
+as an independent seed. Update live bindings only from the verified recovery record.
 
 ## Use the standard training renderer
 
@@ -94,6 +100,15 @@ EEF error distributions or Rerun/3D widgets. Identify task/scene/checkpoint and
 selection rule; compare corresponding cases. Give trial denominators and separate
 observations from hypotheses. One training seed does not establish variability
 across seeds. Do not cherry-pick examples or silently combine evaluation cohorts.
+
+Requested media must be easy to find near the top, alongside the initial comparison
+or above it when the user prioritizes those examples. Verify in the actual app pane
+that each image/GIF loads and each video is playable, with sensible dimensions,
+controls and a visible error/link fallback. A valid URL or offscreen DOM element
+is not proof that the user can see it. Preserve scene/run/checkpoint provenance.
+W&B file-view pages are HTML pages, not raw video/image URLs; do not put them in
+a media src and claim playback. Use an actually embeddable resource without
+credentials, or show a clear source link when embedding is unavailable.
 
 Sealed validation artifacts and other fixed evidence may remain snapshots with
 checkpoint, protocol and extraction provenance. Identify them as artifacts rather

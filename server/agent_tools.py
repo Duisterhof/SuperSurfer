@@ -350,11 +350,34 @@ MESSAGES_TOOL = {
     "inputSchema": {"type": "object", "additionalProperties": False, "properties": {
         "message_id": {"type": "string", "minLength": 1, "maxLength": 100}}},
 }
+NODE_CHECK_TOOL = {
+    "name":"check_available_node",
+    "description":"Check one registered node for an existing pooled run's exact Git commit, isolated checkout, Python/packages, required data, storage and observed GPU capacity. Uses per-node paths with project defaults. May create an isolated verification checkout, never switches an existing worktree or allocates GPUs. ready describes setup; available also considers observed capacity, which the scheduler rechecks. Missing setup is recoverable: use acquire_new_node. Legacy non-portable runs report a clear unsupported contract instead of guessing.",
+    "inputSchema":{"type":"object","additionalProperties":False,"required":["run_id","host_id"],"properties":{
+        "run_id":{"type":"string","minLength":1,"maxLength":150}, "host_id":{"type":"string","minLength":1,"maxLength":150},
+        "node":POOL_NODE}}}
+ACQUIRE_NODE_TOOL = {
+    "name":"acquire_new_node",
+    "description":"Prepare a registered node for this existing queued pooled run and add it to the SAME run after calling check_available_node. Prefer reuse: node supplies prepared paths. For fresh setup provide setup.python (existing base interpreter), optional committed requirements_file to create an isolated venv, and data_source (directory on workspace, or on registered data_host_id) to copy with resumable checksum rsync. Source is bundled from the exact commit into an isolated directory under the host root; shared repositories/environments/data are preserved. Returns a durable acquisition id immediately. Read progress with recover_run(action=status); repeat identical fields to resume a blocked/interrupted setup without duplicate jobs. Advanced environments can be prepared with authorized shell tools and passed as node paths. GPU allocation and launch remain with the scheduler. Requires user work or this run's saved recovery grant.",
+    "inputSchema":{"type":"object","additionalProperties":False,"required":["run_id","host_id"],"properties":{
+        "run_id":{"type":"string","minLength":1,"maxLength":150}, "host_id":{"type":"string","minLength":1,"maxLength":150},
+        "node":POOL_NODE,"setup":{"type":"object","additionalProperties":False,"properties":{
+            "python":{"type":"string","maxLength":4096},"requirements_file":{"type":"string","maxLength":4096},
+            "data_source":{"type":"string","maxLength":4096},"data_host_id":{"type":"string","maxLength":150}}}}}}
+RECOVER_RUN_TOOL = {
+    "name":"recover_run",
+    "description":"Inspect durable node acquisition and recovery status for this run. enable saves its existing user task and grants this conversation bounded wakeups for queue blockers/failures; new worker queue_run requests enable this automatically. Recovery can check/acquire nodes, register necessary hosts and retry the same failed task without manager relays. pause revokes future recovery and stops setup transfers, leaving the research run untouched. retry requires a confirmed failed latest attempt, diagnosed repair reason, explicit argv with fresh outputs or verified resume, and an exact-source PR; it preserves resources and creates a linked attempt with new W&B identity. At most three retries; cancelled/lost/uncertain jobs cannot retry. Preserve protocol and the user's scope. Ordinary monitoring wakeups get no mutation grant. Chat Stop and run cancellation pause recovery.",
+    "inputSchema":{"type":"object","additionalProperties":False,"required":["run_id","action"],"properties":{
+        "run_id":{"type":"string","minLength":1,"maxLength":150},"action":{"type":"string","enum":["status","enable","pause","retry"]},
+        "task":{"type":"string","minLength":1,"maxLength":20000},"revision":{"type":"string","pattern":"^[a-f0-9]{40}$"},
+        "pr_url":{"type":"string","maxLength":2048},"command":{"type":"array","minItems":1,"items":{"type":"string"}},
+        "reason":{"type":"string","minLength":1,"maxLength":4000}}}}
+
 ROLE_TOOLS = {"worker": [TOOL, QUEUE_TOOL, *WORKER_COMPUTE_TOOLS, WAKEUP_TOOL, QUESTION_TOOL, TASK_TOOL, RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL],
               "lead": [CREATE_EXPERIMENT_TOOL, CREATE_AGENT_TOOL, HANDOFF_TOOL, UPDATE_TOOL, *COMPUTE_TOOLS, QUESTION_TOOL, TASK_TOOL, PROJECT_RESULT_TOOL, PROJECT_BRIEF_TOOL, PROJECT_PAGE_TOOL],
               "manager": [MANAGER_CREATE_EXPERIMENT_TOOL, MANAGER_QUEUE_TOOL, MANAGER_CREATE_AGENT_TOOL, MANAGER_HANDOFF_TOOL, *MANAGER_COMPUTE_TOOLS, QUESTION_TOOL, TASK_TOOL, PROJECT_RESULT_TOOL, PROJECT_BRIEF_TOOL, PROJECT_PAGE_TOOL]}
 for _tools in ROLE_TOOLS.values():
-    _tools.extend([MESSAGE_TOOL, MESSAGES_TOOL])
+    _tools.extend([MESSAGE_TOOL, MESSAGES_TOOL, NODE_CHECK_TOOL, ACQUIRE_NODE_TOOL, RECOVER_RUN_TOOL])
 for _role, _tools in ROLE_TOOLS.items():
     _tools.extend([TRAINING_RESULT_TOOL if _role == 'worker' else PROJECT_TRAINING_RESULT_TOOL,
                    MANAGER_LIMITS_TOOL if _role == 'manager' else LIMITS_TOOL, STOP_RUN_TOOL])
@@ -505,7 +528,7 @@ def call_tool(name, arguments):
     try:
         # Human answers can arrive after the desktop disconnects. Only this
         # question call waits; action calls retain their short transport bound.
-        with opener.open(request, timeout=86410 if name == "ask_user" else 180 if name == "queue_run" else 90 if name in {"inspect_compute_host", "onboard_project_node", "configure_project_compute"} else 45) as response:
+        with opener.open(request, timeout=86410 if name == "ask_user" else 180 if name == "queue_run" else 120 if name == "check_available_node" else 90 if name in {"inspect_compute_host", "onboard_project_node", "configure_project_compute"} else 45) as response:
             payload = response.read(MAX_REQUEST + 1)
         if len(payload) > MAX_REQUEST:
             raise ValueError("The service response exceeded the limit.")

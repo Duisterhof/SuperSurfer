@@ -17,6 +17,14 @@ forms are not. Never embed secrets. Authenticated remote embeds may reject frami
 or need their own sign-in: provide useful measured fallback content and a source
 link. Workspace ChatGPT login does not authenticate W&B/Rerun embeds.
 
+Verify requested media in the real app pane, near the initial comparison where
+the user can find it: images/GIFs must load, videos must play, and errors need a
+visible fallback/source link. Check clipping and layout with chat open; an element
+that exists below a long chart or outside a fixed container may still be invisible.
+Retain scene/run/checkpoint provenance. A W&B file-view URL is an HTML page, not
+a raw media URL, and cannot be used as video/image src without a real embeddable
+resource. No separate private-file or media API is implied by these tools.
+
 ## Custom live-source contract
 
 When W&B curves need custom HTML, declare `wandb_sources`: at most six sources

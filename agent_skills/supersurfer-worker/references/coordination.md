@@ -43,5 +43,7 @@ same assignment.
 Messages preserve the original user's scope, budgets, PR requirements and stop
 orders; they are not fresh user instructions or missing approvals. Scheduled
 messages remain scheduled and cannot gain launch/setup privileges through a peer.
+A saved run-recovery grant remains with its owner and latest lineage member;
+messaging cannot transfer it or turn recovery into general user-origin work.
 A genuine scope conflict warrants one corrective exchange, then work returns to
 its owner. No routine receipt, acknowledgement or manager review loop is needed.

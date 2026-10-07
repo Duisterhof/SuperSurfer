@@ -2,17 +2,19 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.22'
+  supersurfer-version: '0.1.23'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.22. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.23. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
-project, and managers explicitly select the registered project. Suggestions and
-scheduled checks do not authorize setup, budget changes or launches.
+project, and managers explicitly select the registered project for pool operations.
+Run-specific tools infer scope from `run_id`. Suggestions and ordinary scheduled
+checks do not authorize setup, budget changes or launches; a saved recovery grant
+separately permits bounded repair for its owner and latest run only.
 
 ## Separate the causes of a queue wait
 
@@ -23,14 +25,20 @@ This reads existing state rather than probing or reserving GPUs.
 - A full project budget or paused queue is separate from physical capacity.
   Adding a free node does not override it. Preserve active jobs and finish useful
   independent preparation; do not manufacture a diagnostic launch.
-- For a concrete candidate-readiness failure, inspect prepared alternatives first.
-  If none are usable, inspect and prepare a compatible authorized host within the
-  task without waiting for another user nudge. Avoid duplicating staging already
-  underway by another owner.
-- Saved run contracts contain their candidate nodes. A later pool addition does
-  **not** extend an existing queued run. Check the actual run's candidates before
-  claiming onboarding solved placement. Do not silently cancel/requeue it or
-  create a duplicate; report an unavailable candidate-update capability honestly.
+- For a concrete candidate-readiness failure, use `check_available_node` against
+  the exact existing run. Prefer prepared alternatives. If necessary, use
+  `acquire_new_node` to stage missing source/environment/data within the task
+  without waiting for another user nudge. Avoid duplicating another owner's staging.
+- `acquire_new_node` calls that same readiness check, then adds the verified
+  candidate to the **same queued run** through the scheduler. Pool edits alone
+  still affect future submissions. Confirm acquisition/candidate state before
+  claiming success; do not cancel/requeue or create a duplicate merely to relocate.
+
+Use `recover_run` status for the durable acquisition record and current lineage.
+Read [run acquisition, recovery and authority](references/run-recovery.md) before
+starting setup or retrying a failed attempt. `ready` means setup passed; `available`
+also considers observed GPU capacity, which the scheduler rechecks. Neither
+overrides project limits, queue pause or another job's reservations.
 
 When the user explicitly requests stopping a run, all owned roles can use
 `stop_run(run_id)` directly within their scope (worker experiment, lead project,
@@ -108,12 +116,18 @@ copy data or launch jobs.
 
 ## Finish the authorized task
 
-Prepare nodes before new submission, then continue through the role's scoped
-queue workflow and exact-source PR. Carry the same required paths/package versions
+Prefer prepared nodes before new submission, then continue through the role's
+scoped queue workflow and exact-source PR. For an existing queued run, acquisition
+can add a candidate without replacing that run. Carry required paths/package versions
 into the run contract. The scheduler chooses an eligible node and stages the
 verified commit without modifying its registered worktree; it does not install
 an environment or copy datasets on demand. Preserve known request/run identities
 through failures; a missing run ID is not evidence that node setup must be repeated.
+Automatic acquisition supports an existing interpreter, an isolated venv from a
+committed requirements file, and resumable directory copying. It does not infer
+arbitrary Conda/container setup. Prepare advanced environments with authorized
+shell work and pass their verified paths for reuse. Continue recovery against its
+saved lineage rather than requeueing under an invented request identity.
 For training, follow [telemetry guidance](../supersurfer-worker/references/training-metrics.md),
 including real MFU and individual W&B logging in the exact-source PR.
 

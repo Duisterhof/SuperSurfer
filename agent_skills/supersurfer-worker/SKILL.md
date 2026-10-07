@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.22'
+  supersurfer-version: '0.1.23'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.22. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.23. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -28,12 +28,13 @@ stop orders and resource limits. A turn ending is not completion.
    [run submission](references/run-submission.md) before submitting or recovering
    a run; it includes identity, telemetry and permission requirements.
 3. At a concrete placement failure, inspect both project budgets and candidate
-   readiness. Prefer already prepared nodes; if necessary, inspect and prepare
-   another compatible authorized node within the existing task without waiting
-   for another nudge. Read [host onboarding](../supersurfer-host-onboarding/SKILL.md).
-   Onboarding does **not** extend an existing queued run's saved candidate set.
-   Report that distinction; do not duplicate/requeue work or promise placement
-   on the new node without a supported operation.
+   readiness. Use `check_available_node` for the run's exact committed checkout,
+   runtime, data and observed capacity. Prefer prepared nodes, then use
+   `acquire_new_node` to reuse one or stage missing source/environment/data and
+   add the verified candidate to the **same queued run**. Inspect durable progress
+   with `recover_run` status instead of duplicating setup. Read
+   [host onboarding](../supersurfer-host-onboarding/SKILL.md) for the full workflow.
+   A pool edit alone still does not add candidates to an existing run.
 4. If the user explicitly changes a project budget, apply `set_project_limits`
    directly and read back the saved values. GPU and concurrent-run limits are
    separate. A queue wait alone authorizes neither an increase nor displacement
@@ -47,6 +48,15 @@ For a user-requested cancellation, call `stop_run` with the exact `run_id` from
 this experiment instead of asking the lead/manager to do it. Queued work cancels
 immediately; active work remains cancelling until the scheduler confirms it stopped.
 A terminal retry is a no-op. Do not kill processes directly or cancel other runs.
+
+Pooled worker `queue_run` saves recovery ownership automatically. Keep pursuing
+that run's requested outcome: diagnose a placement/failure, repair the actual
+cause, and use the saved lineage through `recover_run`, rather than returning a
+plan or forwarding routine recovery to the manager. A dedicated recovery wakeup
+allows only that owner's latest run and its bounded setup/retry operations, not
+fresh user authority. Follow the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
+Chat Stop, run cancellation and recovery pause revoke recovery; never revive it
+without the user's resumption.
 
 Ask a peer only for a concrete dependency your own records/tools cannot resolve
 or an observed scope conflict. Use [coordination](references/coordination.md):
@@ -72,8 +82,9 @@ agent turn or periodic republishing task.
 For explicitly requested recurring analysis, `configure_worker_wakeup` confirms
 an interval/metric/run-status rule owned by this conversation. Then mark the task
 `watching` with its returned `wakeup_id`; creating a rule does not finish monitoring.
-A scheduled check never authorizes a new run, node/budget mutation, worker or
-schedule. Keep an explicitly paused/removed rule stopped.
+An ordinary scheduled check never authorizes a new run, node/budget mutation,
+worker or schedule. A saved run-recovery grant is separate from these monitoring
+rules and stays confined to its lineage. Keep paused/removed rules stopped.
 
 ## Tool index
 
@@ -86,6 +97,8 @@ All worker experiment/project targets are fixed by this conversation; omit
 | `prepare_run`, `queue_run` | Held preparation or an explicitly requested exact-source PR-backed launch. |
 | `stop_run` | User-requested scheduler cancellation of one run in this experiment; supply only `run_id`. |
 | `inspect_project_compute`, `inspect_compute_host` | Read budgets/pool and inspect candidate hardware, paths and runtime. |
+| `check_available_node`, `acquire_new_node` | Check exact-run readiness; reuse/stage a node and add it to that queued run. |
+| `recover_run` | Read acquisition/lineage status; enable, pause or retry only within the saved recovery contract. |
 | `register_compute_host`, `onboard_project_node` | Register a new authorized host; validate and save one project node, preserving other nodes/defaults. |
 | `set_project_limits` | Apply an explicit user budget decision; optional `until_run` makes only those fields temporary. |
 | `publish_training_results`, `publish_result` | Standard live training comparisons or other HTML scientific artifacts. |
