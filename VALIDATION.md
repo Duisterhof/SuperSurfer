@@ -1,3 +1,17 @@
+# Unreleased extended QA — October 6, 2026
+
+The release baseline passes: 292 Python tests, the 212 isolated engine tests, and desktop tests including both real localhost SSH cases. A shuffled run after new regressions passes all 295 Python tests. The new seeded cases combine workspace permission changes, per-agent overrides, archive/selection state and repeated service restarts; concurrent delivery retries preserve one receipt per request and never create GPU runs.
+
+Five reproduced issues are fixed on the review branch: setup accepted submission before initialization, host-discovery failure prevented remote entry, repeated form submissions raced, native preferences discarded custom Markdown tabs, and an older W&B summary overwrote newer measurements. MFU now carries its own sample timestamp. The setup failures and stale-summary regression failed before their fixes; the old native runtime reproduced the lost-tab issue and the current source passed persistence checks.
+
+All 24 design/size/scheme combinations pass, including form validation, reduced transparency, reduced motion and forced-color handling. The three screenshots were visually inspected. Native Linux Electron checks pass with Chromium sandboxing enabled: isolated profile, real preload/main IPC, custom-tab/layout/theme restart persistence and connection denial from an untrusted document. No Mac or Intel/Apple Silicon native rendering claim is made.
+
+Older Compute/queue/wakeup browser fixtures were updated for required job classification/MFU declarations and the collapsed agent list. Compute (11 groups), queue (4), Results (8) and wakeups (4) pass against the current code. The original five browser suites also passed the broad baseline; the final campaign rechecks them after the changes.
+
+A bounded six-hour campaign runs fresh seeds and shuffled suites at 15-minute intervals. Its generated `report.json` and `report.html` contain actual status, source commit, start/end times, individual outcomes and reproduction logs. It stops on failure rather than masking a flaky result. These are isolated checks: no real agent inference, GPU jobs, user chats or scheduler mutations are used as fixtures. Overnight completion must be read from that report; it is not implied by this document.
+
+## Released baseline
+
 # SuperSurfer 0.1.13 validation
 
 All 291 Python regressions passed, followed by a focused schema regression for training classification/MFU requirements (292 tests in the resulting suite). All 212 isolated engine regressions and 11 Node desktop checks passed; two optional SSH-daemon checks were skipped. New backend coverage exercises durable peer delivery, restart/deduplication, privacy, explicit Stop, archive behavior, scheduled authority, inherited settings, real stdio catalogs, runner timestamps and W&B cache/error/units behavior. Tests use isolated fixtures; no live research job is launched or cancelled as validation.

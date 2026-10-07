@@ -51,7 +51,7 @@ def run_metrics(reader, run, state):
     if isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value):
         unit = requirement.get("mfu_unit") or ({"mfu_percent": "percent", "train/mfu": "fraction"}.get(key))
         percent = value * (100 if unit == "fraction" else 1) if unit else None
-        result["mfu"] = {"value": percent, "raw": value, "key": key, "valid": percent is not None and 0 <= percent <= 100, "method": requirement.get("mfu_method")}
+        result["mfu"] = {"value": percent, "raw": value, "key": key, "valid": percent is not None and 0 <= percent <= 100, "method": requirement.get("mfu_method"), "observed_at": result.get("metric_observed_at", {}).get(key)}
     else:
         result["mfu"] = None
     # Host readings are explicitly device-wide and carry their own freshness.

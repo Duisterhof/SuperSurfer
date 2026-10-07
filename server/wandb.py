@@ -89,7 +89,7 @@ class WandBReader:
             cached = self.live_cache.get(url)
             if cached and time.monotonic() - cached[0] < 10:
                 return copy.deepcopy(cached[1])
-            result = {"metrics": {}, "series": [], "system_metrics": {}, "observed_at": None,
+            result = {"metrics": {}, "metric_observed_at": {}, "series": [], "system_metrics": {}, "observed_at": None,
                       "system_observed_at": None, "updated_at": time.time(), "error": None}
             try:
                 target = parse_target(url)
@@ -116,8 +116,12 @@ class WandBReader:
                     summary = json.loads(summary)
                 if not isinstance(summary, dict):
                     summary = {}
-                for row in [*history, summary]:
-                    result['metrics'].update({key: value for key, value in row.items() if not key.startswith('_') and numeric(value)})
+                # Summary can lag history during an SDK flush. Merge by observation
+                # time so stale summary values cannot look like fresh measurements.
+                for row in rows([summary, *history]):
+                    values = {key: value for key, value in row.items() if not key.startswith('_') and numeric(value)}
+                    result['metrics'].update(values)
+                    result['metric_observed_at'].update({key: row.get('_timestamp') if numeric(row.get('_timestamp')) else None for key in values})
                     if numeric(row.get('_timestamp')):
                         result['observed_at'] = max(result['observed_at'] or 0, row['_timestamp'])
                 for row in system:

@@ -91,6 +91,15 @@ class RunTelemetryTests(unittest.TestCase):
         result = run_metrics(WandBReader(Mock(return_value=data)), run, {'hosts': []})
         self.assertIsNone(result['mfu']['value']); self.assertEqual(37.5, result['mfu']['raw'])
 
+    def test_older_summary_cannot_replace_newer_history_with_a_fresh_timestamp(self):
+        data = self.sample()
+        data['project']['run']['summaryMetrics'] = {'train/loss': 99, '_timestamp': 50, 'train/mfu': .3}
+        result = WandBReader(Mock(return_value=data)).live_metrics('https://wandb.ai/a/b/runs/r1')
+        self.assertEqual(1.2, result['metrics']['train/loss'])
+        self.assertEqual(200, result['observed_at'])
+        self.assertEqual(.3, result['metrics']['train/mfu'])
+        self.assertEqual(50, result['metric_observed_at']['train/mfu'])
+
 
 class TrainingSubmissionTests(unittest.TestCase):
     setUp = fixtures.ConversationTests.setUp

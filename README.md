@@ -159,3 +159,14 @@ SUPERSURFER_SSHD_TEST=1 node --test tests/ssh.integration.test.cjs
 This remains a single-user prototype. Full PR diff review, native Rerun integration, multi-user permissions, and automatic preemption are future work. Sandboxed HTML pages can already host compatible HTTPS viewers and WebGL widgets; external login, CORS and framing restrictions still apply. Existing AutoML chat history is a bounded recent transcript; SuperSurfer-owned history is persisted completely. Agent instructions and scoped queue controls do not constitute an operating-system isolation boundary.
 
 Codex integration references: [app-server protocol](https://learn.chatgpt.com/docs/app-server), [Fast mode](https://learn.chatgpt.com/docs/agent-configuration/speed), and [automatic approval review](https://learn.chatgpt.com/docs/sandboxing/auto-review).
+
+
+## Development: extended QA and login studies
+
+The `overnight-qa-designs` branch contains candidate fixes and three connection-screen studies; it is not a new packaged release. Build the standalone interactive comparison with `node scripts/preview-login.cjs`, then open `dist/login-designs.html`. Its local simulation never contacts a workspace. The studies are Tidal glass, Observatory and Field notes; they use the same real form code. Tidal glass is the candidate default on this branch, with no change to ChatGPT sign-in or SSH authentication.
+
+The glass treatment follows [Apple's materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials): visual depth with readable controls and reduced-transparency, reduced-motion and higher-contrast alternatives. This is a CSS interpretation in Electron, not a native macOS Liquid Glass API.
+
+Run the ordinary suite with `npm test`. `python3 scripts/qa-shuffle.py --seed 20261007` randomizes the Python test order and the durable-state/concurrent-retry scenarios. Browser tests use installed Playwright and Chrome at `CHROME_PATH` (new suites) or `/opt/google/chrome/chrome` (existing suites). Build the login preview before its browser test. The native Electron smoke uses an isolated user profile and a Linux package runtime at `ELECTRON_PATH` or `dist/SuperSurfer-linux-x64/SuperSurfer`, under `xvfb-run` when headless. Chromium sandboxing remains enabled in that native check.
+
+A bounded campaign is `python3 scripts/qa-campaign.py --hours 6 --output /absolute/path/to/qa-report`. It changes the seed and test order every cycle, runs the loopback SSH cases, saves JSON/HTML reports after each command and stops on the first failure. Optional `--engine-tests` and `--engine-source` point to matching isolated AML test/source directories. Development Node/Python must be on PATH. It exercises temporary fixtures, never research jobs; logs include the exact source commit and seed. Running the campaign in a process supervisor preserves it across client disconnects. A running report is not a completed overnight result.
