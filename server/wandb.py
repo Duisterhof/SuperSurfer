@@ -68,7 +68,7 @@ def series_from_runs(runs):
                     continue
                 metrics.setdefault(key, []).append({'x': x, 'y': value})
         for key, points in metrics.items():
-            if len(points) < 2:
+            if not points:
                 continue
             by_step = {p['x']: p for p in points}
             series.append({'run_id': run['name'], 'run_name': run.get('displayName') or run['name'], 'key': key, 'points': [by_step[x] for x in sorted(by_step)]})
@@ -174,13 +174,13 @@ class WandBReader:
             raise ValueError('W&B could not access or update this project. Check the remote W&B account’s access.')
         return data.get('data', {})
 
-    def metrics(self, url):
+    def metrics(self, url, refresh=False):
         result = {'url': url, 'series': [], 'runs': [], 'updated_at': None, 'error': None, 'sampled': True, 'limit': 6}
         if not url:
             return result
         with self.lock:
             cached = self.cache.get(url)
-            if cached and time.monotonic() - cached[0] < 60:
+            if cached and not refresh and time.monotonic() - cached[0] < 60:
                 return copy.deepcopy(cached[1])
             try:
                 target = parse_target(url)
@@ -188,7 +188,7 @@ class WandBReader:
                 variables = {'entity': entity, 'project': project}
                 if run_id:
                     variables['run'] = run_id
-                    query = 'query Curves($entity: String!, $project: String!, $run: String!) { project(name: $project, entityName: $entity) { run(name: $run) { name displayName state history(samples: 500) } } }'
+                    query = 'query Curves($entity: String!, $project: String!, $run: String!) { project(name: $project, entityName: $entity) { run(name: $run) { name displayName state summaryMetrics history(samples: 500) } } }'
                 else:
                     # Metadata stays accessible in W&B, but should not consume
                     # the six curve slots ahead of actual training writers.
@@ -196,15 +196,42 @@ class WandBReader:
                     if target['group'] is not None:
                         filters['group'] = target['group']
                     variables['filters'] = json.dumps(filters)
-                    query = 'query Curves($entity: String!, $project: String!, $filters: JSONString!) { project(name: $project, entityName: $entity) { runs(first: 6, order: "-createdAt", filters: $filters) { edges { node { name displayName state history(samples: 500) } } } } }'
+                    query = 'query Curves($entity: String!, $project: String!, $filters: JSONString!) { project(name: $project, entityName: $entity) { runs(first: 6, order: "-createdAt", filters: $filters) { edges { node { name displayName state summaryMetrics history(samples: 500) } } } } }'
                 data = self.fetcher(query, variables).get('project')
                 if not data:
                     raise ValueError('W&B project was not found or is not accessible to the remote account.')
                 runs = [data['run']] if run_id and data.get('run') else [e['node'] for e in data.get('runs', {}).get('edges', [])]
+                # W&B samples do not promise to include the newest point.
+                # Batch a bounded tail for each run; summary values only locate
+                # the history range and are never synthesized as observations.
+                tail_vars = {'entity': entity, 'project': project}
+                declarations, selections, indexed = [], [], []
+                for index, run in enumerate(runs):
+                    summary = run.get('summaryMetrics') or {}
+                    if isinstance(summary, str):
+                        summary = json.loads(summary)
+                    latest = summary.get('_step') if isinstance(summary, dict) else None
+                    if not numeric(latest) or not 0 <= latest < 2**31-1:
+                        continue
+                    suffix = str(index)
+                    declarations += [f'$r{suffix}:String!', f'$lo{suffix}:Int!', f'$hi{suffix}:Int!']
+                    selections.append(f'r{suffix}:run(name:$r{suffix}) {{ history(minStep:$lo{suffix},maxStep:$hi{suffix},samples:1500) }}')
+                    tail_vars.update({f'r{suffix}': run['name'], f'lo{suffix}': max(0, int(latest)-100), f'hi{suffix}': int(latest)+1})
+                    indexed.append((suffix, run))
+                if selections:
+                    tail_query = 'query RecentCurves($entity:String!, $project:String!, ' + ', '.join(declarations) + ') { project(name:$project,entityName:$entity) { ' + ' '.join(selections) + ' } }'
+                    tail = self.fetcher(tail_query, tail_vars).get('project') or {}
+                    for suffix, run in indexed:
+                        if not tail.get('r'+suffix):
+                            raise ValueError('A W&B run became unavailable during refresh')
+                        run['history'] = [*(run.get('history') or []), *(tail['r'+suffix].get('history') or [])]
                 result['series'] = series_from_runs(runs)
                 result['runs'] = [{'id': run['name'], 'name': run.get('displayName') or run['name'], 'state': run.get('state'), 'url': f'https://wandb.ai/{entity}/{project}/runs/{run["name"]}'} for run in runs]
                 result['updated_at'] = time.time()
             except (ValueError, KeyError, TypeError) as error:
+                if cached:
+                    result = copy.deepcopy(cached[1])
                 result['error'] = str(error)
+                result['stale'] = True
             self.cache[url] = (time.monotonic(), result)
             return copy.deepcopy(result)

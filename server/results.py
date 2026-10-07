@@ -1,11 +1,14 @@
 """Experiment HTML pages with short-lived, document-only preview capabilities."""
 import hashlib
+from pathlib import Path
+import re
 import secrets
 import threading
 import time
 
 from .store import atomic_write
 from .store import Conflict
+from .result_data import validate_sources
 
 
 class Results:
@@ -17,8 +20,8 @@ class Results:
         self.previews = {}
 
     def publish(self, experiment_id, fields):
-        if not isinstance(fields, dict) or set(fields) - {"result_id", "title", "html"}:
-            raise ValueError("Result accepts result_id, title and html")
+        if not isinstance(fields, dict) or set(fields) - {"result_id", "title", "html", "wandb_sources", "expected_sha256"}:
+            raise ValueError("Result accepts result_id, title, html, wandb_sources and expected_sha256")
         for key, limit in (("title", 200), ("html", 2_000_000)):
             if not isinstance(fields.get(key), str) or not fields[key].strip() or len(fields[key].encode()) > limit:
                 raise ValueError(f"Result {key} must be nonempty and at most {limit} bytes")
@@ -29,13 +32,18 @@ class Results:
             row = next((r for r in rows if r["id"] == fields.get("result_id")), None)
             if fields.get("result_id") and not row:
                 raise ValueError("Result does not belong to this experiment")
+            if fields.get("expected_sha256") is not None and (not row or row["sha256"] != fields["expected_sha256"]):
+                raise Conflict("Result changed. Read the latest report before updating.")
+            sources = validate_sources(fields.get("wandb_sources", (row or {}).get("wandb_sources", [])))
+            if sources and "SuperSurferResults.subscribe" not in fields["html"]:
+                raise ValueError("Live W&B reports must render SuperSurferResults.subscribe updates; do not replace a live page with embedded curve snapshots")
             if row is None:
                 if len(rows) >= 20:
                     raise ValueError("An experiment supports 20 result pages; update an existing page")
                 row = {"id": "result_" + secrets.token_hex(16), "created": time.time()}
                 rows.append(row)
             atomic_write(self.directory / (row["id"] + ".html"), fields["html"])
-            row.update(title=fields["title"].strip(), updated=time.time(), sha256=hashlib.sha256(fields["html"].encode()).hexdigest())
+            row.update(title=fields["title"].strip(), updated=time.time(), sha256=hashlib.sha256(fields["html"].encode()).hexdigest(), wandb_sources=sources)
             self.store.put(key, rows)
             return dict(row)
 
@@ -65,7 +73,24 @@ class Results:
             body = path.read_bytes()
             if len(body) > 2_000_000:
                 raise ValueError("Result page exceeds 2 MB")
+            if hashlib.sha256(body).hexdigest() != row["sha256"]:
+                raise KeyError("Result changed. Refresh Results to reopen it.")
+            if row.get("wandb_sources"):
+                script = b"<script>" + (Path(__file__).parent.parent / "ui/results-client.js").read_bytes() + b"</script>"
+                head = re.search(br"<head\b[^>]*>", body, re.I)
+                position = head.end() if head else 0
+                body = body[:position] + script + body[position:]
             return body
+
+    def sources(self, experiment_id, result_id, revision=None):
+        self.store.experiment(experiment_id)
+        with self.lock:
+            row = next((r for r in self.store.get("results:" + experiment_id, []) if r["id"] == result_id), None)
+            if row is None:
+                raise KeyError("Result does not belong to this experiment")
+            if revision is not None and row["updated"] != revision:
+                raise Conflict("Result sources changed. Reopen Results to load the current report.")
+            return validate_sources(row.get("wandb_sources", []))
 
     def pages(self, experiment_id):
         self.store.experiment(experiment_id)

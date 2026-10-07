@@ -1,13 +1,13 @@
 ---
 name: supersurfer-results
-description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
+description: Build or revise an experiment Results page with live W&B train and validation/test comparisons across methods, followed by the user's requested domain-specific visualizations and identified static artifacts.
 metadata:
-  supersurfer-version: '0.1.20'
+  supersurfer-version: '0.1.21'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.20. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.21. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -57,16 +57,66 @@ Show corresponding examples side by side when comparing methods.
 
 Use `publish_result` with `title` and `html` for a self-contained HTML page
 with plots and interactive widgets (at most 2,000,000 UTF-8 bytes). Reuse its
-`result_id` when revising the page; this publishes saved content, not a live
-W&B subscription, so describe whether charts are snapshots or explicitly refreshed. JavaScript and WebGL are allowed in the sandbox; assets must be inline
+`result_id` when revising the page. Link W&B training curves through the live
+source contract below; fixed evaluation artifacts, videos and sealed reports
+may remain clearly identified snapshots. JavaScript and WebGL are allowed in the sandbox; assets must be inline
 or available over an appropriate HTTPS URL. An authenticated W&B or Rerun embed
 may refuse framing, so supply a working source link and a useful local plot or
 preview. Do not replace requested figures with bare W&B group links. Never embed
 tokens, local filesystem URLs or app credentials. Workspace ChatGPT sign-in
 enables model work on that host; it does not authenticate a W&B/Rerun embed or
-grant the Results sandbox account access. Diagnose a refused embed separately
-from agent sign-in, and preserve the measured fallback instead of requesting
-ChatGPT credentials or republishing a page to bypass that boundary.
+grant the Results sandbox account access. The live-source bridge fetches only
+declared history through the workspace's W&B account. Diagnose failed W&B access
+separately from agent sign-in; preserve measured fallback data and report the
+source error without requesting credentials in chat or bypassing the sandbox.
+
+## Keep training curves connected to W&B
+
+Declare `wandb_sources` when publishing: at most six individual W&B run sources,
+each with a unique `id`, an individual run `url` and 1–64 exact history `keys`.
+Group or project links cannot supply a run's curve. Include the actual x-axis
+key when using a logged optimizer step, epoch or other axis instead of `_step`.
+For infrequent validation/test samples, add `sparse_metrics` entries with `key`
+and `x_axis`; both must be declared keys, except `_step` is always allowed as an
+axis. At most twelve sparse metrics are accepted per source. This prevents the
+ordinary training-history sample from hiding infrequent held-out measurements.
+
+The app injects `window.SuperSurferResults` into live report documents before
+their scripts. Implement `SuperSurferResults.subscribe(({sources = [], loading,
+error}) => { ... })` in the HTML and redraw the plots and data-derived claims
+from each update. Match sources by their declared IDs, not array position.
+Each source supplies `rows`, `run_id`, `state`, `fetched_at`, `observed_at`,
+`checked_at`, `sampled`, `stale` and `error` when available. Handle initial
+loading and empty/error sources without erasing useful prior curves. A source
+declaration alone does not make hard-coded arrays, headline numbers or captions
+current. Use ordinary safe text rendering for source names and errors.
+
+Every Results opening fetches fresh declared history; the report can also call
+`SuperSurferResults.refresh()` for an in-page refresh control. An agent turn,
+republish or worker wakeup is unnecessary for curve freshness. This is refresh
+on opening or request, not a promise of continuous polling while the page stays
+open. The iframe cannot select new sources, access app credentials, read local
+files or use an arbitrary authenticated API. Add or change sources through the
+scoped `publish_result` tool, never by embedding tokens or fetching a private
+API directly from the report.
+
+History is bounded and sampled with a separately fetched recent tail; it is
+not a complete export of every point. Plot measured rows only. A run summary is
+not a curve point. Preserve sparse observations, missing intervals and phase
+boundaries; do not convert absent values to zero. `fetched_at` identifies a
+successful fetch, `checked_at` a refresh attempt, and `observed_at` the newest
+available source sample. That newest sample need not be the latest validation
+measurement: use each plotted metric's rows and timestamps for its own age.
+Show timestamps in the user's local timezone and label unknown ages honestly.
+
+When a source fails, retain its last successful observations with their original
+fetch and sample times, visibly label stale data, and identify partial coverage
+when another source succeeds. A top-level refresh error also leaves prior data
+stale; never change its age to the failed attempt time. Keep method comparisons,
+protocol and phase labels, and the provenance of any fixed fallback when migrating
+an existing report. For example, a sealed validation artifact can complement
+live training history, but must be identified as that artifact with its checkpoint
+and extraction time instead of being relabelled as current W&B validation.
 
 The HTML Results page fills the available main pane inside the existing sandbox.
 Build a responsive full-page document whose content scrolls naturally in that
@@ -90,12 +140,19 @@ Reuse existing page/result IDs to improve the page rather than accumulating
 slightly different result tabs. Leads/managers supply the registered
 `experiment_id` for these tools; leads remain in their project. Workers publish
 only within their own experiment and omit `experiment_id`. Preserve concurrent
-work: HTML updates have no version check, so coordinate before replacing a page
-that another worker is editing.
+work by supplying the current result record's `sha256` as `expected_sha256` when
+updating HTML; reread and reconcile a conflict. This optional check guards the
+HTML revision, so still inspect current source declarations before changing them.
+Omitting `wandb_sources` preserves existing declarations, and updates to a live
+page must still implement the subscription. An explicit empty array removes live
+sources and makes the page a snapshot; do not use it to bypass a rendering error
+or a failed fetch.
 
 Desktop windows restore their own workspace and selected tab. Reopening a saved
-Results page does not refresh a published snapshot or request a new publication.
-A release or larger result pane is also not an instruction to rewrite existing
+Results page refreshes its declared W&B sources without dispatching model work;
+an undeclared static snapshot remains static. Opening a page authorizes no run,
+monitoring task, handoff or extra approval request. A release or larger result
+pane is also not an instruction to rewrite existing
 results; revise saved pages only within the requested reporting task.
 Read current experiment and page records before an authorized revision, preserving
 their IDs and any changes made while the desktop was closed. Keep provenance
@@ -123,7 +180,7 @@ Have the owning worker resolve its original request through the scoped workflow;
 publishing Results never authorizes a replacement run.
 
 Put source run links/IDs, commit/PR, data split, protocol, extraction time and
-refresh behavior in a compact provenance section. The built-in W&B view is sampled;
+refresh behavior in a compact provenance section. The W&B history view is sampled;
 a latest summary value alone cannot reconstruct a learning curve. If sampled
 history and summary disagree, compare their timestamps and metric definitions
 before choosing a value, and preserve missing intervals. For live efficiency
@@ -139,6 +196,9 @@ requested domain visuals are present or explicitly unavailable, and links and
 widgets work at the app's normal width, including with the agent panel open
 and resized narrower. Check that changing pane width preserves useful labels
 and widget controls, and that returning from fullscreen chat restores the report
-without requiring a republish. Use responsive plots and wrapping legends; a
+without requiring a republish. For live curves, reopen Results and exercise
+refresh, missing/sparse samples and a source failure: new observations should
+reach the plots and current claims, while stale/partial data keeps its true age.
+Use responsive plots and wrapping legends; a
 figure that only works after closing the chat is not a usable in-app comparison. Describe unavailable evidence precisely;
 do not claim a screenshot or interactive test was performed unless it was.

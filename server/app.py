@@ -25,6 +25,7 @@ from . import __version__
 from .aml import AMLClient, ManagerError, normalize
 from .store import Store, atomic_write
 from .wandb import WandBReader
+from .result_data import ResultData
 from .time_context import local_time_context
 from .compute import ComputePools, ComputeError
 from .runner_python import resolve_runner_python
@@ -148,6 +149,7 @@ class Service:
         self.directory = self.store.directory
         self.read_only = read_only
         self.wandb = WandBReader()
+        self.result_data = ResultData(self.wandb)
         self.results = Results(self.store)
         self.aml = aml or AMLClient(aml_home)
         self.compute = ComputePools(self.store, self.aml)
@@ -545,6 +547,7 @@ class Service:
             instructions.append("Use this experiment's W&B destination for its runs. Prepared jobs receive WANDB_ENTITY, WANDB_PROJECT, WANDB_RUN_GROUP and WANDB_RUN_ID. "
                 "Log measured training/evaluation metrics with the training logger; parameter metadata alone is not a measured result. "
                 "Preserve existing training runs and never invent metric values. The Results tab reads this experiment's W&B group.")
+            instructions.append("Published HTML Results (preserve source bindings; use expected_sha256 when updating): " + json.dumps(self.store.get("results:" + experiment["id"], [])))
             instructions.append("Custom Markdown tabs: " + json.dumps(self.results.pages(experiment["id"])))
             instructions.append("Current structured brief (version required for updates): " + json.dumps(brief.read(self.store, experiment["id"])))
             instructions.append(f"Experiment document: {experiment['document_path']}\nThese are technical notes and provenance, not the main overview. Update the main page with update_experiment_brief: replace objective/method/findings/next_steps, and put routine status changes in activity. Keep live run status in the app run list, measured visualizations in publish_result. Preserve technical provenance and unrelated edits.\n\n{experiment['markdown'][:40000]}")
@@ -1622,6 +1625,9 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.results.page(query.get("experiment_id", [""])[0], query.get("page_id", [""])[0])
                 elif path == "/api/results":
                     result = {"pages": self.server.service.results.list(query.get("experiment_id", [""])[0])}
+                elif path == "/api/result-data":
+                    sources = self.server.service.results.sources(query.get("experiment_id", [""])[0], query.get("result_id", [""])[0], float(query["revision"][0]) if "revision" in query else None)
+                    result = self.server.service.result_data.read(sources, refresh=query.get("refresh", [""])[0] == "1")
                 elif path == "/api/experiment-agents":
                     result = self.server.service.experiment_agents(query.get("experiment_id", [""])[0])
                 elif path == "/api/project-agents":
@@ -1638,7 +1644,7 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.chat(query.get("scope", [""])[0])
                 elif path == "/api/metrics":
                     experiment = self.server.service.store.experiment(query.get("id", [""])[0])
-                    result = self.server.service.wandb.metrics(experiment["wandb_url"])
+                    result = self.server.service.wandb.metrics(experiment["wandb_url"], refresh=query.get("refresh", [""])[0] == "1")
                 elif path == "/api/run-metrics":
                     snapshot = self.server.service.state()
                     run = next((run for run in snapshot["runs"] if run["id"] == query.get("id", [""])[0]), None)

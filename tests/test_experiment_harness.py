@@ -72,6 +72,34 @@ class ExperimentHarnessTests(unittest.TestCase):
             with self.assertRaises(KeyError):self.service.results.preview('../../token')
         finally:server.shutdown();server.server_close();thread.join(2)
 
+    def test_live_results_are_scoped_authenticated_and_keep_bindings(self):
+        from test_result_data import SOURCE
+        fields={'title':'Live plot','html':'<!doctype html><head></head><body><script>SuperSurferResults.subscribe(data=>{});</script></body>','wandb_sources':[SOURCE]}
+        row=self.service.results.publish(self.exp['id'],fields)
+        self.service.result_data.read=Mock(return_value={'sources':[]})
+        server=create_server(self.service,port=0);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        base='http://127.0.0.1:'+str(server.server_port)
+        route='/api/result-data?experiment_id='+self.exp['id']+'&result_id='+row['id']+'&refresh=1&revision='+str(row['updated'])
+        def request(path):return urlopen(Request(base+path,headers={'Authorization':'Bearer '+self.service.token}))
+        try:
+            with self.assertRaises(HTTPError) as caught:urlopen(base+route)
+            self.assertEqual(401,caught.exception.code);self.service.result_data.read.assert_not_called()
+            with request(route) as response:self.assertEqual({'sources':[]},json.load(response))
+            self.service.result_data.read.assert_called_once_with([SOURCE],refresh=True)
+            with self.assertRaises(HTTPError):request(route.replace(row['id'],'unknown'))
+            preview=self.service.results.list(self.exp['id'])[0]['preview_url']
+            with urlopen(base+preview) as response:
+                html=response.read().decode();self.assertIn('window.SuperSurferResults',html);self.assertNotIn(self.service.token,html)
+                self.assertNotIn('allow-same-origin',response.headers['Content-Security-Policy'])
+            updated=self.service.results.publish(self.exp['id'],{'result_id':row['id'],'expected_sha256':row['sha256'],'title':'Updated','html':fields['html']+' '})
+            self.assertEqual([SOURCE],updated['wandb_sources'])
+            with self.assertRaises(Conflict):self.service.results.publish(self.exp['id'],{**fields,'result_id':row['id'],'expected_sha256':row['sha256']})
+            with self.assertRaises(ValueError):self.service.results.publish(self.exp['id'],{'result_id':row['id'],'title':'Snapshot','html':'static'})
+            with self.assertRaises(HTTPError) as stale:request(route)
+            self.assertEqual(409,stale.exception.code)
+            with self.assertRaises(HTTPError):urlopen(base+preview)
+        finally:server.shutdown();server.server_close();thread.join(2)
+
     def test_agent_rename_survives_reload_and_keeps_conversation_identity(self):
         scope='experiment:'+self.exp['id'];self.service.codex.rename=Mock()
         self.service.action('chat.rename',{'scope':scope,'name':'Failure videos'})

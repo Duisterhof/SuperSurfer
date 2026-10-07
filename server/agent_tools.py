@@ -268,9 +268,16 @@ TASK_TOOL = {
 }
 RESULT_TOOL = {
     "name": "publish_result",
-    "description": "Publish or update an HTML Results page for this experiment. Supply a meaningful title and self-contained HTML; reuse result_id to update. JavaScript charts, WebGL/3D widgets and HTTPS iframe embeds are supported. Inline local assets or use public/CORS-enabled HTTPS URLs. Never include secrets or access tokens. Pages are sandboxed without app credentials, local files, forms or parent access; remote embeds may require sign-in or disallow framing, so include ordinary source links and usable local findings. Report measured evidence and provenance; a W&B group link alone is not a result.",
+    "description": "Publish or update an HTML Results page for this experiment. Supply a meaningful title and self-contained HTML; reuse result_id to update. JavaScript charts, WebGL/3D widgets and HTTPS iframe embeds are supported. Inline local assets or use public/CORS-enabled HTTPS URLs. Never include secrets or access tokens. Pages are sandboxed without app credentials, local files, forms or parent access; remote embeds may require sign-in or disallow framing, so include ordinary source links and usable local findings. For training curves declare wandb_sources: individual run URLs, ids and history keys; render updates with SuperSurferResults.subscribe(({sources,loading,error})=>...). The app fetches fresh W&B data whenever Results opens. Each source has rows, fetched_at, observed_at, stale and error. Declare sparse_metrics [{key,x_axis}] for infrequent validation/test measurements. Keep old curves visibly stale on failure; do not fabricate measurements or republish embedded snapshots to refresh data. Use expected_sha256 from the result record to reject concurrent edits. Report measured evidence and provenance; a W&B group link alone is not a result.",
     "inputSchema": {"type": "object", "additionalProperties": False, "required": ["title", "html"], "properties": {
         "result_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "expected_sha256": {"type": "string", "minLength": 64, "maxLength": 64},
+        "wandb_sources": {"type": "array", "maxItems": 6, "items": {"type": "object", "additionalProperties": False, "required": ["id", "url", "keys"], "properties": {
+            "id": {"type": "string", "minLength": 1, "maxLength": 64},
+            "url": {"type": "string", "minLength": 1, "maxLength": 2048},
+            "keys": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+            "sparse_metrics": {"type": "array", "maxItems": 12, "items": {"type": "object", "additionalProperties": False, "required": ["key", "x_axis"], "properties": {"key": {"type": "string", "minLength": 1, "maxLength": 256}, "x_axis": {"type": "string", "minLength": 1, "maxLength": 256}}}}}}},
+
         "title": {"type": "string", "minLength": 1, "maxLength": 200},
         "html": {"type": "string", "minLength": 1, "maxLength": 2000000}}},
 }

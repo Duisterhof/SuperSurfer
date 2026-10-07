@@ -50,7 +50,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  console.log('PASS custom Markdown tab renders without executing embedded script');
  await page.getByRole('button',{name:'Results',exact:true}).click();
  const frame=page.frameLocator('#result-preview');await frame.getByText('parent denied',{exact:true}).waitFor();
- await frame.locator('#counter').click();assert.equal(await frame.locator('#counter').innerText(),'1');
+ await frame.locator('#counter').click();await frame.getByRole('button',{name:'1',exact:true}).waitFor();assert.equal(await frame.locator('#counter').innerText(),'1');
  exp.status='working';exp.status_detail='An experiment agent is working.';
  await page.getByRole('button',{name:'Refresh connection',exact:true}).click();
  await page.locator('#main .metadata-line .badge.working').waitFor({state:'attached'});

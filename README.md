@@ -1,3 +1,7 @@
+## 0.1.21 live W&B Results
+
+Opening Results now refreshes W&B directly, including when you return to a recently viewed experiment. The built-in metrics view bypasses its cache on opening and refresh. Agent-authored HTML can declare individual W&B source runs and redraw from fresh data through the sandboxed Results bridge. Curves include a bounded recent tail and separately requested sparse validation measurements. Failed fetches preserve available curves with their original timestamps and a visible error; no agent turn or report republishing is needed to fetch data.
+
 ## 0.1.20 host sign-in and Dock windows
 
 Right-click the SuperSurfer icon in the macOS Dock and choose **New Window** to connect another workspace. Each workspace host must confirm its own ChatGPT sign-in before agent work is available. New hosts show a required device-code sign-in screen; it closes automatically after confirmation. Already authenticated hosts reopen normally. A compute-only node does not need a ChatGPT login.
@@ -10,7 +14,7 @@ The selected Floating Panels design is now the main workspace: a compact full-wi
 
 A rejected cache/run submission no longer strands its request without a run ID. Retry `queue_run` in the original conversation with the same `request_id` and unchanged fields: SuperSurfer reuses the recorded run or safely submits that identity once. Resolved node contracts and W&B identity survive retries. Existing held run IDs still use normal PR verification and release. Existing workspaces need the bundled manager update for safe recovery when no receipt exists; connecting alone does not restart their manager.
 
-# SuperSurfer 0.1.20
+# SuperSurfer 0.1.21
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -18,9 +22,9 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.20-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.20-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** extract `SuperSurfer-0.1.21-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.21-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.20-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.21-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
