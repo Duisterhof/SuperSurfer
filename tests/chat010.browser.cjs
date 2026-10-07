@@ -7,7 +7,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  const page=await browser.newPage({viewport:{width:1840,height:1100}});page.setDefaultTimeout(10000);
  const errors=[],external=[],fontRequests=[];page.on('pageerror',e=>errors.push(e.message));
  page.on('request',r=>{if(!r.url().startsWith('http://chat.test/'))external.push(r.url());if(r.url().endsWith('.woff2'))fontRequests.push(r.url());});
- const scope='experiment:e12';let questions=[],approvals=[];
+ const scope='experiment:e12';let questions=[],approvals=[],taskUpdate=0;
  const equation=String.raw`Inline: \(L_{\text{train}} = \frac{1}{N}\sum_i (y_i-\hat y_i)^2\), and $\alpha_1 + \beta_2$.
 
 $$
@@ -41,7 +41,7 @@ Incomplete streaming: \(x_{t+1}`;
   if(url.pathname==='/api/state')body=data;
   else if(url.pathname==='/api/experiment')body=exp;
   else if(url.pathname==='/api/experiment-agents')body={selected_scope:scope,agents:[{scope,name:'E12 worker',owner:'supersurfer',status:'completed',task_state:'incomplete',busy:false,can_resume:true},...Array.from({length:9},(_,i)=>({scope:'conversation:'+i,name:'Previous worker '+i,owner:'supersurfer',status:'completed',busy:false}))]};
-  else if(url.pathname==='/api/chat')body={busy:!!(questions.length||approvals.length),status:'completed',agent:{name:'E12 worker',model:'fixture'},tasks:[{id:'t1',title:'Evaluate the checkpoint and report measured evidence',status:'working',summary:'Scoring is in progress.'},{id:'t2',title:'Watch the loss every ten minutes',status:'watching',summary:'Monitoring is enabled.'}],messages,questions,approvals,preferences:{editable:true,defaults:{model:'',reasoning:'medium',approval_mode:'ask'},overrides:{},effective:{model:'fixture',reasoning:'medium',approval_mode:'ask'},supported_reasoning:['medium']}};
+  else if(url.pathname==='/api/chat')body={busy:!!(questions.length||approvals.length),status:'completed',agent:{name:'E12 worker',model:'fixture'},tasks:[{id:'t1',title:'Evaluate the checkpoint and report measured evidence',status:'working',summary:'Scoring is in progress. '+taskUpdate},{id:'t2',title:'Watch the loss every ten minutes',status:'watching',summary:'Monitoring is enabled.'}],messages,questions,approvals,preferences:{editable:true,defaults:{model:'',reasoning:'medium',approval_mode:'ask'},overrides:{},effective:{model:'fixture',reasoning:'medium',approval_mode:'ask'},supported_reasoning:['medium']}};
   else if(url.pathname==='/api/models')body={models:[{id:'fixture',displayName:'Fixture',supportedReasoningEfforts:[{reasoningEffort:'medium'}]}]};
   else if(url.pathname==='/api/worker-wakeups')body={rules:[]};
   else if(url.pathname==='/api/action'){assert.equal(route.request().postDataJSON().op,'settings.save');}
@@ -62,6 +62,15 @@ Incomplete streaming: \(x_{t+1}`;
  assert.equal(await page.locator('#chat-messages a[href^="javascript:"], #chat-messages img').count(),0);
  await page.evaluate(()=>document.fonts.ready);assert.ok(fontRequests.length>0);assert.deepEqual(external,[]);
  console.log('PASS inline/display/matrix math, literal code/currency, incomplete or invalid math, isolated TeX and local fonts under app CSP');
+ assert.equal(await page.locator('#chat-tasks details').evaluate(el=>el.open),false);
+ assert.ok((await page.locator('.chat-header').boundingBox()).height<=58,'Worker header too tall');
+ assert.ok((await page.locator('#chat-agent-list').boundingBox()).height<=34,'Collapsed agents too tall');
+ await page.locator('#chat-tasks summary').click();taskUpdate++;
+ await page.getByRole('button',{name:'Refresh connection',exact:true}).click();
+ await page.getByText('Scoring is in progress. '+taskUpdate,{exact:true}).waitFor();
+ assert.equal(await page.locator('#chat-tasks details').evaluate(el=>el.open),true,'Polling must retain an intentional expansion');
+ await page.locator('#chat-tasks summary').click();
+ console.log('PASS collapsed deliverables by default, compact worker/agent headers and retained explicit expansion');
  await page.getByRole('button',{name:'Maximize agent chat',exact:true}).click();
  await page.locator('#chat-input').fill('Keep this unsent direction.');
  const checkLayout=async()=>{
@@ -86,6 +95,10 @@ Incomplete streaming: \(x_{t+1}`;
  }
  await page.setViewportSize({width:1440,height:1000});
  await page.getByRole('button',{name:'Expand agents section',exact:true}).click();await checkLayout();
+ for(const row of await page.locator('.agent-list-row').all())assert.ok((await row.boundingBox()).height<=28,'Agent list row too tall');
+ assert.ok((await page.locator('.agent-list').boundingBox()).height<=131,'Agent list consumes transcript space');
+ await page.locator('#chat-agent-list').screenshot({path:path.join(__dirname,'../../../work/ui016-agents.png')});
+ await page.locator('.chat-header').screenshot({path:path.join(__dirname,'../../../work/ui016-worker.png')});
  await page.getByRole('button',{name:'Collapse agents section',exact:true}).click();
  await page.locator('#chat-tasks summary').click();await checkLayout();await page.locator('#chat-tasks summary').click();
  await page.evaluate(()=>{document.querySelector('#chat-messages').scrollTop=0;});

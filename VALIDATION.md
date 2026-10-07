@@ -1,3 +1,17 @@
+# SuperSurfer 0.1.16 validation — October 7, 2026
+
+All 297 Python tests, 20 Node desktop/SSH tests (no skips), 13 browser suites and both native Linux Electron suites pass. All five agent skills received an independent bounded capability review and pass the release checker. Research scheduling and the bundled engine are unchanged.
+
+Native Electron tests restore two hosts after quitting, preserving separate project/tab selections and window bounds. They verify Open Recent, one-window closure without disturbing another, automatic reconnect after a dropped tunnel, unavailable-host recovery, cancellation and closing a pending connection. Credentials are injected only into the owning window’s trusted main frame and exact API origin: other hosts, embedded frames and untrusted main documents receive no token. Privileged IPC is denied to untrusted documents. Window records exclude tokens and temporary loopback origins. These connection-lifecycle tests use controlled hosts; the separate isolated SSH daemon verifies real forwarding and owned-tunnel cancellation without disturbing another listener.
+
+Window-store tests cover migration from the previous connection/navigation files, host changes and recent-history preservation, multiple open windows, fallback to the last successful host, corrupt records and private file permissions. Existing native checks retain sandboxed preload/main isolation, layout/custom-tab/theme persistence and connection denial from untrusted pages.
+
+Compute regression fixtures show 12 compact nodes and 76 registered GPU bars. Counts distinguish idle, busy, reserved, missing, disallowed, individually stale and offline observations; unregistered devices never inflate capacity. CPU-only nodes remain compact. Refresh updates both counts and bars. Wide and narrow dark layouts have no horizontal overflow. Chat checks verify collapsed Deliverables by default and after conversation changes, retained explicit expansion during refresh, a shorter worker header and compact scrollable agent rows. Compute and chat screenshots were visually inspected.
+
+The existing composer, questions, approvals, steering, archive, custom experiment pages, results, queue, monitoring, setup resilience and 24 login-design combinations also pass. Native macOS rendering, window restoration and Gatekeeper behavior remain untested on this Linux host; Mac packages are unsigned. Tests do not launch or cancel research jobs.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.15 validation — October 7, 2026
 
 All 297 Python tests, 15 Node desktop/SSH checks, 12 browser suites and native Linux Electron checks pass. All five agent skills received an independent bounded review and pass the release checker. Backend and scheduler behavior are unchanged.

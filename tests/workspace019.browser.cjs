@@ -30,6 +30,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.getByText('Does compression preserve action information?',{exact:true}).waitFor();
  assert.equal(await page.getByText('HISTORICAL-NOISE',{exact:true}).isVisible(),false);
  assert.equal(await page.locator('.agent-list-row small').textContent(),'Idle');
+ assert.equal(await page.locator('#chat-tasks details').getAttribute('open'),null);
+ await page.locator('#chat-tasks summary').click();
  await page.getByText('Produce failure videos',{exact:true}).waitFor();
  assert.equal(await page.locator('.agent-list').isVisible(),false);await page.getByRole('button',{name:'Expand agents section',exact:true}).click();assert.equal(await page.locator('.agent-list').isVisible(),true);await page.getByRole('button',{name:'Collapse agents section',exact:true}).click();
  console.log('PASS compact brief, separate technical history, task progress and persistent Idle agent');

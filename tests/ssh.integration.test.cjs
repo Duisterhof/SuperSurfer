@@ -187,3 +187,16 @@ test('rejected session credentials close the dedicated master and private socket
   assert.equal(fs.existsSync(f.unwantedForward), false);
   assert.equal(fs.existsSync(path.join(f.directory, 'user-master')), false);
 });
+
+
+test('aborting a window connection closes only its owned tunnel', { skip, timeout: 45000 }, async t => {
+  const f = await fixture(t), controller = new AbortController();
+  const result = await startTunnel(f.config, f.ready, { sshOptions: f.sshOptions, signal: controller.signal });
+  f.children.push(result.child);
+  const socketPath = result.child.spawnargs[result.child.spawnargs.indexOf('-S') + 1];
+  controller.abort();
+  for (let i = 0; i < 40 && fs.existsSync(path.dirname(socketPath)); i++) await delay(50);
+  assert.equal(fs.existsSync(path.dirname(socketPath)), false);
+  assert.equal(await isListening(Number(new URL(result.origin).port)), false);
+  assert.equal(await isListening(f.occupiedPort), true);
+});

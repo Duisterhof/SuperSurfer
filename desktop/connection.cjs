@@ -21,9 +21,9 @@ function validateConfig(value) {
   if (!Number.isInteger(remotePort) || remotePort < 1024 || remotePort > 65535) throw new Error('Workspace port must be between 1024 and 65535.');
   return { mode, target: mode === 'local' ? '' : target, remoteRoot, amlHome, remotePort };
 }
-function collect(command, args, input, timeout = 90000) {
+function collect(command, args, input, timeout = 90000, signal) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], signal });
     const output = [], errors = []; let size = 0;
     const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('SSH connection timed out. Check that the remote host is reachable.')); }, timeout);
     child.stdout.on('data', chunk => { size += chunk.length; if (size > 2 * 1024 * 1024) child.kill(); else output.push(chunk); });
@@ -53,13 +53,14 @@ function parseSetupResponse(output) {
   }
   throw new Error('Remote setup did not return valid connection credentials. Check the remote service log.');
 }
-async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS } = {}) {
+async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS, signal } = {}) {
   // ClearAllForwardings clears command-line -L as well as inherited forwards.
   // Connect a private master first; then add only our listener over its socket.
+  signal?.throwIfAborted();
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-'));
   const control = path.join(directory, 's');
   const cleanup = () => fs.rmSync(directory, { recursive: true, force: true });
-  const child = spawn('/usr/bin/ssh', [...sshOptions, '-M', '-S', control, '-N', '-o', 'ControlPersist=no', config.target], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const child = spawn('/usr/bin/ssh', [...sshOptions, '-M', '-S', control, '-N', '-o', 'ControlPersist=no', config.target], { stdio: ['ignore', 'ignore', 'pipe'], signal });
   let failure = ''; let exited = false;
   child.stderr.on('data', chunk => { failure = (failure + chunk.toString()).slice(-10000); });
   child.on('error', error => { failure = error.message; exited = true; });
@@ -69,9 +70,10 @@ async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS } = {}) {
   try {
     let connected = false;
     for (let attempt = 0; attempt < 150; attempt++) {
+      signal?.throwIfAborted();
       if (exited) throw new Error(failure.trim() || 'SSH tunnel closed.');
       if (fs.existsSync(control)) {
-        await collect('/usr/bin/ssh', [...controlArgs, '-O', 'check', config.target], undefined, 5000);
+        await collect('/usr/bin/ssh', [...controlArgs, '-O', 'check', config.target], undefined, 5000, signal);
         connected = true;
         break;
       }
@@ -79,12 +81,13 @@ async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS } = {}) {
     }
     if (!connected) throw new Error('SSH did not establish the workspace connection in time.');
     const port = await freePort();
-    await collect('/usr/bin/ssh', [...controlArgs, '-O', 'forward', '-o', 'ExitOnForwardFailure=yes', '-L', `127.0.0.1:${port}:127.0.0.1:${ready.port}`, config.target], undefined, 5000);
+    await collect('/usr/bin/ssh', [...controlArgs, '-O', 'forward', '-o', 'ExitOnForwardFailure=yes', '-L', `127.0.0.1:${port}:127.0.0.1:${ready.port}`, config.target], undefined, 5000, signal);
     const origin = `http://127.0.0.1:${port}`;
     for (let attempt = 0; attempt < 25; attempt++) {
+      signal?.throwIfAborted();
       if (exited) throw new Error(failure.trim() || 'SSH tunnel closed.');
       try {
-        const response = await fetch(origin + '/api/session', { headers: { Authorization: `Bearer ${ready.token}` }, signal: AbortSignal.timeout(1500) });
+        const response = await fetch(origin + '/api/session', { headers: { Authorization: `Bearer ${ready.token}` }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(1500)]) : AbortSignal.timeout(1500) });
         if (response.ok && (await response.json()).ok) return { config, origin, token: ready.token, child };
         if (response.status === 401 || response.status === 403) throw new Error('The remote rejected the workspace credentials. Reconnect to run setup again.');
       } catch (error) {
@@ -98,7 +101,8 @@ async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS } = {}) {
     throw error;
   }
 }
-async function connect(raw, onStatus = () => {}) {
+async function connect(raw, onStatus = () => {}, { signal } = {}) {
+  signal?.throwIfAborted();
   const config = validateConfig(raw);
   onStatus(config.mode === 'local' ? 'Starting your workspace on this machine…' : 'Connecting securely over SSH…');
   const script = fs.readFileSync(path.join(__dirname, 'bootstrap.py'), 'utf8');
@@ -106,17 +110,18 @@ async function connect(raw, onStatus = () => {}) {
   const remoteCommand = `python3 -c ${shellQuote(script)} ${shellQuote(JSON.stringify(config))}`;
   let result;
   if (config.mode === 'local') {
-    try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(config)], bundle); }
+    try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(config)], bundle, 90000, signal); }
     catch (error) { if (error.code === 'ENOENT') throw new Error('This machine needs Python 3.10+ to run a local workspace. Install Python, then reopen SuperSurfer.'); throw error; }
-  } else result = await collect('/usr/bin/ssh', [...SSH_OPTIONS, config.target, remoteCommand], bundle);
+  } else result = await collect('/usr/bin/ssh', [...SSH_OPTIONS, config.target, remoteCommand], bundle, 90000, signal);
+  signal?.throwIfAborted();
   const ready = parseSetupResponse(result);
   if (config.mode === 'local') {
     const origin = `http://127.0.0.1:${ready.port}`;
-    const response = await fetch(origin + '/api/session', { headers: { Authorization: `Bearer ${ready.token}` }, signal: AbortSignal.timeout(5000) });
+    const response = await fetch(origin + '/api/session', { headers: { Authorization: `Bearer ${ready.token}` }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000) });
     if (!response.ok || !(await response.json()).ok) throw new Error('The local workspace did not pass its connection check.');
     return { config, origin, token: ready.token, child: null };
   }
   onStatus('Remote workspace is ready. Opening the connection…');
-  return startTunnel(config, ready);
+  return startTunnel(config, ready, { signal });
 }
 module.exports = { connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, SSH_OPTIONS };

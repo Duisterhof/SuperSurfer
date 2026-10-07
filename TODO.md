@@ -2,6 +2,15 @@
 
 Ongoing list of requested improvements. Unchecked items are planned, not implemented.
 
+## Completed in 0.1.16
+
+- [x] Show compact machine rows above Runs, with free/total counts and labeled bars for every registered GPU; preserve unknown readings and expand for utilization.
+
+- [x] Restore host-associated windows and navigation automatically, with New Window and Open Recent.
+- [x] Keep window sessions/tokens/tunnels isolated; preserve host selection on failure and support cancellation.
+- [x] Default Deliverables to collapsed and compact worker headers and agent-list rows.
+- [x] Review all five skills for reconnect continuity without replaying research actions.
+
 ## Completed in 0.1.15
 
 - [x] Align composer controls and send/steer/stop actions at wide and narrow panel sizes.
