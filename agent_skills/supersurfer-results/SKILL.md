@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.18'
+  supersurfer-version: '0.1.19'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.18. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.19. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -66,11 +66,16 @@ tokens, local filesystem URLs or app credentials.
 
 The HTML Results page fills the available main pane inside the existing sandbox.
 Build a responsive full-page document whose content scrolls naturally in that
-one area; avoid a second fixed-height scrolling dashboard inside it. Size plots
-to their container, wrap controls and legends, and give 3D/video widgets sensible
-responsive dimensions. Put the clear train/held-out comparison before extended
-prose so the extra space serves the evidence. Filling the pane does not grant
-parent-window, filesystem or authentication access.
+one area; avoid a second fixed-height scrolling dashboard inside it. The app
+already supplies the Floating Panels frame: publish the research content without
+recreating sidebars, a chat composer or another glass dashboard around the plots.
+Give charts and text a legible background of their own; the sandbox does not
+inherit the parent app's theme variables. If offering light/dark presentation,
+verify both palettes and keep a readable fallback when transparency is reduced.
+Size plots to their container, wrap controls and legends, and give 3D/video widgets
+sensible responsive dimensions. Put the clear train/held-out comparison before
+extended prose so the extra space serves the evidence. Filling the pane does not
+grant parent-window, filesystem or authentication access.
 
 Use `publish_markdown_tab` with `title` and `markdown` for detailed protocols,
 derivations or analysis beyond the figures. For an existing tab, read with
@@ -127,7 +132,9 @@ workers' edits and unrelated evidence.
 Before reporting completion, inspect the rendered page: verify that the leading
 curves really compare methods and splits, legend colors/units are consistent,
 requested domain visuals are present or explicitly unavailable, and links and
-widgets work at the app's normal width, including with the agent panel open.
-Use responsive plots and wrapping legends; a figure that only works after closing
-the chat is not a usable in-app comparison. Describe unavailable evidence precisely;
+widgets work at the app's normal width, including with the agent panel open
+and resized narrower. Check that changing pane width preserves useful labels
+and widget controls, and that returning from fullscreen chat restores the report
+without requiring a republish. Use responsive plots and wrapping legends; a
+figure that only works after closing the chat is not a usable in-app comparison. Describe unavailable evidence precisely;
 do not claim a screenshot or interactive test was performed unless it was.

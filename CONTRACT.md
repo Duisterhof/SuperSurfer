@@ -1,3 +1,7 @@
+## Floating Panels (0.1.19)
+
+Layout changes do not change agent scope, permissions, resource checks or launch behavior. The right panel keeps its existing compact, collapsed agent list and deliverables; Results keeps one document scrolling surface. Panel width uses actual available space, including outer margins. Imported theme foregrounds and selection contrast are preserved; system accessibility preferences suppress decorative glass. The synthetic workspace fixture is used only in tests/product footage, never as a live-data fallback.
+
 ## Idempotent queue recovery (0.1.18)
 
 Submission preparation finishes before a new request is retained. Durable requests save the resolved payload before RPC. On an unknown outcome, reconciliation requires fresh manager state and checks exact request/experiment ownership. A positive receipt is reused; absent receipts may be resubmitted only with `run.submit_idempotent.v1`. The manager serializes receipt lookup and insertion with its command lock, uses the run row as a durable receipt, and rejects conflicting identities. Retries never release without the existing exact-source PR workflow, broaden node contracts or change launch authority. Legacy retained null receipts recover through the same original conversation/request ID; no raw database reset or replacement identity is needed.

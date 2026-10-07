@@ -68,8 +68,8 @@ function persistNavigation() {
   if (window.superSurferDesktop?.setWorkspace) window.superSurferDesktop.setWorkspace(value).catch(() => {});
 }
 function chatWidthBounds(){
- const sidebar=$('.sidebar'),bodyWidth=window.innerWidth-(sidebar?.getBoundingClientRect().width||0);
- return {min:280,max:Math.max(280,Math.min(760,bodyWidth-(window.innerWidth>760?326:0)))};
+ const bodyWidth=$('.workspace-body')?.clientWidth||window.innerWidth;
+ return {min:280,max:Math.max(280,Math.min(760,bodyWidth-(window.innerWidth>760?336:0)))};
 }
 function applyChatLayout(){
  const shell=$('.app-shell'),maximized=state.chatVisible&&state.chatMaximized;

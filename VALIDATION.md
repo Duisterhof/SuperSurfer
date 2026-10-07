@@ -1,3 +1,13 @@
+# SuperSurfer 0.1.19 validation — October 7, 2026
+
+All 330 Python tests, 20 Node/SSH checks without skips, 14 Chromium browser suites and two native Linux Electron suites pass. All five agent capability skills received an independent review and substantive revisions and pass release checks. Backend queue and scheduling behavior is unchanged from 0.1.18.
+
+The selected Floating Panels design was visually inspected in light and dark mode. Coverage checks three separated panel surfaces, compact full-width chrome, normal/narrow/fullscreen chat, actual available resize space, preserved drafts, pending questions/approvals, full-page Results with a single scroll area, dense per-GPU compute rows, imported theme colors, reduced transparency and forced colors. A synthetic workspace fixture supplies only illustrative data for tests and product footage; it never replaces unavailable live data. The existing browser suites still verify real interactions and isolation, and native tests cover sandboxed preload/main IPC, host windows and persisted preferences.
+
+Native macOS rendering is not tested on this Linux build host. Mac packages are unsigned. Live jobs are not launched or modified as tests.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.18 validation — October 7, 2026
 
 All 330 SuperSurfer Python regressions pass in shuffled order (seed 20261007), including 10 new real-manager recovery cases. All 212 matching bundled-engine regressions pass with fixture daemons loading the patched engine. The Chromium queue flow passes. All five capability skills were independently reviewed, substantively revised and checked for this release.
