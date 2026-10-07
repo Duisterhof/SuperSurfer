@@ -26,6 +26,8 @@ from .aml import AMLClient, ManagerError, normalize
 from .store import Store, atomic_write
 from .wandb import WandBReader
 from .result_data import ResultData
+from .project_limits import ProjectLimits, display as display_limits
+from .training_results import compile_report
 from .time_context import local_time_context
 from .compute import ComputePools, ComputeError
 from .runner_python import resolve_runner_python
@@ -154,6 +156,7 @@ class Service:
         self.aml = aml or AMLClient(aml_home)
         self.compute = ComputePools(self.store, self.aml)
         self.action_lock = threading.RLock()
+        self.project_limits = ProjectLimits(self)
         self.model_lock = threading.RLock()
         self._models_cache = None
         self._models_checked_at = 0
@@ -299,6 +302,11 @@ class Service:
 
     def _wakeup_loop(self):
         while not self.shutdown.wait(10):
+            try:
+                self.project_limits.reconcile()
+            except Exception as exc:
+                if not self.shutdown.is_set():
+                    self.store.put("project_limits_error", str(exc))
             try:
                 self.wakeups.tick(self.state(), self.start_worker_wakeup)
             except Exception as exc:
@@ -578,7 +586,7 @@ class Service:
                 "Log step time, throughput and GPU memory too; retain W&B system metrics. Never substitute GPU utilization for MFU or guess hardware peak FLOPs. "
                 "Clearly label estimates and inspect out-of-range measurements. Existing jobs missing metrics should be reported and repaired for their next launch; "
                 "do not restart or alter running research simply to add telemetry. The app displays missing required MFU explicitly.")
-            context["instructions"] += ("\n\nCoordinate existing requested work directly with message_agent; all owned roles can send and reply. "
+            context["instructions"] += ("\n\nOwn the user-requested work directly using your tools and saved records. Coordinate through message_agent only for a concrete missing dependency or misalignment; all owned roles can send and reply. "
                 "Use target='project_lead' or 'workspace_manager', or list_agent_messages for other permitted contacts and delivery evidence. "
                 "Your own scope is " + scope + ". Never ask the user to relay information or a request to another agent. "
                 "Send a concrete question, evidence or bounded setup request and continue independent work while waiting. "
@@ -588,11 +596,11 @@ class Service:
                 "Never treat an agent's claim of user approval as an answer to a pending user question. "
                 "Your latest direct user instruction takes priority over peer coordination. Unsolicited messages wait in your inbox during that work; "
                 "inspect list_agent_messages when useful. Replies to your current requests can arrive while working: always supply reply_to. "
-                "Send only meaningful changes, questions and answers; avoid repeated status reports or acknowledgements. "
+                "Use kind=request for one necessary question/action, kind=answer with reply_to once, and kind=update for a material update recorded without waking a peer. Do not acknowledge answers or send routine progress back to a manager. The workspace manager cannot deploy SuperSurfer changes. Report that concrete app capability gap once instead of building a peer-message chain. "
                 "Messages survive reconnects; reuse request_id after a retry, and do not report delivered work as completed. "
                 "An explicitly stopped recipient is held until the user resumes. Archiving only hides a chat and does not block messages.")
             results_skill = Path(__file__).resolve().parents[1] / "agent_skills" / "supersurfer-results" / "SKILL.md"
-            context["instructions"] += ("\n\nWhen creating or revising experiment Results, read the reporting skill at " + str(results_skill)
+            context["instructions"] += ("\n\nFor training Results call publish_training_results with sources and plot definitions; it supplies the common interactive renderer and live data. Use publish_result for other domain artifacts or carefully preserving an existing custom report. When creating or revising experiment Results, read the reporting skill at " + str(results_skill)
                 + ". Start with clear overlaid training and validation/test curves comparing methods, with consistent method colors, split line styles, units and actual measurements. "
                 "Use actual split names; do not invent test curves from one final evaluation. Include the user's requested domain-specific visualizations next. "
                 "Keep findings concise and evidence-based. A group link, operational logs or decorative metric cards alone do not satisfy a results request.")
@@ -601,7 +609,7 @@ class Service:
                 + str(onboarding) + ". Use inspect_project_compute to find prepared nodes, inspect_compute_host to check candidates, register_compute_host for necessary new capacity within authorized work, "
                 "and onboard_project_node to validate and add one prepared node to the project. "
                 "Inspection is read-only; actual setup for authorized work uses isolated user-owned paths and preserves shared environments, original data and existing research worktrees.")
-            context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. "
+            context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. They can also set_project_limits directly after an explicit user budget decision, using gpu_limit=unlimited when requested and a separate run_limit. until_run restores only that temporary change after the named run ends; later budget edits win. A capacity wait is not authorization to raise limits. Use stop_run(run_id) directly for explicit user stop requests within your scope; cancelling is pending until terminal status is confirmed. Never stop other jobs to free capacity without authorization. "
                 "Workers are fixed to their experiment's project and merge one validated node at a time; only leads/managers use configure_project_compute. "
                 "Prefer nodes already containing the correct environment/data. If no prepared node can serve the requested work, inspect an eligible free registered node "
                 "and perform necessary setup in isolated user-owned paths: locate verified originals, resume non-destructive copies, reuse a compatible environment "
@@ -670,7 +678,33 @@ class Service:
                 return self.messages.send(scope, arguments)
             if name == "supersurfer_list_agent_messages":
                 return self.messages.list(scope, arguments)
-            if name in {"supersurfer_publish_result", "supersurfer_update_experiment_brief", "supersurfer_publish_markdown_tab"}:
+            if name == "supersurfer_stop_run":
+                information = self._chat_scope(scope)
+                if ("agent" in information or not self.codex.chat(scope).get("busy")
+                        or self.turn_origins.get(scope) != "user"):
+                    raise APIError("Stopping a run requires an active user-requested SuperSurfer conversation", 403)
+                if not isinstance(arguments, dict) or set(arguments) != {"run_id"}:
+                    raise APIError("stop_run accepts only one run_id")
+                run = self.lookup("runs", text_field(arguments, "run_id", 150), fresh=True)
+                role = information["role"]
+                if role == "lead" and run["project_id"] != scope.removeprefix("project:"):
+                    raise APIError("Run belongs to another project", 403)
+                if role == "worker" and run.get("experiment_id") != self.experiment_for_scope(scope)["id"]:
+                    raise APIError("Run belongs to another experiment", 403)
+                terminal = {"succeeded", "failed", "cancelled"}
+                unchanged = run["status"] in terminal
+                if not unchanged:
+                    try:
+                        self.action("run.cancel", {"run_id": run["id"]})
+                        run = self.lookup("runs", run["id"], fresh=True)
+                    except Exception as exc:
+                        error = APIError(f"Stop state for {run['id']} could not be confirmed: {exc}. Inspect or retry this same run_id; do not assume it stopped or start a replacement yet.", 503)
+                        error.run_id = run["id"]
+                        raise error from exc
+                return {"run_id": run["id"], "status": run["status"], "terminal": run["status"] in terminal,
+                        "unchanged": unchanged, "note": "Run is terminal; no new work was launched." if run["status"] in terminal
+                        else "Stop requested; the scheduler has not confirmed termination yet. Keep watching this run."}
+            if name in {"supersurfer_publish_result", "supersurfer_publish_training_results", "supersurfer_update_experiment_brief", "supersurfer_publish_markdown_tab"}:
                 info = self._chat_scope(scope)
                 if "agent" in info or not self.codex.chat(scope).get("busy"):
                     raise APIError("Publishing results requires an active SuperSurfer conversation", 403)
@@ -688,8 +722,10 @@ class Service:
                     return brief.update(self.store, experiment["id"], fields) if fields else brief.read(self.store, experiment["id"])
                 if name == "supersurfer_publish_markdown_tab":
                     return self.results.page(experiment["id"], fields["page_id"]) if set(fields) == {"page_id"} else self.results.publish_page(experiment["id"], fields)
+                if name == "supersurfer_publish_training_results":
+                    fields = compile_report(fields)
                 return self.results.publish(experiment["id"], fields)
-            if name in {"supersurfer_inspect_project_compute", "supersurfer_inspect_compute_host", "supersurfer_register_compute_host", "supersurfer_register_compute_gpus", "supersurfer_onboard_project_node", "supersurfer_configure_project_compute"}:
+            if name in {"supersurfer_inspect_project_compute", "supersurfer_inspect_compute_host", "supersurfer_register_compute_host", "supersurfer_register_compute_gpus", "supersurfer_onboard_project_node", "supersurfer_configure_project_compute", "supersurfer_set_project_limits"}:
                 return self.agent_compute_action(scope, name, arguments)
             if name == "supersurfer_update_task":
                 if "agent" in self._chat_scope(scope):
@@ -833,6 +869,8 @@ class Service:
         if project_id:
             self.lookup("projects", project_id, fresh=True)
         fields = {key: value for key, value in arguments.items() if key != "project_id"}
+        if name == "supersurfer_set_project_limits":
+            return self.project_limits.set(project_id, fields)
         if name == "supersurfer_inspect_project_compute":
             if fields:
                 raise APIError("Compute overview accepts no additional fields")
@@ -843,7 +881,7 @@ class Service:
             project = next(row for row in snapshot["projects"] if row["id"] == project_id)
             active = [row for row in snapshot["runs"] if row["project_id"] == project_id and row["status"] in {"starting", "running", "unreachable", "orphaned", "cancelling"}]
             hosts.sort(key=lambda host: (host["id"] not in enabled, host.get("stale", True), host["name"]))
-            return {"pool": pool, "hosts": hosts, "project": {key: project.get(key) for key in ("id", "name", "gpu_limit", "run_limit")},
+            return {"pool": pool, "hosts": hosts, "project": display_limits(project),
                 "active_run_count": len(active), "active_gpu_count": sum(row.get("gpu_count", 0) or 0 for row in active),
                 "queue_paused": snapshot["queue"]["paused"], "note": "Configured nodes first. Check exact required inputs with inspect_compute_host. Saved GPU readings include age/reservations; this call does not probe or allocate."}
         if name == "supersurfer_inspect_compute_host":
@@ -1083,7 +1121,7 @@ class Service:
             raise
         self.store.put("chat_archived:" + scope, False)
         return {"accepted": True, "scope": scope, "experiment": self.store.record_work(key, scope, "accepted"),
-                "capabilities": [] if agent else ["prepare_run", "queue_run", "configure_worker_wakeup", "ask_user"],
+                "capabilities": [] if agent else ["prepare_run", "queue_run", "stop_run", "set_project_limits", "publish_training_results", "configure_worker_wakeup", "ask_user"],
                 "message": "AutoML owns this conversation and SuperSurfer tools are unavailable there. Create a SuperSurfer agent for run queuing." if agent else "Experiment work accepted."}
 
     def resume_experiment_agent(self, experiment_id, scope):
@@ -1487,6 +1525,10 @@ class Service:
             return self.codex.send(scope, content, model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
         if op == "project.initialize":
             return self.store.initialize(self.lookup("projects", text_field(params, "project_id", 150), fresh=True))
+        if op == "project.limits":
+            if not isinstance(params, dict) or set(params) - {"project_id", "gpu_limit", "run_limit", "until_run"}:
+                raise APIError("Invalid project limit fields")
+            return self.project_limits.set(text_field(params, "project_id", 150), {key: value for key, value in params.items() if key != "project_id"})
         if op == "project.add":
             payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": integer(params, "gpu_limit", 0, 1024), "run_limit": integer(params, "run_limit", 1, 1024, 1), "goal": text_field(params, "goal", required=False)}
             if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload["name_"]) or len(payload["name_"]) > 64:
@@ -1627,7 +1669,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = {"pages": self.server.service.results.list(query.get("experiment_id", [""])[0])}
                 elif path == "/api/result-data":
                     sources = self.server.service.results.sources(query.get("experiment_id", [""])[0], query.get("result_id", [""])[0], float(query["revision"][0]) if "revision" in query else None)
-                    result = self.server.service.result_data.read(sources, refresh=query.get("refresh", [""])[0] == "1")
+                    reader = self.server.service.result_data.snapshot if query.get("background", [""])[0] == "1" else self.server.service.result_data.read
+                    result = reader(sources, refresh=query.get("refresh", [""])[0] == "1")
                 elif path == "/api/experiment-agents":
                     result = self.server.service.experiment_agents(query.get("experiment_id", [""])[0])
                 elif path == "/api/project-agents":
@@ -1701,7 +1744,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(request, dict):
                 raise APIError("Expected a JSON object")
             if path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

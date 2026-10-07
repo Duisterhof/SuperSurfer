@@ -8,8 +8,17 @@ export function connectLiveResults({api, selection, frame}) {
   const entry=current;if(!entry||!active(entry)||entry.loading)return;
   entry.loading=true;post(entry,{...cache.get(entry.key),loading:true,error:null});
   try{
-   const data=await api('result-data?experiment_id='+encodeURIComponent(entry.experimentId)+'&result_id='+encodeURIComponent(entry.id)+'&refresh=1'+(entry.revision!=null?'&revision='+encodeURIComponent(entry.revision):''));
-   if(!active(entry))return;if(cache.size>=100&&!cache.has(entry.key))cache.delete(cache.keys().next().value);cache.set(entry.key,data);post(entry,{...data,loading:false,error:null});
+   const path='result-data?experiment_id='+encodeURIComponent(entry.experimentId)+'&result_id='+encodeURIComponent(entry.id)+'&background=1'+(entry.revision!=null?'&revision='+encodeURIComponent(entry.revision):'');
+   let first=true;
+   do {
+    if(!active(entry))return;
+    const data=await api(path+(first?'&refresh=1':''));first=false;
+    if(!active(entry))return;
+    if(cache.size>=100&&!cache.has(entry.key))cache.delete(cache.keys().next().value);
+    cache.set(entry.key,data);post(entry,{...data,loading:!!data.loading,error:null});
+    if(!data.loading)break;
+    await new Promise(resolve=>setTimeout(resolve,400));
+   }while(active(entry));
   }catch(error){post(entry,{...cache.get(entry.key),loading:false,error:error.message,stale:true});}
   finally{entry.loading=false;entry.lastChecked=Date.now();}
  }

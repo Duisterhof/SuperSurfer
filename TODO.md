@@ -1,3 +1,11 @@
+## Completed in 0.1.22
+
+- Direct agent project limits, explicit unlimited GPU budgets and durable per-run temporary restoration.
+- Scoped stop_run with pending/terminal confirmation and retry protection.
+- Quiet updates and one-answer requests to stop acknowledgement chains.
+- Shared live training Results tool with overlays, decimal axes, EEF/held-out traces, interaction and partial-source rendering.
+- Shortened and reviewed all five skills around owning the task and using direct tools first.
+
 ## Completed in 0.1.21
 
 - Fetch current W&B curves whenever Results opens, including immediate reopen.

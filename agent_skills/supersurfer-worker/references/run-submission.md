@@ -1,0 +1,89 @@
+# Run submission and recovery
+
+Keep preparation, explicit execution and suggestions distinct. `prepare_run`
+creates a held draft for requested preparation; it never launches. `queue_run`
+finishes an explicit user queue/run request, including one accurately forwarded
+by its lead/manager. Prior authorization for the same work survives follow-ups
+unless withdrawn. Questions, Start working, permission approval, suggestions and
+scheduled reviews add no launch authority. Never bypass the queue through direct
+training processes, scheduler/state edits or arbitrary AML commands.
+
+## Prepare the exact contract
+
+Prefer the configured project pool: `use_project_pool: true`, exact committed
+`revision`, argv `command`, `gpu_count`, `storage_gib`, actual `job_type` and any
+required free VRAM (`min_free_mib`); omit `host_id`. The clean source checkout
+`repo` defaults to the project's repository. Each node supplies its own repository,
+absolute training Python, data and storage paths; optional run `python`/`data_path`
+overrides remain possible. Arguments may use `{python}` and `{data}`. Declare
+`required_paths` and exact distribution versions in `python_packages` for actual
+inputs/dependencies; root-directory existence is insufficient. CPU work uses
+`gpu_count: 0`. Without a configured pool, manual placement needs `host_id` and
+`repo`. The scheduler stages the verified commit without changing node worktrees.
+
+Verify source/PR, environment/data and declared resources for the authorized
+command. Do not impose extra admission jobs, repeated test suites or a manual
+confirmation/release ceremony. Diagnostics are appropriate for a concrete
+unresolved defect, not because a run is being launched. Honor actual permissions
+and tool errors. Onboarding or a recent reading does not guarantee allocation;
+pool edits do not expand already saved queued-run candidate contracts.
+
+Every new run declares `job_type`: training/evaluation/data/other. Training also
+requires `training_metrics` with `mfu_metric`, explicit `mfu_unit`, documented
+`mfu_method` and repository-relative logger `source_path`. Read
+[training telemetry](training-metrics.md), adapt the existing helper into the
+exact-source PR, and verify real logging after launch. Preserve the supplied
+`WANDB_ENTITY`, `WANDB_PROJECT`, `WANDB_RUN_GROUP`, `WANDB_RUN_ID` and
+`WANDB_RESUME`. A declaration or metadata-only group is not measured telemetry.
+Do not misclassify training or replace another run's history to satisfy the check.
+
+MFU is useful model FLOPs divided by measured distributed step time and verified
+hardware peak FLOP/s at the actual precision, not GPU utilization. Report missing
+samples honestly, inspect each metric's observation age independently of fetch
+or other metrics, and preserve existing jobs when preparing future instrumentation.
+
+## Queue once, recover the same identity
+
+For an existing held run, send only `run_id` and `pr_url`. For a new run, send its
+contract, mandatory exact-source `pr_url` and a stable `request_id` of 16–100 ASCII
+letters, digits, underscores or hyphens. Use one distinct ID per explicitly
+requested arm and retain the original fields. Workers omit `experiment_id`;
+manager submissions always include it. The tool verifies the PR and readies the
+run; a manual Release click is unnecessary. Ready/queued does not mean running.
+
+After an uncertain creation without `run_id`, resolve the reported recoverable
+cause and retry in the **same conversation** with the same request ID and
+unchanged fields. Supported idempotent submission recovers the existing run or
+creates at most one held draft. Do not invent a replacement ID, switch owners,
+reset service records or assume the run is absent. If the engine explicitly lacks
+safe reconciliation, preserve the request and report that concrete limitation
+while continuing independent preparation. It is not another launch approval.
+
+An error that returns `run_id` identifies the existing draft: retain it, fix the
+cause, then retry with only `run_id` and `pr_url` (plus manager `experiment_id`).
+Failed PR verification leaves the draft held. Inspect readiness errors and actual
+state before claiming success/failure. Requests without durable IDs retain the
+legacy one-new-run-per-turn limit; IDs do not authorize extra runs or experiments.
+
+Read project budget, queue pause and candidate readiness when blocked. Continue
+independent preparation, preserve accepted/held IDs, and use the onboarding skill
+for necessary node setup or an explicit budget decision. Do not cancel/requeue
+existing jobs or change original contracts simply to escape a placement wait.
+
+## Stop a requested run through the scheduler
+
+`stop_run` takes only `run_id`. It requires an active user-origin turn and an
+actual user request to stop that work: workers are confined to their experiment,
+leads to their project, and the manager to this workspace. Use it directly within
+scope rather than asking another agent to relay the same authorized action.
+Scheduled observations and peer status updates do not authorize cancellation.
+
+Queued cancellation is immediate. For running work, report cancelling until the
+scheduler confirms termination; an accepted request is not proof that its process
+has exited or GPUs are free. Retrying a terminal run is a no-op. After an uncertain
+response, inspect and retry the same ID if needed, without direct process kills,
+raw scheduler/state edits, broader cancellation or duplicate replacement launches.
+Keep the cancelled run's history and evidence. A stop request does not authorize
+restarting it or change the experiment's scientific completion status.
+If the user requested a replacement too, confirm the original is terminal before
+launching that replacement through the normal scoped queue workflow.

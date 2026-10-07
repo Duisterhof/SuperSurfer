@@ -50,6 +50,40 @@ class ResultData:
         self.cache = {}
         self.locks = {}
         self.lock = threading.Lock()
+        self.inflight = set()
+
+    @staticmethod
+    def source_key(source):
+        return json.dumps(source, sort_keys=True)
+
+    def snapshot(self, sources, refresh=False):
+        """Return cached/partial observations immediately; only refresh starts I/O."""
+        jobs, values = [], []
+        with self.lock:
+            for source in sources:
+                key = self.source_key(source)
+                cached = self.cache.get(key)
+                value = copy.deepcopy(cached[1]) if cached else {
+                    'id': source['id'], 'url': source['url'], 'rows': [], 'sampled': True,
+                    'fetched_at': None, 'observed_at': None, 'error': None, 'stale': False}
+                if refresh and key not in self.inflight:
+                    if len(self.inflight) >= 12:
+                        value.update(error='W&B refresh is busy. Retry shortly; existing curves are retained.', stale=True)
+                    else:
+                        self.inflight.add(key)
+                        jobs.append((key, source))
+                value['loading'] = key in self.inflight
+                values.append(value)
+        for key, source in jobs:
+            threading.Thread(target=self._refresh, args=(key, source), daemon=True, name='result-wandb-refresh').start()
+        return {'sources': values, 'loading': any(v['loading'] for v in values), 'checked_at': time.time()}
+
+    def _refresh(self, key, source):
+        try:
+            self.history(source, refresh=True)
+        finally:
+            with self.lock:
+                self.inflight.discard(key)
 
     def read(self, sources, refresh=False):
         if not sources:
@@ -59,7 +93,7 @@ class ResultData:
         return {'sources': values, 'checked_at': time.time()}
 
     def history(self, source, refresh=False):
-        key = json.dumps(source, sort_keys=True)
+        key = self.source_key(source)
         requested = time.monotonic()
         with self.lock:
             lock = self.locks.setdefault(key, threading.Lock())
@@ -103,7 +137,7 @@ class ResultData:
                     step = row.get('_step')
                     if not numeric(step):
                         continue
-                    clean = {k: v for k, v in row.items() if k in allowed and (numeric(v) or isinstance(v, str) and len(v) <= 500)}
+                    clean = {k: v for k, v in row.items() if k in allowed and (numeric(v) or isinstance(v, bool) or isinstance(v, str) and len(v) <= 500)}
                     merged.setdefault(step, {}).update(clean)
                 result.update(rows=[merged[k] for k in sorted(merged)], run_id=run['name'], run_name=run.get('displayName') or run['name'], state=run.get('state'), fetched_at=time.time())
                 result['observed_at'] = max((r['_timestamp'] for r in result['rows'] if numeric(r.get('_timestamp'))), default=None)

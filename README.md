@@ -1,3 +1,11 @@
+## 0.1.22 direct controls and consistent Results
+
+Agents can apply an explicit project GPU/run budget decision with `set_project_limits` and stop an authorized run with `stop_run`. Workers stay inside their experiment for stops, leads inside their project, and the manager inside the workspace. GPU and concurrent-run limits are separate; an optional run-bound temporary change restores only those fields when the run ends, without reverting later edits. A stop reply distinguishes pending cancellation from confirmed termination.
+
+New training Results use `publish_training_results`: named methods, exact W&B metric keys and labeled axes produce live interactive overlays. Training/validation/test use consistent colors and distinct line styles; ordinary decimal axes, scroll zoom, pan, hover, reset, expand and optional smoothing with raw traces are built in. Requested schematics and domain views follow the curves. Unavailable measurements must be stated. Available/cached curves appear while slower sources load.
+
+Routine agent updates are recorded quietly. A concrete request wakes its recipient and accepts one answer; answers do not solicit acknowledgements. Direct tools come first, with manager escalation for genuine shared conflicts or missing dependencies. All five skills have been shortened and reviewed against the release's actual capabilities. Onboarding a node still affects future submissions: extending an already queued run's eligible nodes remains planned.
+
 ## 0.1.21 live W&B Results
 
 Opening Results now refreshes W&B directly, including when you return to a recently viewed experiment. The built-in metrics view bypasses its cache on opening and refresh. Agent-authored HTML can declare individual W&B source runs and redraw from fresh data through the sandboxed Results bridge. Curves include a bounded recent tail and separately requested sparse validation measurements. Failed fetches preserve available curves with their original timestamps and a visible error; no agent turn or report republishing is needed to fetch data.
@@ -14,7 +22,7 @@ The selected Floating Panels design is now the main workspace: a compact full-wi
 
 A rejected cache/run submission no longer strands its request without a run ID. Retry `queue_run` in the original conversation with the same `request_id` and unchanged fields: SuperSurfer reuses the recorded run or safely submits that identity once. Resolved node contracts and W&B identity survive retries. Existing held run IDs still use normal PR verification and release. Existing workspaces need the bundled manager update for safe recovery when no receipt exists; connecting alone does not restart their manager.
 
-# SuperSurfer 0.1.21
+# SuperSurfer 0.1.22
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -22,9 +30,9 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.21-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.21-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** extract `SuperSurfer-0.1.22-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.22-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.21-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.22-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
