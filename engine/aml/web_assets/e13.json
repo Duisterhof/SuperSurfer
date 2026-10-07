@@ -1,0 +1,125 @@
+{
+  "id": "E13",
+  "title": "Learn the current and future representations",
+  "run_id": "run_575275f17844",
+  "source_revision": "170949a29a2ed467bed9e10a876784d1b3eb94a1",
+  "pr_url": "https://github.com/Duisterhof/VLA_WAM/pull/5",
+  "overview": [
+    "E13 asks whether learned attention queries can retain the information needed for robot control in 16 current tokens and 256 future tokens. It starts a new model from seed 42. Current inputs are full spatial DINO features, depth, robot coordinates and the task identity. Cached DINO features stay fixed. Eight DINO queries and eight depth queries read the current frame. There is no raw visual bypass.",
+    "Separate future query banks read entire four-frame modality blocks at offsets +8,+16,+24,+32. They output 128 DINO,64 depth and 64 track tokens in total. These global tokens are not assigned to individual frames. Two attention/MLP layers encode each modality; position-and-time decoder queries reconstruct all original fields. Tracks contain x,y and visibility. Proprioception and task conditioning do not add visual sequence tokens.",
+    "Online encoders and decoders learn reconstruction while a six-layer ModAR transformer learns future and action prediction. A slowly changing exponential moving average (EMA) encoder supplies detached future targets. The frozen EMA decoder also decodes predicted tokens for a native-field forecast loss; gradients still flow into the predicted tokens. The current encoder receives task gradients. Future query banks learn from reconstruction; shared DINO/depth trunks also receive current-context gradients.",
+    "After each optimizer step, EMA parameters follow the online model with decay 0.999. They receive no optimizer gradients. Reconstruction anchors the representation to recorded fields. EMA slows target movement; it does not guarantee stability. Deployment uses one coherent EMA snapshot: current encoding, whole-block tracks\u2192DINO\u2192depth generation, then 16 actions of 14 coordinates. Each generated block uses eight Euler steps. Recorded future fields are unavailable at deployment.",
+    "Data uses 1250 dynamics and 50 labelled-action demonstrations per task across six tasks. Offline evaluation fixes 60 held-out episodes and 240 windows. We report reconstruction/forecast MSE, normalized action MSE and end-effector (EEF) RMSE in millimetres. Oracle curves use real future fields. Closed-loop SR30 uses 30 original mapped scenes: 20 dynamics training, 1 validation and 9 outside those pools, with no labelled-action overlap. This is a diagnostic, not fully held out. E13 has no matched direct/full comparison. Its data, bottleneck and objective differ from E12; these scores cannot establish an E13 benefit."
+  ],
+  "configuration": [
+    [
+      "Tokens",
+      "Current 8 DINO+8depth=16; future 128 DINO+64depth+64tracks=256 across all four frames."
+    ],
+    [
+      "Query codecs",
+      "Two cross-attention/MLP blocks per encoder and decoder; width 384, six heads; separate current/future query banks."
+    ],
+    [
+      "Predictor",
+      "Six shared layers; six heads; modality experts: tracks 1\u00d7128, DINO2\u00d7384, depth 4\u00d7384, action 2\u00d7128."
+    ],
+    [
+      "Native decoder outputs",
+      "Per frame: DINO192\u00d7384; depth 192\u00d7196 pixels (full 168\u00d7224 map); tracks 192\u00d73."
+    ],
+    [
+      "Data",
+      "7500 dynamics and 300 action training episodes; six RT6DS2 tasks; seeded original 1300-episode split universe."
+    ],
+    [
+      "Normalization",
+      "Fixed training-only statistics. Action/proprio use the 50 labelled episodes per task; DINO uses 30 seeded dynamics episodes; depth uses fixed log statistics."
+    ],
+    [
+      "Optimizer",
+      "AdamW1e-4; betas 0.9/0.95; weight decay 0.1; clip 1;375-update warmup, then constant."
+    ],
+    [
+      "EMA",
+      "0.999 after each optimizer step; initialize by exact copy; copy fixed geometry buffers. Online parameters learn; teacher parameters do not receive gradients."
+    ],
+    [
+      "Batch and precision",
+      "128 examples per stream per update, two GPUs, compute batch 32. FP32 parameters/moments; BF16 attention/matrix operations."
+    ],
+    [
+      "Cadences",
+      "Training stopped by Bart; recorded results preserved. Original cadence: checkpoint and held-out validation every 250 updates; progress every 25."
+    ],
+    [
+      "Evaluation",
+      "One coherent EMA checkpoint;60 held-out episodes, four fixed windows each. Episode-balanced metrics; real action steps for EEF."
+    ],
+    [
+      "Closed-loop diagnostic",
+      "Six tasks \u00d7 five original mapped scenes. 20 overlap dynamics training, 1 validation, 9 outside; no labelled-action overlap or matched control. Scores require verified completion of all 30."
+    ],
+    [
+      "Recovery",
+      "Exact immutable trainer/source/data/runtime/layout bindings; raw+EMA weights, all 408 optimizer states and both rank RNG states."
+    ],
+    [
+      "Memory",
+      "Warm real training and complete generation before retaining spare allocator cache; at least 3GiB physical headroom per GPU. Model peak and memory reservation are separate measurements."
+    ]
+  ],
+  "losses": [
+    [
+      "Current reconstruction",
+      "\u00bcMSE(current DINO)+\u00bcMSE(current depth), using online encoders/decoders."
+    ],
+    [
+      "Future reconstruction",
+      "\u2159 per future modality: MSE(D(E(x)),x)."
+    ],
+    [
+      "Latent forecast",
+      "\u2159 per future modality: flow-weighted MSE(predicted tokens,stopgrad(E_EMA(x)))."
+    ],
+    [
+      "Native forecast",
+      "\u2159 per future modality: flow-weighted MSE(D_EMA(predicted tokens),x). Decoder weights frozen; input graph retained."
+    ],
+    [
+      "Action prediction",
+      "\u00bd flow-weighted action MSE. Original held-tail supervision retained."
+    ],
+    [
+      "Reduction",
+      "Mean field elements, valid future frames per example, then globally contributing examples. No extra division by rank or accumulation count."
+    ]
+  ],
+  "evidence": [
+    {
+      "id": "e13-status",
+      "label": "Current E13 training record",
+      "path": "artifacts/auto_ml_e13/results/training-170949a/status.json"
+    },
+    {
+      "id": "e13-latest-validation",
+      "label": "Latest completed EMA held-out evaluation",
+      "path": "artifacts/auto_ml_e13/results/training-170949a/latest-validation.json"
+    },
+    {
+      "id": "e12-metrics",
+      "label": "Mirrored E12 training and offline metrics",
+      "path": "artifacts/auto_ml_dashboard/e12/index.json"
+    },
+    {
+      "id": "wandb-index",
+      "label": "Verified W&B run links and synchronization",
+      "path": "artifacts/auto_ml_dashboard/wandb-index.json"
+    },
+    {
+      "id": "e13-sr30",
+      "label": "Verified original-scene diagnostic SR30",
+      "path": "artifacts/auto_ml_dashboard/e13/sr30-index.json"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+'use strict';
+const {chromium}=require('playwright');
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+(async()=>{
+ const browser=await chromium.launch({executablePath:'/opt/google/chrome/chrome',headless:true,args:['--no-sandbox']});
+ try{
+  const context=await browser.newContext({viewport:{width:1440,height:1000}}),errors=[],calls=[];
+  let failure=false,partial=false;
+  const scope='experiment:e14',exp={id:'e14',project_id:'p1',name:'E14',summary:'Requested evaluation',status:'ready',version:1,markdown:'Protocol',pages:[],brief:{version:1,objective:'Evaluate.',method:'Held-out scenes.',findings:'Pending.',next_steps:'Stage inputs.',activity:[]}};
+  const now=Date.now()/1000;
+  const runs=[{id:'old',name:'Older training',project_id:'p1',experiment_id:'e14',status:'running',started:now-3660,updated:now,gpu_count:1},{id:'new',name:'Newest training',project_id:'p1',experiment_id:'e14',status:'running',started:now-65,updated:now-100,gpu_count:1},{id:'queued',name:'Waiting job',project_id:'p1',experiment_id:'e14',status:'queued',created:now,ready:true,gpu_count:1},{id:'done',name:'Finished job',project_id:'p1',experiment_id:'e14',status:'succeeded',started:now-10000,finished:now-6400,gpu_count:1}];let metricReads=0;
+  const data={connected:true,read_only:false,projects:[{id:'p1',name:'VLA',repo:'/tmp/vla',initialized:true}],experiments:[exp],runs,hosts:[],agents:[],queue:{paused:false,run_ids:[]},monitoring:{},settings:{models:{manager:'',lead:'',worker:''},reasoning:{manager:'medium',lead:'medium',worker:'medium'},approval_mode:'ask',timezone:'America/New_York'}};
+  await context.addInitScript(()=>{if(!localStorage.getItem('supersurfer-workspace'))localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:'p1',experimentId:'e14',tab:'overview',chatVisible:true}));});
+  await context.route('http://coordination.test/**',async route=>{
+   const req=route.request(),url=new URL(req.url());let body={};
+   if(url.pathname==='/api/state')body=data;
+   else if(url.pathname==='/api/experiment')body=exp;
+   else if(url.pathname==='/api/experiment-agents')body={selected_scope:scope,agents:[{scope,name:'E14 worker',owner:'supersurfer',status:'idle',busy:false}]};
+   else if(url.pathname==='/api/chat')body={busy:false,status:'idle',agent:{name:'E14 worker',model:'fixture'},tasks:[],messages:[{id:'m1',role:'system',text:'The original protocol is ready on Trinity.',created:1,agent_sender:{name:'VLA lead <script>bad()</script>',scope:'project:p1'}},{id:'m2',role:'user',text:'Continue the evaluation.',created:2}],questions:[],approvals:[],preferences:{editable:true,defaults:{model:'fixture',reasoning:'medium',approval_mode:data.settings.approval_mode},overrides:{approval_mode:null},effective:{model:'fixture',reasoning:'medium',approval_mode:data.settings.approval_mode},supported_reasoning:['medium']}};
+   else if(url.pathname==='/api/models')body={models:[{id:'fixture',displayName:'Fixture',isDefault:true,defaultReasoningEffort:'medium',supportedReasoningEfforts:[{reasoningEffort:'medium'}]}]};
+   else if(url.pathname==='/api/run-metrics'){metricReads++;body={run_id:url.searchParams.get('id'),metrics:{'train/mfu':.375,'train/loss':1.2,'perf/samples_per_second':32},mfu:{value:37.5,key:'train/mfu',valid:true},system_metrics:{'gpu.0.gpu':95,'gpu.0.memoryAllocatedBytes':32*1073741824,'gpu.0.powerWatts':300},observed_at:now-15,system_observed_at:now-5,updated_at:now,series:[{key:'train/loss',run_id:'new',run_name:'Newest training',points:[{x:1,y:2},{x:2,y:1.2}]}],gpus:[]};}
+   else if(url.pathname==='/api/account')body={account:{type:'chatgpt'}};
+   else if(url.pathname==='/api/worker-wakeups')body={rules:[]};
+   else if(url.pathname==='/api/action'){
+    const call=req.postDataJSON();calls.push(call);assert.equal(call.op,'settings.save');
+    if(call.params.approval_mode&&failure)return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Cannot save settings'})});
+    Object.assign(data.settings,call.params);body={...data.settings,permission_updates:[]};
+    if(call.params.approval_mode&&partial)return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Preference saved, but current runtime needs attention'})});
+   }else if(!url.pathname.startsWith('/api/')){
+    const file=path.join(__dirname,'../ui',url.pathname==='/'?'index.html':url.pathname.slice(1));
+    return route.fulfill({contentType:{'.js':'text/javascript','.css':'text/css','.json':'application/json','.woff2':'font/woff2'}[path.extname(file)]||'text/html',body:fs.readFileSync(file)});
+   }
+   return route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+  });
+  let page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('http://coordination.test/');
+  await page.locator('#chat-messages .message.system').waitFor();
+  assert.equal(await page.locator('#chat-messages .message.system .message-label strong').textContent(),'VLA lead <script>bad()</script> · Agent');
+  assert.equal(await page.locator('#chat-messages .message.system script').count(),0);
+  assert.equal(await page.locator('#chat-messages .message.user .message-label strong').textContent(),'You');
+  console.log('PASS peer sender attribution, escaped names, compact message display');
+  const composer=await page.locator('#chat-form').boundingBox();assert.ok(composer.height<145,JSON.stringify(composer));
+  await page.locator('#chat-input').fill('A multiline draft\n'.repeat(14));
+  assert.ok((await page.locator('#chat-input').boundingBox()).height<=141);
+  await page.locator('#chat-input').fill('');
+  await page.getByRole('button',{name:'Maximize agent chat',exact:true}).click();
+  assert.ok((await page.locator('#chat-form').boundingBox()).height<120);
+  await page.getByRole('button',{name:'Restore agent panel',exact:true}).click();
+  console.log('PASS compact composer, bounded auto-growth and fullscreen layout');
+  await page.locator('[data-view="compute"]').click();
+  const order=await page.locator('.run-row').evaluateAll(rows=>rows.map(row=>row.dataset.run));
+  assert.deepEqual(order,['new','old','queued']);
+  assert.match(await page.locator('[data-run="old"]').innerText(),/Running for 1h/);
+  assert.match(await page.locator('[data-run="queued"]').innerText(),/Not started/);
+  await page.locator('[data-run="new"]').click();
+  await page.getByText('37.5%',{exact:true}).waitFor();
+  assert.ok((await page.locator('#run-telemetry-body').innerText()).includes('32 GiB'));
+  assert.ok((await page.locator('#run-telemetry-body').innerText()).includes('95%'));
+  assert.equal(await page.locator('#run-telemetry-body .metric-chart svg').count(),1);
+  await page.getByRole('button',{name:'Refresh run statistics',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#run-telemetry-body')?.textContent.includes('37.5%'));
+  await page.screenshot({path:path.join(__dirname,'../../../work/ui013-run-statistics.png')});
+  await page.getByRole('button',{name:'Close dialog',exact:true}).click();
+  await page.getByRole('button',{name:'Finished',exact:true}).click();
+  assert.equal(await page.locator('.run-row').count(),1);
+  assert.match(await page.locator('[data-run="done"]').innerText(),/Ran for 1h 0m/);
+  assert.ok(metricReads>=2);
+  console.log('PASS start-time ordering, live elapsed duration, finished filtering, MFU/VRAM/utilization and chart refresh');
+  await page.locator('[data-view="settings"]').click();
+  await page.locator('#workspace-approval-mode').selectOption('yolo');
+  await page.getByText('Saved on this workspace. This default stays after closing SuperSurfer.',{exact:true}).waitFor();
+  assert.deepEqual(calls.filter(c=>c.params.approval_mode).map(c=>c.params),[{approval_mode:'yolo'}]);
+  await page.close();page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('http://coordination.test/');await page.locator('#workspace-approval-mode').waitFor();
+  assert.equal(await page.locator('#workspace-approval-mode').inputValue(),'yolo');
+  await page.locator('input[name="model_worker"]').fill('unsubmitted-model-draft');
+  await page.locator('#workspace-approval-mode').selectOption('auto_review');
+  await page.getByText('Saved on this workspace. This default stays after closing SuperSurfer.',{exact:true}).waitFor();
+  assert.equal(await page.locator('input[name="model_worker"]').inputValue(),'unsubmitted-model-draft');
+  assert.equal(data.settings.models.worker,'');
+  assert.equal(data.settings.approval_mode,'auto_review');
+  console.log('PASS permission autosave, close/reopen persistence, unrelated settings draft preserved');
+  failure=true;await page.locator('#workspace-approval-mode').selectOption('ask');
+  await page.getByText('Could not save. The previous default is still in use.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#workspace-approval-mode').inputValue(),'auto_review');
+  failure=false;partial=true;await page.locator('#workspace-approval-mode').selectOption('ask');
+  await page.getByText('Default saved, but active conversations need attention.',{exact:true}).waitFor();
+  assert.equal(await page.locator('#workspace-approval-mode').inputValue(),'ask');
+  assert.deepEqual(errors,[]);
+  console.log('PASS failed save preserves confirmed default; saved preference with runtime failure is reported accurately');
+ }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

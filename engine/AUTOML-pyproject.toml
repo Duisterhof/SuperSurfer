@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-ml-manager"
+version = "0.3.3"
+description = "Persistent project agents and experiment scheduling over tmux and SSH"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+aml = "aml.cli:main"
+aml-control = "aml.cli:control_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aml = ["skills/*/SKILL.md", "web_assets/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

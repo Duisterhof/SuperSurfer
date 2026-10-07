@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"><title>SuperSurfer</title><link rel="stylesheet" href="setup.css"></head>
+<body><div class="titlebar"></div><main>
+  <section class="intro"><div class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 24c7-16 15-17 23-11-9-1-12 4-11 9 4-7 13-6 18 1-11-4-19 13-30 1Z" fill="currentColor"/></svg><span>SuperSurfer</span></div><div class="eyebrow">YOUR RESEARCH, IN MOTION</div><h1>A home for<br>your next idea.</h1><p>Projects, experiments, and the agents<br>that help you move them forward.</p><div class="continuity"><span class="pulse"></span>Your research keeps running when you leave.</div></section>
+  <section class="connection"><div class="step">01 <span>/ CONNECT YOUR WORKSPACE</span></div><h2>Where do you work?</h2><p class="hint">Choose the computer that manages your experiments.</p><form id="connect-form">
+    <label for="mode">Workspace location</label><select id="mode" name="mode"><option value="local">This machine</option><option value="remote">Remote machine</option></select>
+    <div id="remote-fields" hidden><label for="host">Computer</label><select id="host" name="host"></select><p class="field-note">Known computers from your SSH configuration. Uses your existing keys.</p><div id="custom-host" hidden><label for="target">Host or user@hostname</label><input id="target" name="target" placeholder="you@research-server" autocomplete="off"></div></div>
+    <details><summary>Connection options</summary><label for="remoteRoot">SuperSurfer service folder</label><input id="remoteRoot" name="remoteRoot" value="~/.local/share/supersurfer" required><label for="amlHome">Existing AutoML data folder</label><input id="amlHome" name="amlHome" value="~/.auto-ml" required><label for="remotePort">Workspace port</label><input id="remotePort" name="remotePort" type="number" min="1024" max="65535" value="8765" required></details>
+    <div class="explanation" id="connection-explanation">The workspace service keeps running when you close the app.</div>
+    <button type="submit" id="connect-button">Connect workspace <span>↗</span></button><div id="status" role="status" aria-live="polite"></div>
+  </form><div class="footnote">One workspace. All your experiments.</div></section>
+</main><script src="setup.js"></script></body></html>

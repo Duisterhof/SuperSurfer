@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="ocean" x2="0" y2="1"><stop stop-color="#335b4b"/><stop offset="1" stop-color="#173d32"/></linearGradient></defs>
+  <rect x="56" y="56" width="912" height="912" rx="208" fill="url(#ocean)"/>
+  <g fill="none" stroke="#e8f2d8" stroke-width="65" stroke-linecap="round">
+    <path d="M240 540c137-27 137-328 328-328 137 0 137 191 274 191" transform="translate(-15 100) scale(.96)"/>
+    <path d="M240 704c219 0 274-328 438-328 137 0 137 164 246 164" transform="translate(-15 100) scale(.96)"/>
+  </g>
+</svg>

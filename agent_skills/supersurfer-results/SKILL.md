@@ -1,0 +1,100 @@
+---
+name: supersurfer-results
+description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
+metadata:
+  supersurfer-version: '0.1.13'
+---
+
+# Experiment results
+
+Reviewed for SuperSurfer 0.1.13. Apply when creating, improving or interpreting
+an experiment's Results tab. Use the experiment's real runs, W&B history and
+artifacts. The output is a research comparison, not a progress report or an
+interface demo. Respect the requested methods, splits, checkpoints and visuals.
+
+## Lead with the comparison
+
+Lead with overlaid training and actual held-out curves comparing methods. Use
+one plot when metric definitions match, or aligned panels for different
+quantities; never place training loss and a test success rate on an unlabeled
+shared scale. Use one consistent color per method and
+line style for split, for example solid training and dashed validation. Keep
+legends readable and consistent across plots. Show loss first when that is the
+meaningful shared training signal; also show the domain's primary quality metric.
+
+Label the actual split: validation and test are not interchangeable. If test
+was measured only once, show its point or a compact final-results comparison;
+do not fabricate a test curve. If a requested method, training curve or held-out
+split is unavailable, label the gap beside the plot and state the source checked.
+Before declaring a gap, check the recorded runs and artifact sources and ask
+the owning worker directly when it can supply the missing evidence. Show the
+available measured comparison rather than a polished empty dashboard. A request
+to report results does not authorize another run to fill a missing curve.
+
+Choose comparable axes: optimizer steps, examples/tokens seen, or elapsed training
+time. Label units, global batch and any important difference in training budget.
+Do not silently equate steps from different batch sizes. Overlay only compatible
+metric definitions and protocols; split incomparable quantities into labeled
+panels. Do not silently average different evaluation conditions, checkpoints or cohorts
+together; identify any intended aggregate and its weighting.
+
+Keep raw observations accessible. If smoothing helps, show a faint raw trace and
+name the smoothing setting. Never extend a line beyond observed data or bridge
+a long missing interval as though it was measured. Plot seeds separately or show
+an explicitly defined aggregate with the number of independent runs and justified
+uncertainty. One training seed cannot establish variability across independent
+runs; distinguish that from uncertainty computed from evaluation trials and
+state the sampling unit.
+
+## Add the requested scientific evidence
+
+After the main curves, include each visualization the user asked for. For a VLA
+experiment this might be task-level success with trial denominators, matched
+success/failure videos, predicted versus actual trajectories, temporal alignment,
+or an interactive 3D/Rerun view. Select examples by an explicit rule and identify
+their task/scene/checkpoint; do not cherry-pick flattering cases without disclosure.
+Show corresponding examples side by side when comparing methods.
+
+Use `publish_result` with `title` and `html` for a self-contained HTML page
+with plots and interactive widgets (at most 2,000,000 UTF-8 bytes). Reuse its
+`result_id` when revising the page; this publishes saved content, not a live
+W&B subscription, so describe whether charts are snapshots or explicitly refreshed. JavaScript and WebGL are allowed in the sandbox; assets must be inline
+or available over an appropriate HTTPS URL. An authenticated W&B or Rerun embed
+may refuse framing, so supply a working source link and a useful local plot or
+preview. Do not replace requested figures with bare W&B group links. Never embed
+tokens, local filesystem URLs or app credentials.
+
+Use `publish_markdown_tab` with `title` and `markdown` for detailed protocols,
+derivations or analysis beyond the figures. For an existing tab, read with
+`page_id`, then update with that ID and its current `version`; reconcile a
+conflict rather than overwriting. Keep the main explanation brief with
+`update_experiment_brief`, reading its current version before replacing sections.
+Reuse existing page/result IDs to improve the page rather than accumulating
+slightly different result tabs. Leads/managers supply the registered
+`experiment_id` for these tools; leads remain in their project. Workers publish
+only within their own experiment and omit `experiment_id`. Preserve concurrent
+work: HTML updates have no version check, so coordinate before replacing a page
+that another worker is editing.
+
+## Write only what the evidence supports
+
+Use an informative title, at most a few sentences setting up the comparison,
+and short captions explaining the measured difference. Separate observations
+from hypotheses. Report the comparison metric, denominator, checkpoint and
+uncertainty needed to assess a claim. Say when a result is provisional.
+
+Avoid launch logs, lengthy recaps, congratulatory prose, generic cards, invented
+scores, unexplained acronyms and repeated claims that an experiment is important.
+MFU, VRAM and throughput support a compute-efficiency question; they do not replace
+the primary train/held-out comparison. Scheduler state belongs in Runs.
+
+Put source run links/IDs, commit/PR, data split, protocol, extraction time and
+refresh behavior in a compact provenance section. Keep a reproducible plotting
+script or source data reference in the project when practical. Preserve other
+workers' edits and unrelated evidence.
+
+Before reporting completion, inspect the rendered page: verify that the leading
+curves really compare methods and splits, legend colors/units are consistent,
+requested domain visuals are present or explicitly unavailable, and links and
+widgets work at the app's normal width. Describe unavailable evidence precisely;
+do not claim a screenshot or interactive test was performed unless it was.

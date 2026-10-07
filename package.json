@@ -1,0 +1,23 @@
+{
+  "name": "supersurfer",
+  "productName": "SuperSurfer",
+  "version": "0.1.13",
+  "description": "A quiet workspace for research, agents, and compute.",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "author": "SuperSurfer",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node scripts/build-remote.cjs && electron .",
+    "test": "python3 -m unittest discover -s tests -v && node --test tests/*.test.cjs",
+    "package:mac": "node scripts/package.cjs",
+    "package:linux": "SUPERSURFER_PLATFORM=linux node scripts/package.cjs",
+    "bundle:remote": "node scripts/build-remote.cjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "44.5.1",
+    "katex": "0.18.7",
+    "playwright": "1.63.0"
+  }
+}

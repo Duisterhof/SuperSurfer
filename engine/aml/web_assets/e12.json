@@ -1,0 +1,244 @@
+{
+  "id": "E12",
+  "title": "Can compact forecasts improve robot actions?",
+  "objective": "Continue the 256-token policy with learned future channel maps, then evaluate it against the original full ModAR and own direct controls.",
+  "overview": [
+    "E12 asks whether compact forecasts help a robot choose actions. The policy receives 192 DINO RGB-feature patches, 192 depth patches, the robot's 14-dimensional state and a task identity. DINO is a frozen feature extractor. Current vision stays at 384 tokens. The policy forecasts tracks, DINO features and depth at +8, +16, +24 and +32 steps, then predicts 16 actions with 14 dimensions each.",
+    "The declared compact continuation starts from update 89,738. Its existing future compression encoder E and reconstruction decoder D now learn jointly with the transformer. The four channel matrices initially reproduce the saved principal component analysis (PCA) maps exactly. DINO retains 64 of 384 channels; depth retains 16 of 196. Local packing still produces 256 future tokens, versus 2,304 for full ModAR. Current observations and their token layout are unchanged. Position means, coefficient scales and lossless track packing stay fixed. Only the future channel maps become trainable.",
+    "During training, recorded futures provide targets and corrupted context. Flow matching compares decoded clean forecasts with normalized native maps, using the original flow-time weights. An additional reconstruction loss compares D(E(x)) with the native field x, with weight 1. Action flow loss stays unchanged. Learned maps can lose PCA orthogonality, so their reconstruction error is no longer a fixed projection floor. During deployment, the policy generates tracks \u2192 DINO \u2192 depth \u2192 actions from noise. Recorded futures are unavailable.",
+    "The original split, seed 42 and action-example schedule remain. The direct control uses current inputs; forecast policies also receive dynamics examples. Compact migrates from four to eight physical RTX 3090 ranks, keeping global batch 128 and canonical data/noise keys. The128,000-update checkpoint is preserved as the original16.384M reference. Compact now continues until explicitly stopped, with inherited progress counted. The original full control continues its unchanged objective from update 19,442 on four GPUs. Final EMA evaluation requires original eight-task, 400-scene cohorts and native-map quality tests.",
+    "This is an amended joint-codec continuation, not the original frozen-PCA comparison. Completed fixed-40 monitor scores appear separately below. The earlier frozen 4.096M archive's offline interval includes zero; its 28/40 balanced success result is provisional. Neither is evidence about the learned maps. Final paired 400-scene comparisons remain pending, and no checkpoint or scene subset is selected from outcomes."
+  ],
+  "tokens": {
+    "current_visual": 384,
+    "future_frames": 4,
+    "compact_per_frame": {
+      "dino": 32,
+      "depth": 16,
+      "tracks": 16
+    },
+    "compact_future": 256,
+    "full_future": 2304,
+    "action": 16,
+    "old_current_latent": 16,
+    "old_future_latent": 64,
+    "old_role": "Code support only; separate learned encoder and archived model"
+  },
+  "budgets": {
+    "quick": {
+      "samples_per_stream": 4096000,
+      "updates": 32000,
+      "checkpoint": "fixed frozen-codec EMA archive",
+      "required_arms": [
+        "frozen compact",
+        "own direct"
+      ],
+      "scenes_per_arm": 400
+    },
+    "final": {
+      "samples_per_stream": 16384000,
+      "updates": 128000,
+      "checkpoint": "fixed final EMA, including learned maps",
+      "required_arms": [
+        "joint compact",
+        "original full",
+        "own direct"
+      ],
+      "scenes_per_arm": 400
+    },
+    "batch_per_stream": 128,
+    "seed": 42,
+    "training_seeds": 1,
+    "world_streams": [
+      "action",
+      "dynamics"
+    ],
+    "direct_streams": [
+      "action"
+    ],
+    "selection": "Fixed endpoints; no outcome-selected checkpoints, subsets, or early stopping"
+  },
+  "continuation": {
+    "variant": "joint_codec",
+    "status": "continuous joint training; matched scientific comparison pending",
+    "parent_updates": 89738,
+    "parent_samples_per_stream": 11486464,
+    "remaining_updates": 38262,
+    "remaining_samples_per_stream": 4897536,
+    "parent_physical_ranks": 4,
+    "physical_ranks": 8,
+    "logical_ranks": 8,
+    "new_map_matrices": 4,
+    "new_map_parameters": 55424,
+    "inherited_optimizer_states": 207,
+    "new_optimizer_states": 4,
+    "reconstruction_weight": 1,
+    "full_parent_updates": 19442,
+    "full_physical_ranks": 4,
+    "results": null,
+    "comparison": "Amended learned-map continuation versus original full and own direct controls; not the original frozen-PCA comparison",
+    "training_budget": "until_stopped"
+  },
+  "configuration": [
+    [
+      "Backbone",
+      "Width 384; six shared layers; six attention heads. Compact transformer weights continue from the sealed parent; architecture and current-observation adapters are unchanged."
+    ],
+    [
+      "Modality branches",
+      "Tracks: 1 layer / width 128; DINO: 2 / 384; depth: 4 / 384; action: 2 / 128"
+    ],
+    [
+      "Current inputs",
+      "192 DINO + 192 depth patches; current robot state and task; one frame"
+    ],
+    [
+      "Future targets",
+      "Four offsets: +8, +16, +24, +32; tracks \u2192 DINO \u2192 depth \u2192 actions"
+    ],
+    [
+      "Future channel maps",
+      "DINO encoder and decoder: 384\u00d764 each; depth encoder and decoder: 196\u00d716 each. Four trainable matrices, 55,424 added values, initialized exactly from the saved PCA basis; encoder and decoder then learn independently."
+    ],
+    [
+      "Fixed codec components",
+      "Position-specific means, coefficient scales, DINO tiles 3\u00d72, depth tiles 3\u00d74 and lossless track tiles 3\u00d74. All 192 spatial positions, 256 future tokens and current observation processing are retained."
+    ],
+    [
+      "Original PCA fit",
+      "3,600 dynamics-training episodes; 14,400 saved windows; 51,499 valid fields per modality; no actions, robot-state values or task labels used in this initial fit."
+    ],
+    [
+      "Training split",
+      "400 action-training episodes nested in 3,600 dynamics episodes; eight tasks; train-only normalization"
+    ],
+    [
+      "Offline evaluation",
+      "320 ordered windows from 80 held-out episodes; episode-balanced metrics; masks exclude invalid future frames"
+    ],
+    [
+      "Optimizer",
+      "AdamW; LR 0.0001; historical 375-update warmup then constant; betas 0.9 / 0.95; weight decay 0.1; gradient clip 1. Migration does not restart warmup."
+    ],
+    [
+      "EMA and batching",
+      "EMA 0.999\u2074 per update; batch 128 per stream; eight logical ranks; canonical microbatch 2"
+    ],
+    [
+      "Compact migration",
+      "Sealed parent at update 89,738 / 11,486,464 examples per stream. All 207 existing optimizer states and their steps are preserved. Only the four added map states start with zero Adam moments and step 0. EMA includes the learned maps; fixed buffers are copied exactly."
+    ],
+    [
+      "Physical rank migration",
+      "Intentional four\u2192eight RTX 3090 ranks on Trinity 3-13; eight logical sampling ranks, global batch 128 and keyed data/noise draws retained. Existing rank RNG states are restored; added ranks are explicitly initialized with seed 42 + rank. Compute batch becomes 16 per physical rank. Subsequent joint recovery requires the same eight-rank layout."
+    ],
+    [
+      "Endpoint accounting",
+      "Original16.384M reference checkpoint preserved at update128000. Joint training continues beyond it until explicit stop. Full control retains the original128000-update endpoint."
+    ],
+    [
+      "Full control continuation",
+      "Original full-field objective and architecture; parent update 19,442; four RTX 3090 ranks on Trinity 3-3. Current progress and allocations appear in Overview."
+    ],
+    [
+      "Inference",
+      "Eight Euler steps per modality; canonical native-field noise passes through the same learned affine encoder, including the fixed mean. Inference restores EMA encoder, decoder and transformer weights."
+    ],
+    [
+      "Quality criterion",
+      "Upper one-sided 95% paired episode-bootstrap error ratio \u22641.10 vs fresh full, separately for DINO MSE, depth MSE and visible-track EPE"
+    ],
+    [
+      "Success analysis",
+      "Original eight tasks \u00d750 fixed scenes per arm; paired task-stratified 20,000-scene bootstrap, seed 20260909; exact McNemar; one training seed"
+    ],
+    [
+      "Implementation",
+      "Joint objective: simple_vla/joint_codec.py; migration and strict recovery: joint_checkpoint.py; training: joint_train.py. The executable request's actual PR link appears with its queue entry."
+    ],
+    [
+      "Interpretation",
+      "This objective and map-learning change begins partway through compact training. The comparison assesses the amended policy against original controls; it does not isolate compression or preserve the original frozen-PCA preregistration. Rank grouping also changes, so keyed draws do not imply bitwise-identical floating-point reductions. Secondary intervals are descriptive and unadjusted; one seed limits generalization."
+    ]
+  ],
+  "losses": {
+    "noise": "z\u209c = t x + (1\u2212t) \u03b5",
+    "per_modality": "\u2113\u2098 = mean valid examples [w(t\u2098) \u00d7 MSE(predicted clean x, target x)]; w(t) = 1 / max(1\u2212t, 0.05)\u00b2",
+    "native_forecast": "For DINO and depth, \u2113forecast = mean valid examples [w(t) \u00d7 MSE(D(predicted coefficients), normalized native x)]. Track forecast remains in its original native coordinate units.",
+    "reconstruction": "rDINO = mean valid examples [MSE(D(E(xDINO)), xDINO)]; rdepth likewise. Weight 1; no flow-time weight. Applied to the dynamics stream only, using the original future-validity masks and global valid-example reduction.",
+    "world": "Ljoint = \u00bd [\u2113tracks + \u2113DINO + rDINO + \u2113depth + rdepth] / 3 + \u00bd\u2113action",
+    "direct": "Ldirect = \u00bd\u2113action; full-field control uses scale 1 for each future modality",
+    "context": "Earlier recorded modalities independently corrupted with t \u223c Uniform(0.5, 1), including their time labels. No self-forcing.",
+    "target_times": "Logit-normal (mean, std): tracks (0, 1), DINO (\u22122, 1), depth (\u22121, 1.6), action (\u22121, 1); 10% replaced by Uniform(0, 0.5).",
+    "gradient_paths": "The encoder learns through noisy queries and encoded teacher context; the decoder learns through native forecast and reconstruction. Action-stream teacher context uses E, but that stream adds no second reconstruction term.",
+    "metric": "Joint DINO/depth losses measure decoded native fields directly, without the old coefficient-space K/C multiplier. Learned E and D need not remain orthogonal; reconstruction is not the former fixed PCA projection floor.",
+    "frozen_archive_objective": "Original frozen compact: Lworld = \u00bd [\u2113tracks + (64/384)\u2113DINO + (16/196)\u2113depth] / 3 + \u00bd\u2113action. Only that frozen orthogonal codec has the retained-subspace MSE plus fixed projection-residual identity."
+  },
+  "archive": {
+    "scope": "Original frozen-codec 4.096M intermediate checkpoint; historical evidence only, not a joint-version result",
+    "variant": "frozen_pca",
+    "observed_at": "2026-10-04T19:47:21.055320+00:00",
+    "offline": {
+      "direct_eef_rmse_mm": 15.647215162052044,
+      "compact_eef_rmse_mm": 14.488049435980583,
+      "oracle_eef_rmse_mm": 8.005543061241305,
+      "direct_minus_compact_mm": 1.1591657260714605,
+      "paired_ci95_mm": [
+        -0.6207368764123614,
+        2.88761465906594
+      ],
+      "episodes": 80,
+      "windows": 320,
+      "bootstrap_replicates": 20000,
+      "bootstrap_seed": 20261004
+    },
+    "provisional_success": {
+      "successes": 28,
+      "scenes": 40,
+      "planned_scenes": 400,
+      "indices_per_task": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "completed_cohort": false,
+      "own_direct_complete": false
+    },
+    "final_success": null,
+    "limitations": "All results in this panel belong to the earlier frozen-PCA model and are not evidence about joint learned maps. The offline interval includes zero. The oracle uses privileged recorded futures. The balanced 40-scene result is provisional and does not establish a compact/direct benefit or a completed 400-scene rate."
+  },
+  "evidence": [
+    {
+      "id": "final-protocol",
+      "label": "Original frozen-PCA protocol, budgets and controls",
+      "path": "artifacts/overnight_20261002/next_experiment/E12_PROTOCOL_v2.json"
+    },
+    {
+      "id": "quick-protocol",
+      "label": "Quick archive: fixed checkpoint and predeclared cohort",
+      "path": "artifacts/overnight_20261002/next_experiment/E12_ARCHIVE_QUICK_SUCCESS_v1/protocol.json"
+    },
+    {
+      "id": "paired-offline",
+      "label": "Paired offline action error and uncertainty",
+      "path": "artifacts/overnight_20261002/next_experiment/E12_ARCHIVE_QUICK_SUCCESS_v1/paired_eef_analysis.json"
+    },
+    {
+      "id": "first40",
+      "label": "Independent review of the provisional 28/40 result",
+      "path": "artifacts/overnight_20261002/next_experiment/E12_ARCHIVE_QUICK_SUCCESS_v1/lead_execution_v1/PROVISIONAL40_independent_review.json"
+    },
+    {
+      "id": "archive-verification",
+      "label": "Fixed compact archive and oracle diagnostic",
+      "path": "artifacts/overnight_20261002/next_experiment/LEAD_PROGRESS_20261004T1154Z/E12_compact_archive_verification.json"
+    },
+    {
+      "id": "sr40-series",
+      "label": "Fixed-40 checkpoint evaluation series",
+      "path": "artifacts/auto_ml_e12/sr40_series.json"
+    }
+  ]
+}

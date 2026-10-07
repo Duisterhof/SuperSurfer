@@ -1,0 +1,13 @@
+node_modules/
+dist/
+desktop/remote.tar.gz
+__pycache__/
+*.pyc
+.DS_Store
+.state/
+
+.pytest_cache/
+*.egg-info/
+.venv/
+.env
+.env.*
