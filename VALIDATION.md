@@ -1,3 +1,13 @@
+# SuperSurfer 0.1.15 validation — October 7, 2026
+
+All 297 Python tests, 15 Node desktop/SSH checks, 12 browser suites and native Linux Electron checks pass. All five agent skills received an independent bounded review and pass the release checker. Backend and scheduler behavior are unchanged.
+
+The new composer regression recreates the reported busy YOLO chat with a pending full-access transition. It verifies visible control bounds, pairwise non-overlap, icon containment, the shared baseline on wide panels, separate notice rows, and preserved drafts across 390–1840px fullscreen sizes and the narrow panel. Tests exercise one steering delivery with a disabled pending-send state, Stop, long model labels, settings failure, current/selected permission mismatch with Apply now, and question/approval gating. Stable YOLO no longer creates a permanent notice. Wide and narrow screenshots were visually inspected.
+
+Existing browser regressions cover fullscreen section alignment and short windows, math, archive/selection behavior, question cleanup, workspace pages, queue/compute/results controls, setup and connection designs. The native Electron smoke checks the actual sandboxed preload/main boundary and persisted layout/themes/custom tabs. Native macOS rendering and Gatekeeper behavior remain untested on this Linux host; Mac builds are unsigned.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.14 validation — October 7, 2026
 
 All 297 Python regressions pass in shuffled order with seed 20261007. All 15 Node desktop/SSH checks pass without skips, including the real isolated SSH daemon. All 11 browser suites and native Linux Electron checks pass. The corrected three-case SSH integration suite also passes 30 consecutive repetitions. All five agent capability skills received a bounded independent review, substantive revisions and passing version/tool checks.

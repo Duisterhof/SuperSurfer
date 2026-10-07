@@ -2,6 +2,13 @@
 
 Ongoing list of requested improvements. Unchecked items are planned, not implemented.
 
+## Completed in 0.1.15
+
+- [x] Align composer controls and send/steer/stop actions at wide and narrow panel sizes.
+- [x] Separate permission and error notices from the toolbar; remove redundant stable-YOLO notice.
+- [x] Cover active steering, permission transitions, long model names and resizing with rendered layout checks.
+- [x] Review all five agent skills against unchanged controls and runtime authority.
+
 ## Completed in 0.1.14
 
 - [x] Reproduce/fix setup initialization, failed host discovery and repeated-submit races.
