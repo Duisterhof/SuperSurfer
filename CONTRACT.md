@@ -1,6 +1,16 @@
-# SuperSurfer 0.1.15 integration contract
+# SuperSurfer 0.1.16 integration contract
 
 Single-user Electron client on Mac/Linux; Python stdlib sidecar on the current or an SSH-accessible machine. AutoML owns GPU scheduling and run execution. Retired native agents remain read-only history; active owned research conversations run through SuperSurfer. SuperSurfer owns durable chats, documents, reviews and planning metadata. An explicit user queue/run request permits an experiment worker or the workspace manager to release a verified PR-backed run through the appropriately scoped tool. Suggested ideas and recurring reviews never authorize autonomous launches.
+
+## Persistent desktop windows
+
+The desktop stores validated connection configuration, navigation, normal bounds, maximized state and open/closed status per window in a private, atomically replaced `windows.json`. It migrates legacy `connection.json` and `workspace.json` once. Credentials, tokens, transient forwarded ports and agent instructions are not stored in this file. Quit restores the open windows; if none remain open, reopening restores the most recently used successful workspace. New Window is independent; Open Recent focuses an already-open matching record or restores that record. Different service roots/ports on the same target remain distinct.
+
+Each window owns its Electron session partition and connection/tunnel. Native bearer injection is confined to the owning window's trusted main frame and exact workspace API origin. Privileged IPC checks the window, main frame and trusted page; setup operations require the setup page. Embedded/untrusted content cannot inherit a token or use workspace-preference IPC. Changing a window's host clears that window's browser storage, resets navigation and keeps the previous association in Open Recent.
+
+Restoration acquires fresh connection credentials through the existing bootstrap flow and reuses existing SSH/Codex authentication. One automatic attempt is made per restored window or lost tunnel; a failure leaves the saved association intact for manual retry. Cancel/window close aborts only its pending connection or private tunnel. No desktop restoration sends chat instructions or modifies the manager's research queue. Remembered desktop hosts are not automatically registered compute nodes.
+
+Compute capacity is derived from unique registered GPU indices. Each index has a visible free/busy/reserved/unknown bar. A reservation stays reserved independently of observation age; otherwise missing/disallowed devices, stale host/device readings, host errors and offline hosts are unknown. Only explicitly idle, fresh, unreserved devices count free. Observed devices outside the registered indices appear only in expanded details. The global summary retains the known free count while separately reporting unknown GPUs; this is observation, not a guarantee of scheduler admission.
 
 ## Desktop setup and metric freshness
 
@@ -27,6 +37,8 @@ The bundled KaTeX 0.18.7 renderer supports inline `\(...\)` / `$...$` and standa
 ## Composer layout
 
 Model, reasoning, permission and Fast controls share the action baseline in wide panels. Panels at or below 620 CSS pixels use a model row and a separate permission/action row. Pending permission changes and errors span their own notice row. The arrow retains an accessible Send message or Steer current work label; Stop current work is a separate square-icon button. Existing question/approval gating, save disabling, draft persistence and current-versus-next-turn permission semantics remain unchanged. Stable YOLO status is available from the permission selector instead of a permanent notice.
+
+Deliverables are collapsed on first display and conversation changes; an explicit expansion survives task refreshes in the same conversation. Compact agent rows retain names/status and the worker header keeps details in its tooltip. This presentation does not change task completion, monitoring, questions or permission state.
 
 ## Conversations
 

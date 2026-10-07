@@ -2,6 +2,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('superSurferDesktop', {
   configuration: () => ipcRenderer.invoke('configuration'),
+  connectionReady: () => ipcRenderer.invoke('connection:ready'),
+  cancelConnection: () => ipcRenderer.invoke('connection:cancel'),
   connect: config => ipcRenderer.invoke('connect', config),
   listHosts: () => ipcRenderer.invoke('hosts:list'),
   listThemes: () => ipcRenderer.invoke('themes:list'),

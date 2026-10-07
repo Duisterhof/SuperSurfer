@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Build or revise an experiment Results page from measured runs, starting with overlaid train and validation/test curves comparing methods, followed by the user's requested domain-specific visualizations.
 metadata:
-  supersurfer-version: '0.1.15'
+  supersurfer-version: '0.1.16'
 ---
 
 # Experiment results
 
-Reviewed for SuperSurfer 0.1.15. Apply when creating, improving or interpreting
+Reviewed for SuperSurfer 0.1.16. Apply when creating, improving or interpreting
 an experiment's Results tab. Use the experiment's real runs, W&B history and
 artifacts. The output is a research comparison, not a progress report or an
 interface demo. Respect the requested methods, splits, checkpoints and visuals.
@@ -75,6 +75,13 @@ slightly different result tabs. Leads/managers supply the registered
 only within their own experiment and omit `experiment_id`. Preserve concurrent
 work: HTML updates have no version check, so coordinate before replacing a page
 that another worker is editing.
+
+Desktop windows restore their own workspace and selected tab. Reopening a saved
+Results page does not refresh a published snapshot or request a new publication.
+Read current experiment and page records before an authorized revision, preserving
+their IDs and any changes made while the desktop was closed. Keep provenance
+within the connected workspace; matching experiment names in another window do
+not establish that its runs or artifacts belong in this comparison.
 
 ## Write only what the evidence supports
 

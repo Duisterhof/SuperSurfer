@@ -19,3 +19,5 @@ body[data-solid="true"] .connection{background:var(--page);backdrop-filter:none;
 @media(prefers-contrast:more){body{--muted:var(--ink);--fine:var(--ink);--line:currentColor}.connection{background:var(--page);backdrop-filter:none;border:1px solid currentColor}.field-note,.footnote{font-size:11px}}
 @media(forced-colors:active){body .landscape{display:none}body .connection{border:1px solid CanvasText;background:Canvas;box-shadow:none}body input,body select,body button{border:1px solid ButtonText}body .brand-mark,body .connection-symbol{background:Canvas}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+#cancel-connect{background:transparent;color:var(--muted);border:0;box-shadow:none;min-height:30px;padding:5px;margin:5px 0 0;font-size:12px}#cancel-connect[hidden]{display:none}

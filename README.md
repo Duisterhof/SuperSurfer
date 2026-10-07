@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.15
+# SuperSurfer 0.1.16
 
 A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
 
@@ -6,9 +6,9 @@ A personal research workspace for Mac and Linux: projects, experiment documents,
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.15-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.15-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** extract `SuperSurfer-0.1.16-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.16-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.15-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.16-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
@@ -20,6 +20,16 @@ The selected workspace computer needs Python 3.10+, Codex CLI, Git, and a runnin
 This release also bundles the compatible scheduler in `engine/`. For an existing detached Linux AutoML manager, an explicit administrator update from the extracted source folder is `python3 -m server.engine --engine-dir ./engine --aml-home ~/.auto-ml`. It uses the manager's existing Python 3.11+ environment, briefly pauses admission, preserves running jobs and current state, and backs up the database. It refuses an active legacy-agent turn or a manager owned by another service. A healthy connection never silently replaces your scheduler.
 
 SuperSurfer uses the workspace computer's existing Codex ChatGPT login. Otherwise choose **Connect ChatGPT** in Settings and complete device-code sign-in. No OpenAI API key is required. GitHub preparation uses that computer's existing `gh` authentication; creating a project folder does not require GitHub.
+
+## Changes in 0.1.16
+
+SuperSurfer remembers host windows. Quit and reopen the app to restore your open workspace windows, their size, and each window's selected project, experiment and tab. Successful connections reuse the computer's existing SSH credentials and remote Codex login. The existing single saved connection migrates automatically on first launch. Closing a window does not stop remote agents or jobs; reopening does not replay chat messages or launch work.
+
+Use **File → New Window** (Cmd/Ctrl+Shift+N) for another workspace, **File → Open Recent** to reopen a previous host, and **Window** to switch between open hosts. Connection Settings applies to the focused window. Each window has its own tunnel and isolated browser session; workspace tokens stay in the main process and are not written to the window-preference file. A lost tunnel gets one reconnect attempt. An unavailable host keeps its saved association and shows the connection form for retry; Cancel stops a pending connection attempt. SSH keys still need to be available/unlocked, and an expired ChatGPT session still needs authentication.
+
+Deliverables start collapsed, the worker header is shorter, and the expanded agent list uses compact single-line rows with names and statuses. Explicitly opening Deliverables stays open through updates in that conversation.
+
+Compute puts registered machines above Runs, with a free/total count and one labeled availability bar per registered GPU. Green is free, blue busy, amber reserved, and hatched gray unknown. Expand a node for memory, utilization and observation age; **Refresh availability** requests a new reading. Missing, stale and failed observations never count as free, and free GPUs still need to meet your project’s environment/data requirements.
 
 ## Changes in 0.1.15
 
