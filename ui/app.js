@@ -4,6 +4,9 @@ import {createLatexPanel} from './latex-panel.js';
 import {projectCapacity,capacityWaitReason} from './run-capacity.js';
 import {createRepositoryExplorer, createAgentChanges} from './code-tiles.js';
 import {connectLiveResults} from './results-live.js';
+import {renderChatTimeline} from './chat-checks.js';
+import {createTileLayout} from './tile-layout.js';
+import {createPdfPreview} from './pdf-preview.js';
 import {createAccountGate} from './account-gate.js';
 if (window.superSurferDesktop) document.body.classList.add('desktop-app');
 document.querySelector('#new-workspace-window').hidden=!window.superSurferDesktop?.newWindow;
@@ -82,7 +85,7 @@ function applyChatLayout(){
  const shell=$('.app-shell'),maximized=state.chatVisible&&state.chatMaximized;
  shell.classList.toggle('chat-maximized',maximized);
  $('#chat-panel').hidden=!state.chatVisible;
- const bounds=chatWidthBounds(),width=Math.round(Math.min(bounds.max,Math.max(bounds.min,state.chatWidth||390)));
+ const bounds=chatWidthBounds(),width=Math.round(Math.min(bounds.max,Math.max(bounds.min,activePage()?.right_width||state.chatWidth||390)));
  shell.style.setProperty('--chat-panel-width',width+'px');
  const divider=$('#chat-resizer');
  divider.hidden=!state.chatVisible||maximized;
@@ -92,7 +95,7 @@ function applyChatLayout(){
  $('#chat-toggle').setAttribute('aria-expanded',String(state.chatVisible));
  if(state.data)dockChat();
 }
-function resizeChat(width){const bounds=chatWidthBounds();state.chatWidth=Math.round(Math.min(bounds.max,Math.max(bounds.min,width)));applyChatLayout();}
+function resizeChat(width){const bounds=chatWidthBounds();state.chatWidth=Math.round(Math.min(bounds.max,Math.max(bounds.min,width)));if(activePage()?.right_width||tileLayout.editing())tileLayout.resizeDock(state.chatWidth);else applyChatLayout();}
 async function api(path, body) {
   const headers = {'Accept':'application/json'};
   const token = sessionStorage.getItem('supersurfer-token');
@@ -315,8 +318,11 @@ async function navigate({view='workspace',projectId=state.projectId,experimentId
 async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||JSON.stringify(data.view_layout)!==JSON.stringify(state.experiment.view_layout)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;let pageCacheChanged=false;for(const page of data.pages||[]){const key=data.id+':'+page.id,cached=markdownPages.get(key);if(cached?.data&&page.version&&cached.data.version!==page.version&&!cached.loading){markdownPages.delete(key);pageCacheChanged=true;}}
  state.experiment=data;if((changed||force||pageCacheChanged)&&!state.edit&&!$('#modal').open)renderMain();if(pageHasTile('results')){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(pageHasTile('overview'))loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
 function renderMain(){
+ if(tileLayout.active())return;
+ if(state.data)ensureLayoutTab();
+ const arrange=$('#arrange-page');arrange.hidden=!savedActivePage();arrange.disabled=readOnly();
+ if(!isTilePage())clearPageTileDocks();
  if(!state.data)return;
- ensureLayoutTab();
  $('#layout-toggle').hidden=state.view!=='workspace'||!state.projectId;
  renderProjectSlots();
  const boardMode=isSurfboard(),boardMain=$('#main');boardMain.classList.toggle('surfboard-main',!!boardMode);
@@ -432,9 +438,10 @@ function currentPages(){
  if(state.view!=='workspace'||!state.projectId||isSurfboard())return null;
  return state.experimentId?(state.experiment?.id===state.experimentId&&state.experiment.view_layout?.pages||project()?.surfboard?.pages?.item):project()?.surfboard?.pages?.project;
 }
-function activePage(){return currentPages()?.find(page=>page.id===state.tab);}
+function savedActivePage(){return currentPages()?.find(page=>page.id===state.tab);}
+function activePage(){return tileLayout.page(savedActivePage());}
 function pageHasTile(kind){return state.view==='workspace'&&(activePage()?.tiles.some(tile=>tile.kind===kind)??state.tab===kind);}
-function isTilePage(){const page=activePage();return page&&!(page.tiles.length===1&&!['file_explorer','agent_changes','pdf'].includes(page.tiles[0].kind)&&page.tiles[0].kind===page.id&&page.tiles[0].span===12&&page.tiles[0].height===400);}
+function isTilePage(){const page=activePage();return page&&(tileLayout.editing()||page.tiles.some(tile=>tile.placement&&tile.placement!=='main'||tile.path)||!(page.tiles.length===1&&!['file_explorer','agent_changes','pdf'].includes(page.tiles[0].kind)&&page.tiles[0].kind===page.id&&page.tiles[0].span===12&&page.tiles[0].height===400));}
 function layoutTabsMarkup(active=state.tab){
  const rows=currentLayout();if(!rows)return '';
  const documents=state.experiment?.pages||[],pages=currentPages();
@@ -464,7 +471,7 @@ function dockChat(){
  if(host&&chat.parentElement!==host)host.append(chat);
  chat.hidden=!state.chatVisible||(!pageChat&&place==='hidden'&&chatRevealScope!==chatLayoutKey())||(place==='main'&&!mainChat&&!state.chatMaximized);
  const panels=$('#project-view-panels');
- dock.hidden=(chat.parentElement!==dock||chat.hidden)&&(!panels||panels.hidden);
+ dock.hidden=(chat.parentElement!==dock||chat.hidden)&&(!panels||panels.hidden)&&!($('#page-right-tiles')&&!$('#page-right-tiles').hidden);
  dock.classList.toggle('views-only',chat.hidden||chat.parentElement!==dock);
  $('.app-shell').classList.toggle('main-chat-view',!!mainChat);
  $('#chat-resizer').hidden=dock.hidden||state.chatMaximized;
@@ -514,7 +521,8 @@ async function loadProjectResults(){
 }
 // Page shells are reconciled by tile identity. Code buffers and embedded results
 // stay mounted across workspace refreshes; switching pages never saves a file.
-function tileBody(kind){
+function tileBody(kind,tile){
+ if(kind==='pdf'&&(tile?.path||!pageTileCatalog().find(row=>row.kind==='pdf')?.node_id))return '<div id="standalone-pdf-tile" class="standalone-pdf-tile"></div>';
  if(kind==='file_explorer')return '<div id="repository-explorer-tile" class="code-tile-root"></div>';
  if(kind==='agent_changes')return '<div id="agent-changes-tile" class="code-tile-root"></div>';
  let html;
@@ -529,49 +537,92 @@ function tileBody(kind){
  for(const nav of template.content.querySelectorAll('.configured-tabs,.sb-project-tabs,.page-eyebrow'))nav.remove();
  return template.innerHTML;
 }
+function pageTileContainers(){
+ let left=$('#page-left-tiles'),right=$('#page-right-tiles');
+ if(!left){left=document.createElement('section');left.id='page-left-tiles';left.className='page-tile-dock';left.dataset.tileDrop='left';left.setAttribute('aria-label','Left sidebar tiles');$('.sidebar-footer').before(left);}
+ if(!right){right=document.createElement('section');right.id='page-right-tiles';right.className='page-tile-dock';right.dataset.tileDrop='right';right.setAttribute('aria-label','Right sidebar tiles');ensureViewDock().prepend(right);}
+ return {main:$('#page-tile-grid'),left,right};
+}
+function clearPageTileDocks(){
+ for(const id of ['page-left-tiles','page-right-tiles']){const root=$('#'+id);if(root){if(root.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));root.replaceChildren();root.hidden=true;}}
+ standalonePdf.unmount();$('.app-shell').classList.remove('has-page-left','arranging-page');$('.app-shell').style.removeProperty('--page-left-width');
+}
+function applyPageTileSizes(page){
+ for(const element of $$('[data-live-tile]')){const tile=page.tiles.find(tile=>tile.id===element.dataset.tileId);if(tile){element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');}}
+ const shell=$('.app-shell');shell.classList.toggle('has-page-left',page.tiles.some(tile=>tile.placement==='left')||tileLayout.editing());
+ shell.style.setProperty('--page-left-width',Math.min(page.left_width||230,Math.max(200,window.innerWidth*.4))+'px');applyChatLayout();
+}
 function renderTilePage(){
  const page=activePage(),main=$('#main'),key=chatLayoutKey()+':'+page.id;
  main.classList.remove('configured-editor-main','results-full-page');
  if(main.dataset.tilePageKey!==key||!$('#page-tile-grid')){
   if(main.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
-  codeEditor.unmount();repositoryExplorer.unmount();agentChangesTile.unmount();latexPanel.unmount();
-  main.innerHTML='<div class="tile-page"><header class="tile-page-heading"></header><div class="tile-page-tabs"></div><div id="page-tile-grid" class="page-tile-grid"></div></div>';
+  clearPageTileDocks();codeEditor.unmount();repositoryExplorer.unmount();agentChangesTile.unmount();latexPanel.unmount();
+  main.innerHTML='<div class="tile-page"><header class="tile-page-heading"></header><div class="tile-page-tabs"></div><div id="tile-arrange-controls"></div><div id="page-tile-grid" data-tile-drop="main" class="page-tile-grid"></div></div>';
   main.dataset.tilePageKey=key;delete main.dataset.viewKey;
  }
+ const editing=tileLayout.editing();$('.app-shell').classList.toggle('arranging-page',editing);
  const heading=$('.tile-page-heading',main);
- heading.innerHTML=`<div><span>${e((state.experiment||experiment())?.name||project()?.name)}</span><h1>${e(page.title)}</h1></div><button class="button small-button" data-action="configure-layout">${icon('panel')}Edit page</button>`;
+ const headingMarkup=`<div><span>${e((state.experiment||experiment())?.name||project()?.name)}</span><h1>${e(page.title)}</h1></div><button class="button small-button" data-action="configure-layout">${icon('panel')}Pages & tiles</button>`;
+ if(heading.innerHTML!==headingMarkup)heading.innerHTML=headingMarkup;
  const tabs=$('.tile-page-tabs',main),markup=layoutTabsMarkup();if(tabs.innerHTML!==markup)tabs.innerHTML=markup;
- const grid=$('#page-tile-grid'),catalog=(state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];
+ const toolbar=$('#tile-arrange-controls'),tools=tileLayout.toolbar();if(toolbar.innerHTML!==tools)toolbar.innerHTML=tools;
+ const containers=pageTileContainers(),catalog=pageTileCatalog(),elements=new Map($$('[data-live-tile]').map(element=>[element.dataset.tileId,element]));
  const ids=new Set(page.tiles.map(tile=>tile.id));
- for(const element of [...grid.children])if(!ids.has(element.dataset.tileId)){if(element.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));element.remove();}
- for(const [index,tile] of page.tiles.entries()){
-  let element=[...grid.children].find(old=>old.dataset.tileId===tile.id);
+ for(const [id,element] of elements)if(!ids.has(id)){if(element.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));element.remove();}
+ const positions={main:0,left:0,right:0};
+ for(const tile of page.tiles){
+  const grid=containers[tile.placement||'main'];let element=elements.get(tile.id);
   if(!element||element.dataset.tileKind!==tile.kind){
    if(element?.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
-   element?.remove();element=document.createElement('section');element.className='page-tile';element.dataset.tileId=tile.id;element.dataset.tileKind=tile.kind;
+   element?.remove();element=document.createElement('section');element.className='page-tile';element.dataset.liveTile='';element.dataset.tileId=tile.id;element.dataset.tileKind=tile.kind;
    element.innerHTML='<header class="page-tile-heading"></header><div class="page-tile-body"></div>';
   }
-  element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');
-  $('.page-tile-heading',element).textContent=catalog.find(row=>row.kind===tile.kind)?.label||currentLayout()?.find(row=>row.id===tile.kind)?.label||tile.kind.replaceAll('_',' ');
-  const body=$('.page-tile-body',element),html=tileBody(tile.kind);
+  tileLayout.decorate(element,tile,catalog.find(row=>row.kind===tile.kind)?.label||tile.kind.replaceAll('_',' '));
+  const body=$('.page-tile-body',element),html=tileBody(tile.kind,tile);
   const persistent=['editor','file_explorer','agent_changes','chat','pdf'].includes(tile.kind);
-  const editing=body.querySelector('#project-compute-form[data-dirty="true"],#document-editor')||body.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,select');
-  if(!body.hasChildNodes()||(!persistent&&!editing&&body.dataset.markup!==html)){
-   const opened=[...body.querySelectorAll('details[data-document-id][open]')].map(node=>node.dataset.documentId);body.innerHTML=html;body.dataset.markup=html;for(const node of body.querySelectorAll('details[data-document-id]'))if(opened.includes(node.dataset.documentId))node.open=true;
+  const editingContent=body.querySelector('#project-compute-form[data-dirty="true"],#document-editor')||body.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,select');
+  const pdfChanged=tile.kind==='pdf'&&(body.dataset.pdfPath!==(tile.path||'')||body.dataset.markup!==html);
+  if(!body.hasChildNodes()||pdfChanged||(!persistent&&!editingContent&&body.dataset.markup!==html)){
+   const opened=[...body.querySelectorAll('details[data-document-id][open]')].map(node=>node.dataset.documentId);body.innerHTML=html;body.dataset.markup=html;body.dataset.pdfPath=tile.path||'';for(const node of body.querySelectorAll('details[data-document-id]'))if(opened.includes(node.dataset.documentId))node.open=true;
   }
-  if(grid.children[index]!==element)grid.insertBefore(element,grid.children[index]||null);
+  const index=positions[tile.placement||'main']++,before=[...grid.children].filter(el=>el.hasAttribute('data-live-tile'))[index]||null;
+  if(before!==element){if(grid.moveBefore&&element.isConnected)grid.moveBefore(element,before);else grid.insertBefore(element,before);}
  }
- if(!page.tiles.length)grid.innerHTML=empty('Add your first tile','Combine repository files, code, results, notes and chat on this page.','<button class="button" data-action="configure-layout">Add tiles</button>');
+ for(const [placement,grid] of Object.entries(containers)){
+  grid.querySelectorAll(':scope>.tile-drop-placeholder,:scope>.empty-state').forEach(el=>el.remove());
+  grid.hidden=placement!=='main'&&!positions[placement]&&!editing;
+  if(editing){const label=document.createElement('div');label.className='tile-drop-placeholder';label.textContent=placement==='main'?'Drop tiles on the page':placement==='left'?'Drop in the left sidebar':'Drop in the right sidebar';grid.append(label);}
+  else if(placement==='main'&&!positions.main)grid.innerHTML=empty('This page uses its sidebars','Choose Arrange to move tiles onto the page.');
+ }
+ applyPageTileSizes(page);
  if(pageHasTile('results')&&state.experimentId&&!resultPages.has(state.experimentId))queueMicrotask(()=>loadResultPages().then(()=>{if(!chosenResultPage())loadMetrics();}));
- bindMain();syncConfiguredEditors();renderPending=false;
+ renderProjectSlots();bindMain();syncConfiguredEditors();renderPending=false;
 }
+function pageTileCatalog(){return (state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];}
+const tileLayout=createTileLayout({
+ key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly,render:()=>renderMain(),resize:applyPageTileSizes,
+ async save(page,base){
+  const projectId=state.projectId,experimentId=state.experimentId;
+  const record=await api('view-layout?'+new URLSearchParams({project_id:projectId,...(experimentId?{experiment_id:experimentId}:{})}));
+  const original=record.pages.find(row=>row.id===base.id);
+  if(JSON.stringify(original)===JSON.stringify(page)){await refreshState(true);return;}
+  if(JSON.stringify(original)!==JSON.stringify(base)){await refreshState(true);throw new Error('This page changed in another window or agent. Cancel and rearrange the latest page.');}
+  await action('view-layout.save',{project_id:projectId,experiment_id:experimentId,version:record.version,board_version:record.board_version,pages:record.pages.map(row=>row.id===page.id?page:row)});
+  await refreshState(true);toast('Page layout saved.');
+ }
+});
+const standalonePdf=createPdfPreview({
+ async loadBytes(url,{signal}){const token=sessionStorage.getItem('supersurfer-token');const response=await fetch(url,{signal,headers:token?{Authorization:'Bearer '+token}:{}});if(!response.ok)throw new Error('PDF could not be opened ('+response.status+'). Check its repository path.');return new Uint8Array(await response.arrayBuffer());},
+ onSelection:selection=>prepareCodeQuestion('About '+selection.source_path+', PDF page '+selection.page+':\n\n'+selection.text)
+});
 async function openPageCode({path,scope,changeId,range}){
  const projectId=state.projectId,experimentId=state.experimentId;
- if(!$('#main #code-editor-root')){
+ if(!$('#code-editor-root')){
   const destination=currentPages()?.find(page=>page.tiles.some(tile=>tile.kind==='editor'));
   if(destination){state.tab=destination.id;persistNavigation();renderMain();}
  }
- let root=$('#main #code-editor-root')||$('#project-view-panels #code-editor-root');
+ let root=$('#code-editor-root');
  if(!root){toast('Add a Code editor tile to this page to open files and agent changes.');await showViewLayout();return;}
  await codeEditor.mount(root,{projectId,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'});
  if(projectId!==state.projectId||experimentId!==state.experimentId||!root.isConnected)return;
@@ -608,9 +659,11 @@ function configuredViewBody(kind,{right=false}={}){
  return '<p class="muted">Choose a view from your layout.</p>';
 }
 function syncConfiguredEditors(){
- const root=$('#main #code-editor-root')||$('#project-view-panels #code-editor-root');
+ const root=$('#code-editor-root');
  if(root)codeEditor.mount(root,{projectId:state.projectId,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
  const context={projectId:state.projectId,experimentId:state.experimentId};
+ const pdfTile=activePage()?.tiles.find(tile=>tile.kind==='pdf'),pdfViewer=$('#standalone-pdf-tile');
+ if(pdfViewer){if(pdfTile?.path){standalonePdf.mount(pdfViewer,{url:'/api/code/pdf?'+new URLSearchParams({project_id:state.projectId,path:pdfTile.path}),source_path:pdfTile.path,title:pdfTile.path});}else{standalonePdf.unmount();pdfViewer.innerHTML='<div class="empty-state"><strong>Choose a PDF</strong><p>Ask your agent to add a repository PDF path to this tile, or set its PDF path in Pages & tiles.</p></div>';}}else standalonePdf.unmount();
  const pdfRoot=$('#latex-panel-root');if(pdfRoot)latexPanel.mount(pdfRoot,context);else latexPanel.unmount();
  const explorer=$('#repository-explorer-tile'),changes=$('#agent-changes-tile');
  if(explorer)repositoryExplorer.mount(explorer,context).catch(error=>toast(error.message,true));else repositoryExplorer.unmount();
@@ -849,7 +902,7 @@ function updateChatHeader(){
  $('#chat-input').placeholder=busy?'Add direction for the current work…':isSurfboard()?'Describe a workflow change…':state.experimentId?`Ask about this ${itemLabel()}…`:'Discuss your next project step…';$('#chat-input').disabled=readOnly()||!accountGate.ready();
  const send=$('#chat-send');send.disabled=readOnly()||!accountGate.ready()||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
  $('#chat-stop').hidden=!busy||native;
- $('#chat-hint').textContent=readOnly()?'Read-only connection':question?'Answer the question above to continue':approval?'Review the approval request above':sending?(busy?'Sending direction…':'Sending message…'):steerable?'Steer adds direction to the current work':busy?'Agent is starting or finishing · Direction will be available shortly':'Enter to send · Shift Enter for a new line';
+ $('#chat-hint').textContent=readOnly()?'Read-only connection':!accountGate.ready()?accountGate.hint():question?'Answer the question above to continue':approval?'Review the approval request above':sending?(busy?'Sending direction…':'Sending message…'):steerable?'Steer adds direction to the current work':busy?'Agent is starting or finishing · Direction will be available shortly':'Enter to send · Shift Enter for a new line';
  renderAgentChooser();renderChatPreferences();renderChatApprovals();renderChatQuestions();renderChatTasks();renderAgentSessionState();
  const archived=state.chat?.archived===true||selectedAgent()?.archived===true,archive=$('#chat-archive'),archiveLabel=archived?'Restore agent chat':'Archive agent chat';archive.setAttribute('aria-label',archiveLabel);archive.title=archived?'Restore chat':'Archive chat · existing work and monitoring continue';archive.disabled=readOnly()||!state.chat||agentMutations.has('archive:'+state.scope);archive.innerHTML=icon(archived?'history':'archive');
  $('#chat-archive').hidden=!!isSurfboard();$('#chat-rename').hidden=native||!!isSurfboard();$('#chat-rename').disabled=readOnly();
@@ -1059,7 +1112,9 @@ function showRenameAgent(){
  });
  $('#agent-name-input').select();
 }
-function renderChat(){const c=state.chat||{messages:[]},el=$('#chat-messages'),nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100,old=el.scrollTop;const messages=c.messages||[];const prompts=isSurfboard()?['Explain this workflow and its requirements','Add a shared data source and visualizer','Change agent responsibilities and permissions']:projectWorkflow()!=='research'?['Help me scope the next task','Review progress and blockers','Suggest checks for this project']:state.experimentId?['Explain the hypothesis and current evidence','Suggest the next experiment','Improve this experiment’s explanation']:['What should we focus on next?','Summarize the current experiments','Suggest a promising research direction'];el.innerHTML=messages.length?messages.map(m=>`<div class="message ${e(m.role)}"><div class="message-label"><strong>${m.role==='user'?'You':m.role==='system'?(m.agent_sender?e(m.agent_sender.name)+' · Agent':'System'):e(c.agent?.name||'Agent')}</strong><time>${e(date(m.created,true))}</time></div><div class="message-text markdown">${markdown(m.text||'')}</div>${m.status==='steering'?'<div class="message-delivery" role="status">Sending direction to the active turn…</div>':['failed','uncertain'].includes(m.status)?`<div class="message-delivery error" role="status">${m.status==='uncertain'?'Delivery not confirmed':'Message failed'}${m.error?': '+e(m.error):''}</div>`:''}</div>`).join(''):`<div class="chat-empty"><span class="agent-orb">${icon('spark')}</span><h3>${isSurfboard()?'Shape how this project works.':projectWorkflow()!=='research'?'Build with your project agent.':state.experimentId?'Stay close to the experiment.':'A thought partner for your research.'}</h3><p>${isSurfboard()?'Describe a change, or draw an arrow and answer a short question. Review the proposed graph before applying it.':state.scope?.startsWith('agent:')?'Talk to this existing AutoML agent in its original conversation.':'Ask a question, explore an idea, or refine the explanation. Your conversation and project context stay here.'}</p><div class="chat-suggestions">${prompts.map(p=>`<button data-prompt="${e(p)}"${disabled()}>${e(p)}${icon('arrowRight')}</button>`).join('')}</div></div>`;
+const chatCheckExpansion=new Map();
+$('#chat-messages').addEventListener('toggle',event=>{const details=event.target;if(!details.isConnected||!details.matches('details[data-check-key]'))return;let expanded=chatCheckExpansion.get(state.scope);if(!expanded){expanded=new Set();chatCheckExpansion.set(state.scope,expanded);}const key=details.dataset.checkKey;if(expanded.has(key)===details.open)return;if(details.open)expanded.add(key);else expanded.delete(key);renderChat();},true);
+function renderChat(){const c=state.chat||{messages:[]},el=$('#chat-messages'),nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100,old=el.scrollTop;const messages=c.messages||[];const prompts=isSurfboard()?['Explain this workflow and its requirements','Add a shared data source and visualizer','Change agent responsibilities and permissions']:projectWorkflow()!=='research'?['Help me scope the next task','Review progress and blockers','Suggest checks for this project']:state.experimentId?['Explain the hypothesis and current evidence','Suggest the next experiment','Improve this experiment’s explanation']:['What should we focus on next?','Summarize the current experiments','Suggest a promising research direction'];el.innerHTML=messages.length?renderChatTimeline(messages,{renderMessage:m=>`<div class="message ${e(m.role)}"><div class="message-label"><strong>${m.role==='user'?'You':m.role==='system'?(m.agent_sender?e(m.agent_sender.name)+' · Agent':'System'):e(c.agent?.name||'Agent')}</strong><time>${e(date(m.created,true))}</time></div><div class="message-text markdown">${markdown(m.text||'')}</div>${m.status==='steering'?'<div class="message-delivery" role="status">Sending direction to the active turn…</div>':['failed','uncertain'].includes(m.status)?`<div class="message-delivery error" role="status">${m.status==='uncertain'?'Delivery not confirmed':'Message failed'}${m.error?': '+e(m.error):''}</div>`:''}</div>`,escape:e,date,expanded:chatCheckExpansion.get(state.scope)||new Set(),busy:c.busy}):`<div class="chat-empty"><span class="agent-orb">${icon('spark')}</span><h3>${isSurfboard()?'Shape how this project works.':projectWorkflow()!=='research'?'Build with your project agent.':state.experimentId?'Stay close to the experiment.':'A thought partner for your research.'}</h3><p>${isSurfboard()?'Describe a change, or draw an arrow and answer a short question. Review the proposed graph before applying it.':state.scope?.startsWith('agent:')?'Talk to this existing AutoML agent in its original conversation.':'Ask a question, explore an idea, or refine the explanation. Your conversation and project context stay here.'}</p><div class="chat-suggestions">${prompts.map(p=>`<button data-prompt="${e(p)}"${disabled()}>${e(p)}${icon('arrowRight')}</button>`).join('')}</div></div>`;
  if((c.questions||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('message')}Waiting for your answer</div>`;else if((c.approvals||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('lock')}Waiting for your approval</div>`;else if(c.busy)el.innerHTML+='<div class="chat-status"><span class="spinner"></span>Working in your workspace…</div>';if(c.error)el.innerHTML+=`<div class="chat-error">${e(c.error)}</div>`;if(nearBottom||!messages.length)el.scrollTop=el.scrollHeight;else el.scrollTop=old;}
 async function sendChat(event){
  event?.preventDefault();const scope=state.scope,busy=!!state.chat?.busy;
@@ -1067,7 +1122,7 @@ async function sendChat(event){
  const input=$('#chat-input'),original=input.value,text=original.trim();if(!text)return;
  chatSending.add(scope);updateChatHeader();
  try{
-   await action(busy?'chat.steer':'chat.send',{scope,text});conversationDrafts.delete(scope);
+   await action(busy?'chat.steer':'chat.send',{scope,text,...(activePage()&&!scope.startsWith('agent:')?{view:{project_id:state.projectId,experiment_id:state.experimentId,page_id:activePage().id}}:{})});conversationDrafts.delete(scope);
    if(state.scope===scope){if(input.value===original){input.value='';resizeComposer();}state.chat={...state.chat,busy:true};state.chatSignature='';await refreshChat(true);}
  }catch(error){toast(error.message,true);if(error.status===403)await accountGate.refresh();}
  finally{chatSending.delete(scope);updateChatHeader();}

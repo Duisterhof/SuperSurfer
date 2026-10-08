@@ -391,6 +391,12 @@ def _board_tool(name, description, properties, required=()):
 
 _PROJECT = {"project_id": {"type": "string", "maxLength": 150, "description": "Manager only; other scopes already select their project."}}
 READ_BOARD_TOOL = _board_tool("read_surfboard", "Read the current project graph, draft, versions, block catalog and compiled capabilities.", _PROJECT)
+_LAYOUT_SCOPE = {**_PROJECT, "experiment_id": {"type": "string", "maxLength": 180, "description": "Lead/manager: select one work item, or omit for the project page. Workers are fixed to their own item."}}
+READ_LAYOUT_TOOL = _board_tool("read_view_layout", "Read pages, tile catalog, side panels and both layout versions. Use before arranging a page. Manager supplies project_id; workers read their own item. This is presentation only.", _LAYOUT_SCOPE)
+UPDATE_LAYOUT_TOOL = _board_tool("update_view_layout", "Apply the user's requested page layout directly. Read first, preserve unrelated pages, and reread on conflict. Pages contain id, title, tiles and optional sidebar widths left_width 200–600, right_width 280–760; each tile has id, kind, span 1–12, height 160–1200 (PDF min 400), optional placement main/left/right and optional repository-relative PDF path. Left is the navigation sidebar. All owned roles can arrange their scope without a manager handoff. Does not change workflow rules, grant tools, compile, save source or launch work.", {
+    **_LAYOUT_SCOPE, "version": {"type": "integer", "minimum": 0}, "board_version": {"type": "integer", "minimum": 0},
+    "pages": {"type": "array", "maxItems": 24, "items": {"type": "object", "additionalProperties": True}}},
+    ["version", "board_version", "pages"])
 PROPOSE_BOARD_TOOL = _board_tool("propose_surfboard", "Save a proposed graph for user review. Never applies or starts work. Read current versions first; ask_user must clarify any ambiguous arrow. Concurrent edits are rejected.", {
     "board": {"type": "object", "additionalProperties": True}, "expected_version": {"type": "integer", "minimum": 0},
     "expected_draft_version": {"type": "integer", "minimum": 0}}, ["board", "expected_version", "expected_draft_version"])
@@ -421,13 +427,13 @@ ARTIFACT_PUBLISH_TOOL = _board_tool("publish_artifact", "Copy an existing projec
 ACTIVITY_TOOL = _board_tool("inspect_project_activity", "Show what agents will do while the user is away: actual wakeups, saved tasks, recovery grants, stop conditions and running board commands.", _PROJECT)
 DIAGNOSTICS_TOOL = _board_tool("export_diagnostics", "Export a bounded, redacted Markdown diagnostic report for this project. Excludes credentials, source files and chat contents. The user reviews and downloads it before sharing.", _PROJECT)
 for _role, _tools in ROLE_TOOLS.items():
-    _tools.extend([READ_BOARD_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, LATEX_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
+    _tools.extend([READ_BOARD_TOOL, READ_LAYOUT_TOOL, UPDATE_LAYOUT_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, LATEX_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
     if _role in {"lead", "manager"}:
         for _old, _new in [("create_experiment", "create_work_item"), ("create_experiment_agent", "create_work_item_agent"), ("handoff_experiment", "handoff_work_item"), ("update_experiment", "update_work_item")]:
             _original = next((tool for tool in _tools if tool["name"] == _old), None)
             if _original:
                 _tools.append({**_original, "name": _new, "description": _original["description"].replace("research question", "acceptance criteria").replace("research", "project").replace("experiment", "work item").replace("W&B setup status", "saved document")})
-ROLE_TOOLS["configurator"] = [READ_BOARD_TOOL, PROPOSE_BOARD_TOOL, QUESTION_TOOL]
+ROLE_TOOLS["configurator"] = [READ_BOARD_TOOL, PROPOSE_BOARD_TOOL, READ_LAYOUT_TOOL, UPDATE_LAYOUT_TOOL, QUESTION_TOOL]
 
 def validate_questions(arguments):
     if not isinstance(arguments, dict) or set(arguments) != {"questions"}:

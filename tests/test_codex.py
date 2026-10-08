@@ -195,6 +195,20 @@ class CodexBridgeTests(unittest.TestCase):
             self.assertFalse(self.bridge.chat('project:vla')['busy'])
             self.assertFalse(self.bridge.chat('project:vla')['messages'])
 
+    def test_background_check_provenance_does_not_label_a_real_user_as_monitoring(self):
+        prompt = 'Perform this worker check explicitly scheduled by the user.\n\nSaved task:\nCheck metrics\n\nWakeup evidence:\n{}'
+        self.bridge.send('project:vla', prompt, message_role='system',
+                         background_check={'rule_id': 'wake_fixture', 'kind': 'interval'})
+        chat = self.finished()
+        scheduled = next(message for message in chat['messages'] if message.get('background_check'))
+        self.assertEqual('system', scheduled['role'])
+        self.assertEqual('background_check', scheduled['origin'])
+        self.bridge.send('project:vla', prompt)
+        chat = self.finished()
+        direct = [message for message in chat['messages'] if message['role'] == 'user'][-1]
+        self.assertEqual('user', direct['origin'])
+        self.assertNotIn('background_check', direct)
+
     def test_expired_account_requires_login_even_when_account_metadata_remains(self):
         self.bridge.send('project:vla', 'hold')
         self.wait_for(lambda: self.bridge.chat('project:vla').get('steerable'))

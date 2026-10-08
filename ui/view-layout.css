@@ -76,3 +76,51 @@
 /* Compute actions follow available pane width, including a resized chat dock. */
 .compute-page .page-heading{flex-wrap:wrap}
 .compute-page .heading-actions{max-width:100%;flex-wrap:wrap}
+
+/* The same page tiles can live on the canvas or in either sidebar. */
+.page-tile{position:relative;flex-shrink:0}
+.page-tile-heading{display:flex;align-items:center;gap:6px;min-height:30px}
+.page-tile-heading>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.page-tile-heading button,.page-tile-heading select{font:inherit;color:var(--muted);background:transparent;border:0;border-radius:4px;padding:2px;max-width:95px}
+.page-tile-heading button:hover{background:var(--soft);color:var(--text)}
+.page-tile-heading .tile-grip{cursor:grab;font-size:18px;line-height:18px;touch-action:none}
+.tile-arrange-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;color:var(--muted);padding:6px 0 10px}
+.tile-arrange-toolbar>div{display:flex;gap:6px;flex:none}
+.tile-palette{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tile-palette .button{font-size:10px;padding:5px 8px;cursor:grab}
+.page-tile-dock{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto;scrollbar-width:thin}
+.page-tile-dock>.page-tile{width:100%;flex:none}
+#page-left-tiles{flex:1;min-height:140px;margin:8px 0}
+#page-right-tiles{flex:0 1 auto;max-height:65%;order:-1}
+#view-dock.views-only>#page-right-tiles{max-height:100%;flex:1}
+.app-shell.has-page-left:not(.chat-maximized){grid-template-columns:var(--page-left-width,230px) minmax(0,1fr)}
+.app-shell.has-page-left .project-tree{flex:0 1 auto;max-height:30%;min-height:65px}
+.app-shell.has-page-left .brand{margin-bottom:10px}
+.app-shell.has-page-left .global-nav{padding-bottom:10px}
+.page-tile-dock .page-tile-heading{flex-wrap:wrap;padding:5px 7px}
+.page-tile-dock .page-tile-heading>span{min-width:70px}
+.tile-drop-placeholder{color:var(--muted);font-size:11px;border:1px dashed var(--strong-line);border-radius:10px;min-height:76px;display:flex;align-items:center;justify-content:center;padding:10px;text-align:center;flex:none;grid-column:1/-1}
+.tile-drop-active{outline:2px solid var(--green);outline-offset:2px;border-radius:10px;background:var(--green-bg)}
+.dragging-page-tile iframe,.resizing-page-tile iframe{pointer-events:none}
+.tile-resize{position:absolute;right:0;bottom:0;width:22px;height:22px;z-index:3;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 53%,var(--strong-line) 54%,var(--strong-line) 61%,transparent 62%,transparent 73%,var(--strong-line) 74%,var(--strong-line) 81%,transparent 82%);border:0;border-radius:0 0 10px 0}
+[data-tile-placement=right]>.tile-resize{right:auto;left:0;transform:scaleX(-1);cursor:nesw-resize}
+.resizing-page-tile{cursor:nwse-resize;user-select:none}
+.arranging-page #page-right-tiles{min-height:100px}
+.arranging-page .page-tile{border-style:dashed}
+.arranging-page .page-tile>.page-tile-heading{display:flex}
+.standalone-pdf-tile{height:100%;min-height:0}
+.page-tile[data-tile-kind=pdf]>.page-tile-body{padding:0;overflow:hidden}
+.app-shell.chat-maximized #page-right-tiles{display:none}
+@media(max-width:760px){.tile-arrange-toolbar{flex-wrap:wrap}.app-shell.has-page-left:not(.chat-maximized){grid-template-columns:minmax(175px,28vw) minmax(0,1fr)}}
+
+.chat-checks{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:color-mix(in srgb,var(--bg) 55%,transparent);font-size:11px}
+.chat-checks>summary{display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:5px 7px;padding:9px 11px;cursor:pointer;color:var(--muted)}
+.chat-checks>summary>strong{font-size:11px;font-weight:500;color:var(--text)}
+.chat-checks time{font-size:10px;white-space:nowrap;color:var(--muted)}
+.chat-checks .check-latest{grid-column:2/-1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+.chat-checks>summary::marker{content:''}.chat-checks>summary::after{content:'Expand checks';grid-column:2/-1;font-size:10px;opacity:.7}
+.chat-checks[open]>summary::after{content:'Collapse checks'}
+.chat-check-history{border-top:1px solid var(--line);padding:4px 10px;max-height:460px;overflow:auto}
+.chat-check>summary{padding:7px 0;cursor:pointer;color:var(--muted);line-height:1.5}
+.chat-check+.chat-check{border-top:1px solid var(--line)}
+.check-indicator.working{color:var(--green)}

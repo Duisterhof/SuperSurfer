@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # Work from the project's surfboard
 
-Reviewed for SuperSurfer 0.1.28. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.29. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
@@ -54,9 +54,12 @@ moving a pane does not create a new task or duplicate its owner.
 
 Custom project/work-item pages can combine separate explorer, editor, agent-change,
 chat and artifact tiles. Reuse the shared source and existing report/agent identity
-across pages. A requested tile or page is configured by the surfboard; do not
-implement a second source browser or launch an agent just to populate the layout.
-Configure checks/previews only when execution behavior is part of the request.
+across pages. Use `read_view_layout` then `update_view_layout` for requested
+presentation changes within your role scope: current pages/tiles, size/order and
+pane placement. Follow [layout editing](../supersurfer-surfboard/references/view-layout.md),
+including both versions and existing overrides. No manager handoff or duplicate
+source browser is needed. Configure checks/previews through the surfboard only
+when execution behavior is part of the request.
 
 When verifying a UI change, exercise the actual controls at a narrow pane width
 as well as the main view. A reachable preview alone does not establish usable
@@ -96,7 +99,7 @@ credentials or private service state into them. `inspect_project_activity` shows
 actual background work. `export_diagnostics` prepares a redacted report for user
 review; creating that local artifact does not authorize sending it elsewhere.
 
-For a requested workflow change, prepare the concrete change for the project
+For a requested workflow policy or capability change, prepare the concrete change for the project
 configurator and its [skill](../supersurfer-surfboard/SKILL.md). Only that conversation
 has `propose_surfboard`; it creates a reviewable draft that the user applies. Never expand your own tools or requirements
 by altering a board as a workaround for an action denial.

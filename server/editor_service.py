@@ -8,6 +8,23 @@ from .code_editor import _parts as repository_parts
 
 
 class EditorService:
+    def chat_view_context(self, scope, value):
+        if value is None:
+            return ""
+        if not isinstance(value, dict) or set(value) != {"project_id", "experiment_id", "page_id"}:
+            raise SurfboardError("View context requires project_id, experiment_id and page_id")
+        info = self._chat_scope(scope)
+        if scope != "manager" and value["project_id"] != info.get("project_id"):
+            raise SurfboardError("The selected view belongs to another project", 403)
+        if scope.startswith(("experiment:", "conversation:")) and value["experiment_id"] != self.experiment_for_scope(scope)["id"]:
+            raise SurfboardError("The selected view belongs to another work item", 403)
+        layout = self.view_layout(value["project_id"], value["experiment_id"])
+        page = next((page for page in layout["pages"] if page["id"] == value["page_id"]), None)
+        if not page:
+            # A removed page must not prevent delivery of the user's message.
+            return "\n\n[The page open in the UI has changed. Read the current view layout before editing it.]"
+        return "\n\n[Current user view, for layout references such as 'this page': " + json.dumps({**value, "title": page["title"]}) + "]"
+
     def view_layout(self, project_id, experiment_id=None, *, board=None):
         from .surfboards import compile_layouts, compile_pages, layout_catalog, tile_catalog, validate_layout, validate_pages
         record = board or self.boards.get(project_id)
@@ -50,9 +67,13 @@ class EditorService:
                 not {"rows", "pages"}.intersection(params)):
             raise SurfboardError("Layout changes require project, work item, both versions, and rows or pages")
         project_id, experiment_id = params["project_id"], params["experiment_id"]
-        if not experiment_id:
-            raise SurfboardError("Edit project and default task layouts in the Surfboard")
         self.lookup("projects", project_id)
+        if not experiment_id:
+            if type(params["version"]) is not int or params["version"] != 0:
+                raise SurfboardError("Reload the project layout before saving", 409)
+            self.boards.save_presentation(project_id, params["board_version"],
+                                         {key: params[key] for key in ("rows", "pages") if key in params})
+            return self.view_layout(project_id)
         if self.store.experiment(experiment_id)["project_id"] != project_id:
             raise SurfboardError("This work item belongs to another project", 403)
         key = "view_layout:" + experiment_id
@@ -77,6 +98,25 @@ class EditorService:
                 self.store.db.rollback()
                 raise
         return self.view_layout(project_id, experiment_id)
+
+    def agent_view_layout(self, scope, operation, arguments):
+        project = self.board_project(scope, arguments)
+        if not project:
+            raise SurfboardError("Select project_id for this operation")
+        fields = {key: value for key, value in arguments.items() if key != "project_id"}
+        item_id = fields.pop("experiment_id", None)
+        if scope.startswith(("experiment:", "conversation:")):
+            owned = self.experiment_for_scope(scope)["id"]
+            if item_id not in (None, owned):
+                raise SurfboardError("This worker can arrange only its own work item", 403)
+            item_id = owned
+        if operation == "read_view_layout":
+            if fields:
+                raise SurfboardError("Read layout accepts only project and work-item scope")
+            return self.view_layout(project["id"], item_id)
+        if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+            raise SurfboardError("Changing a layout requires an active user task", 403)
+        return self.save_view_layout({**fields, "project_id": project["id"], "experiment_id": item_id})
 
     def code_query(self, operation, fields):
         project_id = fields.get("project_id")

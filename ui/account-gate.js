@@ -4,30 +4,43 @@ export function createAccountGate({api, action, onAccount, readOnly}) {
   dialog.setAttribute('aria-labelledby','account-gate-title');
   dialog.innerHTML=`<div class="modal-body"><div class="page-eyebrow">Workspace account</div><h2 id="account-gate-title">Connect ChatGPT</h2><p>Sign in on this workspace host to use its agents. Each host keeps its own login; reconnecting to a signed-in host skips this step.</p><p id="account-gate-status" role="status"></p><div id="account-gate-code" hidden><code></code><a class="button primary" target="_blank" rel="noopener noreferrer">Open verification page</a></div><div class="modal-footer"><button class="button" id="account-check">Check again</button><button class="button primary" id="account-sign-in">Sign in with ChatGPT</button><button class="button" id="account-return" hidden>Return to workspace</button></div></div>`;
   document.body.append(dialog);
-  const status=dialog.querySelector('#account-gate-status'),code=dialog.querySelector('#account-gate-code'),signIn=dialog.querySelector('#account-sign-in'),check=dialog.querySelector('#account-check'),back=dialog.querySelector('#account-return');
+  const status=dialog.querySelector('#account-gate-status'),code=dialog.querySelector('#account-gate-code'),signIn=dialog.querySelector('#account-sign-in'),check=dialog.querySelector('#account-check'),back=dialog.querySelector('#account-return'),title=dialog.querySelector('h2'),description=dialog.querySelector('h2+p');
+  const signInDescription=description.textContent,graceMs=15000;
   let connected=false,checking=false,starting=false,pending=null,timer,forced=false,account=null;
+  let unavailable=false,waitingSince=Date.now();
   const ready=()=>connected||readOnly();
+  const waiting=()=>!ready()&&waitingSince!==null&&Date.now()-waitingSince<graceMs;
+  const hint=()=>ready()?'':unavailable?'Reconnecting to ChatGPT on this host…':account&&!waiting()?'Connect ChatGPT to send messages.':'Checking ChatGPT connection…';
   function render(){
-    back.hidden=!ready();signIn.disabled=starting||!!pending;check.disabled=checking;
+    const connectionProblem=unavailable&&!pending&&!forced;
+    title.textContent=connectionProblem?'Reconnecting to ChatGPT':'Connect ChatGPT';
+    description.textContent=connectionProblem?'The workspace has not confirmed its account yet. Retrying automatically; a connection error does not mean you need to sign in again.':signInDescription;
+    back.hidden=!ready();signIn.hidden=connectionProblem;signIn.disabled=starting||!!pending;check.disabled=checking;
     code.hidden=!pending;
     if(pending){code.querySelector('code').textContent=pending.userCode;code.querySelector('a').href=pending.verificationUrl;}
     else {code.querySelector('code').textContent='';code.querySelector('a').removeAttribute('href');}
     status.textContent=starting?'Requesting a secure sign-in code…':pending?'Enter this code in your browser. This screen will continue automatically when sign-in is confirmed.':checking?'Checking ChatGPT login on this host…':account?.error||account?.login?.error||(connected?'ChatGPT is connected on this host.':'ChatGPT sign-in is required before agent work can start.');
-    if(ready()&&!forced){if(dialog.open)dialog.close();}
+    const show=forced||!!pending||(!ready()&&!waiting()&&account!==null);
+    if(!show){if(dialog.open)dialog.close();}
     else if(!dialog.open)dialog.showModal();
   }
-  function schedule(){clearTimeout(timer);timer=setTimeout(refresh,pending?2000:ready()?60000:10000);}
+  function schedule(){clearTimeout(timer);timer=setTimeout(refresh,pending||waiting()?2000:ready()?60000:10000);}
   async function refresh(){
     if(checking)return;checking=true;render();
     try{
       account=await api('account');
+      unavailable=false;
       connected=account.account?.type==='chatgpt'&&account.login_required!==true&&!account.error;
       if(pending&&account.login?.loginId===pending.loginId&&['completed','failed'].includes(account.login.status)){
         if(account.login.status==='failed'||connected)pending=null;
       }
       if(connected&&!starting&&!pending)forced=false;
-    }catch(error){connected=false;account={error:error.message};}
-    finally{checking=false;onAccount(account);render();schedule();}
+    }catch(error){connected=false;unavailable=true;account={error:error.message};}
+    finally{
+      if(connected)waitingSince=null;
+      else if(waitingSince===null)waitingSince=Date.now();
+      checking=false;onAccount(account);render();schedule();
+    }
   }
   async function login(){
     if(starting||pending)return;forced=true;starting=true;render();
@@ -43,5 +56,5 @@ export function createAccountGate({api, action, onAccount, readOnly}) {
   back.onclick=()=>{forced=false;dialog.close();};signIn.onclick=login;check.onclick=refresh;
   window.addEventListener('focus',()=>{if(!starting)void refresh();});
   render();
-  return {ready,refresh,open:()=>{forced=true;render();void login();}};
+  return {ready,hint,refresh,open:()=>{forced=true;render();void login();}};
 }

@@ -21,7 +21,7 @@ class SurfboardError(ValueError):
 
 ROLES = ("lead", "worker", "manager")
 WORKFLOWS = ("research", "software", "web", "writing")
-COMMON_TOOLS = {"ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "inspect_board_data", "export_diagnostics"}
+COMMON_TOOLS = {"ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "read_view_layout", "update_view_layout", "inspect_board_data", "export_diagnostics"}
 ITEM_TOOLS = {"create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item"}
 EXPERIMENT_TOOLS = {"create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment"}
 COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node",
@@ -554,6 +554,8 @@ def tile_catalog(board, level="item"):
         result.append(editor)
     for kind, title in (("file_explorer", "Repository files"), ("agent_changes", "Agent changes")):
         result.append({**editor, "id": kind, "kind": kind, "label": title, "title": title})
+    if not any(row["kind"] == "pdf" for row in result):
+        result.append({"id": "pdf", "kind": "pdf", "label": "PDF viewer", "title": "PDF viewer", "min_height": 400})
     return result
 
 
@@ -574,7 +576,7 @@ def validate_pages(pages, board, level="item"):
     page_ids, result = set(), []
     for index, page in enumerate(pages):
         at = f"{path}[{index}]"
-        _fields(page, {"id", "title", "tiles"}, at)
+        _fields(page, {"id", "title", "tiles", "left_width", "right_width"}, at)
         page_id = _page_identifier(page.get("id"), at + ".id")
         if page_id in page_ids:
             _fail(at + ".id", "page IDs must be unique within a scope")
@@ -586,7 +588,7 @@ def validate_pages(pages, board, level="item"):
         tile_ids, tile_kinds, normalized = set(), set(), []
         for tile_index, tile in enumerate(tiles):
             tile_at = f"{at}.tiles[{tile_index}]"
-            _fields(tile, {"id", "kind", "span", "height"}, tile_at)
+            _fields(tile, {"id", "kind", "span", "height", "placement", "path"}, tile_at)
             tile_id = _page_identifier(tile.get("id"), tile_at + ".id")
             kind = tile.get("kind")
             if not isinstance(kind, str) or kind not in available:
@@ -601,7 +603,22 @@ def validate_pages(pages, board, level="item"):
                                "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12, True),
                                "height": _number(tile.get("height", 400), tile_at + ".height" + (" (PDF preview)" if kind == "pdf" else ""),
                                                  400 if kind == "pdf" else 160, 1200, True)})
+            if "placement" in tile:
+                if tile["placement"] not in ("main", "left", "right"):
+                    _fail(tile_at + ".placement", "choose main, left or right")
+                normalized[-1]["placement"] = tile["placement"]
+            if "path" in tile:
+                from .code_editor import _parts
+                if kind != "pdf":
+                    _fail(tile_at + ".path", "only PDF tiles accept a repository path")
+                _parts(tile["path"])
+                if not tile["path"].lower().endswith(".pdf"):
+                    _fail(tile_at + ".path", "choose a PDF file")
+                normalized[-1]["path"] = tile["path"]
         result.append({"id": page_id, "title": title, "tiles": normalized})
+        for field, minimum, maximum in (("left_width", 200, 600), ("right_width", 280, 760)):
+            if field in page:
+                result[-1][field] = _number(page[field], at + "." + field, minimum, maximum, True)
     return result
 
 
@@ -895,6 +912,27 @@ class Surfboards:
             record["version"] += 1
             record["board"] = board
             record["draft"] = None
+        return self._mutate(project_id, expected_version, change)
+
+    def save_presentation(self, project_id, expected_version, fields):
+        """A direct user layout edit cannot change policies or apply a draft."""
+        def change(record):
+            board = deepcopy(record["board"])
+            for field, key, validator in (("rows", "layouts", validate_layout), ("pages", "pages", validate_pages)):
+                if field not in fields:
+                    continue
+                if fields[field] is None:
+                    board.get(key, {}).pop("project", None)
+                else:
+                    board.setdefault(key, {})["project"] = validator(fields[field], board, "project")
+            board = validate(board)
+            compile_board(board)
+            history = record.setdefault("history", [])
+            history.append({"version": record["version"], "board": record["board"], "replaced_at": time.time()})
+            record["history"] = history[-30:]
+            record.update(version=record["version"] + 1, board=board)
+            # Retain any proposal, with its old base version. Applying it now
+            # requires reconciliation rather than losing these direct edits.
         return self._mutate(project_id, expected_version, change)
 
     def sync_limits(self, project_id, limits):

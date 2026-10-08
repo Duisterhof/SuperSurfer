@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.28. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.29. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -49,8 +49,8 @@ the live comparison and label the paper's measured snapshot; do not invent updat
 values from the PDF. Use the writing workflow for compilation, without adding a
 GPU launch or turning every paper revision into a new results-publishing loop.
 
-Project and experiment layouts can place Results in the main pane or the right
-panel independently. Repositioning that view does not require copying or
+Project and experiment layouts can place Results in the main pane or either
+sidebar independently. Repositioning that view does not require copying or
 republishing reports, changing W&B writers, or scheduling a new agent. Keep the
 existing live source bindings and verify the requested view at its actual size.
 HTML edited in the Code editor is a shared source file; unsaved text or a reviewed
@@ -59,9 +59,12 @@ use the normal versioned publishing tool when publication was requested.
 
 Results can also be a tile on a custom page beside notes, source or agent changes.
 Reuse the existing live report instead of republishing it for each tile. Honor the
-page's experiment/source scope and test the actual tile size. A requested layout
-change belongs to page configuration; it does not authorize altering metric keys,
-comparison cohorts or the report's scientific content.
+page's experiment/source scope and test the actual tile size. For requested
+resize/reorder, page creation or pane placement, use enabled `read_view_layout`
+and `update_view_layout` tools within your role scope; preserve current versions
+and unrelated views. Follow [layout editing](../supersurfer-surfboard/references/view-layout.md).
+This does not authorize altering metric keys, comparison cohorts or scientific
+content, and it does not require republishing the report.
 
 When a live comparison is empty, distinguish a successful fetch with no numeric
 history from an authentication or transport error. Check each declared writer's
@@ -123,6 +126,11 @@ Available cached measurements appear immediately while sources refresh separatel
 one slow source need not hide successful sources. This requires no worker turn,
 wakeup, manager review or republishing. It is refresh on opening/request, not a
 promise of continuous sampling while the page stays open.
+If the user separately requested periodic analysis, put the new measured evidence
+in the existing report and keep chat to one short outcome. Skip start-of-check
+narration and repeated metric tables; lead with actionable failures, milestones
+or decisions. An unchanged check does not require another report, publishing
+loop or manager message.
 
 History is bounded/sampled, supplemented by a recent tail and sparse held-out
 observations. Summary values are not curve points. Distinguish successful fetch

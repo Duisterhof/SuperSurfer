@@ -1,3 +1,30 @@
+## 0.1.29 scoped presentation and monitoring provenance
+
+- Direct page updates accept validated presentation fields only. Manager selects
+  a project; project leads/configurators can select an item; workers are confined
+  to their own item. Updates require active user-requested work and respect
+  explicit tool restrictions and read-only mode. Scheduled checks do not gain
+  layout authority. Graph, compiler, permissions, limits and source remain separate.
+- Project layout writes check and increment the board version. They preserve a
+  pending graph draft with its old base version, so it cannot silently overwrite
+  the page change. Item overrides check both versions in one SQLite transaction.
+  UI saves retain unrelated pages and reject a changed active page; Cancel reloads
+  the current saved layout. Page arrangement never saves dirty source buffers.
+- Tiles permit main/left/right placement and bounded spans/heights. Optional page
+  widths are 200–600 px left and 280–760 px right; rendering also respects available
+  screen space. Pages remain scoped independently. PDF tiles can read a bounded
+  ordinary repository PDF through the authenticated code API (32 MiB, PDF header,
+  no symlinks, hardlinks, private paths or traversal). They grant no compilation.
+- Scheduled checks carry explicit background provenance and a system message role.
+  New user messages retain user provenance, including pasted check instructions.
+  Legacy grouping requires the exact app-owned assignment prefix and sections.
+  Direct user/steering messages break groups; unrelated turns are not folded in.
+  History remains stored and accessible; errors, approvals and questions keep their
+  existing display. This changes presentation, not polling cadence or task ownership.
+- The account grace period affects prompting only. No agent work is accepted on
+  an unverified account. Connection errors are distinct from confirmed sign-out;
+  explicit account settings still open login immediately.
+
 ## 0.1.28 cancellation is not a connection failure
 
 Cancelling an obsolete scheduler check propagates cancellation through the

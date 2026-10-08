@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.28. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.29. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -117,6 +117,12 @@ an interval/metric/run-status rule owned by this conversation. Then mark the tas
 An ordinary scheduled check never authorizes a new run, node/budget mutation,
 worker or schedule. A saved run-recovery grant is separate from these monitoring
 rules and stays confined to its lineage. Keep paused/removed rules stopped.
+On a routine check, skip “I'll check” narration and give one short outcome, leading
+with a new failure, milestone or decision needed. An unchanged check needs only a
+brief no-change outcome. Keep detailed metrics/provenance in the existing saved
+evidence, not another long chat recap or manager update. The app groups its own
+checks compactly; grouping does not stop the monitoring task or hide your duty
+to surface an actionable change.
 
 ## Project surfboard
 
@@ -144,6 +150,11 @@ custom experiment page. They still refer to this experiment and its shared sourc
 Page navigation does not finish, restart or duplicate your task. Publish into the
 existing requested artifact/report, and let configured tiles display it rather
 than creating duplicate pages or periodic publishing work for each layout.
+For requested changes to this work item's pages, tile sizes/order or pane placement,
+use `read_view_layout` then `update_view_layout` directly with current versions.
+Your scope does not permit editing another item or project defaults. Follow
+[layout editing](../supersurfer-surfboard/references/view-layout.md); do not relay
+ordinary presentation work to the lead or manager.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named
@@ -155,7 +166,7 @@ data or crossing project boundaries.
 `run_board_action` executes a configured permitted action with a durable record;
 use its recorded result rather than claiming that a command passed. Research GPU
 launches continue through their existing exact-source PR and scheduler workflow.
-For a requested board change, prepare the concrete change for the project
+For a requested workflow policy or capability change, prepare the concrete change for the project
 configurator. That conversation has `propose_surfboard` and the user applies its
 reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
 changes. Never alter board state to grant yourself a denied capability.

@@ -32,10 +32,16 @@ run_limit, each a number or 'unlimited'; new projects have no caps. Preserve int
 existing limits unless the user changes them. Propose explicit 'unlimited' to remove a cap.
 All compute blocks share the same project budget. Applying budget edits updates and checks
 the scheduler; unrelated page or workflow changes preserve its current limits.
-Pages are separate from workflow execution. Configure ordered board.pages.project and
+Pages are separate from workflow execution. Use read_view_layout and update_view_layout
+for direct user-requested project or specific-work-item page edits. Preserve unrelated
+pages and reread both versions on conflict. No proposal or manager handoff is needed.
+A retained workflow draft must be reconciled after a direct layout edit. Configure
+default work-item templates in ordered board.pages.project and
 board.pages.item lists, each page {id,title,tiles:[{id,kind,span,height}]}.
 Use compiled.available_tiles for the permitted tile kinds. Tiles have width span 1–12,
-height 160–1200 pixels, and one of each kind per page. Add named pages and compose
+height 160–1200 pixels (PDF minimum 400), and one of each kind per page.
+Tiles may set placement main/left/right (left is the navigation sidebar), and PDF
+tiles may set a repository-relative path. Adding a view grants no compiler permission. Add named pages and compose
 repository files, editor, agent changes, results, notes and chat. Repository tiles are available in every project and keep existing file access checks. Existing main views become pages when pages is omitted; preserve
 other pages and the independent side-panel layouts. A visual change grants no tools.
 Build with the block catalog. For a new or ambiguous arrow, call ask_user to clarify
@@ -381,6 +387,8 @@ class SurfboardService:
             raise SurfboardError("Select project_id for this operation.")
         state = self.boards.get(project["id"])
         fields = {k: v for k, v in arguments.items() if k != "project_id"}
+        if tool in {"read_view_layout", "update_view_layout"}:
+            return self.agent_view_layout(scope, tool, arguments)
         if tool == "read_surfboard":
             if fields:
                 raise SurfboardError("read_surfboard accepts only the manager's project_id.")

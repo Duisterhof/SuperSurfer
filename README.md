@@ -1,3 +1,28 @@
+## 0.1.29 arrange your workspace and quiet monitoring
+
+Choose **Arrange** on any project or work-item page. Drag tiles into the page,
+left navigation sidebar or right sidebar. Drag a tile's corner to change its
+width and height; sidebar tiles also resize their sidebar. **Save layout** keeps
+that page's arrangement; **Cancel** restores its saved layout. Existing editor
+buffers and chat drafts survive moving tiles. Another window or agent's newer
+layout is protected by a version check.
+
+Every owned agent role can use `read_view_layout` and `update_view_layout` for a
+requested change within its scope, such as “add a PDF viewer to this page.” The
+message includes the current page identity. Existing repository PDFs work in any
+workflow; adding a viewer does not configure or start a compiler. Default layouts
+for all work items and workflow rules still use the Surfboard proposal flow.
+
+Consecutive scheduled monitoring checks appear in one collapsed **Monitoring**
+card with the latest outcome visible. Expand it for the complete check history.
+Your messages and steering remain in the conversation. Existing scheduled history
+is recognized without rewriting or deleting it. Updated worker guidance asks for
+brief outcomes and keeps recurring detail in the saved evidence.
+
+Reconnecting waits and retries quietly for fifteen seconds before prompting for
+ChatGPT login. A transport error shows a reconnecting state; confirmed sign-out
+shows the login prompt. Agent actions still require a verified host account.
+
 ## 0.1.28 prompt admission after node preparation
 
 Updating a queued run's node contract cancels its obsolete readiness check. That

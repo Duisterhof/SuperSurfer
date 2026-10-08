@@ -248,7 +248,6 @@ class EditorServiceTests(unittest.TestCase):
         for changes in ({}, {"pages": {}}, {"pages": [page, page]}, {"pages": [], "command": "execute"}):
             with self.subTest(changes=changes):
                 self.assertEqual(400, self.action("view-layout.save", **params, **changes)[0])
-        self.assertEqual(400, self.action("view-layout.save", **{**params, "experiment_id": None}, pages=[page])[0])
         foreign = self.service.store.create({"id": "p1", "repo": str(self.repo)}, "Foreign pages", "Different project")
         self.assertEqual(403, self.action("view-layout.save", **{**params, "experiment_id": foreign["id"]}, pages=[page])[0])
         self.assertEqual(403, self.request("/api/view-layout?" + urlencode({"project_id": self.pid, "experiment_id": foreign["id"]}))[0])
