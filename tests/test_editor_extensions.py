@@ -65,6 +65,25 @@ class ExtensionAPItests(unittest.TestCase):
         for identity in ('vscodevim.vim@1.0','../../private','--install-extension',None):
             with self.assertRaises(SurfboardError):workbench.command({'id':'editor','kind':'settings','extension_id':identity})
 
+    def test_terminal_and_ports_accept_no_arbitrary_execution_fields(self):
+        workbench=self.service.workbench
+        workbench.sessions['editor']={'project_id':'p1','commands':[]}
+        for kind in ('terminal','ports'):
+            workbench.command({'id':'editor','kind':kind,'command':'do-not-execute','cwd':'/outside','port':1234})
+        commands=workbench.sessions['editor']['commands']
+        self.assertEqual(['terminal','ports'],[row['kind'] for row in commands])
+        self.assertTrue(all(set(row)=={'id','kind'} for row in commands))
+        with self.assertRaises(SurfboardError):workbench.command({'id':'editor','kind':'executeCommand'})
+
+    def test_read_only_workspace_cannot_open_terminal_or_ports(self):
+        workbench=self.service.workbench
+        workbench.sessions['editor']={'project_id':'p1','commands':[]}
+        self.service.read_only=True
+        for kind in ('terminal','ports'):
+            with self.assertRaises(SurfboardError) as error:workbench.command({'id':'editor','kind':kind})
+            self.assertEqual(403,error.exception.status)
+        self.assertEqual([],workbench.sessions['editor']['commands'])
+
     def test_project_archive_preserves_tasks_and_running_goals_and_persists(self):
         scope='experiment:'+self.exp['id']
         self.service.action('chat.send',{'scope':scope,'text':'Continue the assigned work.'})

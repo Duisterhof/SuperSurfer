@@ -1,3 +1,8 @@
+## Next update
+
+- [x] Direct Terminal and Ports controls in the native VS Code editor toolbar.
+  The standalone website demonstrates these with a clearly simulated console.
+
 ## Completed in 0.1.33
 
 - Keep queue and W&B identities aligned when correcting a rejected source folder.

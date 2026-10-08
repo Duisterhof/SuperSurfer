@@ -1,3 +1,13 @@
+# Unreleased editor panel shortcuts — October 8, 2026
+
+All **8 focused editor-extension tests** pass, including read-only rejection and
+proof that terminal/ports requests cannot inject shell commands, working directories,
+port mappings or arbitrary VS Code command identifiers into the bridge.
+`tests/editor-panels.browser.cjs` passes against the pinned real Code OSS runtime:
+the native terminal opens in an isolated trusted workspace, reopening reuses the
+active terminal, and Ports opens its real forwarding view. No browser errors.
+The full backend suite was not repeated for these two bounded editor actions.
+
 # SuperSurfer 0.1.33 tracking recovery — October 8, 2026
 
 The full backend suite passes **641 Python tests**. The source-recovery regression

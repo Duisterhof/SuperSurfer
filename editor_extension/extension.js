@@ -28,6 +28,11 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc=>{if(doc.uri.scheme==='file')request({operation:'saved',path:doc.uri.fsPath}).catch(()=>{});}));
   async function command(item){
     if(item.kind==='selection')return selection();
+    if(item.kind==='terminal'){
+      const terminal=vscode.window.activeTerminal||vscode.window.createTerminal({name:'Terminal',cwd:vscode.workspace.workspaceFolders?.[0]?.uri});
+      terminal.show();return;
+    }
+    if(item.kind==='ports')return vscode.commands.executeCommand('remoteExplorer.toggleForwardedPortsView');
     if(item.kind==='extensions')return vscode.commands.executeCommand('workbench.view.extensions');
     if(item.kind==='settings')return vscode.commands.executeCommand('workbench.action.openSettings','@ext:'+item.extension_id);
     if(item.kind==='theme')return vscode.commands.executeCommand('workbench.action.selectTheme');

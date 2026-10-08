@@ -1,3 +1,12 @@
+## Editor terminal and ports controls
+
+The native workbench toolbar exposes Terminal and Ports through its authenticated
+editor session. Terminal reveals the active terminal, creating one in the workspace
+folder only when none is active. The bridge accepts no shell command or arbitrary
+VS Code command ID. Read-only workspaces reject both actions. Ports delegates to
+the native forwarded-port view; it does not publish or expose a service itself.
+The lightweight Monaco editor and standalone mockup are not remote shells.
+
 ## 0.1.33 W&B source correction
 
 Only the service-verified rejected/absent queue path can authorize a repo-only

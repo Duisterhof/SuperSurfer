@@ -1,0 +1,20 @@
+'use strict';
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
+(async()=>{
+ const root=path.resolve(__dirname,'..'),binary=path.resolve(root,'../../work/code-server-4.141.0/code-server-4.141.0-linux-amd64/bin/code-server');
+ const child=spawn('python3',['tests/layout_runtime_fixture.py'],{cwd:root,env:{...process.env,SUPERSURFER_CODE_SERVER:binary},stdio:['pipe','pipe','pipe']});let browser,stderr='';child.stderr.on('data',v=>stderr+=v);
+ try{
+ const service=await new Promise((resolve,reject)=>{let s='';child.stdout.on('data',v=>{s+=v;if(s.includes('\n'))resolve(JSON.parse(s.split('\n')[0]))});child.on('exit',code=>reject(new Error(code+' '+stderr)))}),base='http://127.0.0.1:'+service.port,token=fs.readFileSync(path.join(service.directory,'token'),'utf8').trim(),pid=service.projects.software;
+ const request=async(route,body)=>{const response=await fetch(base+'/api/'+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();assert(response.ok,JSON.stringify(data));return data};
+ const layout=await request('view-layout?project_id='+pid);await request('action',{op:'view-layout.save',params:{project_id:pid,experiment_id:null,version:layout.version,board_version:layout.board_version,pages:[{id:'desk',title:'Code',tiles:[{id:'code',kind:'editor',span:12,height:700}]}]}});await request('action',{op:'editor.settings',params:{engine:'vscode'}});
+ browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1650,height:1100}});page.setDefaultTimeout(45000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.addInitScript(({token,pid})=>{if(window===window.top){sessionStorage.setItem('supersurfer-token',token);localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:pid,tab:'desk',chatVisible:true}))}},{token,pid});
+ await page.goto(base);const frame=page.frameLocator('.workbench-frame iframe');await frame.locator('.monaco-workbench').waitFor();await frame.getByRole('button',{name:/trust.*authors|Yes, I trust/i}).click({timeout:3000}).catch(()=>{});
+ await page.waitForFunction(()=>document.querySelector('.workbench-status')?.hidden===true);
+ await page.locator('.workbench-toolbar').getByRole('button',{name:'Terminal',exact:true}).click();await frame.getByRole('button',{name:/Trust Workspace.*Continue/}).click({timeout:5000}).catch(()=>{});await frame.locator('.xterm-screen').first().waitFor();console.log('PASS native terminal opens on the isolated workspace');
+ const count=await frame.locator('.xterm-screen').count();await page.locator('.workbench-toolbar').getByRole('button',{name:'Terminal',exact:true}).click();await page.waitForTimeout(1200);assert.equal(await frame.locator('.xterm-screen').count(),count);console.log('PASS terminal button reuses the active terminal');
+ await page.locator('.workbench-toolbar').getByRole('button',{name:'Ports',exact:true}).click();await frame.getByText(/No forwarded ports\. Forward a port/).first().waitFor();console.log('PASS native forwarded Ports view opens');
+ assert.deepEqual(errors,[]);await page.screenshot({path:path.resolve(root,'../../work/workflow-playground/native-editor-ports.png')});
+ }catch(e){if(browser)await browser.contexts()[0]?.pages()[0]?.screenshot({path:path.resolve(root,'../../work/workflow-playground/native-editor-failed.png')}).catch(()=>{});throw e}
+ finally{child.stdin.end();await browser?.close()}
+})().catch(e=>{console.error(e);process.exitCode=1});

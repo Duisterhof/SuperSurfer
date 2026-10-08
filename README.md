@@ -73,7 +73,10 @@ Settings (about 240 MB), then select it as your editor. It uses Code OSS/code-se
 on the workspace computer; Vim, Python, LaTeX and themes install from Open VSX.
 Microsoft-only Marketplace extensions may be unavailable. Cmd/Ctrl+L or I adds
 selected source to a chat chip. The editor starts with explicit saves; users can
-change native VS Code settings. The built-in PDF and compiler tiles remain available.
+change native VS Code settings. **Terminal** and **Ports** in the editor toolbar open
+the native bottom panel. Terminals run on the workspace computer and reuse the
+active shell; Ports uses the native forwarded-port view. The lightweight built-in
+editor does not run a shell. The built-in PDF and compiler tiles remain available.
 Extensions execute on the connected workspace under that user's account. Use the
 current desktop app or a browser with state-preserving DOM moves (Chrome 133+).
 

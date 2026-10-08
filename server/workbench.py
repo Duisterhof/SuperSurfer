@@ -322,7 +322,7 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings"}:
+            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
