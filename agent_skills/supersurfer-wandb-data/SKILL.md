@@ -25,6 +25,11 @@ configured input; it does not silently narrow or widen experiment sharing. Sourc
 files or manifests selected from the Code editor may be unsaved context. Resolve
 actual saved run/source records before presenting them as measured writers.
 
+Several custom pages can display views of the same W&B input. They retain the
+configured project/current/selected data scope; page titles and neighboring source
+tiles are not a new selection rule. Reuse individual writer identities across
+those views instead of creating another tracking run to populate a new tile.
+
 A W&B group is context, not a measured writer. Resolve individual run URLs and
 actual logged keys before publishing curves. Retain experiment, method, attempt,
 commit/checkpoint, split and step/time provenance. Failed or cancelled runs can

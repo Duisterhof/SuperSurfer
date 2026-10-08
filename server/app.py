@@ -26,7 +26,7 @@ from .aml import AMLClient, ManagerError, normalize
 from .store import Store, atomic_write
 from .wandb import WandBReader
 from .result_data import ResultData
-from .project_limits import ProjectLimits, display as display_limits
+from .project_limits import ProjectLimits, display as display_limits, encode_limit
 from .training_results import compile_report
 from .time_context import local_time_context
 from .compute import ComputePools, ComputeError
@@ -234,7 +234,7 @@ class Service(SurfboardService, EditorService):
             state["connected"] = True
         for project in state["projects"]:
             board = self.boards.get(project["id"])
-            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts")}, "name": board["board"]["name"], "version": board["version"]}
+            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
         projects = {project["id"]: project for project in state["projects"]}
@@ -633,7 +633,7 @@ class Service(SurfboardService, EditorService):
                 + str(onboarding) + ". Use inspect_project_compute to find prepared nodes, inspect_compute_host to check candidates, register_compute_host for necessary new capacity within authorized work, "
                 "and onboard_project_node to validate and add one prepared node to the project. For a queued run, use check_available_node for its exact checkout and acquire_new_node to stage source/environment/data, call that same check and add the candidate to the existing run. recover_run enables owner-bound recovery wakeups and retries confirmed failed attempts. "
                 "Inspection is read-only; actual setup for authorized work uses isolated user-owned paths and preserves shared environments, original data and existing research worktrees.")
-            context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. They can also set_project_limits directly after an explicit user budget decision, using gpu_limit=unlimited when requested and a separate run_limit. until_run restores only that temporary change after the named run ends; later budget edits win. A capacity wait is not authorization to raise limits. Use stop_run(run_id) directly for explicit user stop requests within your scope; cancelling is pending until terminal status is confirmed. Never stop other jobs to free capacity without authorization. "
+            context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. They can also set_project_limits directly after an explicit user budget decision, using gpu_limit=unlimited or run_limit=unlimited to remove either cap. Neither cap is imposed on new projects by default. Read the live limits through inspect_project_compute or read_surfboard; a saved snapshot may be stale. until_run restores only that temporary change after the named run ends; later budget edits win. A capacity wait is not authorization to raise limits. Use stop_run(run_id) directly for explicit user stop requests within your scope; cancelling is pending until terminal status is confirmed. Never stop other jobs to free capacity without authorization. "
                 "Workers are fixed to their experiment's project and merge one validated node at a time; only leads/managers use configure_project_compute. "
                 "Prefer nodes already containing the correct environment/data. If no prepared node can serve the requested work, inspect an eligible free registered node "
                 "and perform necessary setup in isolated user-owned paths: locate verified originals, resume non-destructive copies, reuse a compatible environment "
@@ -1610,7 +1610,7 @@ class Service(SurfboardService, EditorService):
                 raise APIError("Invalid project limit fields")
             return self.project_limits.set(text_field(params, "project_id", 150), {key: value for key, value in params.items() if key != "project_id"})
         if op == "project.add":
-            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": integer(params, "gpu_limit", 0, 1024, 0), "run_limit": integer(params, "run_limit", 1, 1024, 1), "goal": text_field(params, "goal", required=False)}
+            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": encode_limit("gpu_limit", params.get("gpu_limit", "unlimited")), "run_limit": encode_limit("run_limit", params.get("run_limit", "unlimited")), "goal": text_field(params, "goal", required=False)}
             if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload["name_"]) or len(payload["name_"]) > 64:
                 raise APIError("Project name must use lowercase letters, numbers and single hyphens, up to 64 characters")
             payload["repo"] = prepare_project_repository(payload["repo"])
@@ -1624,7 +1624,7 @@ class Service(SurfboardService, EditorService):
                 if any(row["name"] == payload["name_"] for row in self.state()["projects"]):
                     raise APIError("A project with that name already exists", 409)
                 project = {"id": "proj_" + uuid.uuid4().hex[:12], "name": payload["name_"], "repo": payload["repo"],
-                           "goal": payload["goal"], "gpu_limit": 0, "run_limit": payload["run_limit"],
+                           "goal": payload["goal"], "gpu_limit": payload["gpu_limit"], "run_limit": payload["run_limit"],
                            "workflow": workflow, "status": "active", "created_at": time.time()}
                 projects.append(project)
                 self.store.put("local_projects", projects)

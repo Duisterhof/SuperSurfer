@@ -1,5 +1,6 @@
 """Authenticated repository editing and scoped view preferences."""
 from copy import deepcopy
+import json
 from pathlib import Path
 
 from .surfboards import SurfboardError
@@ -8,12 +9,12 @@ from .code_editor import _parts as repository_parts
 
 class EditorService:
     def view_layout(self, project_id, experiment_id=None, *, board=None):
-        from .surfboards import compile_layouts, layout_catalog, validate_layout
+        from .surfboards import compile_layouts, compile_pages, layout_catalog, tile_catalog, validate_layout, validate_pages
         record = board or self.boards.get(project_id)
         if board is None:
             self.lookup("projects", project_id)
         level = "item" if experiment_id else "project"
-        saved = {"version": 0, "rows": None}
+        saved = {"version": 0, "rows": None, "pages": None}
         if experiment_id:
             if self.store.experiment(experiment_id)["project_id"] != project_id:
                 raise SurfboardError("This work item belongs to another project", 403)
@@ -21,34 +22,60 @@ class EditorService:
         definition = deepcopy(record["board"])
         available = layout_catalog(definition, level)
         available_ids = {row["id"] for row in available}
-        if saved["rows"] is not None:
+        if saved.get("rows") is not None:
             # Removed workflow views cannot be resurrected by an old item layout.
             rows = [row for row in saved["rows"] if row["id"] in available_ids]
             definition.setdefault("layouts", {})[level] = validate_layout(rows, definition, level)
+        available_tiles = tile_catalog(definition, level)
+        if saved.get("pages") is not None:
+            # Keep titles and empty pages, but never revive a removed block's
+            # views from an older work-item override.
+            kinds = {tile["kind"] for tile in available_tiles}
+            pages = [{**page, "tiles": [tile for tile in page["tiles"] if tile["kind"] in kinds]}
+                     for page in saved["pages"]]
+            definition.setdefault("pages", {})[level] = validate_pages(pages, definition, level)
         return {"project_id": project_id, "experiment_id": experiment_id,
                 "version": saved["version"], "board_version": record["version"],
-                "overridden": saved["rows"] is not None,
-                "rows": compile_layouts(definition)[level], "available": available}
+                "overridden": saved.get("rows") is not None or saved.get("pages") is not None,
+                "rows_overridden": saved.get("rows") is not None, "pages_overridden": saved.get("pages") is not None,
+                "rows": compile_layouts(definition)[level], "available": available,
+                "pages": compile_pages(definition)[level], "available_tiles": available_tiles}
 
     def save_view_layout(self, params):
-        from .surfboards import validate_layout
+        from .surfboards import validate_layout, validate_pages
         if self.read_only:
             raise SurfboardError("Read-only workspace: layouts cannot be changed", 403)
-        if set(params) != {"project_id", "experiment_id", "version", "board_version", "rows"}:
-            raise SurfboardError("Layout changes require project, work item, both versions and rows")
+        required = {"project_id", "experiment_id", "version", "board_version"}
+        if (not required <= set(params) or set(params) - required - {"rows", "pages"} or
+                not {"rows", "pages"}.intersection(params)):
+            raise SurfboardError("Layout changes require project, work item, both versions, and rows or pages")
         project_id, experiment_id = params["project_id"], params["experiment_id"]
         if not experiment_id:
             raise SurfboardError("Edit project and default task layouts in the Surfboard")
-        # The action lock serializes board apply and item layout writes. The
-        # persisted version also catches edits from another browser window.
-        current = self.view_layout(project_id, experiment_id)
-        if (type(params["version"]) is not int or type(params["board_version"]) is not int or
-                current["version"] != params["version"] or current["board_version"] != params["board_version"]):
-            raise SurfboardError("The layout or surfboard changed. Reload before saving", 409)
-        rows = params["rows"]
-        if rows is not None:
-            rows = validate_layout(rows, self.boards.get(project_id)["board"], "item")
-        self.store.put("view_layout:" + experiment_id, {"version": current["version"] + 1, "rows": rows})
+        self.lookup("projects", project_id)
+        if self.store.experiment(experiment_id)["project_id"] != project_id:
+            raise SurfboardError("This work item belongs to another project", 403)
+        key = "view_layout:" + experiment_id
+        # One transaction checks both versions and saves both independent
+        # overrides, including when another service connection applies a board.
+        with self.store.lock:
+            self.store.db.execute("BEGIN IMMEDIATE")
+            try:
+                board = self.boards.get(project_id)
+                saved = self.store.get(key, {"version": 0, "rows": None, "pages": None})
+                if (type(params["version"]) is not int or type(params["board_version"]) is not int or
+                        saved["version"] != params["version"] or board["version"] != params["board_version"]):
+                    raise SurfboardError("The layout or surfboard changed. Reload before saving", 409)
+                for field, validator in (("rows", validate_layout), ("pages", validate_pages)):
+                    if field in params:
+                        value = params[field]
+                        saved[field] = None if value is None else validator(value, board["board"], "item")
+                saved["version"] += 1
+                self.store.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (key, json.dumps(saved)))
+                self.store.db.commit()
+            except BaseException:
+                self.store.db.rollback()
+                raise
         return self.view_layout(project_id, experiment_id)
 
     def code_query(self, operation, fields):

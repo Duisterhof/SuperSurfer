@@ -12,6 +12,16 @@ component of VS Code. Its files are the registered repository shared by the user
 and project agents, not an isolated agent checkout. The `editor` surfboard block
 is a view; it adds no shell tool, executable action or launch permission.
 
+Custom pages can place File explorer, Code editor and Agent changes as separate
+tiles on any project, including Research, without adding an editor workflow block.
+They can sit beside chat or other views and share repository identities and the
+editor's buffers; opening a file from an explorer or switching pages does not
+create another checkout or agent. The editor tile can omit its built-in sidebar
+when a separate explorer is present. If the page lacks an editor, file selection
+can open the existing Code surface. Page arrangement is a presentation choice,
+not a new source owner or permission. Ask the configurator for requested default
+page composition rather than rebuilding equivalent dashboards in HTML.
+
 When the user asks about a file or selected lines, use that context for the
 requested task. **Ask agent** places a draft in chat; it does not itself send work.
 Selections can contain unsaved edits and carry a warning. Re-read the current

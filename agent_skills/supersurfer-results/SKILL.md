@@ -46,6 +46,12 @@ HTML edited in the Code editor is a shared source file; unsaved text or a review
 agent patch does not mean the report was published. Preserve concurrent edits and
 use the normal versioned publishing tool when publication was requested.
 
+Results can also be a tile on a custom page beside notes, source or agent changes.
+Reuse the existing live report instead of republishing it for each tile. Honor the
+page's experiment/source scope and test the actual tile size. A requested layout
+change belongs to page configuration; it does not authorize altering metric keys,
+comparison cohorts or the report's scientific content.
+
 ## Use the standard training renderer
 
 Use `publish_training_results` for a new or redesigned training comparison instead

@@ -214,6 +214,17 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(Path(fresh["document_path"]).is_file())
         self.assertEqual(self.service.context_provider("experiment:" + key)["cwd"], str(self.repo))
         self.assertEqual(subprocess.check_output(["git", "-C", str(self.repo), "status", "--porcelain"]), b"")
+    def test_project_add_omitted_limits_are_unlimited_for_every_workflow(self):
+        from server.project_limits import UNLIMITED_GPUS
+        for workflow in ("research", "software", "web"):
+            row = self.service.action("project.add", {"name": "uncapped-" + workflow,
+                "repo": str(self.root / ("uncapped-" + workflow)), "surfboard_template": workflow})
+            self.assertEqual((UNLIMITED_GPUS, UNLIMITED_GPUS), (row["gpu_limit"], row["run_limit"]))
+        explicit = self.service.action("project.add", {"name": "explicit-limits", "repo": str(self.root / "explicit-limits"), "gpu_limit": 0, "run_limit": 3})
+        self.assertEqual((0, 3), (explicit["gpu_limit"], explicit["run_limit"]))
+        row = self.service.action("project.add", {"name": "literal-unlimited", "repo": str(self.root / "literal-unlimited"), "gpu_limit": "unlimited", "run_limit": "unlimited"})
+        self.assertEqual((UNLIMITED_GPUS, UNLIMITED_GPUS), (row["gpu_limit"], row["run_limit"]))
+
     def test_project_add_creates_own_empty_repository_inside_parent_repository(self):
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
         destination = self.root / "new-projects" / "civic_action"

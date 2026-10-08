@@ -44,6 +44,13 @@ stop orders and resource limits. A turn ending is not completion.
    or demonstrated external dependency, with concrete checks and attempted
    alternatives. Mark `completed` only with the requested artifact/outcome.
 
+Compare completion with the original assignment, including later clarifications.
+Passing helper tests or writing a protocol is a milestone when requested trainer,
+recovery or telemetry integration remains. Keep that same task working and finish
+the remaining authorized preparation; a no-launch restriction does not prohibit
+implementation. During an application completion review, inspect the deliverable
+and reopen an incomplete task instead of confirming your earlier status claim.
+
 For a user-requested cancellation, call `stop_run` with the exact `run_id` from
 this experiment instead of asking the lead/manager to do it. Queued work cancels
 immediately; active work remains cancelling until the scheduler confirms it stopped.
@@ -57,6 +64,11 @@ allows only that owner's latest run and its bounded setup/retry operations, not
 fresh user authority. Follow the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
 Chat Stop, run cancellation and recovery pause revoke recovery; never revive it
 without the user's resumption.
+
+GPU and concurrent-run caps each accept a number or `unlimited`. New projects
+have neither cap by default; preserve existing limits unless the user changes
+them. Inspect live values through `inspect_project_compute` or `read_surfboard`;
+an unavailable reading is unknown, not permission to remove a limit.
 
 Ask a peer only for a concrete dependency your own records/tools cannot resolve
 or an observed scope conflict. Use [coordination](references/coordination.md):
@@ -102,6 +114,12 @@ carry an unsaved warning; do not assume it is committed or deploy it as if it we
 Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
 agent patches versus repository Git changes. A local review marker does not satisfy
 the exact-source PR requirement, and editing a file never launches a run by itself.
+
+Explorer, editor, recorded changes, chat and Results may be separate tiles on a
+custom experiment page. They still refer to this experiment and its shared source.
+Page navigation does not finish, restart or duplicate your task. Publish into the
+existing requested artifact/report, and let configured tiles display it rather
+than creating duplicate pages or periodic publishing work for each layout.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named

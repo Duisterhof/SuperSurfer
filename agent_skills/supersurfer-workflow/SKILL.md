@@ -28,6 +28,17 @@ with the current document version. These names retain the established project/it
 ownership rules without introducing research metadata. Workers finish
 their own task; a handoff acknowledgment or passing check is not the whole delivery.
 Do not duplicate a busy owner. Create another conversation only for distinct work.
+Record actionable deliverables before doing the work. Compare completion with the
+original assignment and later clarifications; a helper, passing test or written
+plan is not completion when requested integration remains. An application completion
+review asks for actual evidence: reopen the same task and continue missing work,
+without expanding scope or reviving a stopped request.
+
+If this board enables compute, GPU and concurrent-run caps independently accept
+a number or `unlimited`. Neither is imposed on new projects by default. Preserve
+existing caps, read live limits through `read_surfboard` or the enabled compute
+tools, and apply only the user's explicit budget decision. A queue wait grants no
+authority to raise limits; a generic project needs no compute block to edit source.
 
 The Code editor block is a visual view of the shared project repository. It is
 different from a Code action with a configured command: opening or editing source
@@ -36,6 +47,12 @@ when acting on selected code or reviewing agent changes. Preserve user and peer
 edits, including unsaved-selection warnings. A Reviewed patch marker is not a
 check receipt. Project and work-item layouts are independent presentation choices;
 moving a pane does not create a new task or duplicate its owner.
+
+Custom project/work-item pages can combine separate explorer, editor, agent-change,
+chat and artifact tiles. Reuse the shared source and existing report/agent identity
+across pages. A requested tile or page is configured by the surfboard; do not
+implement a second source browser or launch an agent just to populate the layout.
+Configure checks/previews only when execution behavior is part of the request.
 
 Use `run_board_action` for an action configured on the current board, such as a
 check or preview. Inspect the durable record after uncertainty before starting it

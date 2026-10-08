@@ -103,6 +103,10 @@ def catalog():
                           order={"type": "integer", "minimum": 0, "maximum": 1000, "default": 50})
         if kind in ACTION_KINDS | {"experiment", "compute"}:
             fields["recovery_attempts"] = {"type": "integer", "minimum": 1, "maximum": 3, "default": 3}
+        if kind == "compute":
+            for key, minimum, limit_label in (("gpu_limit", 0, "GPU allocation"), ("run_limit", 1, "Concurrent runs")):
+                fields[key] = {"type": ["integer", "string"], "minimum": minimum, "maximum": 1024,
+                               "default": "unlimited", "description": limit_label + ": a number or 'unlimited'. No cap by default."}
         if kind == "approval":
             fields["requirements"] = {"type": "array", "items": {"type": "string", "enum": list(GATE_REQUIREMENTS)}, "default": ["user_authorization"]}
         if kind == "wandb":
@@ -236,7 +240,7 @@ def validate(board, *, allow_pending=False):
         if isinstance(error, SurfboardError):
             raise
         _fail("board", "must contain finite JSON values")
-    _fields(board, {"schema", "name", "workflow", "nodes", "edges", "defaults", "layouts"}, "board")
+    _fields(board, {"schema", "name", "workflow", "nodes", "edges", "defaults", "layouts", "pages"}, "board")
     if type(board.get("schema")) is not int or board["schema"] != 1:
         _fail("schema", "only schema version 1 is supported")
     name = _text(board.get("name"), "name", 100, 1, False).strip()
@@ -267,7 +271,13 @@ def validate(board, *, allow_pending=False):
             field_path, spec = path + ".config." + field, fields[field]
             if "enum" in spec and value not in spec["enum"]:
                 _fail(field_path, "choose a supported value")
-            if spec["type"] == "string":
+            if kind == "compute" and field in {"gpu_limit", "run_limit"}:
+                from .project_limits import encode_limit
+                try:
+                    encode_limit(field, value)
+                except ValueError as error:
+                    _fail(field_path, str(error))
+            elif spec["type"] == "string":
                 _text(value, field_path, spec.get("maxLength", 100), 0)
             elif spec["type"] == "integer":
                 _number(value, field_path, spec["minimum"], spec["maximum"], True)
@@ -304,6 +314,15 @@ def validate(board, *, allow_pending=False):
         nodes.append({"id": key, "kind": kind, "label": _text(raw.get("label", definitions[kind]["label"]), path + ".label", 100, 1, False).strip(),
                       "x": _number(raw.get("x", 0), path + ".x", -100000, 100000),
                       "y": _number(raw.get("y", 0), path + ".y", -100000, 100000), "config": config})
+    limit_policy = {}
+    for node in nodes:
+        if node["kind"] != "compute":
+            continue
+        for key in ("gpu_limit", "run_limit"):
+            if key in node["config"]:
+                if key in limit_policy and node["config"][key] != limit_policy[key]:
+                    _fail("nodes", "Compute blocks share one project budget; conflicting " + key + " values are not allowed")
+                limit_policy[key] = node["config"][key]
     by_id, edges, edge_ids, connections = {node["id"]: node for node in nodes}, [], set(), set()
     for i, raw in enumerate(raw_edges):
         path = f"edges[{i}]"
@@ -369,6 +388,9 @@ def validate(board, *, allow_pending=False):
     if "layouts" in board:
         _fields(board["layouts"], {"project", "item"}, "layouts")
         result["layouts"] = {level: validate_layout(rows, result, level) for level, rows in board["layouts"].items()}
+    if "pages" in board:
+        _fields(board["pages"], {"project", "item"}, "pages")
+        result["pages"] = {level: validate_pages(pages, result, level) for level, pages in board["pages"].items()}
     return result
 
 
@@ -476,6 +498,96 @@ def compile_layouts(board):
         layouts[level] = sorted([{**view, **by_id.get(view["id"], {"placement": "hidden", "order": 1000})}
                                  for view in available], key=lambda row: (row["order"], row["id"]))
     return layouts
+
+
+def tile_catalog(board, level="item"):
+    """Code tiles expose authenticated repository views, never agent capabilities."""
+    result = [{**row, "title": row["label"]} for row in layout_catalog(board, level)]
+    editor = next((row for row in result if row["kind"] == "editor"), None)
+    if editor is None:
+        editor = {"id": "editor", "kind": "editor", "label": "Code editor", "title": "Code editor"}
+        result.append(editor)
+    for kind, title in (("file_explorer", "Repository files"), ("agent_changes", "Agent changes")):
+        result.append({**editor, "id": kind, "kind": kind, "label": title, "title": title})
+    return result
+
+
+def _page_identifier(value, path):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value):
+        _fail(path, "must be 1–64 letters, numbers, underscores or hyphens")
+    if value.lower() in {"surfboard", "empty-layout"}:
+        _fail(path, "this ID is reserved for workspace navigation")
+    return value
+
+
+def validate_pages(pages, board, level="item"):
+    """Ordered pages and tiles are presentation only, with bounded grid sizes."""
+    available = {row["kind"] for row in tile_catalog(board, level)}
+    path = "pages." + level
+    if not isinstance(pages, list) or len(pages) > 24:
+        _fail(path, "must be a list with at most 24 pages")
+    page_ids, result = set(), []
+    for index, page in enumerate(pages):
+        at = f"{path}[{index}]"
+        _fields(page, {"id", "title", "tiles"}, at)
+        page_id = _page_identifier(page.get("id"), at + ".id")
+        if page_id in page_ids:
+            _fail(at + ".id", "page IDs must be unique within a scope")
+        page_ids.add(page_id)
+        title = _text(page.get("title"), at + ".title", 100, 1, False).strip()
+        tiles = page.get("tiles")
+        if not isinstance(tiles, list) or len(tiles) > 16:
+            _fail(at + ".tiles", "must be a list with at most 16 tiles")
+        tile_ids, tile_kinds, normalized = set(), set(), []
+        for tile_index, tile in enumerate(tiles):
+            tile_at = f"{at}.tiles[{tile_index}]"
+            _fields(tile, {"id", "kind", "span", "height"}, tile_at)
+            tile_id = _page_identifier(tile.get("id"), tile_at + ".id")
+            kind = tile.get("kind")
+            if not isinstance(kind, str) or kind not in available:
+                _fail(tile_at + ".kind", "choose a tile available in this scope")
+            if tile_id in tile_ids:
+                _fail(tile_at + ".id", "tile IDs must be unique within a page")
+            if kind in tile_kinds:
+                _fail(tile_at + ".kind", "a page can contain only one tile of each kind")
+            tile_ids.add(tile_id)
+            tile_kinds.add(kind)
+            normalized.append({"id": tile_id, "kind": kind,
+                               "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12, True),
+                               "height": _number(tile.get("height", 400), tile_at + ".height", 160, 1200, True)})
+        result.append({"id": page_id, "title": title, "tiles": normalized})
+    return result
+
+
+def compile_pages(board):
+    """Old main views become one-tile pages without writing a migration."""
+    layouts = compile_layouts(board)
+    result = {}
+    for level in ("project", "item"):
+        pages = board.get("pages", {}).get(level)
+        if pages is None:
+            pages = [{"id": row["id"], "title": row["label"],
+                      "tiles": [{"id": row["id"], "kind": row["kind"], "span": 12, "height": 400}]}
+                     for row in layouts[level] if row["placement"] == "main"]
+        result[level] = validate_pages(pages, board, level)
+    return result
+
+
+def configured_limits(board):
+    """Only explicitly configured caps; omission never edits a legacy scheduler."""
+    result = {}
+    for node in board["nodes"]:
+        if node["kind"] == "compute":
+            result.update({key: node.get("config", {})[key] for key in ("gpu_limit", "run_limit") if key in node.get("config", {})})
+    return result
+
+
+def with_limits(board, limits):
+    result = deepcopy(board)
+    for node in result["nodes"]:
+        if node["kind"] == "compute":
+            node.setdefault("config", {}).update({key: limits[key] for key in ("gpu_limit", "run_limit")})
+    return result
 
 
 def compile_board(board):
@@ -618,7 +730,10 @@ def compile_board(board):
     return {"workflow": workflow, "item_label": {"research": "Experiment", "software": "Feature", "web": "Design task"}[workflow],
             "tabs": tabs, "tools_by_role": tools_by_role, "requirements": requirements, "defaults": deepcopy(board["defaults"]),
             "instructions": instructions, "actions": actions, "actions_by_role": actions_by_role, "data_sharing": board["defaults"]["data_sharing"],
-            "data_sources": data_sources, "visualizers": visualizers, "timers": timers, "recovery": recovery, "views": views, "layouts": compile_layouts(board), "warnings": warnings}
+            "data_sources": data_sources, "visualizers": visualizers, "timers": timers, "recovery": recovery, "views": views,
+            "layouts": compile_layouts(board), "pages": compile_pages(board),
+            "limits": {"gpu_limit": "unlimited", "run_limit": "unlimited", **configured_limits(board)},
+            "available_tiles": {level: tile_catalog(board, level) for level in ("project", "item")}, "warnings": warnings}
 
 
 def diff_summary(before, after):
@@ -645,6 +760,8 @@ def diff_summary(before, after):
     for level in ("project", "item"):
         if before.get("layouts", {}).get(level) != after.get("layouts", {}).get(level):
             result.append("Arrange " + ("project" if level == "project" else "work-item") + " views.")
+        if before.get("pages", {}).get(level) != after.get("pages", {}).get(level):
+            result.append("Update " + ("project" if level == "project" else "work-item") + " pages and tiles.")
     return result or ["Update the diagram layout."]
 
 
@@ -695,7 +812,7 @@ class Surfboards:
         if actual != expected_draft_version or (not actual and not allow_new):
             raise SurfboardError("The surfboard draft changed. Reload it to preserve the newer edits.", 409)
 
-    def save_draft(self, project_id, board, expected_version, expected_draft_version=None):
+    def save_draft(self, project_id, board, expected_version, expected_draft_version=None, *, limits_baseline=None):
         board = validate(board, allow_pending=True)
         errors = []
         try:
@@ -707,12 +824,16 @@ class Surfboards:
             record["next_draft_version"] = record.get("next_draft_version", 0) + 1
             record["draft"] = {"board": board, "draft_version": record["next_draft_version"], "base_version": record["version"],
                                "summary": diff_summary(record["board"], board), "errors": errors, "updated_at": time.time()}
+            if limits_baseline is not None:
+                record["draft"]["limits_baseline"] = deepcopy(limits_baseline)
         return self._mutate(project_id, expected_version, change)
 
-    def apply(self, project_id, expected_version, expected_draft_version):
+    def apply(self, project_id, expected_version, expected_draft_version, *, board_override=None):
         def change(record):
             self._expect_draft(record, expected_draft_version)
-            board = validate(record["draft"]["board"])
+            if record["draft"]["base_version"] != record["version"]:
+                raise SurfboardError("The active project policy changed. Reread and reconcile this draft before applying.", 409)
+            board = validate(board_override if board_override is not None else record["draft"]["board"])
             compile_board(board)
             history = record.setdefault("history", [])
             history.append({"version": record["version"], "board": record["board"], "replaced_at": time.time()})
@@ -721,6 +842,26 @@ class Surfboards:
             record["board"] = board
             record["draft"] = None
         return self._mutate(project_id, expected_version, change)
+
+    def sync_limits(self, project_id, limits):
+        """Mirror confirmed scheduler edits, invalidating stale draft versions."""
+        key = self._key(project_id)
+        with self.store.lock:
+            self.store.db.execute("BEGIN IMMEDIATE")
+            try:
+                record = self._record(project_id)
+                board = with_limits(record["board"], limits)
+                if board != record["board"]:
+                    history = record.setdefault("history", [])
+                    history.append({"version": record["version"], "board": record["board"], "replaced_at": time.time()})
+                    record["history"] = history[-30:]
+                    record.update(version=record["version"] + 1, board=validate(board))
+                    self.store.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (key, json.dumps(record)))
+                self.store.db.commit()
+            except BaseException:
+                self.store.db.rollback()
+                raise
+        return self._public(project_id, record)
 
     def discard(self, project_id, expected_version, expected_draft_version):
         def change(record):

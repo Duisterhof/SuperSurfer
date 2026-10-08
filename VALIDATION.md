@@ -1,10 +1,11 @@
 # SuperSurfer 0.1.25 validation — October 7, 2026
 
-The full **485 Python tests** pass, including 16 repository-editor, 8 durable
-agent-attribution, 9 real HTTP integration, and 8 new layout-schema cases.
+The full **518 Python tests** pass, including 16 repository-editor, 8 durable
+agent-attribution, 13 real HTTP integration, and the layout/page schema cases.
 All **20 Node/SSH tests** pass with the isolated localhost SSH checks enabled.
-The **21 Chromium suites** cover the existing app plus Monaco and the visual layout
-editor; the read-only wakeup check now waits for its asynchronous refresh response.
+The **26 Chromium suites** cover the existing app plus Monaco, standalone coding
+tiles, the page builder and data-loading races. Fixture teardown waits for in-flight
+routes; UI assertions wait for the relevant asynchronous data refresh.
 Three native Linux Electron suites cover workspace isolation/restore and actual
 Monaco unsaved-close handling. The native tests automate the modal response while
 exercising the real Electron beforeunload and window lifecycle.
@@ -27,7 +28,15 @@ also exercise JSON escaping above the ordinary API body's 2 MiB bound.
 Layout tests cover project/item separation, per-item overrides and reset, stale
 board/version conflicts, empty-layout recovery, hidden chat, main/right editor and
 chat, side-panel ordering, collapsed views, fullscreen and scoped previews. Layout
-edits never dispatch a command or change workflow authority.
+edits never dispatch a command or change workflow authority. First-class page checks
+cover create/rename/remove/reorder, palette drag, width/height, the first click after
+renaming/resizing, selected-page restoration, singleton code tiles and independent
+item overrides. Data tiles exercise errors/retry, retained iframe controls, document
+revision changes during pending reads and live W&B data on every page open.
+
+Compute-limit checks cover numeric and unlimited defaults, legacy hydration without mutation, stale proposal rejection, independent caps, confirmed writes after lost replies, compensation after final version conflicts and durable warnings for uncertain rollback. Browser checks preserve dirty fields while refreshing live usage and recovery warnings. New-project tests verify omitted caps remain unlimited for all three workflows.
+
+Fifteen continuity tests cover premature task completion against the original assignment, later status questions, reopened work, real protocol follow-up, Stop, failure, pending questions, restart, long histories, timestamp-less legacy records and bounded repeated reviews. The guard evaluates tracked deliverables; it cannot prove semantic completion or force an agent to diagnose every mistake.
 
 All **ten role/block skills** were reviewed, revised and checked for this release.
 The editor is Monaco; there is no VS Code extension host or Python language server.

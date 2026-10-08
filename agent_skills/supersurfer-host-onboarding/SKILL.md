@@ -30,6 +30,11 @@ checking or staging a node; preserve concurrent working-tree edits instead of
 copying them into an existing reviewed run. Moving/hiding Compute in a project
 layout changes presentation only, not readiness, reservations or setup authority.
 
+The same compute/run view can appear on a custom page beside source or agent-change
+tiles. Its presence, absence or dimensions do not register a host, acquire a node
+or alter the candidate pool. Continue to use the exact-run readiness and acquisition
+records; never interpret a page rearrangement as permission to move source or data.
+
 ## Separate the causes of a queue wait
 
 Use `inspect_project_compute` for pool version/defaults, per-node paths, registered
@@ -71,10 +76,13 @@ five minutes apart. Check timestamps/errors; a reservation is not fresh telemetr
 
 All owned roles have `set_project_limits`. Workers/leads omit `project_id`; managers
 supply it. Set only the fields the user decided: `gpu_limit` is an integer 0–1024
-or literal `unlimited`; `run_limit` independently allows 1–1024. GPU zero permits
+or literal `unlimited`; `run_limit` independently allows 1–1024 or `unlimited`. GPU zero permits
 CPU jobs. Present the unlimited setting as unlimited, not its internal integer
 representation. Read back the returned saved values. This changes scheduler
 budgets, not physical GPU allocations, candidate contracts or running jobs.
+New projects have no GPU or concurrent-run cap by default. Existing saved limits
+remain intentional until changed by the user. `read_surfboard` also reads the live
+limits and usage; do not substitute stale saved graph values when that read fails.
 
 For an explicitly temporary decision, `until_run` must name an existing unfinished
 run in this project. The service durably restores only changed fields after that

@@ -3,9 +3,13 @@
 - Monaco editor block, local language workers, file browser/search, tabs and revision-checked saves.
 - Separate Git working/index diffs and durable agent-attributed patch review.
 - Selected-code handoff into project/task agent composers, preserving unsaved user edits.
-- Independent visual project/task layouts, per-item overrides/reset, all-hidden recovery.
+- Named project/task pages with Add page, rename/remove/reorder, drag-in tiles, width/height controls and a Coding preset.
+- Independent project/task defaults and per-item overrides/reset; page changes preserve data, unsaved buffers and active work.
+- Explorer/editor/agent-change tiles cooperate within the page; live result frames retain controls on refresh.
 - Scoped and bounded source APIs, path/link defenses, overlap/conflict tests and native unsaved-close handling.
-- Review all ten role/block skills against the shipped editor and layout behavior.
+- Optional GPU/run caps in Surfboard Compute, live reads for the configurator, uncapped new projects and conflict-safe existing-limit preservation.
+- Original-assignment completion reviews for tracked deliverables, with interruption and repeated-unverified-completion safeguards.
+- Review all ten role/block skills against the shipped editor, pages, limits and completion behavior.
 
 ## 0.1.24 surfboards — implementation and validation
 

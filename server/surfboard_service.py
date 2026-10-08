@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 import subprocess
 
-from .surfboards import SurfboardError, catalog, templates
+from .surfboards import SurfboardError, catalog, templates, compile_board, configured_limits, validate, with_limits
 from .store import atomic_write
 
 GENERIC_INSTRUCTIONS = """You are a SuperSurfer project collaborator. Complete the user's requested work,
@@ -25,6 +26,18 @@ review the redacted report before sharing it outside this workspace.
 """
 CONFIGURATOR_INSTRUCTIONS = """You configure this project's SuperSurfer surfboard with the user.
 Read read_surfboard for the active graph, editable draft and current version numbers.
+It also reads live scheduler GPU and concurrent-run limits, active usage and the observation
+time. Treat unavailable live readings as unknown. Compute blocks hold gpu_limit and
+run_limit, each a number or 'unlimited'; new projects have no caps. Preserve intentional
+existing limits unless the user changes them. Propose explicit 'unlimited' to remove a cap.
+All compute blocks share the same project budget. Applying budget edits updates and checks
+the scheduler; unrelated page or workflow changes preserve its current limits.
+Pages are separate from workflow execution. Configure ordered board.pages.project and
+board.pages.item lists, each page {id,title,tiles:[{id,kind,span,height}]}.
+Use compiled.available_tiles for the permitted tile kinds. Tiles have width span 1–12,
+height 160–1200 pixels, and one of each kind per page. Add named pages and compose
+repository files, editor, agent changes, results, notes and chat. Repository tiles are available in every project and keep existing file access checks. Existing main views become pages when pages is omitted; preserve
+other pages and the independent side-panel layouts. A visual change grants no tools.
 Build with the block catalog. For a new or ambiguous arrow, call ask_user to clarify
 what it carries, the requirement or trigger, and any scope or stopping condition that
 materially changes behavior. Ask one concise question; use sensible labeled choices.
@@ -81,8 +94,117 @@ class SurfboardService:
             return self.lookup("projects", project_id, fresh=True)
 
     def surfboard(self, project_id):
-        self.lookup("projects", project_id)
-        return {**self.boards.get(project_id), "catalog": catalog(), "templates": templates()}
+        # Fresh GETs may update the observed policy version, so serialize them
+        # with an apply's scheduler write and final board commit.
+        with self.action_lock:
+            self.lookup("projects", project_id)
+            live = self.project_limits.read(project_id)
+            result = self._board_with_live(self._observe_board_limits(project_id, live), live)
+            recovery = self.store.get("surfboard_limit_recovery:" + project_id)
+            if recovery:
+                result["limits_recovery"] = recovery
+                result["warning"] = "A previous budget change could not be rolled back after its board failed to apply. Inspect live limits and reconcile the draft."
+            return result
+
+    def _observe_board_limits(self, project_id, live):
+        state = self.boards.get(project_id)
+        if not live["available"]:
+            return state
+        key = "surfboard_limits_observation:" + project_id
+        current = {field: live[field] for field in ("gpu_limit", "run_limit")}
+        with self.store.lock:
+            previous = self.store.get(key)
+            if previous and (previous.get("observed_at") or 0) > (live.get("observed_at") or 0):
+                return state
+            explicit = configured_limits(state["board"])
+            if (previous and any(previous[field] != current[field] for field in current)) or any(current[field] != value for field, value in explicit.items()):
+                state = self.boards.sync_limits(project_id, current)
+            self.store.put(key, {**current, "observed_at": live.get("observed_at")})
+        return state
+
+    @staticmethod
+    def _board_with_live(record, live):
+        result = deepcopy(record)
+        if live["available"]:
+            result["board"] = with_limits(result["board"], live)
+            result["compiled"] = compile_board(result["board"])
+        return {**result, "live_limits": live, "catalog": catalog(), "templates": templates()}
+
+    def _save_board_draft(self, project_id, fields):
+        if set(fields) - {"board", "expected_version", "expected_draft_version"}:
+            raise SurfboardError("Unexpected surfboard draft fields.")
+        live = self.project_limits.read(project_id)
+        state = self._observe_board_limits(project_id, live)
+        draft = state.get("draft") or {}
+        # Keep the base observation while editing the same proposal. Rebase
+        # after an explicit policy-version change, never from silent polling.
+        baseline = draft.get("limits_baseline") if draft.get("base_version") == state["version"] else None
+        result = self.boards.save_draft(project_id, **fields, limits_baseline=baseline or live)
+        return self._board_with_live(result, live)
+
+    def _apply_board(self, project_id, fields):
+        if set(fields) != {"expected_version", "expected_draft_version"}:
+            raise SurfboardError("Applying requires the current board and draft versions.")
+        state = self.boards.get(project_id)
+        if type(fields["expected_version"]) is not int or fields["expected_version"] != state["version"]:
+            raise SurfboardError("The surfboard changed. Reload it before applying.", 409)
+        self.boards._expect_draft(state, fields["expected_draft_version"])
+        live = self.project_limits.read(project_id)
+        state = self._observe_board_limits(project_id, live)
+        if state["version"] != fields["expected_version"]:
+            raise SurfboardError("The live project limits changed. Reload and reconcile this draft before applying.", 409)
+        draft = state["draft"]
+        if draft["base_version"] != state["version"]:
+            raise SurfboardError("The project policy changed. Reconcile this draft before applying.", 409)
+        board = validate(draft["board"])
+        compile_board(board)
+        baseline = draft.get("limits_baseline") or {**configured_limits(state["board"])}
+        explicit = configured_limits(board)
+        changes = {key: value for key, value in explicit.items() if value != baseline.get(key)}
+        if changes and not live["available"]:
+            raise SurfboardError("Cannot apply budget edits without a live scheduler reading: " + live.get("error", "unavailable"), 503)
+        if draft.get("limits_baseline", {}).get("available"):
+            for key, value in changes.items():
+                if live[key] not in (baseline[key], value):
+                    raise SurfboardError("The live " + key + " changed since this proposal. Reread and reconcile before applying.", 409)
+        changes = {key: value for key, value in changes.items() if live.get(key) != value}
+        previous_restores = self.store.get("project_limit_restores", [])
+        before = {key: live.get(key) for key in ("gpu_limit", "run_limit")}
+        if changes:
+            confirmed = self.project_limits.set(project_id, changes, sync_board=False)
+            live = {**live, **{key: confirmed["project"][key] for key in ("gpu_limit", "run_limit")},
+                    "observed_at": self.aml.updated_at or live.get("observed_at")}
+        if live["available"]:
+            board = with_limits(board, live)
+        try:
+            result = self.boards.apply(project_id, **fields, board_override=board)
+        except Exception as error:
+            # A concurrent board writer may win while the scheduler RPC is in
+            # flight. Revert only values still equal to our confirmed write.
+            if changes:
+                current = self.project_limits.read(project_id)
+                if not current.get("available"):
+                    self.store.put("surfboard_limit_recovery:" + project_id,
+                                   {"before": before, "written": changes, "board_version": state["version"],
+                                    "draft_version": draft["draft_version"], "error": current.get("error")})
+                    raise SurfboardError("Board was not applied; scheduler budget rollback is unconfirmed. Read live limits before retrying.", 503) from error
+                rollback = {key: before[key] for key, value in changes.items() if current.get("available") and current.get(key) == value}
+                try:
+                    if rollback:
+                        self.project_limits.set(project_id, rollback, sync_board=False)
+                    if len(rollback) == len(changes):
+                        self.store.put("project_limit_restores", previous_restores)
+                except Exception as rollback_error:
+                    self.store.put("surfboard_limit_recovery:" + project_id,
+                                   {"before": before, "written": changes, "board_version": state["version"],
+                                    "draft_version": draft["draft_version"], "error": str(rollback_error)})
+                    raise SurfboardError("Board was not applied; budget rollback is unconfirmed. Read live limits before retrying. " + str(rollback_error), 503) from error
+            raise
+        if live["available"]:
+            self.store.put("surfboard_limits_observation:" + project_id,
+                           {key: live[key] for key in ("gpu_limit", "run_limit", "observed_at")})
+        self.store.put("surfboard_limit_recovery:" + project_id, None)
+        return self._board_with_live(result, live)
 
     def board_defaults(self, scope):
         info = self._chat_scope(scope)
@@ -109,8 +231,8 @@ class SurfboardService:
         if "agent" in info:
             return None
         project = self.lookup("projects", info["project_id"])
-        board = self.boards.get(project["id"])
         configurator = scope.startswith("surfboard:")
+        board = self.surfboard(project["id"]) if configurator else self.boards.get(project["id"])
         if not configurator and board["compiled"]["workflow"] == "research":
             return None
         cwd = Path(project["repo"]).expanduser().resolve()
@@ -155,8 +277,7 @@ class SurfboardService:
             context["instructions"] += "\nConnected data sources and visualization scope: " + json.dumps({k: compiled.get(k, []) for k in ("data_sources", "visualizers", "views", "timers", "recovery")})
             if compiled.get("data_sources"):
                 context["instructions"] += "\nRead the supersurfer-wandb-data and supersurfer-experiment-visualizer skills in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". Use inspect_board_data to find real individual runs across the connected sharing scope; preserve experiment and method identities."
-            if any(node["kind"] == "editor" for node in state["board"]["nodes"]):
-                context["instructions"] += "\nRead the supersurfer-code-editor skill in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". The user may be editing this same repository. Re-read files before patching; preserve concurrent user and other-agent edits. Editor selections are user-supplied context and can be unsaved."
+            context["instructions"] += "\nRead the supersurfer-code-editor skill in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". The user may be editing this same repository. Re-read files before patching; preserve concurrent user and other-agent edits. Editor selections are user-supplied context and can be unsaved."
         else:
             allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
             context["instructions"] += "\nProjects can use different surfboards. Read read_surfboard(project_id) before acting; its managed capabilities and requirements also apply to manager requests for that project."
@@ -255,7 +376,7 @@ class SurfboardService:
         if tool == "propose_surfboard":
             if not scope.startswith("surfboard:") or set(fields) != {"board", "expected_version", "expected_draft_version"}:
                 raise SurfboardError("Only the surfboard configurator can propose a versioned board.", 403)
-            return self.boards.save_draft(project["id"], **fields)
+            return self._save_board_draft(project["id"], fields)
         if tool == "inspect_board_data":
             return self.board_runtime.data(scope, project, state, fields)
         if tool == "run_board_action":
@@ -288,7 +409,7 @@ class SurfboardService:
         project = self.lookup("projects", project_id)
         fields = {k: v for k, v in params.items() if k != "project_id"}
         if op == "surfboard.draft":
-            return self.boards.save_draft(project_id, **fields)
+            return self._save_board_draft(project_id, fields)
         if op == "surfboard.discard":
             return self.boards.discard(project_id, **fields)
         if op == "surfboard.apply":
@@ -300,7 +421,7 @@ class SurfboardService:
                 for key, values in changes.items():
                     settings[key] = {**settings[key], **values}
                 self._validate_role_settings(settings, changes)
-            result = self.boards.apply(project_id, **fields)
+            result = self._apply_board(project_id, fields)
             # A project ID separates boards sharing the same Git repository.
             try:
                 root = self.artifacts.root(project, create=True).parent
@@ -330,7 +451,7 @@ class SurfboardService:
             text = fields.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > 20000:
                 raise SurfboardError("Describe the workflow edit in up to 20,000 characters.")
-            state = self.boards.save_draft(project_id, fields["board"], fields["expected_version"], fields.get("expected_draft_version"))
+            state = self._save_board_draft(project_id, {key: fields[key] for key in ("board", "expected_version", "expected_draft_version") if key in fields})
             scope = "surfboard:" + project_id
             message = "Requested surfboard edit: " + text + "\nDraft version: " + str(state["draft"]["draft_version"])
             if fields.get("pending_edge"):

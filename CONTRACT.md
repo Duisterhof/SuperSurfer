@@ -18,14 +18,38 @@
   service restart. Historical partial patches remain explicitly partial. Shell-only
   changes remain unattributed, and repository contents are not backfilled as an
   invented before/after snapshot. Shared repositories retain per-project agent scope.
-- `layouts.project` and `layouts.item` are independently validated semantic view
-  lists, with main/right/hidden placement and order. Missing levels inherit legacy
-  defaults. Individual item overrides are versioned separately and checked against
-  the current board version; reset resumes inheritance. Removed blocks cannot be
-  resurrected by stale overrides. Empty main layouts retain a recovery control.
+- `pages.project` and `pages.item` are ordered lists of `{id,title,tiles}`. Each
+  tile is `{id,kind,span,height}`: span 1–12, height 160–1200 px. There are at most
+  24 pages per scope and 16 tiles per page, with unique tile IDs/kinds within a page.
+  The same kind can recur on other pages. Omitted pages derive from existing main
+  views without writing a migration; explicit empty pages are valid. Coding tiles
+  are available in every project independently of workflow execution blocks.
+- `layouts.project` and `layouts.item` retain semantic main/right/hidden placement
+  for existing layouts and side views. A view already present on the current page
+  is not duplicated in the side panel. A single scoped conversation moves between
+  its tile, the dock and fullscreen; it is not copied or restarted.
+- Item page/row overrides are separate from project defaults. Both board and item
+  versions are checked in one SQLite write transaction. Omitted fields preserve
+  their override; explicit null resets that field, and resetting both restores the
+  board defaults. Removed workflow-specific tile kinds are filtered from old item
+  overrides. Every page can be renamed, reordered or removed without deleting data
+  or work. Empty layouts retain the top-bar recovery control.
 - Source collaboration sends a user-reviewable composer draft with file/selection
   context; it does not dispatch an agent automatically. Unsaved buffers stay in the
   window's memory across view changes; reload/close requires discard confirmation.
+
+- Compute blocks expose optional `gpu_limit` and `run_limit`, each a bounded integer
+  or `unlimited`. No cap is assigned when a project is created without one. Live
+  scheduler values remain authoritative; stale/unavailable snapshots are never
+  presented as current. Explicit existing caps are preserved. Draft/version checks
+  and live readback prevent unrelated layout changes from silently resetting caps.
+- Completion is a claim to review against the recorded original assignment.
+  Newly completed task revisions trigger a same-conversation completion check;
+  unchanged status questions do not restart completed work. Reviews are persisted
+  and bounded, honour interruptions and leave unresolved work visibly blocked.
+  The harness checks tracked deliverables; role instructions require recording
+  actionable assignments and concrete completion evidence. It is not a proof of
+  semantic correctness for every model response.
 
 ## 0.1.24 surfboards and project data flow
 

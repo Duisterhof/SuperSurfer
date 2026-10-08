@@ -128,8 +128,8 @@ export function createCodeEditor(options) {
       const file = await loadFile(path);
       if (!current(token) || nav!==navigation) return;
       rememberView(); selected = file.path; state.selected = selected; view = 'file'; message = '';
-      renderTabs(); showEditor();
-    } catch(error) {if(current(token)) tell(error);}
+      renderTabs(); showEditor();return true;
+    } catch(error) {if(current(token)) tell(error);return false;}
   }
   function editorOptions() {
     return {automaticLayout:true,fontSize:13,lineHeight:21,minimap:{enabled:false},scrollBeyondLastLine:false,
@@ -184,8 +184,8 @@ export function createCodeEditor(options) {
     } catch(error) {if(current(token)) tell(error);}
   }
 
-  async function showAgentDiff(changeId) {
-    const token=epoch,nav=++navigation,scope=state.agentScope,project=state;
+  async function showAgentDiff(changeId, scope=state.agentScope) {
+    const token=epoch,nav=++navigation,project=state;
     try {
       const data=await options.api(query('code/agent-diff',{scope,change_id:changeId}));
       if(!current(token)||nav!==navigation)return;
@@ -198,7 +198,7 @@ export function createCodeEditor(options) {
       if(!current(token)||nav!==navigation)return;
       rememberView();selected=data.path;project.selected=selected;view='agent';disposeView();renderTabs();
       const heading=root.querySelector('.code-diff-heading'),host=root.querySelector('.code-monaco');
-      heading.hidden=false;heading.querySelector('span').textContent=`Recorded agent edit · ${data.partial||data.truncated?'partial patch':typeof data.original==='string'?'before ↔ after':'patch'} · ${project.agentChanges.agents.find(row=>row.scope===scope)?.name || scope}`;
+      heading.hidden=false;heading.querySelector('span').textContent=`Recorded agent edit · ${data.partial||data.truncated?'partial patch':typeof data.original==='string'?'before ↔ after':'patch'} · ${data.agent_name || project.agentChanges?.agents.find(row=>row.scope===scope)?.name || scope}`;
       host.replaceChildren();
       if(typeof data.original==='string'&&typeof data.modified==='string') {
         diffModels=[monaco.editor.createModel(data.original,data.language),monaco.editor.createModel(data.modified,data.language)];
@@ -209,8 +209,8 @@ export function createCodeEditor(options) {
         editor=monaco.editor.create(host,{...editorOptions(),readOnly:true,model:diffModels[0],ariaLabel:'Recorded agent patch'});
         heading.querySelector('span').textContent+=' · recorded patch only';
       } else host.innerHTML='<div class="code-empty">This agent edit has no available patch. Current Git changes are listed separately.</div>';
-      theme();renderStatus();
-    }catch(error){if(current(token))tell(error);}
+      theme();renderStatus();return true;
+    }catch(error){if(current(token))tell(error);return false;}
   }
 
   async function checkDisk(file, project = state) {
@@ -388,17 +388,28 @@ export function createCodeEditor(options) {
   const beforeUnload=event=>{if(hasUnsaved()){event.preventDefault();event.returnValue='';}};
   window.addEventListener('beforeunload',beforeUnload);
   window.addEventListener('focus',onFocus);
+  async function ensureReady() {
+    if(!root)throw new Error('Mount the Code editor before opening a file or agent change.');
+    const token=epoch;
+    monacoPromise ||= import('/vendor/monaco/editor.js').catch(error=>{monacoPromise=null;throw error;});
+    const module=await monacoPromise;
+    if(!current(token))return false;
+    monaco=module.monaco||module;return true;
+  }
 
   async function mount(element, nextContext) {
     if(root===element && root.querySelector('.code-monaco') &&
+      (context.mode || 'full')===(nextContext.mode || 'full') &&
       ['projectId','experimentId','nodeId'].every(key=>context?.[key]===nextContext[key])) {
-      theme();editor?.updateOptions({readOnly:view!=='file'||readonly()||active()?.readOnly});renderStatus();return;
+      if(!monaco && !await ensureReady())return false;
+      theme();editor?.updateOptions({readOnly:view!=='file'||readonly()||active()?.readOnly});renderStatus();return true;
     }
     unmount();root=element;context={...nextContext};const token=++epoch;
     if(!context.projectId)throw new Error('Source editor needs a project.');
     if(!projects.has(context.projectId))projects.set(context.projectId,{projectId:context.projectId,files:new Map(),tree:new Map(),expanded:new Set(),selected:'',search:'',searchResults:null,changes:null,sideBySide:true});
     state=projects.get(context.projectId);selected=state.selected;sidebar='files';view='file';message='';
     root.classList.add('code-editor');
+    root.dataset.codeMode=context.mode==='editor'?'editor':'full';
     root.innerHTML=`<div class="code-toolbar"><div>${button('files','Files')}${button('changes','Git','Repository Git changes')}${button('agents','Agents','Recorded edits by agent')}</div><div>${button('new-file','+ File','Create a file',readonly())}${button('new-folder','+ Folder','Create a folder',readonly())}${button('refresh','↻','Refresh source and Git changes')}</div><div class="code-toolbar-end">${button('ask','Ask agent','Add selected code or file reference to the agent composer')}${button('save','Save','Save file (⌘/Ctrl S)',true)}</div></div>
       <form class="code-create" hidden><label for="code-new-${instance}">New file path</label><input id="code-new-${instance}" required autocomplete="off"><button type="submit">Create</button>${button('cancel-create','Cancel')}</form>
       <div class="code-body"><aside class="code-sidebar"><div class="code-find"><input type="search" placeholder="Find file by name…" aria-label="Find file by name" value="${escapeHTML(state.search)}"></div><div class="code-file-list"></div></aside><section class="code-workbench"><div class="code-tabs" aria-label="Open files"></div><div class="code-conflict" hidden><span></span><div>${button('compare','Compare')}${button('reload','Reload disk')}${button('keep-mine','Keep mine…')}</div></div><div class="code-diff-heading" hidden><span></span>${button('split',state.sideBySide?'Inline':'Side by side')}${button('edit','Edit file')}</div><div class="code-monaco"><div class="code-empty">Loading editor…</div></div></section></div><div class="code-status" role="status" aria-live="polite"></div>`;
@@ -406,22 +417,24 @@ export function createCodeEditor(options) {
     root.addEventListener('change',onChange);
     renderTabs();renderTree();
     try {
-      monacoPromise ||= import('/vendor/monaco/editor.js').catch(error=>{monacoPromise=null;throw error;});
-      const module=await monacoPromise;if(!current(token))return;monaco=module.monaco||module;
-      theme();showEditor();await refresh();if(!current(token))return;if(state.search)await findFiles();if(!current(token))return;
+      if(!await ensureReady() || !current(token))return false;
+      theme();showEditor();await refresh();if(!current(token))return false;if(state.search)await findFiles();if(!current(token))return false;
       observer=new MutationObserver(()=>{theme();editor?.updateOptions({readOnly:view!=='file'||readonly()||active()?.readOnly});renderStatus();});
       observer.observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-theme','data-vscode-theme']});
       poll=setInterval(()=>{if(!document.hidden)refresh();},15000);
-    } catch(error){if(current(token)){root.querySelector('.code-monaco').innerHTML='<div class="code-empty">The editor could not load. Reopen Code to retry.</div>';tell(error);}}
+      return true;
+    } catch(error){if(current(token)){root.querySelector('.code-monaco').innerHTML='<div class="code-empty">The editor could not load. Reopen Code to retry.</div>';tell(error);}return false;}
   }
   function unmount() {
     ++epoch;++searching;clearInterval(poll);observer?.disconnect();observer=null;disposeView();
-    if(root){root.removeEventListener('click',click);root.removeEventListener('change',onChange);root.replaceChildren();root.classList.remove('code-editor');}
+    if(root){root.removeEventListener('click',click);root.removeEventListener('change',onChange);root.replaceChildren();root.classList.remove('code-editor');delete root.dataset.codeMode;}
     root=null;state=null;context=null;selected='';busy=false;
   }
   function dispose() {
     unmount();for(const project of projects.values())for(const file of project.files.values()){file.listener?.dispose();file.model?.dispose();}
     projects.clear();window.removeEventListener('beforeunload',beforeUnload);window.removeEventListener('focus',onFocus);
   }
-  return {mount,unmount,hasUnsaved,refresh,dispose};
+  return {mount,unmount,hasUnsaved,refresh,dispose,
+    async openFile(path){const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path);},
+    async showAgentChange(scope,changeId){const token=epoch;if(!await ensureReady()||!current(token))return false;return showAgentDiff(changeId,scope);}};
 }

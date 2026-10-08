@@ -25,6 +25,12 @@ An unsaved HTML/code selection is proposed source, not a published result or a
 fresh measurement. Preserve shared-file edits and use the report's normal
 versioned publication path for a requested content change.
 
+A custom page can combine this visualization with Markdown, source and chat tiles.
+Keep comparison meaning and source identities intact at each size. A narrow tile
+may need the view's expand control; it does not justify dropping held-out curves
+or inventing another report. Use page configuration for arrangement and the
+existing publishing tool only when the requested report content actually changes.
+
 Use `publish_training_results` for the live comparison. Choose individual W&B
 writers, actual history keys and meaningful method labels; keep training solid,
 validation dashed and test dotted with a common method color. The renderer owns

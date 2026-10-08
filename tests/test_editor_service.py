@@ -192,6 +192,132 @@ class EditorServiceTests(unittest.TestCase):
         self.assertEqual(409, status)
         self.assertFalse(self.service.view_layout(self.pid, item["id"])["overridden"])
 
+    def test_custom_item_pages_crud_and_legacy_rows_updates_are_independent(self):
+        item = self.work_item()
+        initial = self.service.view_layout(self.pid, item["id"])
+        project = self.service.view_layout(self.pid)
+        self.assertIn("file_explorer", {tile["kind"] for tile in initial["available_tiles"]})
+        self.assertEqual(self.service.boards.get(self.pid)["compiled"]["pages"]["project"], project["pages"])
+        params = {"project_id": self.pid, "experiment_id": item["id"], "version": initial["version"], "board_version": initial["board_version"]}
+        page = {"id": "view-code", "title": "Coding", "tiles": [
+            {"id": "files", "kind": "file_explorer", "span": 3},
+            {"id": "edit", "kind": "editor", "span": 6},
+            {"id": "agent", "kind": "chat", "span": 3}]}
+        status, created = self.action("view-layout.save", **params, pages=[page])
+        self.assertEqual(200, status, created)
+        self.assertTrue(created["pages_overridden"])
+        self.assertFalse(created["rows_overridden"])
+        self.assertEqual(400, created["pages"][0]["tiles"][0]["height"])
+        self.assertEqual(409, self.action("view-layout.save", **params, pages=[])[0])
+        params["version"] = created["version"]
+        rows = [{"id": "chat", "placement": "right", "order": 0}]
+        status, with_rows = self.action("view-layout.save", **params, rows=rows)
+        self.assertEqual(200, status)
+        self.assertEqual(created["pages"], with_rows["pages"])
+        self.assertTrue(with_rows["rows_overridden"])
+        params["version"] = with_rows["version"]
+        page["title"] = "Review code"
+        page["tiles"] = [{"id": "changes", "kind": "agent_changes"}]
+        status, updated = self.action("view-layout.save", **params, pages=[page, {"id": "blank", "title": "Plan", "tiles": []}])
+        self.assertEqual(200, status)
+        self.assertEqual(["Review code", "Plan"], [row["title"] for row in updated["pages"]])
+        self.assertEqual(with_rows["rows"], updated["rows"])
+        params["version"] = updated["version"]
+        status, removed = self.action("view-layout.save", **params, pages=[])
+        self.assertEqual(200, status)
+        self.assertEqual([], removed["pages"])
+        self.assertTrue(removed["pages_overridden"])
+        params["version"] = removed["version"]
+        status, inherited_pages = self.action("view-layout.save", **params, pages=None)
+        self.assertEqual(200, status)
+        self.assertFalse(inherited_pages["pages_overridden"])
+        self.assertTrue(inherited_pages["rows_overridden"])
+        self.assertEqual(with_rows["rows"], inherited_pages["rows"])
+        params["version"] = inherited_pages["version"]
+        status, reset = self.action("view-layout.save", **params, rows=None, pages=None)
+        self.assertEqual(200, status)
+        self.assertFalse(reset["overridden"])
+        self.assertEqual(initial["pages"], reset["pages"])
+        self.assertEqual(project["pages"], self.service.view_layout(self.pid)["pages"])
+
+    def test_item_page_validation_scope_readonly_and_restart_preserve_state(self):
+        item = self.work_item()
+        initial = self.service.view_layout(self.pid, item["id"])
+        params = {"project_id": self.pid, "experiment_id": item["id"], "version": initial["version"], "board_version": initial["board_version"]}
+        page = {"id": "one", "title": "One", "tiles": [{"id": "source", "kind": "editor"}]}
+        for changes in ({}, {"pages": {}}, {"pages": [page, page]}, {"pages": [], "command": "execute"}):
+            with self.subTest(changes=changes):
+                self.assertEqual(400, self.action("view-layout.save", **params, **changes)[0])
+        self.assertEqual(400, self.action("view-layout.save", **{**params, "experiment_id": None}, pages=[page])[0])
+        foreign = self.service.store.create({"id": "p1", "repo": str(self.repo)}, "Foreign pages", "Different project")
+        self.assertEqual(403, self.action("view-layout.save", **{**params, "experiment_id": foreign["id"]}, pages=[page])[0])
+        self.assertEqual(403, self.request("/api/view-layout?" + urlencode({"project_id": self.pid, "experiment_id": foreign["id"]}))[0])
+        self.service.read_only = True
+        self.assertEqual(403, self.action("view-layout.save", **params, pages=[page])[0])
+        self.service.read_only = False
+        self.assertEqual(initial, self.service.view_layout(self.pid, item["id"]))
+        status, saved = self.action("view-layout.save", **params, pages=[page])
+        self.assertEqual(200, status)
+        original = self.service
+        self.open_service()
+        try:
+            self.assertEqual(saved["pages"], self.service.view_layout(self.pid, item["id"])["pages"])
+        finally:
+            self.service.close()
+            self.service = original
+
+    def test_item_pages_prune_removed_preview_tiles_and_reject_stale_board_version(self):
+        item = self.work_item()
+        initial = self.service.view_layout(self.pid, item["id"])
+        params = {"project_id": self.pid, "experiment_id": item["id"], "version": initial["version"], "board_version": initial["board_version"]}
+        pages = [{"id": "review", "title": "Review", "tiles": [{"id": kind, "kind": kind} for kind in ("preview", "chat")]},
+                 {"id": "preview-only", "title": "Preview only", "tiles": [{"id": "preview", "kind": "preview"}]}]
+        _, saved = self.action("view-layout.save", **params, pages=pages, rows=[{"id": "preview", "placement": "right"}])
+        record = self.service.boards.get(self.pid)
+        board = record["board"]
+        preview_ids = {node["id"] for node in board["nodes"] if node["kind"] == "preview"}
+        board["nodes"] = [node for node in board["nodes"] if node["id"] not in preview_ids]
+        board["edges"] = [edge for edge in board["edges"] if not preview_ids.intersection((edge["source"], edge["target"]))]
+        draft = self.service.boards.save_draft(self.pid, board, record["version"], 0)
+        self.service.boards.apply(self.pid, record["version"], draft["draft"]["draft_version"])
+        current = self.service.view_layout(self.pid, item["id"])
+        self.assertEqual(["chat"], [tile["kind"] for tile in current["pages"][0]["tiles"]])
+        self.assertEqual({"id": "preview-only", "title": "Preview only", "tiles": []}, current["pages"][1])
+        self.assertNotIn("preview", {tile["kind"] for tile in current["available_tiles"]})
+        self.assertNotIn("preview", {row["id"] for row in current["rows"]})
+        self.assertEqual(409, self.action("view-layout.save", **{**params, "version": saved["version"]}, pages=[])[0])
+
+    def test_page_overrides_compare_and_swap_across_service_connections(self):
+        item = self.work_item()
+        initial = self.service.view_layout(self.pid, item["id"])
+        first = self.service
+        self.open_service()
+        second, self.service = self.service, first
+        barrier, results = threading.Barrier(2), []
+        params = {"project_id": self.pid, "experiment_id": item["id"], "version": initial["version"], "board_version": initial["board_version"]}
+
+        def update(service, name):
+            barrier.wait()
+            try:
+                row = service.save_view_layout({**params, "pages": [{"id": name, "title": name, "tiles": []}]})
+                results.append((200, row))
+            except Exception as error:
+                results.append((getattr(error, "status", 500), str(error)))
+
+        workers = [threading.Thread(target=update, args=(service, name)) for service, name in ((first, "first"), (second, "second"))]
+        try:
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join(timeout=10)
+                self.assertFalse(worker.is_alive())
+            self.assertEqual([200, 409], sorted(status for status, _ in results), results)
+            winner = next(row for status, row in results if status == 200)
+            self.assertEqual(winner["pages"], first.view_layout(self.pid, item["id"])["pages"])
+            self.assertEqual(initial["version"] + 1, winner["version"])
+        finally:
+            second.close()
+
     def test_agent_changes_keep_two_workers_separate_from_unattributed_git_edits(self):
         item = self.work_item()
         first = "experiment:" + item["id"]

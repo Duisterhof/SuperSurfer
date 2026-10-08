@@ -1,7 +1,13 @@
-## 0.1.25 coding editor and configurable views
+## 0.1.25 configurable pages, tiles and coding editor
 
-Add **Code editor** in **Surfboard → Layout** (included in new Software and Web
-boards). It uses [Monaco, the VS Code editor](https://github.com/microsoft/monaco-editor),
+Use **Add page** to create a named page, or **Layout** to edit any existing one.
+Add and rearrange tiles, set their widths/heights, and rename, reorder or remove
+pages. A **Coding page** preset combines a file explorer, code editor and agent
+changes. These coding tiles are available in every project, including research.
+Clicking a file or agent patch opens it in the editor on that page; if that page
+has no editor, an existing editor page opens instead.
+
+The code tile uses [Monaco, the VS Code editor](https://github.com/microsoft/monaco-editor),
 bundled with its language workers for offline use. Browse or find files, open tabs,
 edit and save with Cmd/Ctrl+S, and compare working or staged files with Git HEAD.
 The repository is on the connected workspace host. Projects using the same
@@ -27,13 +33,33 @@ not editable. This is Monaco with built-in language support, not a VS Code exten
 host or an installed Python language server.
 
 In **Surfboard → Layout**, choose **Project** or **Experiment / Feature / Design
-task**, then drag views between **Main**, **Right** and **Hidden** or use the placement
-and ordering controls. Code, chat, runs, results, notes, files, activity and available
-compute/preview views use the same system. Review and apply the board as usual.
-An individual work item's **Layout** button can override its view arrangement or
-reset it to the board default. Hiding a view never stops agents or changes tools,
-permissions, run requirements or schedules. The top-bar Layout button remains
-available even when every main view is hidden.
+task** to configure the default pages. Combine code, repository files, agent changes,
+chat, runs, results, documents, published files, activity and available compute or
+preview tiles. Drag tiles from the palette or move them within the page; width and
+height controls set the grid. Review and apply the board as usual. Existing views
+become single-tile pages automatically, so current navigation is preserved.
+
+Each work item's **Layout** button can override its pages and side panels or reset
+them to the Surfboard default. Deleting a page removes its layout, not files, results,
+chats or running work. Right-side views remain available under **Side panel placement**.
+The Layout button remains accessible even after every page is removed. Page and tile
+choices never add tools, change permissions, waive run requirements or start work.
+
+
+**Optional compute caps.** New projects have no GPU or concurrent-run cap. Open
+**Surfboard → Compute** to choose **Unlimited** or an explicit cap; GPU zero permits
+CPU-only runs. The live usage bar and `read_surfboard` read the scheduler now, with
+an observation time and an unavailable state when it cannot be reached. Existing
+numeric limits are preserved and shown; unrelated page edits do not reset them.
+The configurator can propose changes, and Review & apply updates the scheduler.
+Owned leads/workers can still apply an explicit user decision with `set_project_limits`.
+
+**Completion checks.** Newly completed tracked deliverables receive a continuation
+that checks the original assignment and later directions against actual evidence.
+A completed helper or milestone must not end unfinished implementation/integration.
+Incomplete work reopens; repeated unverifiable completion becomes visible as needing
+attention. Stop, pending questions/approvals and real blockers remain authoritative.
+This check improves the task harness; it does not make a model's judgment infallible.
 
 ## 0.1.24 project surfboards
 

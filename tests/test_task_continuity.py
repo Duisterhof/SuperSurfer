@@ -69,7 +69,7 @@ class TaskContinuityTests(unittest.TestCase):
         self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'completed','summary':'Six videos exist at the recorded artifact paths; playback checked.'})
         chat=self.bridge.chat('project:vla');self.end(chat)
         self.assertEqual('completed',self.finished()['task_state'])
-        self.assertEqual(4,len([r for r in self.requests() if r.get('method')=='turn/start']))
+        self.assertEqual(5,len([r for r in self.requests() if r.get('method')=='turn/start']))
         self.bridge.close(); reopened=self.new_bridge()
         self.assertEqual('completed',reopened.chat('project:vla')['tasks'][0]['status'])
 
@@ -102,3 +102,147 @@ class TaskContinuityTests(unittest.TestCase):
         self.assertEqual(updated,rows[0]['updated'])
         with self.assertRaises(ValueError):tasks.update(rows,{'task_id':row['id'],'status':'completed'})
         with self.assertRaises(ValueError):tasks.update(rows,{'task_id':'foreign','status':'working'})
+
+    def test_completed_milestone_is_reviewed_against_original_assignment_once(self):
+        self.hold()
+        original=self.bridge.chat('project:vla')['messages'][0]
+        with self.bridge._lock:
+            self.bridge._chats['project:vla']['messages'][0]['text']='Prepare the E17 trainer, recovery and telemetry; do not launch GPU jobs.'
+        task=self.bridge.update_task('project:vla',{'title':'Prepare E17 implementation','status':'working'})['task']
+        self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'completed','summary':'Five helper tests pass. Trainer, recovery and telemetry remain next preparation work.'})
+        self.end(self.bridge.chat('project:vla'))
+        final=self.finished()
+        starts=[r for r in self.requests() if r.get('method')=='turn/start']
+        self.assertEqual(2,len(starts))
+        review=str(starts[-1]['params']['input'])
+        self.assertIn('ORIGINAL requested outcome',review)
+        self.assertIn('Prepare the E17 trainer, recovery and telemetry',review)
+        self.assertIn('Trainer, recovery and telemetry remain',review)
+        self.assertEqual(original['id'],final['tasks'][0]['assignment_message_id'])
+        self.assertEqual('passed',final['work_request']['checks'][0]['status'])
+        self.bridge.send('project:vla','What is the status?')
+        self.finished()
+        self.assertEqual(3,len([r for r in self.requests() if r.get('method')=='turn/start']))
+
+    def test_status_question_preserves_legacy_task_assignment_and_review_can_reopen(self):
+        self.hold()
+        task=self.bridge.update_task('project:vla',{'title':'Complete trainer integration','status':'working'})['task']
+        original_id=self.bridge.chat('project:vla')['messages'][0]['id']
+        self.bridge.stop('project:vla');self.finished()
+        with self.bridge._lock:
+            self.bridge._chats['project:vla']['tasks'][0].pop('assignment_message_id')
+        self.hold()  # A later request/status question must not erase the assignment.
+        self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'completed','summary':'Protocol written; implementation remains.'})
+        with patch.object(self.bridge,'_followup') as followup:
+            self.end(self.bridge.chat('project:vla'))
+            self.assertIn(original_id,followup.call_args.args[1])
+            self.assertEqual(original_id,self.bridge.chat('project:vla')['tasks'][0]['assignment_message_id'])
+            with self.bridge._lock:
+                live=self.bridge._chats['project:vla'];live.update(busy=True,turn_id='completion-audit')
+            self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'working','summary':'Reopened: trainer/recovery/telemetry integration is still required.'})
+            self.end(self.bridge.chat('project:vla'))
+            self.assertEqual(2,followup.call_count)
+            self.assertIn('saved deliverables are still unfinished',followup.call_args.args[1])
+        final=self.bridge.chat('project:vla')
+        self.assertEqual('reopened',final['work_request']['checks'][0]['status'])
+        self.assertEqual('incomplete',final['task_state'])
+
+    def test_stop_failure_and_question_prevent_completion_review(self):
+        for ending in ('stop','failure','question'):
+            self.hold()
+            task=self.bridge.update_task('project:vla',{'title':'Deliver '+ending,'status':'completed','summary':'Claimed output.'})['task']
+            with patch.object(self.bridge,'_followup') as followup:
+                if ending=='stop':self.bridge.stop('project:vla');self.finished()
+                elif ending=='failure':
+                    with self.bridge._lock:self.bridge._finish(self.bridge._chats['project:vla'],'failed','Disconnected')
+                else:
+                    worker,_=self.ask_local();self.question();self.end(self.bridge.chat('project:vla'));worker.join(1)
+                    self.assertEqual('awaiting_input',self.bridge.chat('project:vla')['status'])
+                    self.bridge.stop('project:vla');self.finished()
+                followup.assert_not_called()
+
+    def test_completion_review_restart_is_not_replayed_and_output_remains_unverified(self):
+        self.hold();self.bridge.update_task('project:vla',{'title':'Deliver actual implementation','status':'completed','summary':'Claimed done.'})
+        with patch.object(self.bridge,'_followup'):
+            self.end(self.bridge.chat('project:vla'))
+            with self.bridge._lock:
+                live=self.bridge._chats['project:vla'];live.update(busy=True,status='working');self.bridge._save(live)
+        self.bridge.close();reopened=self.new_bridge()
+        chat=reopened.chat('project:vla')
+        self.assertEqual('interrupted',chat['work_request']['checks'][0]['status'])
+        self.assertEqual('incomplete',chat['task_state'])
+        self.assertFalse(chat['busy'])
+        self.assertEqual(1,len([r for r in self.requests() if r.get('method')=='turn/start']))
+
+    def test_repeated_unverified_completion_is_bounded_and_visible(self):
+        self.hold();task=self.bridge.update_task('project:vla',{'title':'Finish requested integration','status':'working'})['task']
+        with patch.object(self.bridge,'_followup') as followup:
+            for attempt in range(self.bridge.MAX_COMPLETION_CHECKS):
+                with self.bridge._lock:self.bridge._chats['project:vla'].update(busy=True,turn_id='claim-'+str(attempt))
+                self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'completed','summary':'Claimed milestone '+str(attempt)})
+                self.end(self.bridge.chat('project:vla'))
+                with self.bridge._lock:self.bridge._chats['project:vla'].update(busy=True,turn_id='review-'+str(attempt))
+                self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'working','summary':'Still missing integration '+str(attempt)})
+                self.end(self.bridge.chat('project:vla'))
+            with self.bridge._lock:self.bridge._chats['project:vla'].update(busy=True,turn_id='final-claim')
+            self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'completed','summary':'Yet another unverified milestone'})
+            self.end(self.bridge.chat('project:vla'))
+        final=self.bridge.chat('project:vla')
+        self.assertEqual('blocked',final['task_state'])
+        self.assertEqual('decision',final['tasks'][0]['blocker_kind'])
+        self.assertIn('original assignment',final['continuation_note'])
+        self.assertEqual(self.bridge.MAX_COMPLETION_CHECKS,len(final['work_request']['checks']))
+
+    def test_completion_review_waits_for_answer_without_duplicate_check(self):
+        self.hold();self.bridge.update_task('project:vla',{'title':'Requested result','status':'completed','summary':'Recorded output needs review.'})
+        followup=self.bridge._followup
+        with patch.object(self.bridge,'_followup',side_effect=lambda chat,text,display_text=None:followup(chat,'hold',display_text)):
+            self.end(self.bridge.chat('project:vla'))
+            audit=self.wait_for(lambda:(chat if (chat:=self.bridge.chat('project:vla')).get('turn_id') else None))
+        worker,_=self.ask_local();question=self.question()
+        self.end(audit);worker.join(1)
+        waiting=self.bridge.chat('project:vla')
+        self.assertEqual('awaiting_input',waiting['status'])
+        self.assertEqual('running',waiting['work_request']['checks'][0]['status'])
+        self.bridge.answer('project:vla',question['id'],{'direction':['Verified existing scope']})
+        final=self.finished()
+        self.assertEqual('passed',final['work_request']['checks'][0]['status'])
+        self.assertEqual(1,len(final['work_request']['checks']))
+        self.assertEqual(3,len([r for r in self.requests() if r.get('method')=='turn/start']))
+
+    def test_long_assignment_review_is_bounded_and_keeps_record_references(self):
+        self.hold()
+        with self.bridge._lock:
+            first=self.bridge._chats['project:vla']['messages'][0]
+            first['text']='full original requirement '+('x'*90_000)
+        task=self.bridge.update_task('project:vla',{'title':'Large assignment','status':'completed','summary':'Output evidence.'})['task']
+        self.end(self.bridge.chat('project:vla'));self.finished()
+        start=[r for r in self.requests() if r.get('method')=='turn/start'][-1]
+        prompt=next(item['text'] for item in start['params']['input'] if item['type']=='text')
+        self.assertLess(len(prompt),self.bridge.MAX_TEXT)
+        self.assertIn(first['id'],prompt)
+        self.assertIn(task['id'],prompt)
+        self.assertIn('Full text is already in this conversation',prompt)
+
+    def test_real_blocker_and_ordinary_answer_do_not_schedule_reviews(self):
+        self.bridge.send('project:vla','What is this project?');self.finished()
+        self.hold()
+        self.bridge.update_task('project:vla',{'title':'Permission needed','status':'blocked','blocker_kind':'permission','summary':'The user denied the required write; no allowed alternative.'})
+        self.bridge.update_task('project:vla',{'title':'Independent artifact','status':'completed','summary':'Artifact is saved.'})
+        with patch.object(self.bridge,'_followup') as followup:
+            self.end(self.bridge.chat('project:vla'));followup.assert_not_called()
+        self.assertEqual('blocked',self.bridge.chat('project:vla')['task_state'])
+
+    def test_legacy_task_without_created_keeps_unknown_assignment_and_can_resume(self):
+        self.bridge.chat('project:vla')
+        with self.bridge._lock:
+            self.bridge._chats['project:vla']['tasks']=[{'id':'legacy-task','title':'Finish original implementation','status':'blocked','blocker_kind':'external','summary':'Legacy interruption'}]
+        self.hold()
+        task=self.bridge.chat('project:vla')['tasks'][0]
+        self.assertTrue(task['assignment_unresolved'])
+        self.assertNotIn('assignment_message_id',task)
+        self.bridge.update_task('project:vla',{'task_id':task['id'],'status':'completed','summary':'Implementation reportedly finished.'})
+        self.end(self.bridge.chat('project:vla'));self.finished()
+        start=[r for r in self.requests() if r.get('method')=='turn/start'][-1]
+        self.assertIn('no reliable original assignment binding',str(start))
+        self.assertNotIn('assignment_message_id',self.bridge.chat('project:vla')['tasks'][0])
