@@ -1,3 +1,10 @@
+## Completed in 0.1.33
+
+- Keep queue and W&B identities aligned when correcting a rejected source folder.
+- Cover the full recovery path with real Tracking, not only a permissive test double.
+- Prevent stale metadata synchronization from replacing a newer correction.
+- Review all eleven skills against the hotfix's unchanged identity/permission rules.
+
 ## Completed in 0.1.32
 
 - Stable Settings updates, extension search and native extension Configure controls.

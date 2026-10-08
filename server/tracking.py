@@ -184,7 +184,7 @@ class Tracking:
     def _intent_fingerprint(parameters):
         return _digest({key: value for key, value in parameters.items() if key not in {'experiment_name', 'experiment_summary', 'experiment_status'}})
 
-    def defer_run(self, project, experiment, params):
+    def defer_run(self, project, experiment, params, *, repo_correction=False):
         """Persist a metadata outbox without blocking run execution on W&B."""
         # Reconciliation owns self.lock across network requests. The outbox
         # uses only the brief Store lock so an outage never gates execution.
@@ -197,7 +197,17 @@ class Tracking:
             previous = self.store.get(key)
             if previous:
                 if previous['fingerprint'] != fingerprint:
-                    raise ValueError('This tracking_id was already used for different parameters. Use a new identifier for a new run.')
+                    original = previous['result'].get('parameters', {})
+                    same_intent = self._intent_fingerprint({k:v for k,v in original.items() if k != 'repo'}) == self._intent_fingerprint({k:v for k,v in parameters.items() if k != 'repo'})
+                    if not repo_correction or not same_intent:
+                        raise ValueError('This tracking_id was already used for different parameters. Use a new identifier for a new run.')
+                    # Only the queue service can authorize this after verifying
+                    # definitive rejection and absence. Keep writer/target IDs,
+                    # and schedule metadata reconciliation without a network call.
+                    result = copy.deepcopy(previous['result'])
+                    result.update(parameters=parameters, status='pending', error='W&B source metadata is waiting to synchronize; execution can continue.')
+                    self.store.put(key, {'fingerprint': fingerprint, 'result': result})
+                    return copy.deepcopy(result)
                 return copy.deepcopy(previous['result'])
             result = self._prepared_result(target, run_id, tracking_id, parameters, 'pending')
             # A known account suggests a future URL; it does not prove existence.
@@ -223,7 +233,12 @@ class Tracking:
         if not existing.get('run'):
             self._write(target, run_id, planned['parameters'].get('name', run_id), planned['parameters'], 'supersurfer-prepared-run')
         result = self._prepared_result(target, run_id, tracking_id, planned['parameters'], 'synced')
-        self.store.put(key, {'fingerprint': previous['fingerprint'], 'result': result})
+        with self.store.lock:
+            current = self.store.get(key)
+            if current['fingerprint'] != previous['fingerprint']:
+                # A source correction queued newer metadata during the query.
+                return copy.deepcopy(current['result'])
+            self.store.put(key, {'fingerprint': previous['fingerprint'], 'result': result})
         return result
 
     def _parameters(self, project, experiment, run=None):

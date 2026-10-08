@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.32'
+  supersurfer-version: '0.1.33'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.32. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.33. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional Code OSS workbench requires its separate runtime
 to be installed and selected before VS Code extension-host capabilities are

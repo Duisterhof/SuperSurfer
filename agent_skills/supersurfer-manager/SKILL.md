@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.32'
+  supersurfer-version: '0.1.33'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.32. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.33. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a

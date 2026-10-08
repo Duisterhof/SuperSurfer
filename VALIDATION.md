@@ -1,3 +1,14 @@
+# SuperSurfer 0.1.33 tracking recovery — October 8, 2026
+
+The full backend suite passes **641 Python tests**. The source-recovery regression
+now uses the actual Tracking implementation alongside a real Git worktree and
+scheduler fixture. This caught the second-layer W&B identity conflict hidden by
+the earlier permissive test double. Tests verify source correction retains the
+original writer, changes no other parameters, requires service authorization and
+makes no network request. A delayed synchronization response cannot overwrite newer
+corrected metadata. The 0.1.32 UI/browser validation below remains applicable; no UI
+or scheduler source changed in this hotfix. All eleven release skills were reviewed.
+
 # SuperSurfer 0.1.32 focused workspaces — October 8, 2026
 
 The full backend suite passes **639 Python tests**. The concurrent task layout

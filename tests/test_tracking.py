@@ -284,4 +284,27 @@ class TrackingTests(unittest.TestCase):
         self.assertEqual('pending', results[0]['status'])
 
 
-if __name__ == '__main__': unittest.main()
+
+    def test_verified_repo_correction_preserves_writer_and_rejects_other_changes(self):
+        original=self.tracking.defer_run(self.project,self.experiment,self.intent)
+        corrected={**self.intent,'repo':'/clean/source'}
+        with self.assertRaisesRegex(ValueError,'different parameters'):
+            self.tracking.defer_run(self.project,self.experiment,corrected)
+        count=len(self.remote.calls)
+        actual=self.tracking.defer_run(self.project,self.experiment,corrected,repo_correction=True)
+        self.assertEqual(count,len(self.remote.calls))
+        self.assertEqual(original['run_id'],actual['run_id']);self.assertEqual(original['tracking_id'],actual['tracking_id']);self.assertEqual(original['env'],actual['env'])
+        self.assertEqual('/clean/source',actual['parameters']['repo'])
+        with self.assertRaisesRegex(ValueError,'different parameters'):
+            self.tracking.defer_run(self.project,self.experiment,{**corrected,'gpu_count':1},repo_correction=True)
+        self.assertEqual(actual,self.tracking.defer_run(self.project,self.experiment,corrected))
+
+    def test_metadata_sync_cannot_overwrite_newer_source_correction(self):
+        original=self.tracking.defer_run(self.project,self.experiment,self.intent)
+        corrected={**self.intent,'repo':'/clean/source'}
+        self.remote.existing=True
+        self.remote.after=lambda:self.tracking.defer_run(self.project,self.experiment,corrected,repo_correction=True)
+        result=self.tracking._recover_prepared(self.project,self.experiment,{'entity':'researcher','project':'research','group':'experiment'},original)
+        self.assertEqual('/clean/source',result['parameters']['repo'])
+        self.assertEqual('pending',result['status'])
+        self.assertEqual(result,self.tracking.prepared(self.project,self.experiment,original))

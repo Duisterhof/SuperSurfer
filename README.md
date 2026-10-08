@@ -1,3 +1,11 @@
+## 0.1.33 tracking recovery hotfix
+
+Correcting a definitively rejected source folder now retains both the original queue
+request and its prepared W&B writer identity. Only repository metadata may change;
+command, data, commit and resource changes still fail. Metadata synchronization cannot
+replace a newer source correction with stale evidence. All 0.1.32 workspace changes
+below are included.
+
 ## 0.1.32 focused workspaces and review
 
 Page titles and navigation share one compact row. Opening or reopening an agent

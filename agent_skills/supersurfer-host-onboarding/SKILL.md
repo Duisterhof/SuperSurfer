@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.32'
+  supersurfer-version: '0.1.33'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.32. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.33. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -201,7 +201,10 @@ If first submission was definitively rejected for its source folder, correct onl
 `repo` under the same request ID in the original conversation; the service freshly
 confirms no run exists first. A lost/uncertain response freezes the original fields
 until reconciled. This exception does not change a queued run's source, candidate
-contract or command and does not authorize another queue identity. Follow
+contract or command. The service keeps its original queue and prepared W&B
+tracking/writer identities, updating only verified repository metadata. A tracking
+parameter error is not permission to invent a replacement request ID, tracking
+ID or W&B run. Follow
 [run submission](../supersurfer-worker/references/run-submission.md).
 Automatic acquisition supports an existing interpreter, an isolated venv from a
 committed requirements file, and resumable directory copying. It does not infer

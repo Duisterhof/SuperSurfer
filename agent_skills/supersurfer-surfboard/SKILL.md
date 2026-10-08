@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.32'
+  supersurfer-version: '0.1.33'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.32. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.33. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.

@@ -213,14 +213,22 @@ class QueueRecoveryTests(unittest.TestCase):
 
 
     def test_correcting_rejected_source_keeps_request_id_and_creates_one_run(self):
+        from server.tracking import Tracking
+        from server.wandb import WandBReader
+        from test_tracking import Remote
+        self.service.tracking=Tracking(self.service.store,WandBReader(Remote()))
         clean=self.root/'clean-worktree'
         self.git('worktree','add','--detach',str(clean),self.revision)
         (self.repo/'main.py').write_text('uncommitted unrelated work\n')
         with self.assertRaises(APIError):self.queue()
         key,identity=self.receipt();self.assertTrue(self.service.store.get(key)['rejected'])
+        before=self.service.store.get(key)['payload']['config']['wandb_tracking']
         corrected={**self.params,'repo':str(clean)}
         result=self.queue(corrected)
         self.assertTrue(result['ready']);self.assertEqual(1,len(self.runs()))
+        after=self.service.store.get(key)['payload']['config']['wandb_tracking']
+        self.assertEqual(before['run_id'],after['run_id']);self.assertEqual(before['tracking_id'],after['tracking_id'])
+        self.assertEqual(str(clean),after['parameters']['repo'])
         self.assertEqual(identity,self.runs()[0]['config']['supersurfer_request_id'] if isinstance(self.runs()[0]['config'],dict) else json.loads(self.runs()[0]['config'])['supersurfer_request_id'])
         self.assertEqual(result['run_id'],self.queue(corrected)['run_id'])
         self.assertEqual('uncommitted unrelated work\n',(self.repo/'main.py').read_text())
