@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.23'
+  supersurfer-version: '0.1.24'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.23. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.24. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -23,6 +23,20 @@ creates a linked attempt with a new run/W&B identity; keep both attempts' proven
 and identify the repaired revision or resume point. Do not silently select the
 newest run, splice restarted steps into one uninterrupted curve, or count a retry
 as an independent seed. Update live bindings only from the verified recovery record.
+
+## Respect the board's data input
+
+Use `read_surfboard` and `inspect_board_data` when a W&B/data block feeds this
+report. The Research default makes project experiments available for comparison;
+current-experiment or explicitly selected experiments narrow that set. Honor the
+applied selection, avoid cross-project sources, and preserve each run's experiment
+and attempt. Choose scientifically compatible methods from the available inputs;
+sharing data does not make incompatible protocols comparable or authorize mixing
+held-out examples into training. The reusable W&B and Experiment visualizer block
+skills cover source resolution and publication. For a requested selection or graph
+change, the configurator uses `propose_surfboard`; only an applied proposal changes
+the active input.
+Generic software/web artifacts need neither W&B nor training plots.
 
 ## Use the standard training renderer
 

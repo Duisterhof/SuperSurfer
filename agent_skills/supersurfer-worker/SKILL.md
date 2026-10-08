@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.23'
+  supersurfer-version: '0.1.24'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.23. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.24. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -86,6 +86,31 @@ An ordinary scheduled check never authorizes a new run, node/budget mutation,
 worker or schedule. A saved run-recovery grant is separate from these monitoring
 rules and stays confined to its lineage. Keep paused/removed rules stopped.
 
+## Project surfboard
+
+Use `read_surfboard` for the applied project graph when configuration affects the
+task. The role policy filters tools and server actions; the graph's requirements
+must be satisfied by actual service evidence. Markdown claims do not pass a gate.
+The guidance above describes the built-in Research board. For a Software
+engineering or Web design project, use the generic workflow skill selected by the
+service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
+A workspace manager must resolve the board of the project it is acting on.
+
+`inspect_board_data` resolves a configured input's experiment/run/artifact sources.
+Research defaults to sharing data within the project; current-experiment and named
+experiment selections narrow that input. Preserve the selection and source
+provenance. Read the W&B/visualizer skills attached to those blocks before creating
+a comparison. Availability for comparison does not authorize training on held-out
+data or crossing project boundaries.
+
+`run_board_action` executes a configured permitted action with a durable record;
+use its recorded result rather than claiming that a command passed. Research GPU
+launches continue through their existing exact-source PR and scheduler workflow.
+For a requested board change, prepare the concrete change for the project
+configurator. That conversation has `propose_surfboard` and the user applies its
+reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
+changes. Never alter board state to grant yourself a denied capability.
+
 ## Tool index
 
 All worker experiment/project targets are fixed by this conversation; omit
@@ -93,6 +118,9 @@ All worker experiment/project targets are fixed by this conversation; omit
 
 | Tools | Use |
 |---|---|
+| `read_surfboard`, `inspect_board_data`, `run_board_action` | Applied graph, scoped data inputs and permitted configured commands. |
+| `list_project_artifacts`, `publish_artifact` | Browse or save requested project outputs in the project's isolated library. |
+| `inspect_project_activity`, `export_diagnostics` | Actual background work or a bounded redacted diagnostic report; never publish it externally without the user's request. |
 | `update_task` | Create/update the same deliverable; record real progress and verified completion. |
 | `prepare_run`, `queue_run` | Held preparation or an explicitly requested exact-source PR-backed launch. |
 | `stop_run` | User-requested scheduler cancellation of one run in this experiment; supply only `run_id`. |

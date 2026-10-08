@@ -383,6 +383,38 @@ for _role, _tools in ROLE_TOOLS.items():
                    MANAGER_LIMITS_TOOL if _role == 'manager' else LIMITS_TOOL, STOP_RUN_TOOL])
 
 
+
+def _board_tool(name, description, properties, required=()):
+    return {"name": name, "description": description, "inputSchema": {"type": "object", "additionalProperties": False,
+            "properties": properties, "required": list(required)}}
+
+_PROJECT = {"project_id": {"type": "string", "maxLength": 150, "description": "Manager only; other scopes already select their project."}}
+READ_BOARD_TOOL = _board_tool("read_surfboard", "Read the current project graph, draft, versions, block catalog and compiled capabilities.", _PROJECT)
+PROPOSE_BOARD_TOOL = _board_tool("propose_surfboard", "Save a proposed graph for user review. Never applies or starts work. Read current versions first; ask_user must clarify any ambiguous arrow. Concurrent edits are rejected.", {
+    "board": {"type": "object", "additionalProperties": True}, "expected_version": {"type": "integer", "minimum": 0},
+    "expected_draft_version": {"type": "integer", "minimum": 0}}, ["board", "expected_version", "expected_draft_version"])
+DATA_BOARD_TOOL = _board_tool("inspect_board_data", "Read actual project experiment/run/W&B/artifact metadata visible through a connected W&B or visualizer block. Honors project, current-item or selected-experiment sharing; never fabricates curves.", {
+    **_PROJECT, "node_id": {"type": "string", "maxLength": 100}, "experiment_id": {"type": "string", "maxLength": 180}}, ["node_id"])
+ACTION_BOARD_TOOL = _board_tool("run_board_action", "Start, inspect or stop an applied board command in this project's repository. Commands come from the graph, never arbitrary argv supplied here. Requires the user's task; checks record actual process evidence. Reuse request_id after uncertainty and inspect execution_id until terminal.", {
+    **_PROJECT, "node_id": {"type": "string", "maxLength": 100},
+    "operation": {"type": "string", "enum": ["start", "status", "stop"]},
+    "request_id": {"type": "string", "minLength": 16, "maxLength": 100},
+    "pr_url": {"type": "string", "maxLength": 2048}, "execution_id": {"type": "string", "maxLength": 150}, "experiment_id": {"type": "string", "maxLength": 180}}, ["node_id", "operation"])
+ARTIFACT_LIST_TOOL = _board_tool("list_project_artifacts", "Browse the project's isolated artifact folder. Returns preview/download links and paths; no files from other projects.", {**_PROJECT, "path": {"type": "string", "maxLength": 4096}})
+ARTIFACT_PUBLISH_TOOL = _board_tool("publish_artifact", "Copy an existing project output into this project's artifact library. Project libraries stay separate even when repositories are shared. Never copy credentials, private service state or a symlink.", {
+    **_PROJECT, "source_path": {"type": "string", "maxLength": 4096}, "path": {"type": "string", "maxLength": 4096},
+    "experiment_id": {"type": "string", "maxLength": 180}}, ["source_path", "path"])
+ACTIVITY_TOOL = _board_tool("inspect_project_activity", "Show what agents will do while the user is away: actual wakeups, saved tasks, recovery grants, stop conditions and running board commands.", _PROJECT)
+DIAGNOSTICS_TOOL = _board_tool("export_diagnostics", "Export a bounded, redacted Markdown diagnostic report for this project. Excludes credentials, source files and chat contents. The user reviews and downloads it before sharing.", _PROJECT)
+for _role, _tools in ROLE_TOOLS.items():
+    _tools.extend([READ_BOARD_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
+    if _role in {"lead", "manager"}:
+        for _old, _new in [("create_experiment", "create_work_item"), ("create_experiment_agent", "create_work_item_agent"), ("handoff_experiment", "handoff_work_item"), ("update_experiment", "update_work_item")]:
+            _original = next((tool for tool in _tools if tool["name"] == _old), None)
+            if _original:
+                _tools.append({**_original, "name": _new, "description": _original["description"].replace("research question", "acceptance criteria").replace("research", "project").replace("experiment", "work item").replace("W&B setup status", "saved document")})
+ROLE_TOOLS["configurator"] = [READ_BOARD_TOOL, PROPOSE_BOARD_TOOL, QUESTION_TOOL]
+
 def validate_questions(arguments):
     if not isinstance(arguments, dict) or set(arguments) != {"questions"}:
         raise ValueError("ask_user accepts only questions for its own conversation.")
@@ -424,7 +456,17 @@ def validate_questions(arguments):
 def available_tools():
     # Older worker sessions predate explicit role configuration. The server's
     # capability still independently enforces scope and permitted operations.
-    return ROLE_TOOLS.get(os.environ.get("SUPERSURFER_AGENT_ROLE", "worker"), [])
+    tools = ROLE_TOOLS.get(os.environ.get("SUPERSURFER_AGENT_ROLE", "worker"), [])
+    configured = os.environ.get("SUPERSURFER_ALLOWED_TOOLS")
+    if configured is None:
+        return tools
+    try:
+        allowed = json.loads(configured)
+        if not isinstance(allowed, list) or any(not isinstance(name, str) for name in allowed):
+            return []
+    except (TypeError, ValueError):
+        return []
+    return [tool for tool in tools if tool["name"] in allowed]
 
 
 def validate_value(value, field, label):
@@ -458,6 +500,8 @@ def validate_value(value, field, label):
             for item in value:
                 validate_value(item, field.get("items", {"type": "string"}), label + " item")
     elif kind == "object":
+        if field.get("additionalProperties") is True and not field.get("properties"):
+            return  # The graph validator performs bounded structural validation on the service.
         if isinstance(field.get("additionalProperties"), dict) and not field.get("properties"):
             for key, item in value.items():
                 validate_value(item, field["additionalProperties"], label + "." + str(key))
@@ -551,7 +595,7 @@ def handle(request):
     method, params = request.get("method"), request.get("params") or {}
     response = {"jsonrpc": "2.0", "id": request["id"]}
     if method == "initialize":
-        response["result"] = {"protocolVersion": params.get("protocolVersion", "2024-11-05"), "capabilities": {"tools": {}}, "serverInfo": {"name": "supersurfer-tools", "version": "7"}}
+        response["result"] = {"protocolVersion": params.get("protocolVersion", "2024-11-05"), "capabilities": {"tools": {}}, "serverInfo": {"name": "supersurfer-tools", "version": "8"}}
     elif method == "ping":
         response["result"] = {}
     elif method == "tools/list":

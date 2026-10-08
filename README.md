@@ -1,3 +1,73 @@
+## 0.1.24 project surfboards
+
+Each project has its own versioned **surfboard**: a graph of reusable agents, work,
+checks, data sources and outputs. Choose **Research**, **Software engineering** or
+**Web design**, then open the project's **Surfboard** to customize it. Existing
+projects keep the Research workflow and their experiments, chats, compute pools,
+queue contracts, W&B sources and Results pages.
+
+Start with a template, drag in blocks and connect them. An arrow has a meaning:
+providing data is different from requiring a check before an action. Use the
+configurator conversation to describe the desired behavior; it asks about an
+ambiguous connection and proposes a versioned change. Inspect the changed graph
+and apply it. Agents cannot apply their own permission changes. Invalid or stale
+proposals leave the last valid board active; moving a block never starts work.
+
+The default Research data path is **Experiment → W&B → Experiment visualizer →
+Results**. W&B makes this project's experiment data available by default. Select
+**Project**, **Current experiment**, or **Selected experiments** on its data block
+to control comparison inputs. The visualizer inherits its connected inputs and
+ships with guidance for live overlaid training/validation/test curves, meaningful
+axes and requested domain visuals. Source identities and missing measurements stay
+visible. Data sharing does not copy a dataset or grant another project access.
+
+```mermaid
+flowchart LR
+    subgraph Research
+        E[Experiments] -->|recorded data| W[W&B · project by default]
+        W -->|selected sources| V[Experiment visualizer]
+        V -->|publish live view| R[Results]
+    end
+    subgraph Software
+        F[Feature] --> C[Code]
+        C --> T[Check]
+        T -->|recorded evidence| N[Change notes]
+    end
+    subgraph Web_design
+        D[Design task] --> P[Preview]
+        P --> A[Review and artifacts]
+    end
+```
+
+Role blocks narrow the tools available to leads and workers. The service checks
+the current board as well as ordinary project ownership; a Markdown claim does
+not pass a gate. Configured local checks/previews use `run_board_action` and durable
+receipts, without GPU/W&B setup. Research runs retain their exact-commit, verified-PR,
+resource and authorization checks. Data connections resolve real project sources;
+publication remains agent work and live W&B refresh occurs on opening Results.
+Timer/recovery blocks describe the intended behavior; existing explicit wakeup
+and recovery tools activate it. Saving a board alone creates no job or schedule.
+
+Each project also has **Files** for published outputs and **Activity** for actual
+agents, enabled wakeups, periodic experiment reviews, recovery grants, checks and previews. Open a row to see
+its task, trigger, allowed actions and stopping condition. Inactive graph templates
+are shown separately from work that will actually run. Ask an agent to publish an
+output or export diagnostics; the resulting file can be previewed or downloaded.
+Project libraries stay separate even when two projects share a repository.
+Diagnostic reports redact credentials on a best-effort basis and omit full chats;
+review the bounded logs before sharing the file.
+
+Use **Export board** / **Import board** to reuse a definition. Local settings,
+credentials and active jobs do not travel with it. Commands should be configured
+for the target repository before execution. Graph tool permissions govern
+SuperSurfer's managed APIs; they do not create a separate operating-system sandbox
+for Codex's shell. Ask / Approve for me / YOLO still govern that session's access.
+
+All nine role/block skills are release-reviewed. The configurator, generic workflow,
+W&B data and experiment visualizer skills are new; Research retains its existing
+five. See [the surfboard contract](CONTRACT.md#0124-surfboards-and-project-data-flow)
+for scope, evidence and compatibility details.
+
 ## 0.1.23 complete node acquisition and run recovery
 
 Workers can use `check_available_node` to verify an existing run's exact committed checkout, Python environment, required data, storage and observed GPU capacity. `acquire_new_node` reuses a prepared node or stages source, an isolated Python venv and data under the node's registered root, then calls the same check and adds the candidate to the **existing queued run**. Transfers run in the background; `recover_run(status)` reports progress, and repeating identical acquisition fields resumes interrupted setup. Prepared nodes remain discoverable for later work.
@@ -30,17 +100,17 @@ The selected Floating Panels design is now the main workspace: a compact full-wi
 
 A rejected cache/run submission no longer strands its request without a run ID. Retry `queue_run` in the original conversation with the same `request_id` and unchanged fields: SuperSurfer reuses the recorded run or safely submits that identity once. Resolved node contracts and W&B identity survive retries. Existing held run IDs still use normal PR verification and release. Existing workspaces need the bundled manager update for safe recovery when no receipt exists; connecting alone does not restart their manager.
 
-# SuperSurfer 0.1.22
+# SuperSurfer 0.1.24
 
-A personal research workspace for Mac and Linux: projects, experiment documents, agent conversations, and a shared GPU queue. AutoML continues to own projects, GPU scheduling and runs. SuperSurfer owns active research conversations; retired AutoML agents remain available as read-only history.
+A personal AI workspace for Mac and Linux: project-specific workflows, persistent agent conversations, documents, previews and a shared research GPU queue. AutoML continues to own Research projects, GPU scheduling and runs. Software engineering and Web design projects work locally without the manager. SuperSurfer owns active conversations; retired AutoML agents remain available as read-only history.
 
 [Requested improvements](TODO.md) · [Validation](VALIDATION.md) · [Integration contract](CONTRACT.md)
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.22-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.22-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** extract `SuperSurfer-0.1.24-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.24-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.22-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.24-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 
@@ -191,7 +261,7 @@ New project registration creates `.SuperSurfer` context. Existing imported proje
 
 ## Agent capability guidance
 
-Each owned role loads its release-reviewed skill: [manager](agent_skills/supersurfer-manager/SKILL.md), [research lead](agent_skills/supersurfer-lead/SKILL.md), or [experiment worker](agent_skills/supersurfer-worker/SKILL.md). The manager coordinates and queues explicitly requested runs across registered experiments; leads create workers, update and hand off experiments within their own project; workers prepare held drafts or queue requested runs only within their assigned experiment. Workers do not delegate, and suggested ideas never authorize autonomous launches. All owned roles also load the [host-onboarding skill](agent_skills/supersurfer-host-onboarding/SKILL.md) for scoped compute setup.
+Each owned role loads its release-reviewed skill: [manager](agent_skills/supersurfer-manager/SKILL.md), [research lead](agent_skills/supersurfer-lead/SKILL.md), or [experiment worker](agent_skills/supersurfer-worker/SKILL.md). The manager coordinates and queues explicitly requested runs across registered experiments; leads create workers, update and hand off experiments within their own project; workers prepare held drafts or queue requested runs only within their assigned experiment. Workers do not delegate, and suggested ideas never authorize autonomous launches. The Research board supplies the [host-onboarding skill](agent_skills/supersurfer-host-onboarding/SKILL.md) for scoped compute setup. Nonresearch lead/worker conversations use [generic workflow guidance](agent_skills/supersurfer-workflow/SKILL.md). The [configurator](agent_skills/supersurfer-surfboard/SKILL.md) proposes graph changes; [W&B data](agent_skills/supersurfer-wandb-data/SKILL.md) and [experiment visualizer](agent_skills/supersurfer-experiment-visualizer/SKILL.md) guidance belongs to those reusable blocks.
 
 Every release requires a bounded subagent review of these skills against the actual tools, ownership and user workflows, as described in [AGENTS.md](AGENTS.md). Packaging checks matching version markers and documented role tools, rejects missing or stale guidance, and includes the skills in the workspace bundle. Updating version markers alone is not the review.
 

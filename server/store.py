@@ -115,7 +115,7 @@ class Store:
 
     def chat_settings(self, scope):
         saved = self.get("chat_settings:" + scope, {})
-        return {"model": saved.get("model"), "reasoning": saved.get("reasoning"), "fast_mode": saved.get("fast_mode", False), "approval_mode": saved.get("approval_mode")}
+        return {"model": saved.get("model"), "reasoning": saved.get("reasoning"), "fast_mode": saved.get("fast_mode"), "approval_mode": saved.get("approval_mode")}
 
     def save_chat_settings(self, scope, changes, validate=None):
         if not isinstance(changes, dict) or set(changes) - {"model", "reasoning", "fast_mode", "approval_mode"}:
@@ -129,8 +129,8 @@ class Store:
                     settings[key] = value
                     continue
                 if key == "fast_mode":
-                    if type(value) is not bool:
-                        raise ValueError("fast_mode must be true or false")
+                    if value is not None and type(value) is not bool:
+                        raise ValueError("fast_mode must be true, false or null to inherit")
                     settings[key] = value
                     continue
                 if value is not None:
@@ -228,6 +228,8 @@ class Store:
                     return self.experiment(prior["experiment_id"])
             path = self._document_path(project, key)
             content = markdown or f"# {name.strip()}\n\n{summary.strip()}\n\n## Research question\n\nDescribe the hypothesis and what would count as evidence.\n\n## Protocol\n\nRecord the data, controls, metrics and budget before requesting a run.\n\n## Results\n\nNo runs have been submitted for this experiment.\n"
+            if markdown is None and (project.get("workflow") or project.get("surfboard", {}).get("workflow", "research")) != "research":
+                content = f"# {name.strip()}\n\n{summary.strip()}\n\n## Acceptance criteria\n\nRecord the requested outcome and how it will be checked.\n\n## Implementation\n\nKeep decisions and provenance here.\n\n## Verification\n\nNo checks have been recorded yet.\n"
             atomic_write(path, content)
             now = time.time()
             data = {"id": key, "project_id": project["id"], "name": name.strip(), "summary": summary.strip(),
@@ -338,7 +340,26 @@ class Store:
             # Ignoring inside this directory avoids changing the research repository's own rules.
             if not (root / ".gitignore").exists():
                 atomic_write(root / ".gitignore", "*\n")
-            atomic_write(root / "project.json", json.dumps({"project_id": project["id"], "name": project["name"], "goal": project.get("goal"), "service_state": str(self.directory), "policy": "Research leads suggest new ideas. An explicit user queue/run request authorizes the experiment worker to use queue_run: verify the exact-source PR, then release through AutoML. The user may also release in the app. Preparation-only requests stay held; scheduled reviews and unsolicited ideas never queue runs."}, indent=2) + "\n")
+            workflow = project.get("workflow") or project.get("surfboard", {}).get("workflow", "research")
+            prior = self.get("initialized:" + project["id"])
+            metadata = root / "project.json"
+            owner = None
+            if metadata.exists():
+                if metadata.is_symlink():
+                    raise ValueError("Project metadata cannot be a symlink")
+                owner = json.loads(metadata.read_text()).get("project_id")
+            assigned_elsewhere = any(key != "initialized:" + project["id"] and json.loads(value) == str(root)
+                                     for key, value in self.db.execute("SELECT key,value FROM kv WHERE key LIKE 'initialized:%'"))
+            if prior:
+                root = Path(prior)
+            elif workflow != "research" or assigned_elsewhere or (owner is not None and owner != project["id"]):
+                root = root / "projects" / project["id"]
+            if root.resolve() != root:
+                raise ValueError("Project context path cannot contain symlinks")
+            root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            policy = ("Research leads suggest ideas. Explicit user run requests use queue_run with verified exact-source PRs. Scheduled checks never launch new runs."
+                      if workflow == "research" else "Follow this project's applied surfboard. Complete requested work and record actual check evidence. Applying configuration does not start work.")
+            atomic_write(root / "project.json", json.dumps({"project_id": project["id"], "name": project["name"], "goal": project.get("goal"), "service_state": str(self.directory), "policy": policy}, indent=2) + "\n")
             for row in self.db.execute("SELECT id FROM experiments").fetchall():
                 data = self._data(row[0])
                 if data["project_id"] != project["id"]:
@@ -504,7 +525,7 @@ class Store:
             monitoring["last_check"] = time.time()
             monitoring["next_check"] = time.time() + self.settings()["monitor_interval_minutes"] * 60
             monitoring["error"] = state.get("error")
-            if state["connected"]:
+            if state.get("manager_connected", state["connected"]):
                 self.put("observed_run_status", current)
             self.put("monitoring", monitoring)
             return monitoring

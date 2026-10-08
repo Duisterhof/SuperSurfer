@@ -4,7 +4,7 @@ function workspacePreference(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid workspace preference.');
   return {
     view: ['workspace','compute','settings'].includes(value.view) ? value.view : 'workspace',
-    tab: ['overview','runs','results','compute'].includes(value.tab) || /^page:page_[a-f0-9]+$/.test(value.tab || '') ? value.tab : 'overview',
+    tab: ['overview','runs','results','compute','surfboard','artifacts','activity'].includes(value.tab) || /^page:page_[a-f0-9]+$/.test(value.tab || '') ? value.tab : 'overview',
     projectId: typeof value.projectId === 'string' ? value.projectId.slice(0,200) : null,
     experimentId: typeof value.experimentId === 'string' ? value.experimentId.slice(0,200) : null,
     chatVisible: value.chatVisible !== false,

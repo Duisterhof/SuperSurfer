@@ -1,3 +1,14 @@
+## 0.1.24 surfboards — implementation and validation
+
+- [x] Per-project versioned Research, Software engineering and Web design graphs with scoped roles and supported requirements.
+- [x] Drag reusable blocks, draw meaningful arrows, inspect changes and apply validated proposals from the configurator conversation.
+- [x] Default project-wide experiment data sharing with selectable current/selected experiments and a W&B → Experiment visualizer → Results path.
+- [x] Configured software checks and web previews with durable receipts; preserve existing Research queue and source contracts.
+- [x] Real configured-action receipts, process-owned Stop/timeouts, source-sensitive check prerequisites and sandboxed HTTP previews.
+- [x] Project-scoped artifact libraries, actual background activity including legacy reviews and continuation, and redacted diagnostic exports with traversal/privacy regression coverage.
+- [x] Revise the existing five skills and add configurator, generic workflow, W&B data and experiment visualizer skills.
+- [x] Exercise the three workflows, board conflicts, permissions, missing inputs and rendering failures; record actual checks in VALIDATION.
+
 ## Completed in 0.1.23
 
 - Exact-commit node check, prepared-node reuse and isolated source/environment/data acquisition.

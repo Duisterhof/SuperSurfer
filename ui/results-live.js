@@ -22,12 +22,13 @@ export function connectLiveResults({api, selection, frame}) {
   }catch(error){post(entry,{...cache.get(entry.key),loading:false,error:error.message,stale:true});}
   finally{entry.loading=false;entry.lastChecked=Date.now();}
  }
- window.addEventListener('message',event=>{
+ const onMessage=event=>{
   const page=selection(),message=event.data;
   if(!page?.wandb_sources?.length||event.source!==frame()?.contentWindow||event.origin!=='null'||!message||!['supersurfer:results:subscribe','supersurfer:results:refresh'].includes(message.type)||typeof message.instance!=='string'||message.instance.length>100)return;
   if(!current||current.window!==event.source||current.instance!==message.instance||current.id!==page.id||current.sha256!==page.sha256||current.previewUrl!==page.preview_url){
    current={id:page.id,experimentId:page.experimentId,sha256:page.sha256,previewUrl:page.preview_url,revision:page.updated,key:page.experimentId+':'+page.id+':'+page.preview_url,window:event.source,instance:message.instance,loading:false,lastChecked:0};void refresh();
   }else if(message.type==='supersurfer:results:refresh'&&Date.now()-current.lastChecked>1000)void refresh();
- });
- return {refresh};
+ };
+ window.addEventListener('message',onMessage);
+ return {refresh,dispose(){current=null;cache.clear();window.removeEventListener('message',onMessage);}};
 }
