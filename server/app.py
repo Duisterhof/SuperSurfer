@@ -1055,11 +1055,13 @@ class Service(SurfboardService, EditorService, WritingService):
         else:
             fingerprint = json.dumps({"experiment_id": experiment["id"], "arguments": {key: value for key, value in arguments.items() if key != "pr_url"}}, sort_keys=True)
             durable_key = "queue_request:" + scope if scope.startswith(("manual:", "agent-request:")) else None
+            correcting_repo = False
             prior = self.store.get(durable_key) if durable_key else self.turn_queue_requests.get(scope)
             if prior:
                 if prior["fingerprint"] != fingerprint:
                     if request_id is not None and durable_key:
                         prior = self.amend_rejected_queue_request(scope, durable_key, prior, experiment, fingerprint)
+                        correcting_repo = True
                     else:
                         raise APIError("Only one new queued run can be created in this conversation turn. Continue with an existing run_id or ask for another run in a new turn.", 409)
                 if prior and not prior.get("run_id") and durable_key:
@@ -1087,7 +1089,7 @@ class Service(SurfboardService, EditorService, WritingService):
                     draft = {key: value for key, value in arguments.items() if key != "pr_url"}
                     if durable_key:
                         draft.update(_request_id=scope, _request_fingerprint=hashlib.sha256(fingerprint.encode()).hexdigest())
-                    payload, _ = self.prepare_run_submission({**draft, "project_id": experiment["project_id"], "experiment_id": experiment["id"]})
+                    payload, _ = self.prepare_run_submission({**draft, "project_id": experiment["project_id"], "experiment_id": experiment["id"]}, repo_correction=correcting_repo)
                     record["payload"] = payload
                 # Freeze resolved node contracts and W&B identity across retries.
                 if durable_key:
@@ -1145,7 +1147,7 @@ class Service(SurfboardService, EditorService, WritingService):
             self.recovery.enable(scope, run, "Complete the existing user-requested run " + run["name"] +
                 ". Consult this conversation's task and preserve its protocol, inputs, resource limits and stop orders.")
 
-    def prepare_run_submission(self, params):
+    def prepare_run_submission(self, params, *, repo_correction=False):
         """Validate and build a held submission before crossing the manager RPC boundary."""
         name = scheduler_name(params)
         project = self.lookup("projects", text_field(params, "project_id", 150), fresh=True)
@@ -1198,7 +1200,7 @@ class Service(SurfboardService, EditorService, WritingService):
         # Persist intent before submission; the background synchronizer handles
         # network writes. A W&B outage must not delay or block a valid run.
         tracking_id = params.get("_request_id", "").removeprefix("manual:").removeprefix("agent-request:") or uuid.uuid4().hex
-        tracking = self.tracking.defer_run(project, experiment, {**{key: value for key, value in params.items() if not key.startswith("_")}, "tracking_id": tracking_id})
+        tracking = self.tracking.defer_run(project, experiment, {**{key: value for key, value in params.items() if not key.startswith("_")}, "tracking_id": tracking_id}, repo_correction=repo_correction)
         config["wandb_tracking"] = {key: value for key, value in tracking.items() if key != "env"}
         config["wandb_url"] = tracking["run_url"]
         payload["env"] = tracking["env"]

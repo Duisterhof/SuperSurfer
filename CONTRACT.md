@@ -1,3 +1,11 @@
+## 0.1.33 W&B source correction
+
+Only the service-verified rejected/absent queue path can authorize a repo-only
+tracking correction. This is a Python keyword argument, not a client-supplied run
+parameter. Existing tracking/run/target IDs remain fixed. Changes to any other intent
+field are refused even on this path. Synchronization rechecks the prepared metadata
+fingerprint before committing a remote response, preserving a concurrent correction.
+
 ## 0.1.32 source recovery, review and organization
 
 - A held submission rejected before run creation may amend only `repo`, under its

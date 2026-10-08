@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.32'
+  supersurfer-version: '0.1.33'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.32. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.33. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -37,6 +37,8 @@ Compiling text does not launch an experiment or save the user's dirty editor buf
    rejected source-folder error may be corrected under the same request ID with
    only `repo` changed, after the service freshly confirms absence; uncertain
    responses keep their original fields and other contract fields stay fixed.
+   That correction retains the original queue and prepared W&B identities; never
+   invent replacement identifiers to bypass a tracking-parameter conflict.
 3. At a concrete placement failure, inspect both project budgets and candidate
    readiness. Use `check_available_node` for the run's exact committed checkout,
    runtime, data and observed capacity. Prefer prepared nodes, then use

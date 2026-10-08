@@ -26,7 +26,7 @@ class FakeTracking:
         result = {"status": "synced", "url": "https://wandb.ai/test/research/groups/" + experiment["id"], "parameters": {}}
         self.records[experiment["id"]] = result
         return deepcopy(result)
-    def defer_run(self, project, experiment, params):
+    def defer_run(self, project, experiment, params, **kwargs):
         return {"status": "pending", "run_id": params["tracking_id"], "tracking_id": params["tracking_id"], "run_url": None,
                 "env": {"WANDB_PROJECT": "research", "WANDB_RUN_GROUP": experiment["id"], "WANDB_RUN_ID": params["tracking_id"], "WANDB_RESUME": "allow"}}
 

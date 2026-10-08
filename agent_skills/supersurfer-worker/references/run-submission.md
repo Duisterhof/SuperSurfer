@@ -70,8 +70,11 @@ A definitively rejected source-folder error has one narrow correction path:
 repeat the same request ID in its owning conversation with only `repo` changed to
 the verified clean committed source checkout. The service must freshly reconcile
 that no run exists before replacing the rejected receipt; every other field stays
-fixed. This does not permit changing commands, resources, revision or tracking
-identity. Lost/uncertain responses are not definitive rejections: retry the original
+fixed. The service retains both the original queue identity and its prepared
+W&B `tracking_id`/writer while updating only the corrected repository metadata.
+Do not create a replacement request ID, tracking ID or W&B writer to bypass a
+parameter conflict. This does not permit changing commands, resources or revision.
+Lost/uncertain responses are not definitive rejections: retry the original
 fields first and preserve uncertainty if reconciliation is unavailable. If a run
 is found, use its returned `run_id` instead of correcting or resubmitting its fields.
 
