@@ -1,3 +1,8 @@
+## Completed in 0.1.28
+
+- Stop treating cancellation of an obsolete node check as a five-minute SSH outage.
+- Preserve real outage backoff, control-process cleanup and scheduler ownership.
+
 ## Completed in 0.1.27
 
 - Use valid scheduler names for run retries and safely repair old rejected receipts without changing request identity or duplicating runs.

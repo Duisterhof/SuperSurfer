@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.27. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.28. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -60,6 +60,9 @@ do not take over or duplicate its setup. When explicitly handling an unowned
 existing run, enable recovery with its actual user task. This permits bounded
 same-lineage repair/retry, not an initial lead launch or additional experiment.
 See the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
+Replacing a candidate can cancel its obsolete admission check without cancelling
+the queued run. Read the current candidate state before reporting failure or
+reassigning the task; this does not call for a new launch or manager relay.
 
 This lead can directly `stop_run` when the user requests cancellation of a run in
 this project. Supply only its exact `run_id`; no worker/manager relay is needed.

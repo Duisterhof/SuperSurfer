@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.27. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.28. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -44,6 +44,9 @@ Compiling text does not launch an experiment or save the user's dirty editor buf
    full source, command, probe or contract receipts. Ordinary polls use the live
    blocker/readiness summary and preserve any pool-save warning.
    A pool edit alone still does not add candidates to an existing run.
+   A replaced candidate's cancelled admission check is not a failed run or proof
+   of an SSH outage. Inspect the current candidate on the same run; preserve its
+   grant and let the scheduler recheck, without duplicate queueing or force polls.
    Successful acquisition remembers a newly prepared host for future project runs
    by default; use `save_for_project: false` for intended run-only setup. Inspect
    `project_pool` and `reusable_node`: conflicting existing settings are preserved,

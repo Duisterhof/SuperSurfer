@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.27. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.28. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -76,6 +76,10 @@ reservations, not project eligibility. Stale/unreachable readings do not establi
 free capacity. Refresh availability requests background probes, limited to once
 per ten seconds, and returns before every host answers. Routine idle probes remain
 five minutes apart. Check timestamps/errors; a reservation is not fresh telemetry.
+Intentional cancellation of an obsolete admission check creates no SSH outage
+backoff. Genuine connection failures and timeouts still retain bounded backoff.
+Inspect the current candidate rather than repeatedly refreshing, re-registering
+the host or bypassing the scheduler because an older check was cancelled.
 The same **Refresh availability** and **Register machine** controls remain part of
 compact Compute layouts. Expanding a node exposes its device details; it neither
 registers those GPUs nor admits a run. A clipped toolbar is a presentation defect,

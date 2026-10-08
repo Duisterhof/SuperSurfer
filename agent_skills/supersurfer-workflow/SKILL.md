@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # Work from the project's surfboard
 
-Reviewed for SuperSurfer 0.1.27. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.28. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and

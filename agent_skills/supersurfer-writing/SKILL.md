@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.27. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.28. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for the applied writing
 workflow and configured compiler. Record actionable deliverables with `update_task`
 and retain their IDs. A compiled PDF proves compilation, not completion of a

@@ -84,6 +84,13 @@ inspect a changed requirement before creating a different request. If the run
 started or stopped meanwhile, prepared files do not establish candidate addition.
 Confirm the saved receipt/current state. Scheduler allocation remains separate.
 
+Replacing a candidate can intentionally cancel its obsolete admission check.
+That cleanup does not cancel the run or establish an SSH outage; it must not
+trigger a new queue request, host registration or repeated forced probes. Read
+the current candidate/receipt and continue necessary remediation within the same
+run and owner grant. Genuine connection failures and timeouts still use the
+scheduler's bounded backoff; this cancellation fix does not authorize bypassing it.
+
 ## Persist and bound recovery
 
 Worker queueing automatically enables recovery for a pooled run. To enable an
