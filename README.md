@@ -1,8 +1,17 @@
-## 0.1.27 compact Compute controls
+## 0.1.27 recovery and compact Compute controls
 
 Compute actions wrap within the space left by your chat panel, keeping Refresh and
 Register machine visible in a narrow window. This patch follows the research,
 coding and writing workflow release below.
+
+Run recovery now generates scheduler-compatible names. A retry stranded by the
+old invalid name reuses its saved request: the service first reconciles any
+existing run, and repairs the name only after a definitive rejection and a fresh
+check confirms no run exists. Resource, source and tracking receipts are preserved;
+timeouts and uncertain ownership never authorize a replacement. Enabled recovery
+tasks affected by that old rejection receive one wakeup to resume their existing
+request; paused work stays paused. New invalid names are caught before a request
+is saved, so the same form or request ID can be corrected and retried.
 
 ## 0.1.26 research, coding and writing workspaces
 

@@ -54,6 +54,13 @@ def text_field(params, key, limit=20000, required=True):
     return value.strip()
 
 
+def scheduler_name(params, label="Run"):
+    value = text_field(params, "name", 64)
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value):
+        raise APIError(f"{label} name must use lowercase letters, numbers and single hyphens, up to 64 characters")
+    return value
+
+
 def integer(params, key, minimum=0, maximum=1000000, default=None):
     value = params.get(key, default)
     if type(value) is not int or not minimum <= value <= maximum:
@@ -1075,6 +1082,7 @@ class Service(SurfboardService, EditorService, WritingService):
 
     def prepare_run_submission(self, params):
         """Validate and build a held submission before crossing the manager RPC boundary."""
+        name = scheduler_name(params)
         project = self.lookup("projects", text_field(params, "project_id", 150), fresh=True)
         experiment = self.store.experiment(text_field(params, "experiment_id", 180))
         if experiment["project_id"] != project["id"]:
@@ -1102,7 +1110,7 @@ class Service(SurfboardService, EditorService, WritingService):
             config["supersurfer_request_id"] = params["_request_id"]
             config["supersurfer_request_fingerprint"] = params["_request_fingerprint"]
         review_url = text_field(params, "pr_url", 2048, required=False)
-        payload = {"project": project["id"], "name_": text_field(params, "name", 100), "gpu_count": count, "command": command, "config": config}
+        payload = {"project": project["id"], "name_": name, "gpu_count": count, "command": command, "config": config}
         if use_pool:
             if params.get("host_id"):
                 raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
@@ -1626,9 +1634,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Invalid project limit fields")
             return self.project_limits.set(text_field(params, "project_id", 150), {key: value for key, value in params.items() if key != "project_id"})
         if op == "project.add":
-            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": encode_limit("gpu_limit", params.get("gpu_limit", "unlimited")), "run_limit": encode_limit("run_limit", params.get("run_limit", "unlimited")), "goal": text_field(params, "goal", required=False)}
-            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload["name_"]) or len(payload["name_"]) > 64:
-                raise APIError("Project name must use lowercase letters, numbers and single hyphens, up to 64 characters")
+            payload = {"name_": scheduler_name(params, "Project"), "repo": text_field(params, "repo", 4096), "gpu_limit": encode_limit("gpu_limit", params.get("gpu_limit", "unlimited")), "run_limit": encode_limit("run_limit", params.get("run_limit", "unlimited")), "goal": text_field(params, "goal", required=False)}
             payload["repo"] = prepare_project_repository(payload["repo"])
             workflow = params.get("surfboard_template", "research")
             board = board_template(workflow)  # Validate before registering anything.
@@ -1652,6 +1658,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 return {**project, "initialized": False, "warning": f"Project was registered, but .SuperSurfer initialization failed: {exc}"}
             return {**project, **initialized}
         if op == "host.add":
+            name = scheduler_name(params, "Host")
             target = text_field(params, "target", 512, required=False)
             if target and not re.fullmatch(r"(?:[a-zA-Z0-9_.-]+@)?[a-zA-Z0-9][a-zA-Z0-9_.-]*", target):
                 raise APIError("SSH target must be a host alias or user@host")
@@ -1662,7 +1669,7 @@ class Service(SurfboardService, EditorService, WritingService):
             if not isinstance(gpus, list) or any(type(g) is not int or g < 0 or g > 1024 for g in gpus) or len(set(gpus)) != len(gpus):
                 raise APIError("GPUs must be unique nonnegative integer device indices")
             runner_python = resolve_runner_python(target or None, text_field(params, "python", 4096))
-            result = self.aml.call(op, {"name_": text_field(params, "name", 100), "target": target or None, "root": root, "gpus": gpus, "python": runner_python})
+            result = self.aml.call(op, {"name_": name, "target": target or None, "root": root, "gpus": gpus, "python": runner_python})
         elif op == "run.submit":
             payload, experiment = self.prepare_run_submission(params)
             result = self.aml.call("run.submit", payload)

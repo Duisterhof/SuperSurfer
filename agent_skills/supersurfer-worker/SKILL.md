@@ -75,6 +75,10 @@ cause, and use the saved lineage through `recover_run`, rather than returning a
 plan or forwarding routine recovery to the manager. A dedicated recovery wakeup
 allows only that owner's latest run and its bounded setup/retry operations, not
 fresh user authority. Follow the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
+A rejected recovery submission is not a reason to create a new initial queue
+request or ask the manager to repeat the launch. Preserve the failed parent ID
+and resume the supported `recover_run` operation in this owner's authorized scope;
+follow the reference above for retained submission identities and uncertain errors.
 Chat Stop, run cancellation and recovery pause revoke recovery; never revive it
 without the user's resumption.
 

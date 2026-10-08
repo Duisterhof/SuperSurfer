@@ -1,8 +1,27 @@
-## 0.1.27 layout follow-up
+## 0.1.27 recovery and layout follow-up
 
 Compute header actions remain within the available main-column width, including
 when a wide agent panel is open. Layout changes preserve scheduler authority and
 all 0.1.26 compiler, source and resource contracts.
+
+Recovery names use bounded kebab-case compatible with the scheduler. Repair of an
+old invalid-name receipt retains the same durable request identity and frozen
+source, pool and W&B fields. Its original arguments must match exactly apart from
+the repaired name. Replaying those original arguments must produce the exact
+terminal name-validation rejection, followed by a fresh connected snapshot with
+no matching run and an unchanged receipt under the store lock. Existing runs go
+through normal reconciliation instead. Offline, ambiguous, conflicting or other
+failed submissions preserve their original receipt. The ordinary reviewed-source,
+resource, ownership and three-attempt recovery constraints remain in force.
+Eligible old rejected receipts contribute a one-time problem marker to the
+existing enabled recovery grant, allowing its owner to resume with the saved
+repair fields. This wakeup creates no run itself and respects paused/busy scopes.
+A failed wakeup delivery keeps the prior problem marker and waits at least sixty
+seconds before retrying; only an accepted delivery records the problem as notified.
+New submissions validate the scheduler name before preparing tracking or freezing
+a receipt; correcting invalid input can reuse the same uncommitted request ID.
+Project and host names use the same scheduler constraints, with host validation
+before any Python/SSH probe and project validation before creating a directory.
 
 ## 0.1.26 contained paper builds and responsive scheduling
 

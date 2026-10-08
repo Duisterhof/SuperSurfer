@@ -1,4 +1,4 @@
-# SuperSurfer 0.1.27 compact-layout follow-up — October 8, 2026
+# SuperSurfer 0.1.27 recovery and layout follow-up — October 8, 2026
 
 A read-only check against the updated real workspace found a clipped Compute
 header at a 1000px window width with a wide agent panel: Register machine extended
@@ -6,6 +6,28 @@ header at a 1000px window width with a wide agent panel: Register machine extend
 The full Compute browser suite passes, including exact bounds and hit targets at
 1000px and 1600px with a resized chat, plus the existing pool, run and limits flows.
 All eleven skills were reviewed again; the checker and four skill tests pass.
+The final 0.1.27 source passes **600 Python tests**. Queue browser checks pass
+five scenarios and Compute passes fourteen, including name correction in the same
+form and header reachability with a wide agent panel.
+
+Live E17 diagnosis found a scheduler-invalid generated retry name, with a frozen
+request but no run ID. A read-only reconstruction matched all thirteen legacy
+receipt checks. Recovery now reconciles the original identity before repairing a
+confirmed rejected name, retaining frozen source, resources, pool and tracking.
+Five real manager/SQLite cases cover rejection, a crash before the repaired submit,
+app+manager restart after a lost insertion reply, existing historical rows, and
+foreign/duplicate receipts. Ten focused cases additionally cover conflicting
+arguments, concurrent edits, offline confirmation, bounded names, one-time owner
+wakeups, paused/busy owners and failed wakeup delivery/backoff. Three preflight
+cases ensure invalid new names create no tracking/request/run and invalid host
+names never start a connection probe. Queue/Compute browser checks reject invalid
+input locally and successfully continue the corrected form.
+
+A 35-minute read-only observation of the deployed workflow release captured
+71 samples with no new service errors. All seven active/uncertain run identities
+and all 24 reservations remained unchanged; the unreachable run retained its
+eight reservations. The manager process identity and the pending user question
+were preserved. Host readings continued their ordinary bounded refresh cycle.
 
 The underlying workflow code retains the 0.1.26 full-suite baseline below. An
 additional native Linux test used the actual packaged desktop and extracted remote

@@ -1,5 +1,9 @@
 ## Completed in 0.1.27
 
+- Use valid scheduler names for run retries and safely repair old rejected receipts without changing request identity or duplicating runs.
+- Wake eligible enabled recovery owners once after the fix; retry failed wakeup delivery after a bounded delay.
+- Reject invalid new names before retaining a request and show valid queue-form examples.
+
 - Keep Compute header actions reachable beside a wide chat panel in narrow windows.
 - Recheck all eleven skills against the shipped controls and unchanged role capabilities.
 
