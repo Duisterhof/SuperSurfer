@@ -1,3 +1,66 @@
+## 0.1.25 configurable pages, tiles and coding editor
+
+Use **Add page** to create a named page, or **Layout** to edit any existing one.
+Add and rearrange tiles, set their widths/heights, and rename, reorder or remove
+pages. A **Coding page** preset combines a file explorer, code editor and agent
+changes. These coding tiles are available in every project, including research.
+Clicking a file or agent patch opens it in the editor on that page; if that page
+has no editor, an existing editor page opens instead.
+
+The code tile uses [Monaco, the VS Code editor](https://github.com/microsoft/monaco-editor),
+bundled with its language workers for offline use. Browse or find files, open tabs,
+edit and save with Cmd/Ctrl+S, and compare working or staged files with Git HEAD.
+The repository is on the connected workspace host. Projects using the same
+repository share source files; their artifact libraries and layouts remain separate.
+
+Open **Agents** in the editor to select an agent and review its recorded file
+patches, including after commits or chat completion. Each record carries the agent,
+turn and local time, with a review marker that does not change source. This view
+uses actual agent edit events. It never assigns the entire Git diff to whichever
+agent last ran. Shell-only edits have no reliable file-event attribution; view
+those in **Git**. Previously retained chat patches may be partial. New records are
+kept independently of the chat activity list, bounded to 1,000 records / 16 MiB per
+conversation and 512 KiB per patch.
+
+**Ask agent** adds the current file or selected lines to the scoped chat composer.
+Review and send the message normally. Unsaved selections are labeled. Clean open
+files refresh from disk; dirty files show a conflict instead of being overwritten.
+Compare, reload disk, or explicitly keep your version before a separate Save.
+Switching tabs, projects or views retains unsaved buffers while the window is open;
+closing/reloading asks before discarding. Unsaved buffers are not a crash-recovery
+backup. Files over 2 MiB, binary files, links and internal Git/SuperSurfer state are
+not editable. This is Monaco with built-in language support, not a VS Code extension
+host or an installed Python language server.
+
+In **Surfboard → Layout**, choose **Project** or **Experiment / Feature / Design
+task** to configure the default pages. Combine code, repository files, agent changes,
+chat, runs, results, documents, published files, activity and available compute or
+preview tiles. Drag tiles from the palette or move them within the page; width and
+height controls set the grid. Review and apply the board as usual. Existing views
+become single-tile pages automatically, so current navigation is preserved.
+
+Each work item's **Layout** button can override its pages and side panels or reset
+them to the Surfboard default. Deleting a page removes its layout, not files, results,
+chats or running work. Right-side views remain available under **Side panel placement**.
+The Layout button remains accessible even after every page is removed. Page and tile
+choices never add tools, change permissions, waive run requirements or start work.
+
+
+**Optional compute caps.** New projects have no GPU or concurrent-run cap. Open
+**Surfboard → Compute** to choose **Unlimited** or an explicit cap; GPU zero permits
+CPU-only runs. The live usage bar and `read_surfboard` read the scheduler now, with
+an observation time and an unavailable state when it cannot be reached. Existing
+numeric limits are preserved and shown; unrelated page edits do not reset them.
+The configurator can propose changes, and Review & apply updates the scheduler.
+Owned leads/workers can still apply an explicit user decision with `set_project_limits`.
+
+**Completion checks.** Newly completed tracked deliverables receive a continuation
+that checks the original assignment and later directions against actual evidence.
+A completed helper or milestone must not end unfinished implementation/integration.
+Incomplete work reopens; repeated unverifiable completion becomes visible as needing
+attention. Stop, pending questions/approvals and real blockers remain authoritative.
+This check improves the task harness; it does not make a model's judgment infallible.
+
 ## 0.1.24 project surfboards
 
 Each project has its own versioned **surfboard**: a graph of reusable agents, work,
@@ -100,7 +163,7 @@ The selected Floating Panels design is now the main workspace: a compact full-wi
 
 A rejected cache/run submission no longer strands its request without a run ID. Retry `queue_run` in the original conversation with the same `request_id` and unchanged fields: SuperSurfer reuses the recorded run or safely submits that identity once. Resolved node contracts and W&B identity survive retries. Existing held run IDs still use normal PR verification and release. Existing workspaces need the bundled manager update for safe recovery when no receipt exists; connecting alone does not restart their manager.
 
-# SuperSurfer 0.1.24
+# SuperSurfer 0.1.25
 
 A personal AI workspace for Mac and Linux: project-specific workflows, persistent agent conversations, documents, previews and a shared research GPU queue. AutoML continues to own Research projects, GPU scheduling and runs. Software engineering and Web design projects work locally without the manager. SuperSurfer owns active conversations; retired AutoML agents remain available as read-only history.
 
@@ -108,9 +171,9 @@ A personal AI workspace for Mac and Linux: project-specific workflows, persisten
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.24-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.24-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** extract `SuperSurfer-0.1.25-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.25-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
-**Linux x64:** extract `SuperSurfer-0.1.24-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
+**Linux x64:** extract `SuperSurfer-0.1.25-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
 On the connection screen, choose:
 

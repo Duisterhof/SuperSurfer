@@ -43,9 +43,15 @@ function cancelConnection(context) {
   sendStatus(context, 'idle', 'Connection cancelled. Your saved workspace is still available.');
 }
 async function showSetup(context, restore = false) {
+  const previous = {restoreRequested:context.restoreRequested,editing:context.editing};
   context.restoreRequested = restore;
   context.editing = !restore;
-  try { await context.window.loadFile(setupPath); } catch (error) { if (!context.window.isDestroyed()) sendStatus(context, 'error', error.message); }
+  try { await context.window.loadFile(setupPath); }
+  catch (error) {
+    if (context.window.isDestroyed()) return;
+    if (context.window.webContents.getURL() !== setupUrl) Object.assign(context,previous);
+    if (error.code !== 'ERR_ABORTED') sendStatus(context, 'error', error.message);
+  }
 }
 async function connectWindow(context, raw) {
   if (context.attempt) return {error:'A connection is already in progress.'};
@@ -118,11 +124,20 @@ function makeWindow(record = store.create()) {
     event.preventDefault();openExternal(url);
   });
   window.webContents.on('will-attach-webview', event => event.preventDefault());
+  window.webContents.on('will-prevent-unload', event => {
+    const choice = dialog.showMessageBoxSync(window, {type:'question',
+      buttons:['Keep editing','Discard unsaved changes'],defaultId:0,cancelId:0,
+      title:'Unsaved source files',message:'Discard unsaved editor changes?',
+      detail:'Saved files and remote agent work are preserved.'});
+    if (choice === 1) event.preventDefault();
+    else shuttingDown = false;
+  });
   let geometryTimer;
   for (const name of ['move','resize','maximize','unmaximize']) window.on(name, () => { clearTimeout(geometryTimer);geometryTimer=setTimeout(() => saveWindow(context),200); });
   window.on('focus', () => { record.updated=Date.now();store.save(); });
-  window.on('close', () => { clearTimeout(geometryTimer);saveWindow(context);if (!shuttingDown) { record.open=false;store.save(); } });
+  window.on('close', () => { clearTimeout(geometryTimer);saveWindow(context); });
   window.on('closed', () => {
+    if (!shuttingDown) { record.open=false;store.save(); }
     windows.delete(record.id);context.attempt?.abort();context.connection?.child?.kill();
     partition.webRequest.onBeforeSendHeaders(null);if (!shuttingDown) updateMenu();
   });

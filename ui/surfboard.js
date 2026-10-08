@@ -1,7 +1,9 @@
+import {createPageLayoutEditor} from './page-editor.js';
+export {createPageLayoutEditor};
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const copy = value => JSON.parse(JSON.stringify(value));
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
-const symbols = {brief:'◇',agent:'✦',code:'⌘',check:'✓',experiment:'◈',compute:'▦',wandb:'▥',results:'▤',visualizer:'◒',preview:'▣',approval:'◉',document:'▧',timer:'◷'};
+const symbols = {brief:'◇',agent:'✦',code:'⌘',check:'✓',experiment:'◈',compute:'▦',wandb:'▥',results:'▤',visualizer:'◒',preview:'▣',approval:'◉',document:'▧',timer:'◷',editor:'⌨',artifacts:'▧',activity:'◴'};
 const names = {feeds:'Data flows to',requires:'Requires',owns:'Works on',handoff:'Hands off to',triggers:'Triggers',recovers:'Recovers'};
 const scopeNames = {project:'All project experiments',item:'Current experiment',selected:'Selected experiments'};
 const uid = prefix => prefix+'_'+Array.from(crypto.getRandomValues(new Uint8Array(6)),n=>n.toString(16).padStart(2,'0')).join('');
@@ -9,17 +11,75 @@ const field = (label,html) => `<label class="sb-field"><span>${esc(label)}</span
 const option = (value,label,current) => `<option value="${esc(value)}" ${value===current?'selected':''}>${esc(label)}</option>`;
 const input = (name,value,attributes='') => `<input data-field="${esc(name)}" value="${esc(value)}" ${attributes}>`;
 const select = (name,choices,current) => `<select data-field="${esc(name)}">${choices.map(v=>option(Array.isArray(v)?v[0]:v,Array.isArray(v)?v[1]:v,current)).join('')}</select>`;
+const capValue = value => Number.isInteger(value)?value:'unlimited';
+const capLabel = value => capValue(value)==='unlimited'?'Unlimited':String(value);
+
+const viewDefinitions=[['overview','Overview',['brief']],['compute','Compute',['compute']],['runs','Runs',['experiment']],['results','Results',['results','visualizer','wandb']],['documents','Documents',['document']],['artifacts','Files',['artifacts']],['activity','Activity',['activity']],['editor','Code editor',['editor']],['chat','Agent chat',['agent']],['preview','Preview',['preview']]];
+export function viewLayoutCatalog(board,level='item') {
+ const kinds=new Set(board.nodes.map(n=>n.kind));
+ return viewDefinitions.filter(([id])=>!(id==='compute'&&(level!=='project'||board.workflow!=='research'))&&!(['editor','preview'].includes(id)&&!kinds.has(id))&&!(id==='results'&&board.workflow!=='research'&&!['results','visualizer','wandb','preview'].some(k=>kinds.has(k)))).map(([id,label,sourceKinds])=>{const nodes=sourceKinds.flatMap(kind=>board.nodes.filter(n=>n.kind===kind));return {id,kind:id,label,...(nodes.length?{node_id:nodes[0].id,node_ids:nodes.map(n=>n.id)}:{})};});
+}
+export function viewLayoutRows(board,level='item') {
+ const available=viewLayoutCatalog(board,level),explicit=board.layouts?.[level];
+ if(explicit)return available.map(view=>({...view,...(explicit.find(r=>r.id===view.id)||{placement:'hidden',order:1000})})).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+ const defaults={overview:['main',0],chat:['right',100],activity:['right',50],editor:['main',25],...(level==='project'?{compute:['main',10],artifacts:['main',40]}:{runs:[board.workflow==='research'?'main':'hidden',10],results:['main',20],documents:['main',30]})};
+ return available.map(view=>{let [placement,order]=defaults[view.id]||['hidden',90];const config=board.nodes.find(n=>n.id===view.node_id)?.config||{};if(['results','documents','artifacts','activity','editor'].includes(view.id)){if(config.placement==='right')placement='right';else if(view.id==='activity'&&config.placement==='main')placement='main';if(config.order!==undefined)order=config.order;}return {...view,placement,order};}).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+}
+
+export function pageLayoutAvailableTiles(board,level='item') {
+ const rows=viewLayoutCatalog(board,level).map(row=>({...row,title:row.label}));
+ let editor=rows.find(row=>row.kind==='editor');if(!editor){editor={id:'editor',kind:'editor',label:'Code editor',title:'Code editor'};rows.push(editor);}
+ for(const [kind,label] of [['file_explorer','Repository files'],['agent_changes','Agent changes']])rows.push({...editor,id:kind,kind,label,title:label});
+ return rows;
+}
+export function pageLayoutPages(board,level='item') {
+ if(board.pages?.[level])return copy(board.pages[level]);
+ return viewLayoutRows(board,level).filter(row=>row.placement==='main').map(row=>({id:row.id,title:row.label,tiles:[{id:row.id,kind:row.id,span:12,height:400}]}));
+}
+
+// Shared by the surfboard's scope defaults and an individual task's override.
+// Callers own persistence; dragging here only changes the caller's local draft.
+export function createViewLayoutEditor(options={}) {
+ let element=null,rows=[],available=[],dragged=null;
+ const writable=()=>!(typeof options.readOnly==='function'?options.readOnly():options.readOnly);
+ function canonical(){return rows.map(({id,placement,order})=>({id,placement,order}));}
+ function move(id,placement,before=null){
+  if(!writable()||!['main','right','hidden'].includes(placement))return;
+  const row=rows.find(r=>r.id===id);if(!row||id===before)return;
+  const group=rows.filter(r=>r.placement===placement&&r.id!==id);
+  const index=before?group.findIndex(r=>r.id===before):-1;
+  row.placement=placement;group.splice(index<0?group.length:index,0,row);
+  group.forEach((r,i)=>r.order=i*10);
+  rows=rows.filter(r=>r.placement!==placement).concat(group).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+  render();options.onChange?.(canonical());
+ }
+ function render(){if(!element)return;const disabled=!writable();element.classList.add('sb-view-layout');
+  element.innerHTML=`<div class="sb-layout-columns">${[['main','Main page','Tabs in the central workspace'],['right','Right panel','Beside the main page'],['hidden','Available views','Drag a view into the layout to show it']].map(([placement,label,hint])=>`<section class="sb-layout-column sb-layout-${placement}" data-layout-slot="${placement}" aria-label="${label}"><header><strong>${label}</strong><span>${hint}</span></header><div class="sb-layout-cards">${rows.filter(r=>r.placement===placement).map(row=>{const info=available.find(v=>v.id===row.id)||row;return `<article class="sb-layout-card" data-layout-id="${esc(row.id)}" draggable="${!disabled}" tabindex="0" aria-label="${esc(info.label||row.id)} view"><span class="sb-layout-grip" aria-hidden="true">⠿</span><span class="sb-layout-card-title"><strong>${esc(info.label||row.id)}</strong><small>${esc(row.id==='chat'?'Scoped conversations':row.id==='editor'?'Repository files':row.id==='documents'?'All Markdown tabs':row.id==='results'?'Live reports and visualizations':row.id==='preview'?'Connected app previews':row.id==='activity'?'Agents, wakeups and recovery':row.id==='artifacts'?'Published project files':'')}</small></span><div class="sb-layout-card-actions"><button type="button" data-layout-move="up" aria-label="Move ${esc(info.label||row.id)} earlier" title="Move earlier" ${disabled?'disabled':''}>↑</button><button type="button" data-layout-move="down" aria-label="Move ${esc(info.label||row.id)} later" title="Move later" ${disabled?'disabled':''}>↓</button><select data-layout-placement aria-label="Placement for ${esc(info.label||row.id)}" ${disabled?'disabled':''}>${[['main','Main'],['right','Right'],['hidden','Hidden']].map(([value,title])=>option(value,title,row.placement)).join('')}</select></div></article>`;}).join('')||`<p class="sb-layout-empty">${placement==='main'?'Drop views here to create page tabs.':placement==='right'?'Drop views here to add a side panel.':'All available views are shown.'}</p>`}</div></section>`).join('')}</div><p class="sb-layout-help">Drag to move or reorder. You can also use the placement menu and arrow buttons. Hidden views preserve their data.</p>`;
+ }
+ function bind(){
+  element.onclick=event=>{const button=event.target.closest('[data-layout-move]');if(!button)return;event.preventDefault();event.stopPropagation();const id=button.closest('[data-layout-id]').dataset.layoutId,row=rows.find(r=>r.id===id),group=rows.filter(r=>r.placement===row.placement),index=group.findIndex(r=>r.id===id);if(button.dataset.layoutMove==='up'&&index>0)move(id,row.placement,group[index-1].id);if(button.dataset.layoutMove==='down'&&index<group.length-1)move(id,row.placement,group[index+2]?.id);};
+  element.onchange=event=>{if(event.target.matches('[data-layout-placement]')){event.stopPropagation();move(event.target.closest('[data-layout-id]').dataset.layoutId,event.target.value);}};
+  element.ondragstart=event=>{const card=event.target.closest('[data-layout-id]');if(!card||!writable())return;dragged=card.dataset.layoutId;event.dataTransfer.setData('application/x-surfboard-view',dragged);event.dataTransfer.effectAllowed='move';card.classList.add('dragging');event.stopPropagation();};
+  element.ondragover=event=>{const slot=event.target.closest('[data-layout-slot]');if(!slot||!writable()||!event.dataTransfer.types.includes('application/x-surfboard-view'))return;event.preventDefault();event.dataTransfer.dropEffect='move';for(const col of element.querySelectorAll('[data-layout-slot]'))col.classList.toggle('drop-target',col===slot);};
+  element.ondrop=event=>{const slot=event.target.closest('[data-layout-slot]');if(!slot)return;const id=event.dataTransfer.getData('application/x-surfboard-view');if(!id)return;event.preventDefault();event.stopPropagation();move(id,slot.dataset.layoutSlot,event.target.closest('[data-layout-id]')?.dataset.layoutId);dragged=null;};
+  element.ondragend=()=>{dragged=null;for(const node of element.querySelectorAll('.drop-target,.dragging'))node.classList.remove('drop-target','dragging');};
+  element.onkeydown=event=>{if(!event.altKey||!['ArrowUp','ArrowDown'].includes(event.key))return;const card=event.target.closest('[data-layout-id]');if(!card)return;event.preventDefault();card.querySelector(`[data-layout-move="${event.key==='ArrowUp'?'up':'down'}"]`).click();element.querySelector(`[data-layout-id="${card.dataset.layoutId}"]`)?.focus();};
+ }
+ return {mount(target,{rows:input=[],available:choices=[]}={}){element=target;available=copy(choices);rows=available.map(view=>{const raw=input.find(r=>r.id===view.id);return {id:view.id,placement:raw?.placement||'hidden',order:raw?.order??1000};}).sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));render();bind();},unmount(){if(element){element.onclick=element.onchange=element.ondragstart=element.ondragover=element.ondrop=element.ondragend=element.onkeydown=null;}element=null;},rows:canonical};
+}
 
 // The editor owns its DOM and each project's local draft. Background workspace
 // refreshes never rebuild a focused input or replace an unsaved graph.
 export function createSurfboardEditor(options) {
- const cache=new Map();let root=null,active=null,poll=null,loading=null,destroyed=false;
+ const cache=new Map();let root=null,active=null,poll=null,loading=null,destroyed=false,layoutEditor=null,pageEditor=null;
  function state(){return cache.get(active);}
  function isMounted(){return root?.isConnected&&!destroyed;}
  function showError(error){const s=state();if(s){s.error=error.message||String(error);renderNotice();}else if(root)root.textContent=error.message;}
  function ingest(s,data,force=false){
   const draft=data.draft, next=draft?.board||data.board;
-  const changed=data.version!==s.version||(draft?.draft_version??0)!==(s.draftVersion??0);
+  s.liveLimits=data.live_limits||null;s.liveLimitsError='';s.warning=data.warning||'';
+  const changed=data.version!==s.version||(draft?.draft_version??0)!==(s.draftVersion??0)||(s.serverBoard&&!same(next,s.serverBoard));
+  s.live=copy(data.board);
   if(s.board&&!force&&!changed){s.catalog=data.catalog||s.catalog;s.templates=data.templates||s.templates;return;}
   if(s.board&&!force&&s.dirty&&changed){s.incoming=data;return;}
   if(s.board&&!force&&s.dirty)return;
@@ -30,8 +90,8 @@ export function createSurfboardEditor(options) {
  }
  async function load({force=false}={}){
   const id=active,s=state();if(!id||loading===id&&!force)return;const request=(s.loadVersion||0)+1;s.loadVersion=request;loading=id;
-  try{const data=await options.api('surfboard?project_id='+encodeURIComponent(id));if(active!==id||s.loadVersion!==request)return;const before=s.board&&JSON.stringify(s.board);ingest(s,data,force);if(isMounted()){if(!before||before!==JSON.stringify(s.board))render();else{renderNotice();updateToolbar();}}}
-  catch(error){if(active===id)showError(error);}finally{if(loading===id)loading=null;}
+  try{const data=await options.api('surfboard?project_id='+encodeURIComponent(id));if(active!==id||s.loadVersion!==request)return;const before=s.board&&JSON.stringify(s.board);ingest(s,data,force);if(isMounted()){if(!before||before!==JSON.stringify(s.board))render();else{renderNotice();renderLiveCompute();updateToolbar();}}}
+  catch(error){if(active===id){s.liveLimitsError=error.message||String(error);renderLiveCompute();showError(error);}}finally{if(loading===id)loading=null;}
  }
  function mark(){const s=state();s.dirty=!same(s.board,s.serverBoard);s.error='';s.errors=[];s.warning='';s.revision++;updateToolbar();renderNotice();}
  function writable(){return !options.readOnly?.()&&!state()?.busy;}
@@ -39,32 +99,49 @@ export function createSurfboardEditor(options) {
  function changes(old,next){
   const out=[];if(old.name!==next.name)out.push(`Rename board to “${next.name}”`);
   if(old.workflow!==next.workflow)out.push(`Use ${next.workflow==='web'?'Web design':next.workflow} workflow`);
-  for(const node of next.nodes){const prev=old.nodes.find(n=>n.id===node.id);if(!prev)out.push(`Add ${node.label}`);else if(!same({...prev,x:0,y:0},{...node,x:0,y:0}))out.push(`Update ${node.label}`);}
+  for(const node of next.nodes){const prev=old.nodes.find(n=>n.id===node.id);if(!prev)out.push(`Add ${node.label}`);else if(!same({...prev,x:0,y:0},{...node,x:0,y:0}))out.push(`Update ${node.label}`);if(prev&&node.kind==='compute')for(const [key,label] of [['gpu_limit','GPU allocation'],['run_limit','Concurrent runs']])if(capValue(prev.config?.[key])!==capValue(node.config?.[key]))out.push(`${label}: ${capLabel(prev.config?.[key])} → ${capLabel(node.config?.[key])}`);}
   for(const node of old.nodes)if(!next.nodes.some(n=>n.id===node.id))out.push(`Remove ${node.label}`);
   for(const edge of next.edges){const prev=old.edges.find(e=>e.id===edge.id);if(!prev||!same(prev,edge)){const from=next.nodes.find(n=>n.id===edge.source)?.label||edge.source,to=next.nodes.find(n=>n.id===edge.target)?.label||edge.target;out.push(`${from} → ${to}: ${names[edge.relation]||'needs clarification'}`);}}
   for(const edge of old.edges)if(!next.edges.some(e=>e.id===edge.id))out.push('Remove connection');
   if(!same(old.defaults,next.defaults))out.push('Update project defaults');
+  for(const level of ['project','item']){if(!same(old.layouts?.[level],next.layouts?.[level]))out.push('Arrange '+(level==='project'?'project':'work-item')+' views');if(!same(old.pages?.[level],next.pages?.[level]))out.push('Update '+(level==='project'?'project':'work-item')+' pages and tiles');}
   if(!out.length&&!same(old,next))out.push('Rearrange blocks');return out;
  }
  function render(){
   if(!isMounted())return;const s=state();
   if(!s.board){root.innerHTML='<div class="loading-state"><span class="spinner"></span><p>Loading surfboard…</p></div>';return;}
-  root.className='sb-editor';root.dataset.project=active;
+  layoutEditor?.unmount();layoutEditor=null;pageEditor?.unmount();pageEditor=null;root.className='sb-editor';root.dataset.project=active;
   root.innerHTML=`<header class="sb-heading"><div><span class="sb-eyebrow">PROJECT WORKFLOW</span><h1>${esc(s.board.name)}</h1></div><button type="button" class="sb-button" data-sb="chat" title="Open the surfboard configurator">✦ Configure with AI</button></header>
    <div class="sb-toolbar"><label class="sb-starter"><span>Start from</span><select aria-label="Surfboard starter"><option value="">Choose a starter…</option>${(s.templates||[]).map(t=>option(t.workflow,t.name,'')).join('')}</select></label><div class="sb-save-state" aria-live="polite"></div><button class="sb-button" data-sb="settings" title="Board defaults">Settings</button><button class="sb-button" data-sb="undo" title="Restore the last saved draft">Undo edits</button><button class="sb-button" data-sb="save">Save draft</button><button class="sb-button sb-primary" data-sb="review">Review & apply</button><details class="sb-menu"><summary aria-label="More surfboard actions">•••</summary><div><button data-sb="export">Export board</button><button data-sb="import">Import board…</button><button data-sb="discard">Revert to active</button></div></details><input class="sb-import" type="file" accept="application/json,.json" hidden></div>
-   <div class="sb-notice" role="status" hidden></div>
+   <div class="sb-mode-bar"><div class="sb-segmented" aria-label="Surfboard editor mode"><button type="button" data-sb="mode-workflow" class="${s.mode!=='layout'?'active':''}">Workflow</button><button type="button" data-sb="mode-layout" class="${s.mode==='layout'?'active':''}">Layout</button></div><span>${s.mode==='layout'?'Create pages from reusable tiles, then arrange side panels.':'Define how work and data flow.'}</span></div>
+   <div class="sb-notice" role="status" hidden></div><div class="sb-compute-live" aria-label="Current project compute usage" hidden></div>
+   ${s.mode==='layout'?`<div class="sb-layout-toolbar"><div class="sb-segmented" aria-label="Layout scope"><button type="button" data-sb="layout-project" class="${s.layoutLevel!=='item'?'active':''}">Project</button><button type="button" data-sb="layout-item" class="${s.layoutLevel==='item'?'active':''}">${s.board.workflow==='research'?'Experiment':s.board.workflow==='software'?'Feature':'Design task'}</button></div><span>${s.layoutLevel==='item'?'Default for every work item. Individual items can override it.':'Project pages and side panels.'}</span></div><div class="sb-page-layout-surface"></div><details class="sb-dock-settings" ${s.dockOpen?'open':''}><summary>Side panels & legacy views</summary><p class="sb-muted">Right panels appear beside every page. For customized main pages, arrange tiles above.</p>${!s.board.nodes.some(n=>n.kind==='editor')?'<button type="button" class="sb-button" data-sb="add-editor">Add Code editor to legacy views</button>':''}<div class="sb-layout-surface"></div></details>`:`
    <div class="sb-palette"><div class="sb-palette-heading"><strong>Blocks</strong><span>Drag or click to add</span><input type="search" placeholder="Find a block…" aria-label="Find a block"></div><div class="sb-blocks">${s.catalog.map(block=>`<button type="button" draggable="true" data-kind="${esc(block.kind)}" title="${esc(block.description)}"><span>${symbols[block.kind]||'◇'}</span>${esc(block.label)}</button>`).join('')}</div></div>
-   ${s.board.workflow!=='research'&&s.board.nodes.some(n=>['check','preview'].includes(n.kind)&&!n.config?.argv?.length)?'<div class="sb-setup"><span>Connect checks and preview to this repository.</span><button type="button" class="sb-button" data-sb="setup-commands">✦ Configure commands with agent</button></div>':''}<div class="sb-workbench"><div class="sb-canvas" tabindex="0" aria-label="Surfboard graph. Drag blocks; connect their right and left handles. Drag empty space to pan."><div class="sb-world"><svg class="sb-wires" aria-label="Workflow connections"><defs><marker id="sb-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8" fill="currentColor"/></marker></defs><g class="sb-wire-paths"></g></svg><div class="sb-nodes"></div></div><div class="sb-canvas-help">Drag blocks · Connect dots · Drag canvas to pan</div><div class="sb-zoom"><button data-sb="zoom-out" aria-label="Zoom out">−</button><span class="sb-zoom-value">100%</span><button data-sb="zoom-in" aria-label="Zoom in">+</button><button data-sb="fit">Fit</button></div></div><aside class="sb-inspector" aria-label="Block settings"></aside></div>
+   ${s.board.workflow!=='research'&&s.board.nodes.some(n=>['check','preview'].includes(n.kind)&&!n.config?.argv?.length)?'<div class="sb-setup"><span>Connect checks and preview to this repository.</span><button type="button" class="sb-button" data-sb="setup-commands">✦ Configure commands with agent</button></div>':''}<div class="sb-workbench"><div class="sb-canvas" tabindex="0" aria-label="Surfboard graph. Drag blocks; connect their right and left handles. Drag empty space to pan."><div class="sb-world"><svg class="sb-wires" aria-label="Workflow connections"><defs><marker id="sb-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0 0L8 4L0 8" fill="currentColor"/></marker></defs><g class="sb-wire-paths"></g></svg><div class="sb-nodes"></div></div><div class="sb-canvas-help">Drag blocks · Connect dots · Drag canvas to pan</div><div class="sb-zoom"><button data-sb="zoom-out" aria-label="Zoom out">−</button><span class="sb-zoom-value">100%</span><button data-sb="zoom-in" aria-label="Zoom in">+</button><button data-sb="fit">Fit</button></div></div><aside class="sb-inspector" aria-label="Block settings"></aside></div>`}
    <form class="sb-prompt"><span aria-hidden="true">✦</span><input aria-label="Describe a surfboard change" value="${esc(s.prompt||'')}" placeholder="Describe a change… e.g. compare every experiment in one visualizer"><button type="submit" class="sb-button" aria-label="Ask configurator">Ask ↗</button></form><div class="sb-review" hidden></div>`;
-  bind();renderGraph();renderInspector();renderNotice();updateToolbar();
-  if(!s.fitted){requestAnimationFrame(()=>{if(isMounted()&&state()===s){fit(true);s.fitted=true;}});}
+  bind();if(s.mode==='layout'){const level=s.layoutLevel||'project';pageEditor=createPageLayoutEditor({readOnly:()=>!writable(),onSelect:id=>{s.selectedLayoutPage=id;},onChange:pages=>{s.board.pages??={};s.board.pages[level]=pages;mark();}});pageEditor.mount(root.querySelector('.sb-page-layout-surface'),{pages:pageLayoutPages(s.board,level),available:pageLayoutAvailableTiles(s.board,level),selectedPageId:s.selectedLayoutPage});layoutEditor=createViewLayoutEditor({readOnly:()=>!writable(),onChange:rows=>{s.board.layouts??={};s.board.layouts[level]=rows;mark();}});layoutEditor.mount(root.querySelector('.sb-layout-surface'),{rows:viewLayoutRows(s.board,level),available:viewLayoutCatalog(s.board,level)});}else{renderGraph();renderInspector();}renderNotice();updateToolbar();if(s.mode==='layout'&&s.addLayoutPage){s.addLayoutPage=false;root.querySelector('[data-pages-action="add-page"]')?.click();}
+  renderLiveCompute();if(s.mode!=='layout'&&!s.fitted){requestAnimationFrame(()=>{if(isMounted()&&state()===s){fit(true);s.fitted=true;}});}
  }
  function renderGraph(){
   const s=state(),container=root?.querySelector('.sb-nodes');if(!container)return;
   container.innerHTML=s.board.nodes.map(node=>`<article class="sb-node ${s.selected===node.id?'selected':''} ${node.kind==='wandb'?'sb-data-node':''}" data-node="${esc(node.id)}" style="left:${Number(node.x)||0}px;top:${Number(node.y)||0}px" tabindex="0" aria-label="${esc(node.label)} block"><button type="button" class="sb-port sb-input" data-port="input" aria-label="Connect to ${esc(node.label)}" title="Connect to ${esc(node.label)}"></button><div class="sb-node-body"><div class="sb-node-kind"><span>${symbols[node.kind]||'◇'}</span>${esc(s.catalog.find(c=>c.kind===node.kind)?.label||node.kind)}</div><strong>${esc(node.label)}</strong><small>${esc(nodeSubtitle(node))}</small></div><button type="button" class="sb-port sb-output ${s.connecting===node.id?'connecting':''}" data-port="output" aria-label="Connect from ${esc(node.label)}" title="Drag to another block, or click both connection dots"></button></article>`).join('');
   drawWires();transform();
  }
- function nodeSubtitle(node){const config=node.config||{};if(node.kind==='wandb')return scopeNames[config.sharing||state().board.defaults?.data_sharing||'project'];if(node.kind==='agent')return `${config.role||'worker'} · ${config.tools?.length??'Default'} tools`;if(node.kind==='approval')return `${config.requirements?.length||0} requirements`;if(['code','check','preview'].includes(node.kind))return config.argv?.join(' ')||'Agent-guided';if(node.kind==='timer')return config.event==='interval'?`Every ${config.interval_minutes||10} minutes`:config.event||'Interval';return config.description|| (node.kind==='visualizer'?'Curves, comparisons & custom views':'');}
+ function nodeSubtitle(node){const config=node.config||{};if(node.kind==='compute')return `${capLabel(config.gpu_limit)} GPUs · ${capLabel(config.run_limit)} runs`;if(node.kind==='wandb')return scopeNames[config.sharing||state().board.defaults?.data_sharing||'project'];if(node.kind==='agent')return `${config.role||'worker'} · ${config.tools?.length??'Default'} tools`;if(node.kind==='approval')return `${config.requirements?.length||0} requirements`;if(['code','check','preview'].includes(node.kind))return config.argv?.join(' ')||'Agent-guided';if(node.kind==='timer')return config.event==='interval'?`Every ${config.interval_minutes||10} minutes`:config.event||'Interval';return config.description|| (node.kind==='visualizer'?'Curves, comparisons & custom views':'');}
+ function renderLiveCompute(){
+  const s=state(),el=root?.querySelector('.sb-compute-live');if(!el||!s?.board)return;
+  el.hidden=!s.board.nodes.some(n=>n.kind==='compute');if(el.hidden)return;
+  const live=s.liveLimits,available=live?.available&&!s.liveLimitsError,observed=live?.observed_at;
+  const date=observed?new Date(typeof observed==='number'?observed*1000:observed):null;
+  const time=date&&!Number.isNaN(date.getTime())?date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}):'';
+  const count=value=>Number.isFinite(value)?String(value):'—';
+  const content=available?`<strong>Project compute</strong><span><b>${count(live.active_gpus)}</b> / ${esc(capLabel(live.gpu_limit))} GPUs</span><span><b>${count(live.active_runs)}</b> / ${esc(capLabel(live.run_limit))} runs</span>${Number.isFinite(live.queued_runs)?`<span>${live.queued_runs} queued</span>`:''}`:'<strong>Project compute</strong><span>Current usage unavailable</span>';
+  const error=s.liveLimitsError||live?.error||'';
+  el.innerHTML=`<div class="sb-compute-readings">${content}<small title="${esc(error||live?.source||'')}">${esc([time?`${available?'Observed':'Last observed'} ${time}`:'',available?live.source==='local'?'Local workspace':'Scheduler':error].filter(Boolean).join(' · '))}</small></div><div class="sb-compute-actions"><button type="button" class="sb-button" data-sb="compute-limits">Edit limits</button><button type="button" class="sb-button" data-sb="refresh-limits" aria-label="Refresh compute usage" title="Refresh current compute usage">↻</button></div>`;
+ }
+ function computeLimitFields(config){
+  return `<fieldset class="sb-compute-limits"><legend>Project limits</legend>${[['gpu_limit','GPU allocation','GPU limit',0],['run_limit','Concurrent runs','Concurrent run limit',1]].map(([key,label,aria,min])=>{const unlimited=capValue(config[key])==='unlimited';return `<div class="sb-cap" data-cap="${key}"><div><strong>${label}</strong><label class="sb-cap-toggle"><input type="checkbox" data-cap-unlimited="${key}" aria-label="Unlimited ${label.toLowerCase()}" ${unlimited?'checked':''} ${!writable()?'disabled':''}>Unlimited</label></div><input type="number" data-cap-value="${key}" aria-label="${aria}" value="${unlimited?'':config[key]}" min="${min}" max="1024" step="1" placeholder="Unlimited" ${unlimited?'hidden':''} ${!writable()?'disabled':''}></div>`;}).join('')}<p class="sb-muted">Blank means unlimited. 0 GPUs allows CPU-only runs. Limits change only when you apply this draft.</p></fieldset>`;
+ }
  function point(node,end=false){return {x:(Number(node.x)||0)+(end?0:196),y:(Number(node.y)||0)+48};}
  function path(from,to){const bend=Math.max(45,Math.abs(to.x-from.x)*.42);return `M${from.x},${from.y} C${from.x+bend},${from.y} ${to.x-bend},${to.y} ${to.x},${to.y}`;}
  function drawWires(ghost=null){
@@ -82,6 +159,7 @@ export function createSurfboardEditor(options) {
   if(edge){const a=s.board.nodes.find(n=>n.id===edge.source),b=s.board.nodes.find(n=>n.id===edge.target),source=s.catalog.find(c=>c.kind===a?.kind),relations=(source?.relations||[]).filter(r=>!r.targets||r.targets.includes(b?.kind));pane.innerHTML=`<div class="sb-inspector-title"><strong>Connection</strong><button data-sb="deselect" aria-label="Close settings">×</button></div><p class="sb-connection-name">${esc(a?.label)} <span>→</span> ${esc(b?.label)}</p>${!edge.relation?'<p class="sb-callout">The configurator will ask what this arrow should mean. It cannot run until its meaning is set.</p>':''}${field('Meaning',select('edge.relation',[['','Ask the configurator'],...relations.map(r=>[r.relation,r.label||names[r.relation]])],edge.relation||''))}${field('Details',`<textarea data-field="edge.description" rows="3" placeholder="What should happen here?">${esc(edge.description||'')}</textarea>`)}<button class="sb-button" data-sb="clarify">✦ Discuss this connection</button><button class="sb-button sb-danger" data-sb="delete">Remove connection</button>`;return;}
   const block=s.catalog.find(c=>c.kind===node.kind)||{},c=node.config||{};
   let fields=field('Label',input('node.label',node.label));
+  if(node.kind==='compute')fields+=computeLimitFields(c);
   if(node.kind==='wandb'){
    fields+=field('Experiment data',select('config.sharing',[['','Inherit project default'],...Object.entries(scopeNames)],c.sharing??''));
    if((c.sharing||s.board.defaults?.data_sharing)==='selected'){const experiments=options.experiments?.(active)||[];fields+=`<fieldset class="sb-experiment-choices"><legend>Include experiments</legend>${experiments.length?experiments.map(x=>`<label><input type="checkbox" data-experiment-choice="${esc(x.id)}" ${(c.experiment_ids||[]).includes(x.id)?'checked':''}>${esc(x.name)}</label>`).join(''):'<span class="sb-muted">Create an experiment to select it here.</span>'}</fieldset>`;}
@@ -95,7 +173,8 @@ export function createSurfboardEditor(options) {
   }
   if(['check','preview'].includes(node.kind)&&!c.argv?.length)fields+='<button class="sb-button sb-setup-command" data-sb="setup-command">✦ Set up with agent</button>';
   if(['code','check','preview'].includes(node.kind)){fields+=`<fieldset class="sb-argv"><legend>Command <small>one argument per row</small></legend>${(c.argv||[]).map((arg,i)=>`<div><input aria-label="Command argument ${i+1}" data-arg="${i}" value="${esc(arg)}"><button data-remove-arg="${i}" aria-label="Remove argument ${i+1}">×</button></div>`).join('')}<button class="sb-button" data-sb="add-argument">+ Argument</button></fieldset>`;}
-  const special=new Set(['sharing','experiment_ids','role','instructions','argv','description']);
+  const special=new Set(['sharing','experiment_ids','role','instructions','argv','description','placement','order','gpu_limit','run_limit']);
+  if(block.config_fields?.placement)fields+='<button type="button" class="sb-button" data-sb="mode-layout">Arrange in Layout →</button>';
   for(const [key,spec] of Object.entries(block.config_fields||{})){
    if(special.has(key)||['model','reasoning'].includes(key))continue;const value=c[key]??spec.default;
    if(spec.enum&&spec.type!=='array')fields+=field(spec.label||human(key),select('config.'+key,spec.enum,value??spec.enum[0]));
@@ -113,7 +192,7 @@ export function createSurfboardEditor(options) {
  }
  function human(value){return String(value).replaceAll('_',' ').replace(/^./,c=>c.toUpperCase());}
  function defaultsFields(){const d=state().board.defaults||{};return field('Permission default',select('defaults.approval_mode',[['','Workspace default'],['ask','Ask for approval'],['auto_review','Approve for me'],['yolo','YOLO']],d.approval_mode||''))+field('Experiment data sharing',select('defaults.data_sharing',[['project','Share within project'],['item','Current experiment only']],d.data_sharing||'project'));}
- function updateToolbar(){if(!isMounted()||!state()?.board)return;const s=state(),count=dirtyCount();root.querySelector('.sb-save-state').textContent=s.busy?'Saving…':s.dirty?'Unsaved changes':s.draftVersion?'Draft saved':`Active · v${s.version}`;for(const button of root.querySelectorAll('[data-sb="save"],[data-sb="review"],[data-sb="undo"],[data-sb="discard"]'))button.disabled=!writable()||(button.dataset.sb==='undo'&&!s.dirty)||(button.dataset.sb==='review'&&!count)||(button.dataset.sb==='save'&&!s.dirty);root.classList.toggle('sb-busy',!!s.busy);root.querySelector('.sb-starter select').disabled=!writable();root.querySelector('.sb-prompt button').disabled=!writable();for(const input of root.querySelectorAll('.sb-inspector input:not([data-array]),.sb-inspector select,.sb-inspector textarea'))input.disabled=!writable();}
+ function updateToolbar(){if(!isMounted()||!state()?.board)return;const s=state(),count=dirtyCount();root.querySelector('.sb-save-state').textContent=s.busy?'Saving…':s.dirty?'Unsaved changes':s.draftVersion?'Draft saved':`Active · v${s.version}`;for(const button of root.querySelectorAll('[data-sb="save"],[data-sb="review"],[data-sb="undo"],[data-sb="discard"]'))button.disabled=!writable()||(button.dataset.sb==='undo'&&!s.dirty)||(button.dataset.sb==='review'&&!count)||(button.dataset.sb==='save'&&!s.dirty);root.classList.toggle('sb-busy',!!s.busy);root.querySelector('.sb-starter select').disabled=!writable();root.querySelector('.sb-prompt button').disabled=!writable();for(const input of root.querySelectorAll('.sb-inspector input:not([data-array]),.sb-inspector select,.sb-inspector textarea,.sb-view-layout button,.sb-view-layout select,[data-sb="add-editor"]'))input.disabled=!writable();pageEditor?.refreshReadOnly();}
  function renderNotice(){const el=root?.querySelector('.sb-notice'),s=state();if(!el)return;const pending=s.board?.edges.filter(edge=>!edge.relation).length||0;el.hidden=!(s.error||s.incoming||pending||s.errors?.length||s.warning);el.classList.toggle('error',!!s.error);el.innerHTML=s.error?`${esc(s.error)}${s.incoming?' <button data-sb="use-incoming">Load newer draft</button>':''}`:s.incoming?`A newer draft is available. Your edits are preserved. <button data-sb="use-incoming">Load newer draft</button>`:pending?`${pending} connection${pending===1?' needs':'s need'} clarification. Open the configurator to answer its questions.`:(s.errors||[]).map(error=>esc(typeof error==='string'?error:error.message||JSON.stringify(error))).join('<br>')||esc(s.warning||'');}
  async function mutate(op,extra={}){
   const s=state(),id=active;if(!writable())return null;s.loadVersion=(s.loadVersion||0)+1;s.busy=true;s.error='';updateToolbar();renderNotice();
@@ -121,16 +200,21 @@ export function createSurfboardEditor(options) {
   catch(error){if(active===id){showError(new Error(error.message+(error.status===409?' Your edits are preserved. Export them or load the newer draft to resolve this conflict.':'')));if(error.status===409){try{s.incoming=await options.api('surfboard?project_id='+encodeURIComponent(id));renderNotice();}catch{}}}return null;}
   finally{s.busy=false;if(active===id)updateToolbar();}
  }
- async function save(){const s=state();if(!s.dirty)return true;return !!await mutate('surfboard.draft',{board:copy(s.board)});}
+ async function save(){const s=state();if(!s.dirty)return true;for(const input of root.querySelectorAll('[data-cap-value]'))if(!input.checkValidity()){input.reportValidity();return false;}return !!await mutate('surfboard.draft',{board:copy(s.board)});}
  async function ask(text,pendingEdge=null){const s=state();if(!text.trim()||!writable())return;const response=await mutate('surfboard.ask',{text:text.trim(),board:copy(s.board),...(pendingEdge?{pending_edge:pendingEdge}:{})});if(response){options.onChat?.(response.scope||'surfboard:'+active);if(response.accepted===false){showError(new Error(response.error||'Draft saved, but the configurator could not start.'));return;}if(s.prompt===text.trim()){s.prompt='';root.querySelector('.sb-prompt input').value='';}}}
  function clarify(edge){const s=state(),a=s.board.nodes.find(n=>n.id===edge.source),b=s.board.nodes.find(n=>n.id===edge.target);return ask(`I drew an arrow from “${a?.label}” (${a?.kind}) to “${b?.label}” (${b?.kind}). Ask me one short question about what this connection should do, then propose its meaning in the surfboard draft. Keep the active board unchanged.`,copy(edge));}
- function add(kind,pos=null){if(!writable())return;const s=state(),block=s.catalog.find(b=>b.kind===kind);if(!block)return;const config={};for(const [key,spec] of Object.entries(block.config_fields||{}))if(spec.default!==undefined)config[key]=copy(spec.default);if(kind==='wandb'){config.experiment_ids=[];}const canvas=root.querySelector('.sb-canvas');const preferred=pos||{x:(canvas.clientWidth/2-s.pan.x)/s.zoom-98,y:(canvas.clientHeight/2-s.pan.y)/s.zoom-48};const center=freePosition(preferred);const node={id:uid(kind),kind,label:block.label,x:Math.max(-3000,Math.min(10000,Math.round(center.x))),y:Math.max(-3000,Math.min(10000,Math.round(center.y))),config};s.board.nodes.push(node);s.selected=node.id;const r=root.querySelector('.sb-canvas');if(node.x*s.zoom+s.pan.x<15||node.x*s.zoom+s.pan.x+196*s.zoom>r.clientWidth-15)s.pan.x=r.clientWidth/2-(node.x+98)*s.zoom;if(node.y*s.zoom+s.pan.y<15||node.y*s.zoom+s.pan.y+98*s.zoom>r.clientHeight-55)s.pan.y=r.clientHeight/2-(node.y+49)*s.zoom;mark();renderGraph();renderInspector();}
+ function add(kind,pos=null){if(!writable())return;const s=state(),block=s.catalog.find(b=>b.kind===kind);if(!block)return;const config={};for(const [key,spec] of Object.entries(block.config_fields||{}))if(spec.default!==undefined)config[key]=copy(spec.default);if(kind==='wandb'){config.experiment_ids=[];}const canvas=root.querySelector('.sb-canvas');const preferred=pos||{x:(canvas.clientWidth/2-s.pan.x)/s.zoom-98,y:(canvas.clientHeight/2-s.pan.y)/s.zoom-48};const center=freePosition(preferred);const node={id:uid(kind),kind,label:block.label,x:Math.max(-3000,Math.min(10000,Math.round(center.x))),y:Math.max(-3000,Math.min(10000,Math.round(center.y))),config};s.board.nodes.push(node);if(kind==='editor')for(const level of ['project','item'])if(s.board.layouts?.[level]&&!s.board.layouts[level].some(v=>v.id==='editor'))s.board.layouts[level].push({id:'editor',placement:'main',order:25});s.selected=node.id;const r=root.querySelector('.sb-canvas');if(node.x*s.zoom+s.pan.x<15||node.x*s.zoom+s.pan.x+196*s.zoom>r.clientWidth-15)s.pan.x=r.clientWidth/2-(node.x+98)*s.zoom;if(node.y*s.zoom+s.pan.y<15||node.y*s.zoom+s.pan.y+98*s.zoom>r.clientHeight-55)s.pan.y=r.clientHeight/2-(node.y+49)*s.zoom;mark();renderGraph();renderInspector();}
  function freePosition(preferred){const s=state(),collides=p=>s.board.nodes.some(n=>p.x<n.x+218&&p.x+218>n.x&&p.y<n.y+120&&p.y+120>n.y);if(!collides(preferred))return preferred;for(let ring=1;ring<8;ring++){for(let row=-ring;row<=ring;row++)for(let col=-ring;col<=ring;col++){if(Math.abs(row)!==ring&&Math.abs(col)!==ring)continue;const p={x:preferred.x+col*232,y:preferred.y+row*132};if(p.x>=0&&p.y>=0&&!collides(p))return p;}}return{x:preferred.x,y:Math.max(0,...s.board.nodes.map(n=>n.y))+140};}
  async function connect(source,target){const s=state();s.connecting=null;if(!writable()||source===target)return renderGraph();if(s.board.edges.some(e=>e.source===source&&e.target===target)){s.error='These blocks are already connected. Select their arrow to change its meaning.';renderNotice();return renderGraph();}const edge={id:uid('edge'),source,target,relation:null,description:''};s.board.edges.push(edge);s.selected=edge.id;mark();renderGraph();renderInspector();await clarify(edge);}
  function choose(id){state().selected=id;renderGraph();renderInspector();}
  function review(){const s=state(),panel=root.querySelector('.sb-review'),diff=changes(s.live,s.board),pending=s.board.edges.some(e=>!e.relation);panel.hidden=false;panel.innerHTML=`<section role="dialog" aria-modal="true" aria-label="Review surfboard changes"><div class="sb-inspector-title"><strong>Review changes</strong><button data-sb="close-review" aria-label="Close review">×</button></div><p>Only this project changes. Existing jobs keep their recorded execution contracts.</p><ul>${diff.map(line=>`<li>${esc(line)}</li>`).join('')}</ul>${pending?'<p class="sb-callout">Clarify pending connections before applying.</p>':''}<div class="sb-review-actions"><button class="sb-button" data-sb="close-review">Keep editing</button><button class="sb-button sb-primary" data-sb="apply" ${pending?'disabled':''}>Apply to project</button></div></section>`;panel.querySelector('[data-sb="close-review"]').focus();}
  async function handle(name){const s=state();
   if(name==='chat')return options.onChat?.('surfboard:'+active);
+  if(name==='mode-workflow'||name==='mode-layout'){s.mode=name==='mode-layout'?'layout':'workflow';render();return;}
+  if(name==='layout-project'||name==='layout-item'){s.layoutLevel=name==='layout-item'?'item':'project';render();return;}
+  if(name==='refresh-limits')return load();
+  if(name==='compute-limits'){const node=s.board.nodes.find(n=>n.kind==='compute');if(node){s.mode='workflow';s.selected=node.id;render();}return;}
+  if(name==='add-editor'&&writable()){const position=freePosition({x:590,y:580}),node={id:uid('editor'),kind:'editor',label:'Code editor',...position,config:{}};s.board.nodes.push(node);for(const level of ['project','item'])if(s.board.layouts?.[level])s.board.layouts[level].push({id:'editor',placement:'main',order:25});mark();render();return;}
   if(name==='setup-commands'||name==='setup-command'){const node=name==='setup-command'?s.board.nodes.find(n=>n.id===s.selected):null;return ask(`Set up ${node?'the “'+node.label+'” '+node.kind+' block':'the check and preview blocks'} for this project. Inspect the repository manifests, package scripts, and existing instructions using read-only commands. Propose the appropriate argument arrays, timeout, and preview port in this surfboard draft. Reuse the repository’s actual tooling; ask me a short question only where the choice is ambiguous. Do not install dependencies, run checks, start a server, or apply the board yet.`);}
   if(name==='fit')return fit();if(name==='zoom-in')return zoom(1.18);if(name==='zoom-out')return zoom(1/1.18);
   if(name==='review')return review();if(name==='close-review'){root.querySelector('.sb-review').hidden=true;return;}
@@ -142,17 +226,20 @@ export function createSurfboardEditor(options) {
   if(name==='discard'){if(!confirm('Revert this draft to the active surfboard?'))return;return mutate('surfboard.discard');}
   if(name==='use-incoming'){if(s.dirty&&!confirm('Replace your local edits with the newer saved draft? Export first if you want to keep both.'))return;ingest(s,s.incoming,true);render();return;}
   if(name==='import'){root.querySelector('.sb-import').click();return;}
-  if(name==='settings'){s.settings=!s.settings;s.selected=null;renderInspector();return;}
+  if(name==='settings'){s.mode='workflow';s.settings=!s.settings;s.selected=null;render();return;}
   if(name==='deselect'){s.settings=false;choose(null);return;}
   const node=s.board.nodes.find(n=>n.id===s.selected),edge=s.board.edges.find(e=>e.id===s.selected);
   if(name==='clarify'&&edge)return clarify(edge);
   if(name==='edit-with-ai'&&node){root.querySelector('.sb-prompt input').value=`Change the ${node.label} block: `;root.querySelector('.sb-prompt input').focus();return;}
-  if(name==='delete'){s.board.nodes=s.board.nodes.filter(n=>n.id!==s.selected);s.board.edges=s.board.edges.filter(e=>e.id!==s.selected&&e.source!==s.selected&&e.target!==s.selected);s.selected=null;mark();renderGraph();renderInspector();}
+  if(name==='delete'){s.board.nodes=s.board.nodes.filter(n=>n.id!==s.selected);s.board.edges=s.board.edges.filter(e=>e.id!==s.selected&&e.source!==s.selected&&e.target!==s.selected);s.selected=null;for(const level of ['project','item'])if(s.board.layouts?.[level]){const ids=new Set(viewLayoutCatalog(s.board,level).map(v=>v.id));s.board.layouts[level]=s.board.layouts[level].filter(v=>ids.has(v.id));}for(const level of ['project','item'])if(s.board.pages?.[level]){const kinds=new Set(pageLayoutAvailableTiles(s.board,level).map(v=>v.kind));for(const page of s.board.pages[level])page.tiles=page.tiles.filter(tile=>kinds.has(tile.kind));}mark();renderGraph();renderInspector();}
   if(name==='duplicate'&&node){const duplicate={...copy(node),id:uid(node.kind),label:node.label+' copy',x:node.x+32,y:node.y+126};s.board.nodes.push(duplicate);s.selected=duplicate.id;mark();renderGraph();renderInspector();}
   if(name==='add-argument'&&node){node.config.argv??=[];node.config.argv.push('');mark();renderInspector();const inputs=root.querySelectorAll('[data-arg]');inputs[inputs.length-1]?.focus();}
  }
  function change(event){if(!writable())return;const el=event.target,s=state(),node=s.board.nodes.find(n=>n.id===s.selected),edge=s.board.edges.find(n=>n.id===s.selected),key=el.dataset.field;let rebuild=false;
-  if(key){const [group,name]=key.split('.'),value=el.type==='checkbox'?el.checked:el.type==='number'&&el.value!==''?Number(el.value):el.value;
+  const setCap=(name,value)=>{for(const block of s.board.nodes.filter(n=>n.kind==='compute'))block.config[name]=value;};
+  if(el.dataset.capUnlimited&&node?.kind==='compute'){const name=el.dataset.capUnlimited,number=el.closest('[data-cap]').querySelector('[data-cap-value]');if(el.checked){setCap(name,'unlimited');number.value='';number.hidden=true;}else{const value=Number(number.value);setCap(name,number.value!==''&&number.checkValidity()&&Number.isInteger(value)?value:1);number.value=node.config[name];number.hidden=false;}}
+  else if(el.dataset.capValue&&node?.kind==='compute'){setCap(el.dataset.capValue,el.value===''?'unlimited':Number(el.value));}
+  else if(key){const [group,name]=key.split('.'),value=el.type==='checkbox'?el.checked:el.type==='number'&&el.value!==''?Number(el.value):el.value;
    if(group==='board')s.board[name]=value;
    if(group==='node'&&node)node[name]=value;
    if(group==='config'&&node){if((el.type==='number'||name==='sharing')&&el.value==='')delete node.config[name];else node.config[name]=value;if(name==='sharing'&&value!=='selected')node.config.experiment_ids=[];rebuild=['sharing','role'].includes(name);}
@@ -166,15 +253,17 @@ export function createSurfboardEditor(options) {
   else return;mark();renderGraph();if(rebuild)renderInspector();if(key==='board.name')root.querySelector('h1').textContent=s.board.name;
  }
  function bind(){
+  const dockSettings=root.querySelector('.sb-dock-settings');if(dockSettings)dockSettings.ontoggle=()=>{if(state())state().dockOpen=dockSettings.open;};
   root.onclick=async event=>{const button=event.target.closest('[data-sb]');if(button){event.preventDefault();try{await handle(button.dataset.sb);}catch(error){showError(error);}return;}const kind=event.target.closest('[data-kind]');if(kind){add(kind.dataset.kind);return;}const port=event.target.closest('[data-port]');if(port){const node=port.closest('[data-node]').dataset.node;if(port.dataset.port==='output'){state().connecting=node;renderGraph();}else if(state().connecting)await connect(state().connecting,node);return;}const edge=event.target.closest('[data-edge]');if(edge){choose(edge.dataset.edge);return;}const node=event.target.closest('[data-node]');if(node){choose(node.dataset.node);return;}const remove=event.target.closest('[data-remove-arg]');if(remove&&writable()){const n=state().board.nodes.find(n=>n.id===state().selected);n.config.argv.splice(Number(remove.dataset.removeArg),1);mark();renderInspector();}};
   root.oninput=event=>{if(event.target.matches('.sb-prompt input')){state().prompt=event.target.value;return;}if(event.target.matches('.sb-palette input')){const query=event.target.value.toLowerCase();for(const block of root.querySelectorAll('[data-kind]'))block.hidden=!block.textContent.toLowerCase().includes(query);return;}change(event);};
   root.onchange=async event=>{
+   if(event.target.matches('[data-cap-value]')&&event.target.value===''){event.target.closest('[data-cap]').querySelector('[data-cap-unlimited]').checked=true;event.target.hidden=true;return;}
    const s=state();if(event.target.matches('.sb-starter select')){const value=event.target.value,template=s.templates.find(t=>t.workflow===value);if(!template)return;if(dirtyCount()&&!confirm('Replace the current draft with this starter? The active board will stay unchanged.')){event.target.value='';return;}s.board=copy(template);s.selected=null;s.fitted=false;mark();render();}
    else if(event.target.matches('.sb-import')){try{const file=event.target.files[0];if(!file)return;if(file.size>500000)throw new Error('This board is too large (maximum 500 KB).');const board=JSON.parse(await file.text());const result=await mutate('surfboard.draft',{board});if(result){s.fitted=false;fit();}}catch(error){showError(error);}event.target.value='';}
   };
   root.querySelector('.sb-prompt').onsubmit=event=>{event.preventDefault();ask(root.querySelector('.sb-prompt input').value).catch(showError);};
   root.ondragstart=event=>{const block=event.target.closest('[data-kind]');if(block&&writable()){event.dataTransfer.setData('application/x-surfboard-block',block.dataset.kind);event.dataTransfer.effectAllowed='copy';}};
-  const canvas=root.querySelector('.sb-canvas');canvas.ondragover=event=>{if(event.dataTransfer.types.includes('application/x-surfboard-block')){event.preventDefault();event.dataTransfer.dropEffect='copy';}};canvas.ondrop=event=>{event.preventDefault();add(event.dataTransfer.getData('application/x-surfboard-block'),coords(event));};
+  const canvas=root.querySelector('.sb-canvas');if(!canvas)return;canvas.ondragover=event=>{if(event.dataTransfer.types.includes('application/x-surfboard-block')){event.preventDefault();event.dataTransfer.dropEffect='copy';}};canvas.ondrop=event=>{event.preventDefault();add(event.dataTransfer.getData('application/x-surfboard-block'),coords(event));};
   canvas.onwheel=event=>{if(event.ctrlKey||event.metaKey){event.preventDefault();zoom(event.deltaY>0?1/1.1:1.1);}};
   canvas.onkeydown=event=>{if(event.target.matches('input,textarea,select'))return;if(event.key==='Escape'){state().connecting=null;choose(null);}if((event.key==='Delete'||event.key==='Backspace')&&state().selected){event.preventDefault();handle('delete');}if(event.target.matches('[data-node]')&&event.key==='Enter'){choose(event.target.dataset.node);root.querySelector('.sb-inspector input')?.focus();}};
   canvas.onpointerdown=event=>{
@@ -188,8 +277,9 @@ export function createSurfboardEditor(options) {
   };
  }
  return {
-  mount(element,projectId){destroyed=false;if(root===element&&active===projectId&&root.querySelector('.sb-canvas'))return;root=element;active=projectId;if(!cache.has(projectId))cache.set(projectId,{board:null,live:null,version:0,draftVersion:0,dirty:false,revision:0,selected:null,pan:{x:40,y:40},zoom:1});render();load();clearInterval(poll);poll=setInterval(()=>{if(isMounted()&&!state()?.busy)load();},3000);},
-  unmount(){clearInterval(poll);poll=null;root=null;active=null;destroyed=true;},
+  mount(element,projectId){destroyed=false;if(root===element&&active===projectId&&root.querySelector('.sb-mode-bar'))return;root=element;active=projectId;if(!cache.has(projectId))cache.set(projectId,{board:null,live:null,version:0,draftVersion:0,dirty:false,revision:0,selected:null,pan:{x:40,y:40},zoom:1});render();load();clearInterval(poll);poll=setInterval(()=>{if(isMounted()&&!state()?.busy)load();},3000);},
+  unmount(){layoutEditor?.unmount();layoutEditor=null;pageEditor?.unmount();pageEditor=null;clearInterval(poll);poll=null;if(root)root.onclick=root.oninput=root.onchange=root.ondragstart=null;root=null;active=null;destroyed=true;},
+  showLayout({level='project',selectedPageId=null,addPage=false}={}){const s=state();if(!s)return false;s.mode='layout';s.layoutLevel=level==='item'?'item':'project';s.selectedLayoutPage=selectedPageId;s.addLayoutPage=!!addPage;render();return true;},
   refresh(){return load();},
   dirty(){return !!state()?.dirty;},
  };

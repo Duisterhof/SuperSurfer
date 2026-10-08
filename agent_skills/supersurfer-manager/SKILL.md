@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.24. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.25. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -22,6 +22,10 @@ task, request and run IDs; an ended turn or accepted handoff is not completion.
 Use `update_task` for actual deliverables, recording a demonstrated blocker only
 when available authorized routes cannot resolve it. Inspect prior state before
 retries so coordination cannot duplicate uncertain execution.
+Record the original requested outcome before work and compare final evidence
+against that outcome, including later clarifications. A progress milestone does
+not complete remaining implementation. During an application completion review,
+reopen incomplete work on its existing task ID rather than repeating a prior claim.
 
 For a real missing capability or resource conflict, use
 [coordination](../supersurfer-worker/references/coordination.md). A `request` asks
@@ -82,7 +86,10 @@ nor queued candidates and starts no job. Do not duplicate registrations.
 
 All owned roles can apply explicit user budget decisions with `set_project_limits`.
 Here, supply `project_id`; do not make workers route an already authorized edit
-through you. GPU `unlimited` and concurrent `run_limit` are separate decisions.
+through you. GPU and concurrent-run limits independently accept a number or
+`unlimited`; new projects default to neither cap. Preserve existing limits unless
+explicitly changed. Read live values through `inspect_project_compute` or
+`read_surfboard`; unavailable readings are unknown, not unlimited.
 `until_run` restores only changed fields after the named run terminates, and later
 changes win. Read back saved values. A capacity wait does not authorize increasing
 limits, displacing active work or expanding research scope.
@@ -102,6 +109,19 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+Project and experiment layouts can differ without changing tools or ownership.
+Moving an editor, chat or Results pane is a configurator/layout task, not a reason
+to involve this manager in its content. The visual Code editor uses the same
+repository as its agents; preserve concurrent user/worker edits. Its review badges
+record that a patch was read, not scientific approval, a verified PR or launch
+authorization. Use the [editor guidance](../supersurfer-code-editor/SKILL.md) when
+an assigned task concerns source edits or reviewing a named agent's changes.
+
+Custom pages compose existing views into tiles. An Agent changes tile is a review
+surface for recorded edits, not a new coordination channel or approval assignment.
+Let project configurators arrange requested pages without routing ordinary page
+composition through the workspace manager or changing resource allocations.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named

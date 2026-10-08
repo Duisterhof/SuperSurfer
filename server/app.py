@@ -26,7 +26,7 @@ from .aml import AMLClient, ManagerError, normalize
 from .store import Store, atomic_write
 from .wandb import WandBReader
 from .result_data import ResultData
-from .project_limits import ProjectLimits, display as display_limits
+from .project_limits import ProjectLimits, display as display_limits, encode_limit
 from .training_results import compile_report
 from .time_context import local_time_context
 from .compute import ComputePools, ComputeError
@@ -40,6 +40,8 @@ from .surfboards import Surfboards, SurfboardError as APIError, template as boar
 from .surfboard_service import SurfboardService, ALIASES
 from .board_runtime import BoardRuntime
 from .project_artifacts import ProjectArtifacts
+from .code_editor import CodeEditor
+from .editor_service import EditorService
 
 
 
@@ -147,13 +149,14 @@ def directory_suggestions(value, limit=50, scan_limit=10000):
 from .node_setup import NodeSetup
 from .run_recovery import RunRecovery
 
-class Service(SurfboardService):
+class Service(SurfboardService, EditorService):
     def __init__(self, state_dir, aml_home, read_only=False, aml=None, codex=None, start_monitor=True, tracking=None):
         self.store = Store(state_dir)
         self.directory = self.store.directory
         self.read_only = read_only
         self.boards = Surfboards(self.store)
         self.artifacts = ProjectArtifacts(self)
+        self.code = CodeEditor()
         self.wandb = WandBReader()
         self.result_data = ResultData(self.wandb)
         self.results = Results(self.store)
@@ -231,7 +234,7 @@ class Service(SurfboardService):
             state["connected"] = True
         for project in state["projects"]:
             board = self.boards.get(project["id"])
-            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views")}, "name": board["board"]["name"], "version": board["version"]}
+            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
         projects = {project["id"]: project for project in state["projects"]}
@@ -630,7 +633,7 @@ class Service(SurfboardService):
                 + str(onboarding) + ". Use inspect_project_compute to find prepared nodes, inspect_compute_host to check candidates, register_compute_host for necessary new capacity within authorized work, "
                 "and onboard_project_node to validate and add one prepared node to the project. For a queued run, use check_available_node for its exact checkout and acquire_new_node to stage source/environment/data, call that same check and add the candidate to the existing run. recover_run enables owner-bound recovery wakeups and retries confirmed failed attempts. "
                 "Inspection is read-only; actual setup for authorized work uses isolated user-owned paths and preserves shared environments, original data and existing research worktrees.")
-            context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. They can also set_project_limits directly after an explicit user budget decision, using gpu_limit=unlimited when requested and a separate run_limit. until_run restores only that temporary change after the named run ends; later budget edits win. A capacity wait is not authorization to raise limits. Use stop_run(run_id) directly for explicit user stop requests within your scope; cancelling is pending until terminal status is confirmed. Never stop other jobs to free capacity without authorization. "
+            context["instructions"] += ("\n\nAll owned roles can inspect_project_compute, inspect_compute_host, register_compute_host and onboard_project_node. They can also set_project_limits directly after an explicit user budget decision, using gpu_limit=unlimited or run_limit=unlimited to remove either cap. Neither cap is imposed on new projects by default. Read the live limits through inspect_project_compute or read_surfboard; a saved snapshot may be stale. until_run restores only that temporary change after the named run ends; later budget edits win. A capacity wait is not authorization to raise limits. Use stop_run(run_id) directly for explicit user stop requests within your scope; cancelling is pending until terminal status is confirmed. Never stop other jobs to free capacity without authorization. "
                 "Workers are fixed to their experiment's project and merge one validated node at a time; only leads/managers use configure_project_compute. "
                 "Prefer nodes already containing the correct environment/data. If no prepared node can serve the requested work, inspect an eligible free registered node "
                 "and perform necessary setup in isolated user-owned paths: locate verified originals, resume non-destructive copies, reuse a compatible environment "
@@ -1406,6 +1409,10 @@ class Service(SurfboardService):
             return result
 
     def _action(self, op, params):
+        if op.startswith("code."):
+            return self.code_action(op, params)
+        if op == "view-layout.save":
+            return self.save_view_layout(params)
         if op.startswith("surfboard."):
             return self.surfboard_action(op, params)
         if op == "settings.save":
@@ -1603,7 +1610,7 @@ class Service(SurfboardService):
                 raise APIError("Invalid project limit fields")
             return self.project_limits.set(text_field(params, "project_id", 150), {key: value for key, value in params.items() if key != "project_id"})
         if op == "project.add":
-            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": integer(params, "gpu_limit", 0, 1024, 0), "run_limit": integer(params, "run_limit", 1, 1024, 1), "goal": text_field(params, "goal", required=False)}
+            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": encode_limit("gpu_limit", params.get("gpu_limit", "unlimited")), "run_limit": encode_limit("run_limit", params.get("run_limit", "unlimited")), "goal": text_field(params, "goal", required=False)}
             if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload["name_"]) or len(payload["name_"]) > 64:
                 raise APIError("Project name must use lowercase letters, numbers and single hyphens, up to 64 characters")
             payload["repo"] = prepare_project_repository(payload["repo"])
@@ -1617,7 +1624,7 @@ class Service(SurfboardService):
                 if any(row["name"] == payload["name_"] for row in self.state()["projects"]):
                     raise APIError("A project with that name already exists", 409)
                 project = {"id": "proj_" + uuid.uuid4().hex[:12], "name": payload["name_"], "repo": payload["repo"],
-                           "goal": payload["goal"], "gpu_limit": 0, "run_limit": payload["run_limit"],
+                           "goal": payload["goal"], "gpu_limit": payload["gpu_limit"], "run_limit": payload["run_limit"],
                            "workflow": workflow, "status": "active", "created_at": time.time()}
                 projects.append(project)
                 self.store.put("local_projects", projects)
@@ -1821,6 +1828,10 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.state()
                 elif path == "/api/surfboard":
                     result = self.server.service.surfboard(query.get("project_id", [""])[0])
+                elif path == "/api/view-layout":
+                    result = self.server.service.view_layout(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
+                elif path.startswith("/api/code/"):
+                    result = self.server.service.code_query(path.removeprefix("/api/code/"), {key: value[0] for key, value in query.items()})
                 elif path == "/api/artifacts":
                     result = self.server.service.artifacts.list(self.server.service.lookup("projects", query.get("project_id", [""])[0]), query.get("path", [""])[0])
                 elif path == "/api/project-activity":
@@ -1829,6 +1840,7 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.diagnostics(query.get("project_id", [""])[0])
                 elif path == "/api/experiment":
                     result = self.server.service.store.experiment(query.get("id", [""])[0])
+                    result["view_layout"] = self.server.service.view_layout(result["project_id"], result["id"])
                     result["brief"] = brief.read(self.server.service.store, result["id"])
                     result["pages"] = self.server.service.results.pages(result["id"])
                 elif path == "/api/experiment-page":
@@ -1882,7 +1894,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             path = urlsplit(self.path).path
-            if path not in {"/api/action", "/api/agent-tool"}:
+            if path not in {"/api/action", "/api/agent-tool", "/api/code/save"}:
                 raise APIError("Not found", 404)
             agent_scope = None
             if path == "/api/agent-tool":
@@ -1906,12 +1918,15 @@ class Handler(BaseHTTPRequestHandler):
                 size = int(self.headers.get("Content-Length", "0"))
             except ValueError as exc:
                 raise APIError("Invalid Content-Length") from exc
-            if not 0 < size <= 2 * 1024 * 1024:
-                raise APIError("Request body must be 1 byte to 2 MiB", 413)
+            maximum = 16 * 1024 * 1024 if path == "/api/code/save" else 2 * 1024 * 1024
+            if not 0 < size <= maximum:
+                raise APIError(f"Request body must be 1 byte to {maximum // (1024 * 1024)} MiB", 413)
             request = json.loads(self.rfile.read(size))
             if not isinstance(request, dict):
                 raise APIError("Expected a JSON object")
-            if path == "/api/agent-tool":
+            if path == "/api/code/save":
+                result = self.server.service.action("code.save", request)
+            elif path == "/api/agent-tool":
                 if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))

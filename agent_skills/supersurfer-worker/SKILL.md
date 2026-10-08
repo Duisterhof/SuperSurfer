@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.24. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.25. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -44,6 +44,13 @@ stop orders and resource limits. A turn ending is not completion.
    or demonstrated external dependency, with concrete checks and attempted
    alternatives. Mark `completed` only with the requested artifact/outcome.
 
+Compare completion with the original assignment, including later clarifications.
+Passing helper tests or writing a protocol is a milestone when requested trainer,
+recovery or telemetry integration remains. Keep that same task working and finish
+the remaining authorized preparation; a no-launch restriction does not prohibit
+implementation. During an application completion review, inspect the deliverable
+and reopen an incomplete task instead of confirming your earlier status claim.
+
 For a user-requested cancellation, call `stop_run` with the exact `run_id` from
 this experiment instead of asking the lead/manager to do it. Queued work cancels
 immediately; active work remains cancelling until the scheduler confirms it stopped.
@@ -57,6 +64,11 @@ allows only that owner's latest run and its bounded setup/retry operations, not
 fresh user authority. Follow the [recovery contract and authority diagram](../supersurfer-host-onboarding/references/run-recovery.md).
 Chat Stop, run cancellation and recovery pause revoke recovery; never revive it
 without the user's resumption.
+
+GPU and concurrent-run caps each accept a number or `unlimited`. New projects
+have neither cap by default; preserve existing limits unless the user changes
+them. Inspect live values through `inspect_project_compute` or `read_surfboard`;
+an unavailable reading is unknown, not permission to remove a limit.
 
 Ask a peer only for a concrete dependency your own records/tools cannot resolve
 or an observed scope conflict. Use [coordination](references/coordination.md):
@@ -95,6 +107,19 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+Source is shared with the user's Code editor and other agents. Re-read saved files
+before applying a patch and preserve concurrent changes. A selected snippet may
+carry an unsaved warning; do not assume it is committed or deploy it as if it were.
+Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
+agent patches versus repository Git changes. A local review marker does not satisfy
+the exact-source PR requirement, and editing a file never launches a run by itself.
+
+Explorer, editor, recorded changes, chat and Results may be separate tiles on a
+custom experiment page. They still refer to this experiment and its shared source.
+Page navigation does not finish, restart or duplicate your task. Publish into the
+existing requested artifact/report, and let configured tiles display it rather
+than creating duplicate pages or periodic publishing work for each layout.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named

@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.24. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.25. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -22,6 +22,18 @@ A disabled tool is not permission to use an unscoped shell replacement. Resolve
 a requested board change through the configurator. Existing queued/running
 contracts retain their source, resource and review evidence; a later graph edit
 cannot retroactively prove missing readiness or erase a stop.
+
+The workspace Code editor shows the shared working repository, not a compute
+node's sealed checkout. Unsaved editor text and a patch's Reviewed badge are not
+committed source or PR evidence. Resolve the run's exact recorded revision before
+checking or staging a node; preserve concurrent working-tree edits instead of
+copying them into an existing reviewed run. Moving/hiding Compute in a project
+layout changes presentation only, not readiness, reservations or setup authority.
+
+The same compute/run view can appear on a custom page beside source or agent-change
+tiles. Its presence, absence or dimensions do not register a host, acquire a node
+or alter the candidate pool. Continue to use the exact-run readiness and acquisition
+records; never interpret a page rearrangement as permission to move source or data.
 
 ## Separate the causes of a queue wait
 
@@ -64,10 +76,13 @@ five minutes apart. Check timestamps/errors; a reservation is not fresh telemetr
 
 All owned roles have `set_project_limits`. Workers/leads omit `project_id`; managers
 supply it. Set only the fields the user decided: `gpu_limit` is an integer 0–1024
-or literal `unlimited`; `run_limit` independently allows 1–1024. GPU zero permits
+or literal `unlimited`; `run_limit` independently allows 1–1024 or `unlimited`. GPU zero permits
 CPU jobs. Present the unlimited setting as unlimited, not its internal integer
 representation. Read back the returned saved values. This changes scheduler
 budgets, not physical GPU allocations, candidate contracts or running jobs.
+New projects have no GPU or concurrent-run cap by default. Existing saved limits
+remain intentional until changed by the user. `read_surfboard` also reads the live
+limits and usage; do not substitute stale saved graph values when that read fails.
 
 For an explicitly temporary decision, `until_run` must name an existing unfinished
 run in this project. The service durably restores only changed fields after that

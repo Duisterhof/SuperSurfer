@@ -297,10 +297,10 @@ PROJECT_TRAINING_RESULT_TOOL = {**TRAINING_RESULT_TOOL, "inputSchema": {**TRAINI
     "properties": {**TRAINING_RESULTS_SCHEMA["properties"], "experiment_id": {"type": "string", "minLength": 1, "maxLength": 180}}}}
 LIMITS_TOOL = {
     "name": "set_project_limits",
-    "description": "Apply the user's explicit GPU or concurrent-run budget decision directly within this conversation's project. gpu_limit accepts an integer or 'unlimited'; run_limit is separate. Omitted limits stay unchanged. Optional until_run restores only the changed limits after that existing project run succeeds/fails/is cancelled, preserving later user changes and surviving service restarts. This edits scheduler budgets, not physical GPU allocations or running jobs. A queue wait alone does not authorize raising a budget. Do not route an already-authorized edit through the manager. Read back the returned saved values.",
+    "description": "Apply the user's explicit GPU or concurrent-run budget decision directly within this conversation's project. gpu_limit and run_limit each accept an integer or 'unlimited'; they are separate optional caps. New projects have neither cap by default. Surfboard Compute settings show live values. Omitted limits stay unchanged. Optional until_run restores only the changed limits after that existing project run succeeds/fails/is cancelled, preserving later user changes and surviving service restarts. This edits scheduler budgets, not physical GPU allocations or running jobs. A queue wait alone does not authorize raising a budget. Do not route an already-authorized edit through the manager. Read back the returned saved values.",
     "inputSchema": {"type": "object", "additionalProperties": False, "properties": {
         "gpu_limit": {"type": ["integer", "string"], "description": "0–1024 or the literal unlimited. Zero permits only CPU jobs."},
-        "run_limit": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "run_limit": {"type": ["integer", "string"], "description": "1–1024 or the literal unlimited. Unlimited removes the concurrent-run cap."},
         "until_run": {"type": "string", "minLength": 1, "maxLength": 180}},
         "anyOf": [{"required": ["gpu_limit"]}, {"required": ["run_limit"]}]},
 }

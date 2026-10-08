@@ -155,7 +155,7 @@ class SurfboardServiceTests(unittest.TestCase):
         self.assertTrue(report['filename'].endswith('.md'))
         self.assertNotIn('PRIVATE PROMPT',report['markdown'])
         self.assertNotIn(self.service.token,report['markdown'])
-        self.assertIn('0.1.24',report['markdown'])
+        self.assertIn(__import__('server').__version__,report['markdown'])
         sample='WANDB_API_KEY=abc123secret Authorization: Bearer secret-bearer-token https://x.test/data?token=private sk-abcdefghijklmnopqrst'
         cleaned=redact(sample)
         for value in ['abc123secret','secret-bearer-token','token=private','sk-abcdefghijklmnopqrst']:

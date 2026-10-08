@@ -1,4 +1,6 @@
-import {createSurfboardEditor} from './surfboard.js';
+import {createSurfboardEditor, createViewLayoutEditor, createPageLayoutEditor} from './surfboard.js';
+import {createCodeEditor} from './code-editor.js';
+import {createRepositoryExplorer, createAgentChanges} from './code-tiles.js';
 import {connectLiveResults} from './results-live.js';
 import {createAccountGate} from './account-gate.js';
 if (window.superSurferDesktop) document.body.classList.add('desktop-app');
@@ -37,7 +39,7 @@ async function readNavigation() {
   }
   if (!savedNavigation || typeof savedNavigation !== 'object' || Array.isArray(savedNavigation)) savedNavigation = {};
   state.view = ['workspace', 'compute', 'settings'].includes(savedNavigation.view) ? savedNavigation.view : 'workspace';
-  state.tab = ['overview', 'runs', 'results', 'compute', 'surfboard', 'artifacts', 'activity'].includes(savedNavigation.tab)||/^page:page_[a-f0-9]+$/.test(savedNavigation.tab||'') ? savedNavigation.tab : 'overview';
+  state.tab = ['overview', 'runs', 'results', 'compute', 'surfboard', 'artifacts', 'activity', 'editor', 'chat', 'documents', 'preview'].includes(savedNavigation.tab)||/^(?:page:page_[a-f0-9]+|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.test(savedNavigation.tab||'') ? savedNavigation.tab : 'overview';
   state.chatVisible = typeof savedNavigation.chatVisible === 'boolean' ? savedNavigation.chatVisible : true;
   state.chatWidth = Number.isFinite(savedNavigation.chatWidth) ? Math.min(760,Math.max(280,savedNavigation.chatWidth)) : 390;
   state.chatMaximized = savedNavigation.chatMaximized === true;
@@ -50,7 +52,7 @@ function restoreNavigation(data) {
     state.projectId = data.projects.some(p => p.id === savedNavigation?.projectId) ? savedNavigation.projectId : data.projects[0]?.id || null;
     state.experimentId = state.view === 'workspace' && data.experiments.some(x => x.id === savedNavigation?.experimentId && x.project_id === state.projectId) ? savedNavigation.experimentId : null;
     if (data.connected || data.projects.length) navigationRestored = true;
-    if (!state.experimentId&&!['compute','surfboard','artifacts','activity'].includes(state.tab)||state.experimentId&&['compute','surfboard','artifacts','activity'].includes(state.tab)) state.tab = 'overview';
+    if (state.experimentId&&state.tab==='surfboard') state.tab = 'overview';
     return;
   }
   if (!data.projects.some(p => p.id === state.projectId)) {
@@ -86,6 +88,7 @@ function applyChatLayout(){
  const button=$('#chat-maximize'),label=maximized?'Restore agent panel':'Maximize agent chat';
  button.setAttribute('aria-label',label);button.title=label;button.setAttribute('aria-pressed',String(maximized));button.innerHTML=icon(maximized?'restore':'maximize');
  $('#chat-toggle').setAttribute('aria-expanded',String(state.chatVisible));
+ if(state.data)dockChat();
 }
 function resizeChat(width){const bounds=chatWidthBounds();state.chatWidth=Math.round(Math.min(bounds.max,Math.max(bounds.min,width)));applyChatLayout();}
 async function api(path, body) {
@@ -100,7 +103,7 @@ async function api(path, body) {
   if(!response.ok) {const error=new Error(data.error || `Request failed (${response.status})`); error.status=response.status;error.run_id=data.run_id;throw error;}
   return data;
 }
-async function action(op,params={}) {return api('action',{op,params});}
+async function action(op,params={}) {return op==='code.save'?api('code/save',params):api('action',{op,params});}
 function toast(message,error=false) {clearTimeout(toastTimeout);const el=$('#toast');el.textContent=message;el.classList.toggle('error',error);el.hidden=false;toastTimeout=setTimeout(()=>{el.hidden=true;},error?8000:4000);}
 function safeUrl(value) {if(typeof value!=='string'||!/^https?:\/\//i.test(value.trim()))return null;try {const url = new URL(value,location.origin);return ['https:','http:'].includes(url.protocol)?url.href:null;} catch {return null;}}
 function link(value,label,cls='') {const url=safeUrl(value);return url?`<a href="${e(url)}" target="_blank" rel="noopener noreferrer" class="${e(cls)}">${label}</a>`:`<span class="${e(cls)}">${label}</span>`;}
@@ -168,6 +171,9 @@ const itemLabel = (p=project()) => p?.surfboard?.item_label||({research:'experim
 const pluralItems = (p=project()) => itemLabel(p)+'s';
 const leadLabel = (p=project()) => ({research:'Research lead',software:'Technical lead',web:'Design lead'}[projectWorkflow(p)]||'Project lead');
 const surfboardEditor=createSurfboardEditor({api,action,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
+const codeEditor=createCodeEditor({api,action,readOnly:()=>readOnly(),onAskAgent:prepareCodeQuestion});
+const repositoryExplorer=createRepositoryExplorer({api,onOpenFile:path=>openPageCode({path})});
+const agentChangesTile=createAgentChanges({api,action,readOnly:()=>readOnly(),onOpenChange:(scope,changeId)=>openPageCode({scope,changeId})});
 const projectRuns = id => (state.data?.runs||[]).filter(r=>r.project_id===id);
 const experimentRuns = id => (state.data?.runs||[]).filter(r=>r.experiment_id===id || (experiment()?.run_ids||[]).includes(r.id));
 const readOnly = () => !!state.data?.read_only;
@@ -297,19 +303,43 @@ async function refreshState(force=false){if(stateBusy){if(force){await new Promi
  }catch(error){connectionStatus(error);if(!state.data){$('#main').innerHTML=empty('Connect your research workspace',error.message,`<button class="button primary" data-action="${error.status===401?'auth':'refresh'}">${error.status===401?'Enter connection token':'Try again'}</button>`);if(error.status===401&&!$('#modal').open)showAuth();}}finally{stateBusy=false;const waiting=stateWaiters;stateWaiters=[];waiting.forEach(resolve=>resolve());}}
 async function navigate({view='workspace',projectId=state.projectId,experimentId=null,tab='overview'}={}){
  const wasBoard=!!isSurfboard();stashMessageDraft();scopeSelectionRevision++;if(isSurfboard()&&tab!=='surfboard'&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}if(state.edit){stashEditor();}state.view=view;state.projectId=projectId;state.experimentId=experimentId;state.tab=tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}state.edit=false;state.experiment=null;state.experimentRequest++;state.scope=null;state.chat=null;state.chatSignature='';state.sidebarSignature='';persistNavigation();syncNavigation();renderMain();syncAgentChooser();restoreMessageDraft();refreshChat(true);await Promise.all([experimentId?fetchExperiment(true):Promise.resolve(),!experimentId&&tab==='compute'?loadProjectCompute(projectId,{force:true}).catch(()=>{}):Promise.resolve(),loadAgentDirectory({initial:true})]);}
-async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;state.experiment=data;if((changed||force)&&!state.edit&&!$('#modal').open)renderMain();if(state.tab==='results'){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(state.tab==='overview')loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
+async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||JSON.stringify(data.view_layout)!==JSON.stringify(state.experiment.view_layout)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;let pageCacheChanged=false;for(const page of data.pages||[]){const key=data.id+':'+page.id,cached=markdownPages.get(key);if(cached?.data&&page.version&&cached.data.version!==page.version&&!cached.loading){markdownPages.delete(key);pageCacheChanged=true;}}
+ state.experiment=data;if((changed||force||pageCacheChanged)&&!state.edit&&!$('#modal').open)renderMain();if(pageHasTile('results')){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(pageHasTile('overview'))loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
 function renderMain(){
  if(!state.data)return;
+ ensureLayoutTab();
+ $('#layout-toggle').hidden=state.view!=='workspace'||!state.projectId;
  renderProjectSlots();
  const boardMode=isSurfboard(),boardMain=$('#main');boardMain.classList.toggle('surfboard-main',!!boardMode);
- if(boardMode){if($('#surfboard-root')?.dataset.project!==state.projectId)boardMain.innerHTML=`<div class="sb-page">${projectTabs('surfboard')}<div id="surfboard-root"></div></div>`;surfboardEditor.mount($('#surfboard-root'),state.projectId);return;}
+ if(boardMode){boardMain.classList.remove('tiled-page-main');delete boardMain.dataset.tilePageKey;repositoryExplorer.unmount();agentChangesTile.unmount();codeEditor.unmount();ensureViewDock().append($('#chat-panel'));if($('#surfboard-root')?.dataset.project!==state.projectId)boardMain.innerHTML=`<div class="sb-page">${projectTabs('surfboard')}<div id="surfboard-root"></div></div>`;surfboardEditor.mount($('#surfboard-root'),state.projectId);dockChat();return;}
  surfboardEditor.unmount();
- const preview=$('#result-preview'),selected=state.view==='workspace'&&state.experimentId&&state.tab==='results'&&chosenResultPage();
+ $('#main').classList.toggle('tiled-page-main',!!isTilePage());
+ if(!isTilePage())delete $('#main').dataset.tilePageKey;
+ if(isTilePage()){renderTilePage();return;}
+ repositoryExplorer.unmount();agentChangesTile.unmount();
+ const layout=currentLayout(),scopeKey=state.projectId+':'+(state.experimentId||'');
+ const special=layout&&(state.tab==='empty-layout'||['editor','chat','documents','preview'].includes(state.tab)||!state.experimentId&&['runs','results'].includes(state.tab));
+ const specialMain=$('#main');specialMain.classList.toggle('configured-editor-main',!!special&&['editor','chat'].includes(state.tab));
+ if(special){
+  const key=scopeKey+':'+state.tab;
+  if(specialMain.dataset.viewKey!==key||!['editor','chat'].includes(state.tab)){
+   if($('#main').contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
+   codeEditor.unmount();specialMain.dataset.viewKey=key;
+   const label=state.experimentId?(state.experiment||experiment())?.name:project()?.name;
+   specialMain.innerHTML=`<div class="configured-page"><header class="configured-heading"><strong>${e(label||'Workspace')}</strong><span>${e(project()?.repo||'')}</span></header>${layoutTabsMarkup()}<div class="configured-view-content">${state.tab==='empty-layout'?empty('No main views','Use Layout to put a view in the main area.', '<button class="button" data-action="configure-layout">Configure layout</button>'):configuredViewBody(state.tab)}</div></div>`;
+  }
+  const currentTabs=specialMain.querySelector('.configured-tabs');const nextTabs=layoutTabsMarkup();if(currentTabs&&currentTabs.outerHTML!==nextTabs)currentTabs.outerHTML=nextTabs;
+  specialMain.classList.remove('results-full-page');syncConfiguredEditors();bindMain();return;
+ }
+ delete specialMain.dataset.viewKey;
+ if($('#main').contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
+ if(state.tab!=='editor'&&!$('#project-view-panels #code-editor-root'))codeEditor.unmount();
+ const preview=$('#result-preview'),selected=state.view==='workspace'&&state.experimentId&&pageHasTile('results')&&chosenResultPage();
  $('#main').classList.toggle('results-full-page',!!selected);
- if(preview&&selected&&preview.getAttribute('src')===selected.preview_url){const current=state.experiment||experiment(),badge=$('#main .metadata-line .badge');if(current&&badge)badge.outerHTML=status(current.status,current.status_detail);return;}
+ if(preview&&selected&&preview.getAttribute('src')===selected.preview_url){dockChat();const current=state.experiment||experiment(),badge=$('#main .metadata-line .badge');if(current&&badge)badge.outerHTML=status(current.status,current.status_detail);return;}
  const main=$('#main'),scroll=main.scrollTop,openHosts=$$('details[data-host][open]',main).map(d=>d.dataset.host);
  if(state.view==='compute')main.innerHTML=renderCompute();else if(state.view==='settings')main.innerHTML=renderSettings();else if(state.experimentId)main.innerHTML=renderExperiment();else main.innerHTML=renderProject();
- for(const details of $$('details[data-host]',main))if(openHosts.includes(details.dataset.host))details.open=true;main.scrollTop=scroll;renderPending=false;bindMain();
+ for(const details of $$('details[data-host]',main))if(openHosts.includes(details.dataset.host))details.open=true;main.scrollTop=scroll;renderPending=false;bindMain();syncConfiguredEditors();
 }
 const projectComputeCache=new Map(),projectComputeDrafts=new Map(),projectComputeRequests=new Map(),projectComputeSaving=new Set();
 function computeDraft(id=state.projectId){return projectComputeDrafts.get(id)||projectComputeCache.get(id)?.data;}
@@ -317,7 +347,7 @@ function copyCompute(value){return JSON.parse(JSON.stringify(value));}
 async function loadProjectCompute(id=state.projectId,{force=false}={}){
  if(!id)return null;if(projectComputeRequests.has(id))return projectComputeRequests.get(id);
  if(!force&&projectComputeCache.get(id)?.data)return projectComputeCache.get(id).data;
- const request=(async()=>{try{const data=await api('project-compute?project_id='+encodeURIComponent(id));const config={project_id:id,version:data.version??0,defaults:data.defaults||{},nodes:data.nodes||[]};projectComputeCache.set(id,{data:config});return config;}catch(error){projectComputeCache.set(id,{...projectComputeCache.get(id),error:error.message});throw error;}finally{projectComputeRequests.delete(id);if(state.projectId===id&&state.tab==='compute'&&!state.experimentId&&!$('#project-compute-form')?.dataset.dirty)renderMain();}})();projectComputeRequests.set(id,request);return request;
+ const request=(async()=>{try{const data=await api('project-compute?project_id='+encodeURIComponent(id));const config={project_id:id,version:data.version??0,defaults:data.defaults||{},nodes:data.nodes||[]};projectComputeCache.set(id,{data:config});return config;}catch(error){projectComputeCache.set(id,{...projectComputeCache.get(id),error:error.message});throw error;}finally{projectComputeRequests.delete(id);if(state.projectId===id&&pageHasTile('compute')&&!state.experimentId&&!$('#project-compute-form')?.dataset.dirty)renderMain();}})();projectComputeRequests.set(id,request);return request;
 }
 function readComputeForm(){
  const form=$('#project-compute-form'),current=computeDraft();if(!form||!current)return;const draft=copyCompute(current);
@@ -327,7 +357,7 @@ function readComputeForm(){
 function nodeGPUIndices(host,node){return [...new Set([...(host?.gpus||[]),...(node.gpu_indices||[])].map(Number).filter(Number.isInteger))].sort((a,b)=>a-b);}
 function renderProjectCompute(p){
  const cached=projectComputeCache.get(p.id),draft=computeDraft(p.id);if(!cached&&!projectComputeRequests.has(p.id))loadProjectCompute(p.id).catch(()=>{});
- const heading=`<div class="page-eyebrow">${icon('server')}Project compute</div><div class="page-heading"><div><h1>${e(p.name)} compute</h1><p>Choose the machines and GPUs this project can use.</p></div><div class="heading-actions">${refreshComputeButton()}<button class="button" data-action="onboard-project-host"${disabled()}>${icon('message')}Ask lead</button></div></div><div class="tabs"><button class="tab" data-tab="overview">${icon('layers')}Experiments</button><button class="tab active" data-tab="compute">${icon('server')}Compute</button><button class="tab" data-tab="surfboard">${icon('branch')}Surfboard</button></div>`;
+ const heading=`<div class="page-eyebrow">${icon('server')}Project compute</div><div class="page-heading"><div><h1>${e(p.name)} compute</h1><p>Choose the machines and GPUs this project can use.</p></div><div class="heading-actions">${refreshComputeButton()}<button class="button" data-action="onboard-project-host"${disabled()}>${icon('message')}Ask lead</button></div></div>${projectTabs('compute')}`;
  if(!draft)return `<div class="page">${heading}${cached?.error?`<div class="notice error">${e(cached.error)} <button class="button small-button" data-action="reload-project-compute">Retry</button></div>`:'<div class="loading-state"><span class="spinner"></span><p>Loading project compute</p></div>'}</div>`;
  const unused=state.data.hosts.filter(host=>!draft.nodes.some(node=>node.host_id===host.id)),defaults=draft.defaults||{};
  return `<div class="page">${heading}<form id="project-compute-form" data-project="${e(p.id)}" data-dirty="${projectComputeDrafts.has(p.id)?'true':''}"><fieldset class="compute-fields" ${readOnly()||projectComputeSaving.has(p.id)?'disabled':''}><section class="settings-block"><h2>Shared defaults</h2><p>Absolute paths used on each machine unless that machine overrides them.</p><div class="compute-default-grid">${field('Python executable','default_python',{value:defaults.python,placeholder:'/opt/venv/bin/python'})}${field('Dataset path','default_data_path',{value:defaults.data_path,placeholder:'/data/dataset'})}${field('Storage path','default_storage_path',{value:defaults.storage_path,placeholder:'/data/runs'})}</div></section><section class="settings-block"><div class="compute-nodes-heading"><div><h2>Eligible machines</h2><p>The scheduler chooses an available machine and GPUs from this pool.</p></div></div><div class="compute-node-list">${draft.nodes.map((node,index)=>{const host=state.data.hosts.find(item=>item.id===node.host_id),indices=nodeGPUIndices(host,node),selected=node.gpu_indices||indices;return `<section class="compute-node" data-compute-node="${index}"><div class="compute-node-heading"><label><input type="checkbox" name="node_${index}_enabled" ${node.enabled!==false?'checked':''}><strong>${e(host?.name||node.host_id)}</strong></label><span class="compute-node-target">${e(host?.target||'Workspace computer')}</span><button type="button" class="icon-button" data-action="remove-compute-node" data-node-index="${index}" aria-label="Remove ${e(host?.name||'machine')} from project">${icon('close')}</button></div>${!host?'<p class="notice warn">This machine is no longer registered. Remove it or ask the lead to reconnect it.</p>':''}${field('Repository on this machine',`node_${index}_repo_path`,{value:node.repo_path,placeholder:'/home/researcher/project',required:node.enabled!==false})}<div class="compute-gpu-field"><span>Allowed GPUs</span><div class="compute-gpu-choices">${indices.length?indices.map(gpu=>`<label><input type="checkbox" name="node_${index}_gpu" value="${gpu}" ${selected.includes(gpu)?'checked':''}>GPU ${gpu}</label>`).join(''):'<span class="muted small">No registered GPUs. This machine can run CPU-only tasks.</span>'}</div><small>Select the subset available to this project. Leave empty for CPU-only runs.</small></div><details class="compute-node-overrides"><summary>Machine-specific paths <span class="muted">Optional overrides</span></summary><div class="compute-default-grid">${field('Python executable',`node_${index}_python`,{value:node.python,placeholder:defaults.python||'Use shared default'})}${field('Dataset path',`node_${index}_data_path`,{value:node.data_path,placeholder:defaults.data_path||'Use shared default'})}${field('Storage path',`node_${index}_storage_path`,{value:node.storage_path,placeholder:defaults.storage_path||'Use shared default'})}</div></details></section>`;}).join('')}</div>${!draft.nodes.length?'<p class="compute-pool-empty">Add a registered machine below, or ask your lead to set up a new host.</p>':''}<div class="compute-add-node"><label class="visually-hidden" for="compute-add-host">Registered machine</label><select id="compute-add-host" class="control" ${unused.length?'':'disabled'}>${unused.length?unused.map(host=>`<option value="${e(host.id)}">${e(host.name)}</option>`).join(''):'<option value="">No other registered machines</option>'}</select><button type="button" class="button" data-action="add-compute-node" ${unused.length?'':'disabled'}>${icon('plus')}Add machine</button></div></section><div id="compute-form-error" class="notice error" role="alert" hidden></div><div class="compute-save-row"><span class="muted small">Changes affect new run drafts.</span><button type="button" class="button" data-action="reload-project-compute">Reload saved</button><button type="submit" class="button primary">${icon('check')}Save compute pool</button></div></fieldset></form></div>`;
@@ -339,7 +369,7 @@ async function saveProjectCompute(event){
  try{
   const result=await action('project.compute.save',draft),saved={project_id:id,version:result.version??draft.version,defaults:result.defaults||draft.defaults,nodes:result.nodes||draft.nodes};
   projectComputeCache.set(id,{data:saved});projectComputeDrafts.delete(id);projectComputeSaving.delete(id);form.dataset.dirty='';
-  if(state.projectId===id&&state.tab==='compute'&&!state.experimentId)renderMain();toast('Project compute pool saved.');
+  if(state.projectId===id&&pageHasTile('compute')&&!state.experimentId)renderMain();toast('Project compute pool saved.');
  }catch(err){
   if(form.isConnected){error.textContent=err.status===409?err.message+' Your edits are preserved. Reload saved settings to resolve the conflict.':err.message;error.hidden=false;}
  }finally{
@@ -358,7 +388,7 @@ async function loadProjectPanel(kind,id=state.projectId,path=''){
  const key=kind+':'+id+':'+path;if(projectPanelRequests.has(key))return;projectPanelRequests.add(key);
  try{const data=await api((kind==='artifacts'?'artifacts':'project-activity')+'?project_id='+encodeURIComponent(id)+(kind==='artifacts'?'&path='+encodeURIComponent(path):''));projectPanels.set(key,{data,loadedAt:Date.now()});}
  catch(error){projectPanels.set(key,{...projectPanels.get(key),error:error.message,loadedAt:Date.now()});}
- finally{projectPanelRequests.delete(key);if(state.projectId===id){if(state.tab===kind&&!state.experimentId)renderMain();else renderProjectSlots();}}
+ finally{projectPanelRequests.delete(key);if(state.projectId===id){if(pageHasTile(kind)||kind==='activity'&&pageHasTile('preview'))renderMain();else renderProjectSlots();}}
 }
 const artifactPaths=new Map();
 function renderArtifacts(p){
@@ -383,22 +413,224 @@ async function previewArtifact(path){
 async function exportProjectDiagnostics(){
  const data=await api('diagnostics?project_id='+encodeURIComponent(state.projectId)),blob=new Blob([data.markdown],{type:'text/markdown'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=data.filename||'supersurfer-diagnostics.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Diagnostics exported.');
 }
-function projectTabs(tab='overview'){const views=project()?.surfboard?.views,panels=views?views.filter(v=>['artifacts','activity'].includes(v.kind)&&v.placement==='main'):[{kind:'artifacts',label:'Files'},{kind:'activity',label:'Activity'}];const seen=new Set();return `<div class="sb-project-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</button>${projectWorkflow()==='research'?`<button data-tab="compute" class="${tab==='compute'?'active':''}">Compute</button>`:''}<button data-tab="surfboard" class="${tab==='surfboard'?'active':''}">Surfboard</button>${panels.filter(v=>!seen.has(v.kind)&&seen.add(v.kind)).map(v=>`<button data-tab="${e(v.kind)}" class="${tab===v.kind?'active':''}">${e(v.label)}</button>`).join('')}</div>`;}
-const projectSlotOpen=new Set(),rightResultBridges=new Map();
+let chatRevealScope=null;
+function chatLayoutKey(){return state.projectId+':'+(state.experimentId||'');}
+function currentLayout(){
+ if(state.view!=='workspace'||!state.projectId||isSurfboard())return null;
+ return state.experimentId?(state.experiment?.id===state.experimentId&&state.experiment.view_layout?.rows||project()?.surfboard?.layouts?.item):project()?.surfboard?.layouts?.project;
+}
+function currentPages(){
+ if(state.view!=='workspace'||!state.projectId||isSurfboard())return null;
+ return state.experimentId?(state.experiment?.id===state.experimentId&&state.experiment.view_layout?.pages||project()?.surfboard?.pages?.item):project()?.surfboard?.pages?.project;
+}
+function activePage(){return currentPages()?.find(page=>page.id===state.tab);}
+function pageHasTile(kind){return state.view==='workspace'&&(activePage()?.tiles.some(tile=>tile.kind===kind)??state.tab===kind);}
+function isTilePage(){const page=activePage();return page&&!(page.tiles.length===1&&!['file_explorer','agent_changes'].includes(page.tiles[0].kind)&&page.tiles[0].kind===page.id&&page.tiles[0].span===12&&page.tiles[0].height===400);}
+function layoutTabsMarkup(active=state.tab){
+ const rows=currentLayout();if(!rows)return '';
+ const documents=state.experiment?.pages||[],pages=currentPages();
+ const main=pages?.map(page=>({id:page.id,label:page.title}))||rows.filter(row=>row.placement==='main');
+ const hasDocuments=pages?pages.some(page=>page.tiles.some(tile=>tile.kind==='documents')):main.some(row=>row.id==='documents');
+ return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}${!state.experimentId?'<button class="tab" data-tab="surfboard">Surfboard</button>':''}<button class="tab add-page-tab" data-action="add-view-page" title="Add a page of tiles"${disabled()}>${icon('plus')}Add page</button><button class="tab layout-tab" data-action="configure-layout" title="Configure pages and tiles">${icon('panel')}Layout</button></div>`;
+}
+function ensureLayoutTab(){
+ if(state.experimentId&&state.experiment?.id!==state.experimentId)return;
+ const rows=currentLayout();if(!rows)return;
+ const pages=currentPages(),allowed=pages?.map(page=>page.id)||rows.filter(row=>row.placement==='main').map(row=>row.id);
+ if(state.tab.startsWith('page:')&&(pages?pages.some(page=>page.tiles.some(tile=>tile.kind==='documents')):allowed.includes('documents')))return;
+ if(!allowed.includes(state.tab))state.tab=allowed[0]||'empty-layout';
+}
+function ensureViewDock(){
+ let dock=$('#view-dock');if(dock)return dock;
+ dock=document.createElement('aside');dock.id='view-dock';dock.setAttribute('aria-label','Configured side views');
+ $('#chat-panel').before(dock);dock.append($('#chat-panel'));return dock;
+}
+function dockChat(){
+ const dock=ensureViewDock(),chat=$('#chat-panel'),rows=currentLayout();
+ const chatView=rows?.find(row=>row.id==='chat');const place=chatView?.placement||'right';
+ chat.style.order=String(chatView?.order??1000);
+ const pageChat=pageHasTile('chat');
+ const mainChat=pageChat&&!state.chatMaximized;
+ const host=mainChat?$('#main-chat-host'):dock;
+ if(host&&chat.parentElement!==host)host.append(chat);
+ chat.hidden=!state.chatVisible||(!pageChat&&place==='hidden'&&chatRevealScope!==chatLayoutKey())||(place==='main'&&!mainChat&&!state.chatMaximized);
+ const panels=$('#project-view-panels');
+ dock.hidden=(chat.parentElement!==dock||chat.hidden)&&(!panels||panels.hidden);
+ dock.classList.toggle('views-only',chat.hidden||chat.parentElement!==dock);
+ $('.app-shell').classList.toggle('main-chat-view',!!mainChat);
+ $('#chat-resizer').hidden=dock.hidden||state.chatMaximized;
+}
+async function prepareCodeQuestion(text){
+ const projectId=state.projectId,experimentId=state.experimentId;
+ await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId)return;
+ if(!state.scope||state.scope.startsWith('surfboard:'))syncAgentChooser();
+ state.chatVisible=true;chatRevealScope=chatLayoutKey();
+ if(currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
+ applyChatLayout();dockChat();
+ const input=$('#chat-input'),previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;
+ stashMessageDraft();resizeComposer();input.focus();toast('Code context added to your agent message.');
+}
+async function showViewLayout({addPage=false}={}){
+ const selectedPageId=state.tab;
+ if(!state.experimentId){await navigate({projectId:state.projectId,tab:'surfboard'});surfboardEditor.showLayout({level:'project',selectedPageId,addPage});return;}
+ const projectId=state.projectId,experimentId=state.experimentId;
+ const record=await api('view-layout?project_id='+encodeURIComponent(projectId)+'&experiment_id='+encodeURIComponent(experimentId));
+ let draft=record.rows.map(({id,placement,order})=>({id,placement,order})),pages=structuredClone(record.pages||[]),pagesChanged=false;
+ openModal('Layout for this '+itemLabel(),`<p class="modal-description">Create pages and arrange their tiles. This changes only this ${e(itemLabel())}; other items keep the Surfboard defaults.</p><div id="item-pages-editor"></div><details class="page-dock-settings"><summary>Side panel placement</summary><div id="item-layout-editor"></div></details><p id="item-layout-error" class="form-error" hidden></p><div class="modal-footer"><button class="button" id="layout-inherit"${disabled()}>Use Surfboard default</button><button class="button primary" id="layout-save"${disabled()}>Save layout</button></div>`,'item-layout');
+ const editor=createViewLayoutEditor({onChange:rows=>{draft=rows;},readOnly:()=>readOnly()});
+ editor.mount($('#item-layout-editor'),{rows:draft,available:record.available});
+ const pageEditor=createPageLayoutEditor({onChange:value=>{pages=value;pagesChanged=true;},readOnly:()=>readOnly()});
+ pageEditor.mount($('#item-pages-editor'),{pages,available:record.available_tiles||record.available,selectedPageId:state.tab});
+ if(addPage)$('#item-pages-editor [data-pages-action="add-page"]')?.click();
+ async function save(rows){
+  const selectedPage=$('#item-pages-editor [data-page-select].active')?.dataset.pageSelect;
+  $('#layout-save').disabled=true;$('#layout-inherit').disabled=true;
+  try{await action('view-layout.save',{project_id:projectId,experiment_id:experimentId,version:record.version,board_version:record.board_version,rows,...(rows===null?{pages:null}:pagesChanged?{pages}: {})});editor.unmount();pageEditor.unmount();closeModal();if(state.experimentId===experimentId){await fetchExperiment(true);if(rows!==null&&pagesChanged&&selectedPage&&currentPages()?.some(page=>page.id===selectedPage)){state.tab=selectedPage;persistNavigation();renderMain();}}toast(rows===null?'Using Surfboard defaults.':'Layout saved.');}
+  catch(error){$('#item-layout-error').hidden=false;$('#item-layout-error').textContent=error.message;$('#layout-save').disabled=false;$('#layout-inherit').disabled=false;}
+ }
+ $('#layout-save').onclick=()=>save(draft);$('#layout-inherit').onclick=()=>save(null);
+ $('#modal').addEventListener('close',()=>{editor.unmount();pageEditor.unmount();},{once:true});
+}
+const projectResultRequests=new Set();
+async function loadProjectResults(){
+ const projectId=state.projectId;
+ for(const item of state.data.experiments.filter(x=>x.project_id===projectId)){
+  if(projectResultRequests.has(item.id)||resultPages.get(item.id))continue;
+  projectResultRequests.add(item.id);
+  try{const data=await api('results?experiment_id='+encodeURIComponent(item.id));resultPages.set(item.id,{pages:data.pages||[],loadedAt:Date.now()});}
+  catch(error){resultPages.set(item.id,{pages:[],error:error.message});}
+  finally{projectResultRequests.delete(item.id);}
+ }
+ if(state.projectId===projectId&&!state.experimentId)renderMain();
+}
+// Page shells are reconciled by tile identity. Code buffers and embedded results
+// stay mounted across workspace refreshes; switching pages never saves a file.
+function tileBody(kind){
+ if(kind==='file_explorer')return '<div id="repository-explorer-tile" class="code-tile-root"></div>';
+ if(kind==='agent_changes')return '<div id="agent-changes-tile" class="code-tile-root"></div>';
+ let html;
+ if(kind==='artifacts')html=renderArtifacts(project());
+ else if(kind==='overview'&&!state.experimentId){
+  const items=state.data.experiments.filter(item=>item.project_id===state.projectId);
+  return `<div class="tile-work-items"><div class="document-toolbar"><strong>${e(pluralItems())}</strong><button class="button small-button" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel())}</button></div>${project()?.goal?`<article class="markdown">${markdown(project().goal)}</article>`:''}${items.map(item=>`<button class="tile-work-item" data-experiment="${e(item.id)}"><strong>${e(item.name)}</strong>${status(item.status,item.status_detail)}<p>${e(item.summary||'')}</p></button>`).join('')||'<p class="muted">No work items yet.</p>'}</div>`;
+ }else html=configuredViewBody(kind);
+ // These legacy content renderers include their page navigation. The surrounding
+ // page owns navigation; tile content keeps the useful controls only.
+ const template=document.createElement('template');template.innerHTML=html;
+ for(const nav of template.content.querySelectorAll('.configured-tabs,.sb-project-tabs,.page-eyebrow'))nav.remove();
+ return template.innerHTML;
+}
+function renderTilePage(){
+ const page=activePage(),main=$('#main'),key=chatLayoutKey()+':'+page.id;
+ main.classList.remove('configured-editor-main','results-full-page');
+ if(main.dataset.tilePageKey!==key||!$('#page-tile-grid')){
+  if(main.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
+  codeEditor.unmount();repositoryExplorer.unmount();agentChangesTile.unmount();
+  main.innerHTML='<div class="tile-page"><header class="tile-page-heading"></header><div class="tile-page-tabs"></div><div id="page-tile-grid" class="page-tile-grid"></div></div>';
+  main.dataset.tilePageKey=key;delete main.dataset.viewKey;
+ }
+ const heading=$('.tile-page-heading',main);
+ heading.innerHTML=`<div><span>${e((state.experiment||experiment())?.name||project()?.name)}</span><h1>${e(page.title)}</h1></div><button class="button small-button" data-action="configure-layout">${icon('panel')}Edit page</button>`;
+ const tabs=$('.tile-page-tabs',main),markup=layoutTabsMarkup();if(tabs.innerHTML!==markup)tabs.innerHTML=markup;
+ const grid=$('#page-tile-grid'),catalog=(state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];
+ const ids=new Set(page.tiles.map(tile=>tile.id));
+ for(const element of [...grid.children])if(!ids.has(element.dataset.tileId)){if(element.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));element.remove();}
+ for(const [index,tile] of page.tiles.entries()){
+  let element=[...grid.children].find(old=>old.dataset.tileId===tile.id);
+  if(!element||element.dataset.tileKind!==tile.kind){
+   if(element?.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
+   element?.remove();element=document.createElement('section');element.className='page-tile';element.dataset.tileId=tile.id;element.dataset.tileKind=tile.kind;
+   element.innerHTML='<header class="page-tile-heading"></header><div class="page-tile-body"></div>';
+  }
+  element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');
+  $('.page-tile-heading',element).textContent=catalog.find(row=>row.kind===tile.kind)?.label||currentLayout()?.find(row=>row.id===tile.kind)?.label||tile.kind.replaceAll('_',' ');
+  const body=$('.page-tile-body',element),html=tileBody(tile.kind);
+  const persistent=['editor','file_explorer','agent_changes','chat'].includes(tile.kind);
+  const editing=body.querySelector('#project-compute-form[data-dirty="true"],#document-editor')||body.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,select');
+  if(!body.hasChildNodes()||(!persistent&&!editing&&body.dataset.markup!==html)){
+   const opened=[...body.querySelectorAll('details[data-document-id][open]')].map(node=>node.dataset.documentId);body.innerHTML=html;body.dataset.markup=html;for(const node of body.querySelectorAll('details[data-document-id]'))if(opened.includes(node.dataset.documentId))node.open=true;
+  }
+  if(grid.children[index]!==element)grid.insertBefore(element,grid.children[index]||null);
+ }
+ if(!page.tiles.length)grid.innerHTML=empty('Add your first tile','Combine repository files, code, results, notes and chat on this page.','<button class="button" data-action="configure-layout">Add tiles</button>');
+ if(pageHasTile('results')&&state.experimentId&&!resultPages.has(state.experimentId))queueMicrotask(()=>loadResultPages().then(()=>{if(!chosenResultPage())loadMetrics();}));
+ bindMain();syncConfiguredEditors();renderPending=false;
+}
+async function openPageCode({path,scope,changeId}){
+ const projectId=state.projectId,experimentId=state.experimentId;
+ if(!$('#main #code-editor-root')){
+  const destination=currentPages()?.find(page=>page.tiles.some(tile=>tile.kind==='editor'));
+  if(destination){state.tab=destination.id;persistNavigation();renderMain();}
+ }
+ let root=$('#main #code-editor-root')||$('#project-view-panels #code-editor-root');
+ if(!root){toast('Add a Code editor tile to this page to open files and agent changes.');await showViewLayout();return;}
+ await codeEditor.mount(root,{projectId,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')?'editor':'full'});
+ if(projectId!==state.projectId||experimentId!==state.experimentId||!root.isConnected)return;
+ if(path)await codeEditor.openFile(path);else await codeEditor.showAgentChange(scope,changeId);
+}
+
+function panelLoadError(entry){return entry?.error?`<div class="notice warn">${e(entry.error)} <button class="button small-button" data-action="refresh-project-panel" data-panel-kind="activity">Retry</button></div>`:'';}
+function configuredViewBody(kind,{right=false}={}){
+ const p=project(),x=state.experiment||experiment();
+ if(kind==='editor')return '<div id="code-editor-root" class="code-editor-root"></div>';
+ if(kind==='chat')return '<div id="main-chat-host"></div>';
+ if(kind==='runs')return runBrowser(state.experimentId?experimentRuns(state.experimentId):projectRuns(p.id));
+ if(kind==='overview')return x?renderExperimentOverview(x,experimentRuns(x.id)):`<div class="markdown">${markdown(p.goal||'No project brief yet.')}</div>`;
+ if(kind==='activity'){const entry=projectPanels.get('activity:'+p.id+':');if(!entry&&!projectPanelRequests.has('activity:'+p.id+':'))loadProjectPanel('activity',p.id);return panelLoadError(entry)+(entry?.data?activityBody(entry.data):entry?.error?'':'<p class="muted">Loading activity…</p>');}
+ if(kind==='compute')return renderProjectCompute(p);
+ if(kind==='documents'){
+  if(x){for(const page of x.pages||[])if(!markdownPages.has(x.id+':'+page.id))loadMarkdownPage(x.id,page.id);return (x.pages||[]).map(page=>{const entry=markdownPages.get(x.id+':'+page.id);return `<details class="layout-document" data-document-id="${e(page.id)}"><summary>${e(page.title)}</summary>${entry?.error?`<p class="notice warn">${e(entry.error)} <button class="button small-button" data-action="refresh-page" data-page-id="${e(page.id)}">Retry</button></p>`:''}<article class="markdown">${markdown(entry?.data?.markdown??(entry?.error?'':'Loading…'))}</article></details>`;}).join('')||`<article class="markdown">${markdown(x.markdown||x.summary||'No notes yet.')}</article>`;}
+
+  return state.data.experiments.filter(item=>item.project_id===p.id).map(item=>`<details class="layout-document"><summary>${e(item.name)}</summary><article class="markdown">${markdown(item.markdown||item.summary||'No notes yet.')}</article></details>`).join('')||'<p class="muted">Notes from your work items appear here.</p>';
+ }
+ if(kind==='preview'){
+  const entry=projectPanels.get('activity:'+p.id+':');if(!entry&&!projectPanelRequests.has('activity:'+p.id+':'))loadProjectPanel('activity',p.id);
+  const previewNodes=currentLayout()?.find(row=>row.id==='preview')?.node_ids||[];
+  const previews=(entry?.data?.actions||[]).filter(row=>previewNodes.includes(row.node_id)&&row.preview_url&&row.status==='running'&&(!state.experimentId||!row.experiment_id||row.experiment_id===state.experimentId));
+  return panelLoadError(entry)+(previews.map(row=>`<iframe class="managed-preview" title="${e(row.node_label||'App preview')}" src="${e(row.preview_url)}" sandbox="allow-scripts allow-forms"></iframe>`).join('')||'<p class="muted">Ask your agent to start a configured preview. A running preview appears here.</p>');
+ }
+ if(kind==='results'&&!state.experimentId){
+  const items=state.data.experiments.filter(item=>item.project_id===p.id);
+  if(items.some(item=>!resultPages.has(item.id)&&!projectResultRequests.has(item.id)))loadProjectResults();
+  return items.map(item=>`<section class="layout-result-group"><h3>${e(item.name)}</h3>${(resultPages.get(item.id)?.pages||[]).map(page=>`<h4>${e(page.title)}</h4><iframe data-layout-result="${e(page.id)}" data-result-experiment="${e(item.id)}" title="${e(page.title)}" src="${e(page.preview_url)}" sandbox="allow-scripts allow-downloads"></iframe>`).join('')||`<p class="muted">${e(resultPages.get(item.id)?.error||'No published results yet.')}</p>`}</section>`).join('')||'<p class="muted">Published work-item results appear here.</p>';
+ }
+ if(kind==='results')return renderResults();
+ return '<p class="muted">Choose a view from your layout.</p>';
+}
+function syncConfiguredEditors(){
+ const root=$('#main #code-editor-root')||$('#project-view-panels #code-editor-root');
+ if(root)codeEditor.mount(root,{projectId:state.projectId,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
+ const context={projectId:state.projectId,experimentId:state.experimentId};
+ const explorer=$('#repository-explorer-tile'),changes=$('#agent-changes-tile');
+ if(explorer)repositoryExplorer.mount(explorer,context).catch(error=>toast(error.message,true));else repositoryExplorer.unmount();
+ if(changes)agentChangesTile.mount(changes,context).catch(error=>toast(error.message,true));else agentChangesTile.unmount();
+ for(const [frame,bridge] of rightResultBridges){if(!frame.isConnected){bridge.dispose();rightResultBridges.delete(frame);}}
+ for(const frame of $$('iframe[data-layout-result]')){
+  if(rightResultBridges.has(frame))continue;const experimentId=frame.dataset.resultExperiment,id=frame.dataset.layoutResult;
+  rightResultBridges.set(frame,connectLiveResults({api,frame:()=>frame.isConnected?frame:null,selection:()=>({...resultPages.get(experimentId)?.pages.find(page=>page.id===id),experimentId})}));
+ }
+ dockChat();
+}
+
+function projectTabs(tab='overview'){if(currentLayout())return layoutTabsMarkup(tab);const views=project()?.surfboard?.views,panels=views?views.filter(v=>['artifacts','activity'].includes(v.kind)&&v.placement==='main'):[{kind:'artifacts',label:'Files'},{kind:'activity',label:'Activity'}];const seen=new Set();return `<div class="sb-project-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</button>${projectWorkflow()==='research'?`<button data-tab="compute" class="${tab==='compute'?'active':''}">Compute</button>`:''}<button data-tab="surfboard" class="${tab==='surfboard'?'active':''}">Surfboard</button>${panels.filter(v=>!seen.has(v.kind)&&seen.add(v.kind)).map(v=>`<button data-tab="${e(v.kind)}" class="${tab===v.kind?'active':''}">${e(v.label)}</button>`).join('')}</div>`;}
+const projectSlotOpen=new Set(),projectSlotSeen=new Set(),rightResultBridges=new Map();
 function renderProjectSlots(){
- let container=$('#project-view-panels');if(!container){container=document.createElement('section');container.id='project-view-panels';$('#chat-panel').prepend(container);container.addEventListener('toggle',event=>{if(!event.target.matches('details.project-view-slot'))return;const key=state.projectId+':'+event.target.dataset.node;if(!event.target.open){projectSlotOpen.delete(key);return;}if(!projectSlotOpen.has(key)){projectSlotOpen.add(key);const kind=event.target.dataset.kind;if(['artifacts','activity'].includes(kind))loadProjectPanel(kind,state.projectId,kind==='artifacts'?artifactPaths.get(state.projectId)||'':'');if(kind==='document'&&state.experimentId)Promise.all(((state.experiment||experiment())?.pages||[]).map(page=>loadMarkdownPage(state.experimentId,page.id))).then(renderProjectSlots);if(kind==='preview')loadProjectPanel('activity',state.projectId);if(['results','visualizer','preview'].includes(kind)&&state.experimentId)loadResultPages(true).then(renderProjectSlots);}},true);}
- const p=project(),views=state.view==='workspace'&&!isSurfboard()?(p?.surfboard?.views||[]).filter(v=>v.placement==='right'):[];container.hidden=!views.length;if(!views.length){container.innerHTML='';for(const bridge of rightResultBridges.values())bridge.dispose();rightResultBridges.clear();return;}
- const opened=new Set(views.filter(v=>projectSlotOpen.has(p.id+':'+v.node_id)).map(v=>v.node_id)),x=state.experiment||experiment();
+ let container=$('#project-view-panels');if(!container){container=document.createElement('section');container.id='project-view-panels';ensureViewDock().prepend(container);container.addEventListener('toggle',event=>{if(!event.target.matches('details.project-view-slot'))return;const key=state.projectId+':'+(state.experimentId||'')+':'+event.target.dataset.node;if(!event.target.open){projectSlotOpen.delete(key);return;}if(!projectSlotOpen.has(key)){projectSlotOpen.add(key);const kind=event.target.dataset.kind;if(['artifacts','activity'].includes(kind))loadProjectPanel(kind,state.projectId,kind==='artifacts'?artifactPaths.get(state.projectId)||'':'');if(kind==='document'&&state.experimentId)Promise.all(((state.experiment||experiment())?.pages||[]).map(page=>loadMarkdownPage(state.experimentId,page.id))).then(renderProjectSlots);if(kind==='preview')loadProjectPanel('activity',state.projectId);if(['results','visualizer','preview'].includes(kind)&&state.experimentId)loadResultPages(true).then(renderProjectSlots);}},true);}
+ const p=project(),layout=currentLayout(),views=state.view==='workspace'&&!isSurfboard()?(layout?layout.filter(v=>v.id!=='chat'&&v.placement==='right'&&!activePage()?.tiles.some(tile=>tile.kind===v.id)).map(v=>({...v,node_id:v.id,kind:v.id==='documents'?'document':v.id})):(p?.surfboard?.views||[]).filter(v=>v.placement==='right')):[];container.hidden=!views.length;if(!views.length){container.innerHTML='';dockChat();for(const bridge of rightResultBridges.values())bridge.dispose();rightResultBridges.clear();return;}
+ for(const view of views){const key=p.id+':'+(state.experimentId||'')+':'+view.node_id;if(view.kind==='editor'&&!projectSlotSeen.has(key)){projectSlotSeen.add(key);projectSlotOpen.add(key);}}
+ const opened=new Set(views.filter(v=>projectSlotOpen.has(p.id+':'+(state.experimentId||'')+':'+v.node_id)).map(v=>v.node_id)),x=state.experiment||experiment();
  const content=view=>{
+  if(['editor','overview','runs','compute'].includes(view.kind))return configuredViewBody(view.kind,{right:true});
+  if(view.kind==='results'&&!state.experimentId)return configuredViewBody('results',{right:true});
   if(view.kind==='activity'){const entry=projectPanels.get('activity:'+p.id+':');return entry?.data?activityBody(entry.data):`<p class="muted small">Expand to load current background work.</p>`;}
   if(view.kind==='artifacts'){const path=artifactPaths.get(p.id)||'',entry=projectPanels.get('artifacts:'+p.id+':'+path);return `<div class="artifact-breadcrumb"><button data-artifact-path="">Project files</button>${path?`<span>/ ${e(path)}</span>`:''}</div>${(entry?.data?.entries||[]).map(file=>`<div class="artifact-row"><span>${icon(file.kind==='directory'?'folder':'file')}</span><button ${['directory','folder'].includes(file.kind)?`data-artifact-path="${e(file.path)}"`:`data-artifact-preview="${e(file.path)}"`}>${e(file.name)}</button>${file.download_url?`<a href="${e(file.download_url)}" download aria-label="Download ${e(file.name)}">↓</a>`:''}</div>`).join('')||'<p class="muted small">No published files here.</p>'}`;}
   if(view.kind==='document')return x?((x.pages||[]).length?(x.pages||[]).map(page=>`<details><summary>${e(page.title)}</summary><div class="markdown project-slot-document">${markdown(markdownPages.get(x.id+':'+page.id)?.data?.markdown||'Loading notes…')}</div></details>`).join(''):`<div class="markdown project-slot-document">${markdown(x.markdown||x.summary||'No notes published yet.')}</div>`):'<p class="muted small">Open a work item to read its notes.</p>';
-  if(view.kind==='preview'){const previews=(projectPanels.get('activity:'+p.id+':')?.data?.actions||[]).filter(row=>row.node_id===view.node_id&&row.preview_url&&row.status==='running');if(previews.length)return previews.map(row=>`<iframe class="managed-preview" title="${e(view.label)}" src="${e(row.preview_url)}" sandbox="allow-scripts allow-forms"></iframe>`).join('');}
+  if(view.kind==='preview'){const previews=(projectPanels.get('activity:'+p.id+':')?.data?.actions||[]).filter(row=>(view.node_ids||[view.node_id]).includes(row.node_id)&&row.preview_url&&row.status==='running'&&(!state.experimentId||!row.experiment_id||row.experiment_id===state.experimentId));if(previews.length)return previews.map(row=>`<iframe class="managed-preview" title="${e(view.label)}" src="${e(row.preview_url)}" sandbox="allow-scripts allow-forms"></iframe>`).join('');}
   if(['results','visualizer','preview'].includes(view.kind)){const pages=resultPages.get(x?.id)?.pages||[];return pages.length?pages.map(page=>`<details class="slot-result"><summary>${e(page.title)}</summary><iframe data-right-results="${e(page.id)}" title="${e(page.title)}" src="${e(page.preview_url)}" sandbox="allow-scripts allow-downloads" loading="lazy"></iframe></details>`).join(''):'<p class="muted small">Published results appear here when you open a work item.</p>';}
   return '<p class="muted small">Open a work item to view its content.</p>';
  };
- const html=views.map(view=>`<details class="project-view-slot" data-node="${e(view.node_id)}" data-kind="${e(view.kind)}" ${opened.has(view.node_id)?'open':''}><summary>${icon(view.kind==='activity'?'activity':view.kind==='artifacts'?'folder':'file')}<strong>${e(view.label)}</strong></summary><div class="project-view-slot-body">${content(view)}</div></details>`).join('');
- if(container.dataset.signature!==html){container.dataset.signature=html;const template=document.createElement('template');template.innerHTML=html;const next=[...template.content.children];for(const element of next){const existing=[...container.children].find(old=>old.dataset.node===element.dataset.node);if(existing&&existing.innerHTML===element.innerHTML){existing.open=element.open;container.append(existing);}else if(existing)existing.replaceWith(element);else container.append(element);}const ids=new Set(next.map(el=>el.dataset.node));for(const el of [...container.children])if(!ids.has(el.dataset.node))el.remove();}
+ const html=views.map(view=>`<details class="project-view-slot" data-node="${e(view.node_id)}" data-kind="${e(view.kind)}" style="order:${Number(view.order)||0}" ${opened.has(view.node_id)?'open':''}><summary>${icon(view.kind==='activity'?'activity':view.kind==='artifacts'?'folder':'file')}<strong>${e(view.label)}</strong></summary><div class="project-view-slot-body">${content(view)}</div></details>`).join('');
+ if(container.dataset.signature!==html){container.dataset.signature=html;const template=document.createElement('template');template.innerHTML=html;const next=[...template.content.children];for(const element of next){const existing=[...container.children].find(old=>old.dataset.node===element.dataset.node);if(existing&&(existing.innerHTML===element.innerHTML||element.dataset.kind==='editor')){existing.open=element.open;existing.style.order=element.style.order;container.append(existing);}else if(existing)existing.replaceWith(element);else container.append(element);}const ids=new Set(next.map(el=>el.dataset.node));for(const el of [...container.children])if(!ids.has(el.dataset.node))el.remove();}
  for(const [frame,bridge] of rightResultBridges){if(!frame.isConnected){bridge.dispose();rightResultBridges.delete(frame);}}
  for(const frame of $$('iframe[data-right-results]',container)){if(rightResultBridges.has(frame))continue;const experimentId=x?.id;rightResultBridges.set(frame,connectLiveResults({api,frame:()=>frame.isConnected?frame:null,selection:()=>state.experimentId===experimentId?{...(resultPages.get(experimentId)?.pages||[]).find(page=>page.id===frame.dataset.rightResults),experimentId}:null}));}
 }
@@ -406,6 +638,7 @@ function renderProject(){const p=project();if(!p)return empty('A home for your r
  if(state.tab==='compute')return renderProjectCompute(p);
  if(state.tab==='artifacts')return renderArtifacts(p);
  if(state.tab==='activity')return renderProjectActivity(p);
+ if(state.tab==='runs')return runBrowser(projectRuns(p.id));
  const experiments=state.data.experiments.filter(x=>x.project_id===p.id),runs=projectRuns(p.id),running=runs.filter(r=>active.has(r.status)).length;
  return `<div class="page"><div class="page-eyebrow">${icon('folder')}${projectWorkflow()==='research'?'Research':'Project'} workspace</div><div class="page-heading"><div><h1>${e(p.name)}</h1><p>Your ${e(pluralItems())}, conversations, and results. All in one place.</p></div><div class="heading-actions">${projectWorkflow()==='research'?`<button class="button" data-action="project-compute">${icon('server')}Compute</button>`:''}<button class="button" data-tab="surfboard">${icon('branch')}Surfboard</button><button class="button primary" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel())}</button></div></div>${projectTabs('overview')}<div class="metadata-line"><span class="meta-item">${icon('folder')}${e(p.repo||'Repository not configured')}</span><span class="meta-item">${icon('activity')}${running} running</span><span class="meta-item">${icon('file')}${experiments.length} ${e(pluralItems())}</span></div>${p.goal?`<div class="project-summary"><div class="page-eyebrow">Research direction</div>${e(p.goal)}</div>`:''}${!p.initialized?`<div class="notice">Save durable research context alongside your code in <code>.SuperSurfer</code>. <button class="button small-button" data-action="initialize-project"${disabled()}>Initialize project context</button></div>`:''}<div class="section-title"><span>${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</span><span class="muted">Ideas begin here. Runs launch when you’re ready.</span></div>${experiments.length?`<div class="experiment-grid">${experiments.map(x=>`<button class="experiment-card" data-experiment="${e(x.id)}">${status(x.status,x.status_detail)}<h3>${e(x.name)}</h3><p>${e(x.summary||'Open this experiment to read its research context.')}</p><div class="card-footer">${(x.run_ids||[]).length||state.data.runs.filter(r=>r.experiment_id===x.id).length} runs<span>·</span>${e(elapsed(x.updated_at))}${icon('arrowRight')}</div></button>`).join('')}</div>`:empty('Start with a question','Create your first experiment, capture its hypothesis, and ask your lead to help shape a run.',`<button class="button" data-action="add-experiment"${disabled()}>${icon('plus')}Create experiment</button>`)}${runs.some(r=>active.has(r.status))?`<div class="section-title">Running now</div>${runList(runs.filter(r=>active.has(r.status)))}`:''}</div>`;}
 const workerWakeups=new Map(),workerWakeupRequests=new Map(),workerWakeupVersions=new Map(),workerWakeupMutations=new Set();
@@ -419,7 +652,7 @@ function wakeupCondition(rule){
 async function loadWorkerWakeups(id=state.experimentId,{force=false}={}){
  if(!id)return;if(workerWakeupRequests.has(id)&&!force)return workerWakeupRequests.get(id);
  const version=(workerWakeupVersions.get(id)||0)+1;workerWakeupVersions.set(id,version);
- const request=(async()=>{let changed=false;try{const data=await api('worker-wakeups?experiment_id='+encodeURIComponent(id));if(workerWakeupVersions.get(id)!==version)return;const next={rules:data.rules||[]};changed=JSON.stringify(next)!==JSON.stringify(workerWakeups.get(id));workerWakeups.set(id,next);}catch(error){if(workerWakeupVersions.get(id)!==version)return;const next={...workerWakeups.get(id),error:error.message};changed=JSON.stringify(next)!==JSON.stringify(workerWakeups.get(id));workerWakeups.set(id,next);}finally{if(workerWakeupVersions.get(id)===version)workerWakeupRequests.delete(id);if(changed&&state.experimentId===id&&state.tab==='overview'&&!state.edit&&!$('#modal').open)renderMain();}})();workerWakeupRequests.set(id,request);return request;
+ const request=(async()=>{let changed=false;try{const data=await api('worker-wakeups?experiment_id='+encodeURIComponent(id));if(workerWakeupVersions.get(id)!==version)return;const next={rules:data.rules||[]};changed=JSON.stringify(next)!==JSON.stringify(workerWakeups.get(id));workerWakeups.set(id,next);}catch(error){if(workerWakeupVersions.get(id)!==version)return;const next={...workerWakeups.get(id),error:error.message};changed=JSON.stringify(next)!==JSON.stringify(workerWakeups.get(id));workerWakeups.set(id,next);}finally{if(workerWakeupVersions.get(id)===version)workerWakeupRequests.delete(id);if(changed&&state.experimentId===id&&pageHasTile('overview')&&!state.edit&&!$('#modal').open)renderMain();}})();workerWakeupRequests.set(id,request);return request;
 }
 function renderWorkerWakeups(experiment){
  const data=workerWakeups.get(experiment.id);if(!data&&!workerWakeupRequests.has(experiment.id))loadWorkerWakeups(experiment.id);
@@ -433,6 +666,7 @@ async function addWorkerWakeup(){
 }
 
 function workItemTabs(x,runs){
+ if(currentLayout())return layoutTabsMarkup();
  const views=project()?.surfboard?.views,mainViews=views?.filter(v=>v.placement==='main'),resultViews=views?.filter(v=>['results','visualizer','preview'].includes(v.kind));
  const rows=[{id:'overview',label:'Overview',icon:'file',order:-100}];
  if(projectWorkflow()==='research'||runs.length)rows.push({id:'runs',label:'Runs',icon:'activity',count:runs.length,order:-50});
@@ -440,8 +674,8 @@ function workItemTabs(x,runs){
  const documentViews=views?.filter(v=>v.kind==='document');if(!documentViews?.length||mainViews.some(v=>v.kind==='document'))for(const page of x.pages||[])rows.push({id:'page:'+page.id,label:page.title,order:mainViews?.find(v=>v.kind==='document')?.order??50});
  return `<div class="tabs">${rows.sort((a,b)=>a.order-b.order).map(row=>`<button class="tab ${state.tab===row.id?'active':''}" data-tab="${e(row.id)}">${row.icon?icon(row.icon):''}${e(row.label)}${row.count!==undefined?` <span class="tab-count">${row.count}</span>`:''}</button>`).join('')}</div>`;
 }
-function renderExperiment(){const x=state.experiment||experiment();if(!x)return empty('Experiment unavailable','Select an experiment from your project.');const runs=experimentRuns(x.id),p=project(),startable=x.status==='draft'&&!['dispatching','uncertain'].includes(x.work_state),starting=startingExperiments.has(x.id);
- return `<div class="page"><div class="page-eyebrow">${icon('file')}${e(itemLabel().replace(/^./,c=>c.toUpperCase()))}</div><div class="page-heading"><div><h1>${e(x.name)}</h1>${x.summary?`<p>${e(x.summary)}</p>`:''}</div><div class="heading-actions">${startable?`<button class="button primary" data-action="start-experiment" ${starting||state.edit?'disabled':''}${disabled()} title="Ask the worker to begin the requested work.">${icon('spark')}${starting?'Starting…':'Start working'}</button>`:''}${projectWorkflow()==='research'?`<button class="button ${startable?'':'primary'}" data-action="submit-run"${disabled()}>${icon('plus')}Queue run</button>`:''}</div></div><div class="metadata-line">${status(x.status,x.status_detail)}<span class="meta-item">${icon('play')}${runs.length} ${runs.length===1?'run':'runs'}</span><span class="meta-item">${icon('clock')}Updated ${e(elapsed(x.updated_at))}</span>${x.review_interval_minutes?`<button class="badge active" data-action="review-schedule"${disabled()}>${icon('refresh')}Review every ${e(x.review_interval_minutes)}m</button>`:''}</div>${x.work_error||x.work_state==='uncertain'?`<div class="notice warn work-notice"><strong>${x.work_state==='uncertain'?'Worker dispatch needs checking':'Worker preparation needs attention'}</strong><p>${x.work_state==='uncertain'?'The dispatch outcome is uncertain. Check the worker’s conversation before requesting more work.':e(x.work_error)}</p>${x.work_state==='uncertain'&&x.work_error?`<p>${e(x.work_error)}</p>`:''}<button class="button small-button" data-action="open-experiment-worker">${icon('message')}Open worker chat</button></div>`:''}${workItemTabs(x,runs)}${state.tab==='results'?renderResults():state.tab==='runs'?runBrowser(runs):state.tab.startsWith('page:')?renderMarkdownPage(x,state.tab.slice(5)):renderExperimentOverview(x,runs)}</div>`;
+function renderExperiment(){if(state.tab==='artifacts')return renderArtifacts(project());if(state.tab==='activity')return renderProjectActivity(project());const x=state.experiment||experiment();if(!x)return empty('Experiment unavailable','Select an experiment from your project.');const runs=experimentRuns(x.id),p=project(),startable=x.status==='draft'&&!['dispatching','uncertain'].includes(x.work_state),starting=startingExperiments.has(x.id);
+ return `<div class="page"><div class="page-eyebrow">${icon('file')}${e(itemLabel().replace(/^./,c=>c.toUpperCase()))}</div><div class="page-heading"><div><h1>${e(x.name)}</h1>${x.summary?`<p>${e(x.summary)}</p>`:''}</div><div class="heading-actions">${startable?`<button class="button primary" data-action="start-experiment" ${starting||state.edit?'disabled':''}${disabled()} title="Ask the worker to begin the requested work.">${icon('spark')}${starting?'Starting…':'Start working'}</button>`:''}${projectWorkflow()==='research'?`<button class="button ${startable?'':'primary'}" data-action="submit-run"${disabled()}>${icon('plus')}Queue run</button>`:''}</div></div><div class="metadata-line">${status(x.status,x.status_detail)}<span class="meta-item">${icon('play')}${runs.length} ${runs.length===1?'run':'runs'}</span><span class="meta-item">${icon('clock')}Updated ${e(elapsed(x.updated_at))}</span>${x.review_interval_minutes?`<button class="badge active" data-action="review-schedule"${disabled()}>${icon('refresh')}Review every ${e(x.review_interval_minutes)}m</button>`:''}</div>${x.work_error||x.work_state==='uncertain'?`<div class="notice warn work-notice"><strong>${x.work_state==='uncertain'?'Worker dispatch needs checking':'Worker preparation needs attention'}</strong><p>${x.work_state==='uncertain'?'The dispatch outcome is uncertain. Check the worker’s conversation before requesting more work.':e(x.work_error)}</p>${x.work_state==='uncertain'&&x.work_error?`<p>${e(x.work_error)}</p>`:''}<button class="button small-button" data-action="open-experiment-worker">${icon('message')}Open worker chat</button></div>`:''}${workItemTabs(x,runs)}${pageHasTile('results')?renderResults():state.tab==='runs'?runBrowser(runs):state.tab.startsWith('page:')?renderMarkdownPage(x,state.tab.slice(5)):renderExperimentOverview(x,runs)}</div>`;
 }
 function renderExperimentOverview(x,runs){
  const brief=x.brief||{},sections=projectWorkflow()==='research'?[['objective','Question'],['method','Method'],['findings','Findings'],['next_steps','Next steps']]:[['objective','Goal'],['method','Approach'],['findings','Progress'],['next_steps','Next steps']],running=recentRuns(runs.filter(r=>!terminal.has(r.status))).slice(0,4);
@@ -454,14 +688,21 @@ function showEditBrief(){
  $('#brief-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;try{await action('experiment.brief.save',{experiment_id:x.id,version:brief.version,...Object.fromEntries(new FormData(event.currentTarget))});closeModal();await fetchExperiment(true);}catch(error){$('#brief-error').hidden=false;$('#brief-error').textContent=error.message;button.disabled=false;}});
 }
 const markdownPages=new Map(),resultPages=new Map(),resultSelections=new Map();
-const liveResults=connectLiveResults({api,frame:()=>$('#result-preview'),selection:()=>state.view==='workspace'&&state.tab==='results'?{...chosenResultPage(),experimentId:state.experimentId}:null});
+const liveResults=connectLiveResults({api,frame:()=>$('#result-preview'),selection:()=>state.view==='workspace'&&pageHasTile('results')?{...chosenResultPage(),experimentId:state.experimentId}:null});
 async function loadMarkdownPage(experimentId,pageId){
  const key=experimentId+':'+pageId;if(markdownPages.get(key)?.loading)return;
+ const revision=()=>state.experiment?.id===experimentId?state.experiment.pages?.find(page=>page.id===pageId)?.version:undefined;
+ const requestedVersion=revision();
  markdownPages.set(key,{...markdownPages.get(key),loading:true});
- try{const data=await api('experiment-page?experiment_id='+encodeURIComponent(experimentId)+'&page_id='+encodeURIComponent(pageId));markdownPages.set(key,{data});}
+ try{const data=await api('experiment-page?experiment_id='+encodeURIComponent(experimentId)+'&page_id='+encodeURIComponent(pageId));markdownPages.set(key,{data});
+  // A metadata refresh can overtake an in-flight content read. Read the new
+  // revision immediately rather than leaving that older response in the tile.
+  if(revision()&&requestedVersion!==revision())return loadMarkdownPage(experimentId,pageId);
+ }
  catch(error){markdownPages.set(key,{error:error.message});}
- if(state.experimentId===experimentId&&state.tab==='page:'+pageId)renderMain();
+ if(state.experimentId===experimentId&&(state.tab==='page:'+pageId||pageHasTile('documents')))renderMain();
 }
+
 function renderMarkdownPage(x,id){
  const entry=markdownPages.get(x.id+':'+id),page=(x.pages||[]).find(p=>p.id===id);if(!page)return empty('Page unavailable','Choose another experiment tab.');
  if(!entry){loadMarkdownPage(x.id,id);return '<div class="loading-state">Loading page…</div>';}
@@ -471,13 +712,13 @@ function renderMarkdownPage(x,id){
 async function loadResultPages(force=false){
  const id=state.experimentId;if(!id)return;const old=resultPages.get(id);if(old?.loading||!force&&old?.loadedAt&&Date.now()-old.loadedAt<10000)return;
  resultPages.set(id,{...old,loading:true});
- try{const data=await api('results?experiment_id='+encodeURIComponent(id));const changed=JSON.stringify(data.pages)!==JSON.stringify(old?.pages);resultPages.set(id,{pages:data.pages||[],loadedAt:Date.now()});if(changed&&state.experimentId===id&&state.tab==='results')renderMain();}
- catch(error){resultPages.set(id,{...old,error:error.message,loadedAt:Date.now()});if(state.experimentId===id&&state.tab==='results')renderMain();}
+ try{const data=await api('results?experiment_id='+encodeURIComponent(id));const changed=JSON.stringify(data.pages)!==JSON.stringify(old?.pages);resultPages.set(id,{pages:data.pages||[],loadedAt:Date.now()});if(changed&&state.experimentId===id&&pageHasTile('results'))renderMain();}
+ catch(error){resultPages.set(id,{...old,error:error.message,loadedAt:Date.now()});if(state.experimentId===id&&pageHasTile('results'))renderMain();}
 }
 function chosenResultPage(){const id=state.experimentId,pages=resultPages.get(id)?.pages||[],selection=resultSelections.get(id);return selection==='metrics'?null:pages.find(p=>p.id===selection)||pages[0];}
 function renderResults(){
  const pages=resultPages.get(state.experimentId)?.pages||[],page=chosenResultPage(),x=state.experiment||experiment();
- const tabs=`<div class="result-page-tabs" role="group" aria-label="Result pages">${pages.map(p=>`<button class="button small-button ${page?.id===p.id?'primary':''}" data-action="select-result" data-result-id="${e(p.id)}" title="${e(p.title)}">${e(p.title)}</button>`).join('')}<button class="button small-button ${!page?'primary':''}" data-action="select-result" data-result-id="metrics">W&B metrics</button><button class="icon-button" data-action="refresh-results" aria-label="Refresh results">${icon('refresh')}</button>${page&&x?.wandb_url?link(x.wandb_url,`${icon('external')}<span class="visually-hidden">Open W&amp;B</span>`,'icon-button result-wandb-link'):''}</div>`;
+ const tabs=(resultPages.get(state.experimentId)?.error?`<div class="notice warn">${e(resultPages.get(state.experimentId).error)}</div>`:'')+`<div class="result-page-tabs" role="group" aria-label="Result pages">${pages.map(p=>`<button class="button small-button ${page?.id===p.id?'primary':''}" data-action="select-result" data-result-id="${e(p.id)}" title="${e(p.title)}">${e(p.title)}</button>`).join('')}<button class="button small-button ${!page?'primary':''}" data-action="select-result" data-result-id="metrics">W&B metrics</button><button class="icon-button" data-action="refresh-results" aria-label="Refresh results">${icon('refresh')}</button>${page&&x?.wandb_url?link(x.wandb_url,`${icon('external')}<span class="visually-hidden">Open W&amp;B</span>`,'icon-button result-wandb-link'):''}</div>`;
  if(page){const url=/^\/result-preview\/[A-Za-z0-9_-]+$/.test(page.preview_url)?page.preview_url:null;return `<section class="results-surface" aria-label="Interactive results">${tabs}${url?`<iframe id="result-preview" title="${e(page.title)}" src="${e(url)}" sandbox="allow-scripts allow-downloads" referrerpolicy="no-referrer" class="result-preview"></iframe>`:'<div class="notice warn">Invalid result preview URL.</div>'}</section>`;}
  return tabs+renderWandbResults();
 }
@@ -542,7 +783,7 @@ const chartColors=['#55764a','#c09653','#748da4','#af7867','#8a7da3','#609995'];
 function currentChartColors(){if(!document.documentElement.dataset.vscodeTheme)return chartColors;const style=getComputedStyle(document.documentElement);return chartColors.map((fallback,index)=>style.getPropertyValue('--theme-chart-'+(index+1)).trim()||fallback);}
 function formatNumber(n){const value=Number(n);if(!Number.isFinite(value))return '—';if(value===0)return '0';if(Math.abs(value)>=10000||Math.abs(value)<.001)return value.toExponential(2);return new Intl.NumberFormat(undefined,{maximumSignificantDigits:4}).format(value);}
 function metricChart(series,key){const width=720,height=300,pad={top:20,right:20,bottom:42,left:62},points=series.flatMap(s=>s.points||[]).filter(p=>p.x!=null&&p.y!=null&&Number.isFinite(Number(p.x))&&Number.isFinite(Number(p.y)));if(!points.length)return '<div class="document-empty">No finite metric points to display.</div>';let xmin=Math.min(...points.map(p=>Number(p.x))),xmax=Math.max(...points.map(p=>Number(p.x))),ymin=Math.min(...points.map(p=>Number(p.y))),ymax=Math.max(...points.map(p=>Number(p.y)));if(xmin===xmax)xmax=xmin+1;if(ymin===ymax){const margin=Math.abs(ymin)*.05||1;ymin-=margin;ymax+=margin;}const scaleX=x=>pad.left+(Number(x)-xmin)/(xmax-xmin)*(width-pad.left-pad.right),scaleY=y=>height-pad.bottom-(Number(y)-ymin)/(ymax-ymin)*(height-pad.top-pad.bottom);let svg='';for(let i=0;i<=4;i++){const value=ymin+(ymax-ymin)*i/4,y=scaleY(value);svg+=`<line x1="${pad.left}" y1="${y}" x2="${width-pad.right}" y2="${y}" stroke="#e6ebdf"/><text x="${pad.left-12}" y="${y+4}" text-anchor="end">${e(formatNumber(value))}</text>`;const xv=xmin+(xmax-xmin)*i/4;svg+=`<text x="${scaleX(xv)}" y="${height-17}" text-anchor="middle">${e(formatNumber(xv))}</text>`;}series.forEach((s,i)=>{const valid=(s.points||[]).filter(p=>p.x!=null&&p.y!=null&&Number.isFinite(Number(p.x))&&Number.isFinite(Number(p.y))),color=currentChartColors()[i%chartColors.length];if(valid.length>1)svg+=`<polyline points="${valid.map(p=>`${scaleX(p.x)},${scaleY(p.y)}`).join(' ')}" fill="none" stroke="${color}" stroke-width="2.2"/>`;if(valid.length===1)svg+=`<circle cx="${scaleX(valid[0].x)}" cy="${scaleY(valid[0].y)}" r="3" fill="${color}"/>`;});return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${e(key)} by training step">${svg}</svg><div class="chart-axis-label">Training step</div>`;}
-async function loadMetrics(force=false){const x=state.experiment;if(!x?.wandb_url)return;const existing=metricsCache.get(x.id);if(existing?.loading&&existing.url===x.wandb_url||!force&&existing?.loadedAt&&Date.now()-existing.loadedAt<60000&&existing.url===x.wandb_url)return;const entry={...(existing?.url===x.wandb_url?existing:{}),loading:true,url:x.wandb_url};metricsCache.set(x.id,entry);if(state.tab==='results'&&!state.edit&&!$('#modal').open)renderMain();try{entry.data=await api('metrics?id='+encodeURIComponent(x.id)+(force?'&refresh=1':''));entry.error=null;}catch(error){entry.error=error.message;}finally{entry.loading=false;entry.loadedAt=Date.now();if(state.experimentId===x.id&&state.tab==='results'&&!state.edit&&!$('#modal').open)renderMain();}}
+async function loadMetrics(force=false){const x=state.experiment;if(!x?.wandb_url)return;const existing=metricsCache.get(x.id);if(existing?.loading&&existing.url===x.wandb_url||!force&&existing?.loadedAt&&Date.now()-existing.loadedAt<60000&&existing.url===x.wandb_url)return;const entry={...(existing?.url===x.wandb_url?existing:{}),loading:true,url:x.wandb_url};metricsCache.set(x.id,entry);if(pageHasTile('results')&&!state.edit&&!$('#modal').open)renderMain();try{entry.data=await api('metrics?id='+encodeURIComponent(x.id)+(force?'&refresh=1':''));entry.error=null;}catch(error){entry.error=error.message;}finally{entry.loading=false;entry.loadedAt=Date.now();if(state.experimentId===x.id&&pageHasTile('results')&&!state.edit&&!$('#modal').open)renderMain();}}
 function hostObservation(h){const age=h.age_seconds!=null&&Number.isFinite(Number(h.age_seconds))?(Number(h.age_seconds)<60?'Just now':`${Math.floor(Number(h.age_seconds)/60)}m ago`):elapsed(h.observed_at),next=h.next_refresh_at?new Date(typeof h.next_refresh_at==='number'?h.next_refresh_at*1000:h.next_refresh_at).getTime():NaN,remaining=Number.isFinite(next)?Math.ceil((next-Date.now())/60000):null;return `Observed ${age}${remaining!==null?remaining>0?` · next refresh in ${remaining}m`:' · refresh due':''}`;}
 function renderHost(h){
  const gpus=registeredGPUs(h),free=gpus.filter(({device})=>gpuAvailability(h,device)==='free').length,unknown=gpus.filter(({device})=>gpuAvailability(h,device)==='unknown').length,observation=hostObservation(h),devices=h.devices||[];
@@ -893,7 +1134,7 @@ function bindDirectorySuggestions(){
   list.addEventListener('click',event=>{const option=event.target.closest('[data-directory-index]');if(option)choose(Number(option.dataset.directoryIndex));});
 }
 
-function showAddProject(){openModal('Add a project',`<p class="modal-description">Choose a project folder and its workflow. Project context is saved in <code>.SuperSurfer</code>.</p><form><div class="field-stack">${field('Project name','name',{placeholder:'my-project',required:true,help:'Lowercase letters, numbers, and hyphens.'})}${projectDirectoryField()}<label class="field"><span>Surfboard</span><select name="surfboard_template"><option value="research">Research · experiments, GPUs, W&B</option><option value="software">Software · features, checks, pull requests</option><option value="web">Web design · pages, browser, preview</option></select></label>${textarea('Project goal','goal',{placeholder:'What would you like to build or discover?'})}<div class="field-grid" id="new-project-compute">${field('GPU limit','gpu_limit',{type:'number',value:1,min:1,required:true})}${field('Concurrent run limit','run_limit',{type:'number',value:1,min:1,required:true})}</div></div>${formFooter('Add project')}</form>`,'project');bindDirectorySuggestions();$('#modal [name=surfboard_template]').addEventListener('change',event=>{$('#new-project-compute').hidden=event.target.value!=='research';});bindModalForm(async fd=>{const result=await action('project.add',{name:fd.get('name').trim(),repo:fd.get('repo').trim(),goal:fd.get('goal').trim(),surfboard_template:fd.get('surfboard_template'),gpu_limit:Number(fd.get('gpu_limit')),run_limit:Number(fd.get('run_limit'))});closeModal();await refreshState(true);const id=result.id||result.project?.id||state.data.projects.find(p=>p.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:id,tab:fd.get('surfboard_template')==='research'?'overview':'surfboard'});toast('Project connected.');});}
+function showAddProject(){openModal('Add a project',`<p class="modal-description">Choose a project folder and its workflow. Project context is saved in <code>.SuperSurfer</code>.</p><form><div class="field-stack">${field('Project name','name',{placeholder:'my-project',required:true,help:'Lowercase letters, numbers, and hyphens.'})}${projectDirectoryField()}<label class="field"><span>Surfboard</span><select name="surfboard_template"><option value="research">Research · experiments, GPUs, W&B</option><option value="software">Software · features, checks, pull requests</option><option value="web">Web design · pages, browser, preview</option></select></label>${textarea('Project goal','goal',{placeholder:'What would you like to build or discover?'})}<p class="muted small">No project GPU or concurrent-run cap by default. Add optional limits in the Surfboard’s Compute block.</p></div>${formFooter('Add project')}</form>`,'project');bindDirectorySuggestions();bindModalForm(async fd=>{const result=await action('project.add',{name:fd.get('name').trim(),repo:fd.get('repo').trim(),goal:fd.get('goal').trim(),surfboard_template:fd.get('surfboard_template')});closeModal();await refreshState(true);const id=result.id||result.project?.id||state.data.projects.find(p=>p.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:id,tab:fd.get('surfboard_template')==='research'?'overview':'surfboard'});toast('Project connected.');});}
 function showAddExperiment(){const p=project();if(!p)return showAddProject();openModal('New '+itemLabel(),`<p class="modal-description">Describe the work for ${e(p.name)}. Creating a ${e(itemLabel())} does not start execution.</p><form><div class="field-stack">${field(itemLabel().replace(/^./,c=>c.toUpperCase())+' name','name',{placeholder:'What should be done?',required:true})}${textarea('Brief explanation','summary',{placeholder:'The goal, scope, and how we will know it is complete.',required:true})}</div>${formFooter('Create '+itemLabel())}</form>`,'experiment');bindModalForm(async fd=>{const result=await action('experiment.create',{project_id:p.id,name:fd.get('name').trim(),summary:fd.get('summary').trim()});closeModal();await refreshState(true);const id=result.id||result.experiment?.id||state.data.experiments.find(x=>x.project_id===p.id&&x.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:p.id,experimentId:id});toast(itemLabel().replace(/^./,c=>c.toUpperCase())+' created.');});}
 function showAddHost(){openModal('Register a machine',`<p class="modal-description">Register the GPU indices this workspace can use. Leave the SSH target empty to use the workspace computer itself.</p><form><div class="field-stack"><div class="field-grid">${field('Display name','name',{placeholder:'Trinity',required:true})}${field('SSH target (optional)','target',{placeholder:'Empty = this workspace computer',help:'For another machine, use an SSH alias or user@hostname.'})}</div>${field('Working directory on this machine','root',{placeholder:'/home/researcher/supersurfer',required:true})}<div class="field-grid">${field('GPU indices','gpus',{placeholder:'0, 1, 2, 3',help:'Leave empty for a CPU-only machine.'})}${field('Runner Python (3.9+)','python',{value:'auto',required:true,help:'Auto finds a compatible interpreter. Separate from project Python; no AML installation is needed on the host.'})}</div></div>${formFooter('Register machine')}</form>`,'host');bindModalForm(async fd=>{const gpuText=fd.get('gpus').trim(),parts=gpuText?gpuText.split(',').map(s=>s.trim()):[];if(parts.some(p=>!/^[0-9]+$/.test(p)))throw new Error('Enter GPU indices separated by commas, such as 0, 1.');await action('host.add',{name:fd.get('name').trim(),target:fd.get('target').trim(),root:fd.get('root').trim(),gpus:[...new Set(parts.map(Number))],python:fd.get('python').trim()});closeModal();await refreshState(true);toast('Machine registered.');});}
 async function openExperimentWorker(scope=experimentWorkerScope()){
@@ -962,7 +1203,7 @@ async function perform(op,params={},success){try{await action(op,params);await r
 async function handleAction(name,el){switch(name){
  case 'toggle-agent-list':agentsExpanded=!agentsExpanded;try{localStorage.setItem('supersurfer-agents-expanded',String(agentsExpanded));}catch{}renderAgentChooser();break;
  case 'edit-brief':showEditBrief();break;
- case 'refresh-page':await loadMarkdownPage(state.experimentId,state.tab.slice(5));break;
+ case 'refresh-page':await loadMarkdownPage(state.experimentId,el.dataset.pageId||state.tab.slice(5));break;
  case 'select-result':resultSelections.set(state.experimentId,el.dataset.resultId);renderMain();if(el.dataset.resultId==='metrics')await loadMetrics(true);else await liveResults.refresh();break;
  case 'refresh-results':await loadResultPages(true);if(chosenResultPage())await liveResults.refresh();else await loadMetrics(true);break;
  case 'archive-agent':await toggleChatArchive();break;
@@ -981,8 +1222,10 @@ async function handleAction(name,el){switch(name){
  case 'refresh':await refreshState(true);if(state.view==='workspace'&&!state.experimentId&&state.tab==='compute')await loadProjectCompute(state.projectId,{force:true});await refreshChat(true);break;
  case 'auth':showAuth();break;
  case 'new-window':if(window.superSurferDesktop?.newWindow)await window.superSurferDesktop.newWindow();break;
- case 'toggle-chat':state.chatVisible=!state.chatVisible;applyChatLayout();persistNavigation();if(state.chatVisible)refreshChat(true);break;
- case 'maximize-chat':state.chatVisible=true;state.chatMaximized=!state.chatMaximized;applyChatLayout();persistNavigation();break;
+ case 'configure-layout':await showViewLayout();break;
+ case 'add-view-page':await showViewLayout({addPage:true});break;
+ case 'toggle-chat':state.chatVisible=$('#chat-panel').hidden;chatRevealScope=state.chatVisible?chatLayoutKey():null;if(state.chatVisible&&currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}applyChatLayout();dockChat();persistNavigation();if(state.chatVisible)refreshChat(true);break;
+ case 'maximize-chat':state.chatVisible=true;state.chatMaximized=!state.chatMaximized;applyChatLayout();dockChat();persistNavigation();break;
  case 'close-modal':closeModal();break;
  case 'add-project':showAddProject();break;
  case 'add-experiment':showAddExperiment();break;
@@ -990,7 +1233,7 @@ async function handleAction(name,el){switch(name){
  case 'resume-experiment-agent':await resumeExperimentAgent();break;
  case 'refresh-agents':await loadAgentDirectory();break;
  case 'add-host':showAddHost();break;
- case 'refresh-project-panel':await loadProjectPanel(state.tab,state.projectId,state.tab==='artifacts'?artifactPaths.get(state.projectId)||'':'');break;
+ case 'refresh-project-panel':{const kind=el.dataset.panelKind||el.closest('[data-tile-kind]')?.dataset.tileKind||state.tab;await loadProjectPanel(kind,state.projectId,kind==='artifacts'?artifactPaths.get(state.projectId)||'':'');break;}
  case 'export-diagnostics':await exportProjectDiagnostics();break;
  case 'project-compute':closeModal();await navigate({projectId:state.projectId,tab:'compute'});break;
  case 'onboard-project-host':await openHostOnboarding();break;
@@ -1032,7 +1275,7 @@ document.addEventListener('click',async event=>{const target=event.target.closes
  if(target.dataset.view){closeModal();await navigate({view:target.dataset.view});if(target.dataset.view==='settings')refreshAccountModels();return;}
  if(target.dataset.project){closeModal();await navigate({projectId:target.dataset.project});return;}
  if(target.dataset.experiment){const x=state.data.experiments.find(x=>x.id===target.dataset.experiment);if(x){closeModal();await navigate({projectId:x.project_id,experimentId:x.id});}return;}
- if(target.dataset.tab){if(state.edit)stashEditor();state.edit=false;const wasBoard=!!isSurfboard();state.tab=target.dataset.tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}else if(wasBoard&&!isSurfboard()&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}persistNavigation();syncAgentChooser();renderAgentChooser();refreshChat(true);renderMain();if(state.tab==='results'){loadResultPages(true).then(()=>chosenResultPage()?liveResults.refresh():loadMetrics(true));}if(state.tab==='compute'&&!state.experimentId)loadProjectCompute(state.projectId,{force:true}).catch(()=>{});return;}
+ if(target.dataset.tab){if(state.edit)stashEditor();state.edit=false;const wasBoard=!!isSurfboard();state.tab=target.dataset.tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}else if(wasBoard&&!isSurfboard()&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}persistNavigation();syncAgentChooser();renderAgentChooser();refreshChat(true);renderMain();if(pageHasTile('results')){if(state.experimentId)loadResultPages(true).then(()=>chosenResultPage()?liveResults.refresh():loadMetrics(true));else{for(const item of state.data.experiments.filter(x=>x.project_id===state.projectId))resultPages.delete(item.id);loadProjectResults();}}if(pageHasTile('compute')&&!state.experimentId)loadProjectCompute(state.projectId,{force:true}).catch(()=>{});return;}
  if(target.dataset.prompt){$('#chat-input').value=target.dataset.prompt;$('#chat-input').focus();return;}
  if(target.dataset.run){showRun(target.dataset.run);return;}
  }catch(error){toast(error.message,true);}});
@@ -1078,7 +1321,7 @@ setInterval(()=>{if(state.view==='settings')refreshAccountModels();},15000);
 window.addEventListener('supersurfer-theme',()=>{
  const appearance=$('.appearance-block');
  if(appearance){appearance.outerHTML=renderAppearance();$('#vscode-theme')?.addEventListener('change',event=>{if(event.target.value)window.superSurferTheme?.setPreference(event.target.value);});}
- if(state.view==='workspace'&&state.tab==='results'&&!state.edit&&!$('#modal').open)renderMain();
+ if(state.view==='workspace'&&pageHasTile('results')&&!state.edit&&!$('#modal').open)renderMain();
 });
 window.addEventListener('focus',syncClientTimezone);
 window.addEventListener('beforeunload',stashEditor);

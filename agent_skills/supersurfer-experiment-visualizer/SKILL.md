@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.24. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.25. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -17,6 +17,19 @@ requested methods. Select compatible protocols and axes, preserve actual splits,
 and explain exclusions or missing measurements. Keep source/experiment identities
 visible; do not automatically choose the newest run or merge recovery attempts.
 Use the existing report's identity and current content hash when updating it.
+
+The project and work-item layouts may display the same visualizer in different
+panes. Keep one report identity and source binding when its position changes;
+test the actual pane width instead of creating a second report for the sidebar.
+An unsaved HTML/code selection is proposed source, not a published result or a
+fresh measurement. Preserve shared-file edits and use the report's normal
+versioned publication path for a requested content change.
+
+A custom page can combine this visualization with Markdown, source and chat tiles.
+Keep comparison meaning and source identities intact at each size. A narrow tile
+may need the view's expand control; it does not justify dropping held-out curves
+or inventing another report. Use page configuration for arrangement and the
+existing publishing tool only when the requested report content actually changes.
 
 Use `publish_training_results` for the live comparison. Choose individual W&B
 writers, actual history keys and meaningful method labels; keep training solid,

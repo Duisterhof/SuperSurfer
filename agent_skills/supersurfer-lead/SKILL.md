@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.24. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.25. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -21,6 +21,10 @@ user's goal through follow-ups and reconnects; a status question does not cancel
 it. Keep `update_task` records accurate until the requested outcome is verified.
 An accepted handoff or ended worker turn is not delivery. Continue independent
 work while a bounded dependency is outstanding; avoid repeated status requests.
+Record the requested deliverable before actionable work. Completion evidence must
+cover the original assignment and later clarifications, not just a passed check,
+accepted handoff or prepared protocol. If an application completion review finds
+remaining authorized work, reopen the same task and finish it within your role.
 
 For a new requested experiment, `create_experiment` takes `name`, `summary` and a
 stable `request_id` (16–100 ASCII letters, digits, underscores or hyphens). Reuse
@@ -81,6 +85,9 @@ candidate to the existing queued run; a pool edit alone does not. Apply an expli
 `set_project_limits`; do not request manager review of that same decision.
 GPU and concurrent-run limits are independent; later user changes take precedence
 over temporary restoration.
+Both accept a number or `unlimited`; new projects have no default cap for either.
+Preserve existing caps unless explicitly changed. Read live limits through
+`inspect_project_compute` or `read_surfboard`; unavailable readings remain unknown.
 
 Use [the Results skill](../supersurfer-results/SKILL.md) for reports. Prefer
 `publish_training_results` for live training comparisons, requested held-out/EEF
@@ -97,6 +104,20 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+The user can edit the same repository in the Code editor. Include relevant file
+ownership and the user's selected-code context in a handoff; an unsaved selection
+is not necessarily the disk version. Keep overlapping edits with their existing
+owner and preserve unrelated changes. Recorded agent patches help review a change
+but are not a complete history of shell edits or a new PR gate. See
+[editor collaboration](../supersurfer-code-editor/SKILL.md). Changing project or
+experiment pane placement does not change these responsibilities or launch rights.
+
+A custom page can put a worker's chat beside its files, patch history and results.
+Those tiles refer to existing owners and artifacts. Do not create another worker
+or reporting task because the same experiment appears on a second page. Project
+and default experiment page compositions belong to the configurator; preserve an
+individual experiment's explicit page override when discussing the result.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named

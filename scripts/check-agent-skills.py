@@ -14,6 +14,7 @@ CAPABILITY_GUIDANCE = {
     "workflow": ("read_surfboard", "inspect_board_data", "run_board_action", "update_task", "handoff_work_item", "create_work_item", "create_work_item_agent", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"),
     "wandb-data": ("read_surfboard", "inspect_board_data", "propose_surfboard"),
     "experiment-visualizer": ("inspect_board_data", "publish_training_results", "publish_result", "publish_markdown_tab"),
+    "code-editor": (),  # Visual collaboration guidance; this block grants no MCP tool.
 }
 
 

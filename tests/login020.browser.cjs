@@ -25,12 +25,12 @@ const {install}=require('./fixtures/workspace-demo.cjs');
   await page.locator('#account-check').click();await gate.waitFor({state:'hidden'});assert.equal(await page.locator('#chat-send').isEnabled(),true);
   await page.reload();await page.locator('#chat-send:enabled').waitFor();assert.equal(await gate.isVisible(),false);assert.equal(logins,2);
   // A second host has its own account even when this host is signed in.
-  const other=await browser.newPage();await install(other);await other.route('http://demo.test/api/account',route=>route.fulfill({json:{account:null,login_required:true}}));await other.goto('http://demo.test/');await other.locator('#account-gate').waitFor();assert.equal(await gate.isVisible(),false);await other.close();
+  const other=await browser.newPage();await install(other);await other.route('http://demo.test/api/account',route=>route.fulfill({json:{account:null,login_required:true}}));await other.goto('http://demo.test/');await other.locator('#account-gate').waitFor();assert.equal(await gate.isVisible(),false);await other.unrouteAll({behavior:'wait'});await other.close();
   // Account check failures fail closed, preserve the draft, and recover without login when healthy.
   await page.locator('#chat-input').fill('Keep this direction');broken=true;
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.getByText('Host account check unavailable',{exact:true}).waitFor();
   assert.equal(await page.locator('#chat-send').isDisabled(),true);broken=false;await page.locator('#account-check').click();await gate.waitFor({state:'hidden'});assert.equal(await page.locator('#chat-input').inputValue(),'Keep this direction');
   assert.deepEqual(errors,[]);assert.ok(reads>=7);
   console.log('PASS required host login, no Escape bypass, device-code expiry/retry, completion, reconnect, independent hosts, unavailable checks and draft preservation');
- }finally{await browser.close();}
+ }finally{for(const context of browser.contexts())for(const page of context.pages())await page.unrouteAll({behavior:'ignoreErrors'});await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

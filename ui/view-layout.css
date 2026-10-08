@@ -1,0 +1,68 @@
+/* One resizable side dock, with independently configurable views and chat. */
+#view-dock{width:var(--chat-panel-width,390px);flex:0 0 var(--chat-panel-width,390px);min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px}
+#view-dock[hidden]{display:none}
+:root #view-dock>.chat-panel{width:100%;max-width:none;flex:1;min-height:160px;position:relative;inset:auto}
+:root #view-dock>.chat-panel[hidden]{display:none}
+:root #view-dock:not(.views-only)>.chat-panel{min-height:min(320px,54vh)}
+#view-dock>#project-view-panels{border:1px solid var(--panel-edge,var(--line));border-radius:var(--panel-radius,12px);background:var(--floating-glass,var(--bg));box-shadow:var(--panel-shadow);max-height:50%;min-height:0}
+#view-dock.views-only>#project-view-panels{max-height:100%;flex:1}
+/* Flatten the view group into flex items so chat can be ordered between any
+   two side views, while preserving the group's event delegation. */
+#view-dock>#project-view-panels{display:contents}
+#view-dock>#project-view-panels[hidden]{display:none}
+#view-dock .project-view-slot{flex:0 1 auto;min-height:32px;overflow:auto;border:1px solid var(--panel-edge,var(--line));border-radius:var(--panel-radius,12px);background:var(--floating-glass,var(--bg))}
+#view-dock.views-only .project-view-slot[data-kind=editor]{flex:1}
+.project-view-slot[data-kind=editor]>.project-view-slot-body{height:440px;max-height:60vh;padding:0;overflow:hidden}
+.project-view-slot[data-kind=editor] .code-editor-root{height:100%;min-height:220px}
+#view-dock:not(.views-only) .project-view-slot[data-kind=editor][open]{flex:0 1 40%;min-height:190px}
+#view-dock:not(.views-only) .project-view-slot[data-kind=editor]>.project-view-slot-body{height:clamp(160px,25vh,300px);max-height:none}
+#view-dock:not(.views-only) .project-view-slot[data-kind=editor] .code-editor-root{min-height:160px}
+.project-view-slot .page{padding:12px}
+.project-view-slot .page-heading h1{font-size:17px}
+.project-view-slot .sb-project-tabs,.project-view-slot .configured-tabs{display:none}
+.configured-editor-main{overflow:hidden!important;display:flex;min-height:0}
+.configured-page{display:flex;flex-direction:column;width:100%;min-width:0;min-height:0;height:100%;padding:12px 16px}
+.configured-heading{display:flex;align-items:center;gap:16px;min-height:30px;flex:none}
+.configured-heading strong{font-size:14px;white-space:nowrap}
+.configured-heading span{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.configured-tabs{flex:none;display:flex;flex-wrap:wrap;margin:6px 0 12px;gap:2px}
+.configured-tabs .tab{font-size:12px;padding:7px 10px}
+.configured-tabs .layout-tab{margin-left:auto}
+.configured-view-content{flex:1;min-height:0;min-width:0;overflow:auto}
+.configured-editor-main .configured-view-content{display:flex;overflow:hidden}
+.configured-view-content>.code-editor-root{height:100%;width:100%;min-height:260px}
+#main-chat-host{display:flex;width:100%;min-height:0}
+:root #main-chat-host>.chat-panel{width:100%;max-width:none;flex:1;border:0;box-shadow:none;background:transparent;position:relative;inset:auto}
+.layout-document{border-bottom:1px solid var(--line);padding:10px 0}
+.layout-document>summary{cursor:pointer;font-weight:550}
+.layout-result-group>iframe{width:100%;height:70vh;border:0;border-radius:8px;background:var(--bg)}
+.layout-result-group>h3{font-size:16px}.layout-result-group>h4{font-size:13px;color:var(--muted)}
+.configured-view-content>.managed-preview{width:100%;height:100%;min-height:400px;border:0}
+.app-shell.chat-maximized #view-dock{width:100%;flex:1;max-width:none}
+.app-shell.chat-maximized #view-dock>#project-view-panels{display:none}
+.app-shell.chat-maximized #view-dock>.chat-panel{max-width:none}
+#modal:has(#item-layout-editor){width:min(960px,95vw)}
+@media(max-width:1000px){.configured-page{padding:10px}.configured-heading span{display:none}.configured-tabs .tab{font-size:11px;padding:6px}}
+@media(max-width:760px){#view-dock{position:absolute;right:0;top:0;bottom:0;z-index:5;max-width:100%;background:var(--bg)}.app-shell.chat-maximized #view-dock{position:relative}.configured-heading{padding-right:25px}}
+/* Named pages combine bounded tiles; their contents share the same project. */
+.tile-page{padding:14px 18px;min-width:0}
+.tile-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tile-page-heading span{font-size:11px;color:var(--muted)}
+.tile-page-heading h1{font-size:19px;margin:3px 0 8px}
+.page-tile-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;align-items:start}
+.page-tile{grid-column:span var(--tile-span,12);height:var(--tile-height,400px);min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid var(--panel-edge,var(--line));border-radius:12px;background:var(--floating-glass,var(--bg));box-shadow:var(--panel-shadow)}
+.page-tile-heading{font-size:11px;font-weight:600;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
+.page-tile-body{flex:1;min-width:0;min-height:0;overflow:auto;padding:12px}
+.page-tile[data-tile-kind=editor]>.page-tile-body,.page-tile[data-tile-kind=file_explorer]>.page-tile-body,.page-tile[data-tile-kind=agent_changes]>.page-tile-body,.page-tile[data-tile-kind=chat]>.page-tile-body,.page-tile[data-tile-kind=results]>.page-tile-body,.page-tile[data-tile-kind=preview]>.page-tile-body{padding:0}
+.page-tile .code-editor-root,.page-tile .code-tile-root,.page-tile #main-chat-host{height:100%;min-height:0}
+.page-tile .results-surface{display:flex;flex-direction:column;height:100%;min-height:0}
+.page-tile .result-preview,.page-tile .managed-preview{flex:1;width:100%;height:100%;min-height:0;border:0}
+.page-tile .page{padding:12px}.page-tile .page-heading h1{font-size:16px}.page-tile .page-heading p{font-size:12px}
+.page-tile .page-heading{margin-bottom:12px;flex-wrap:wrap}
+.tile-work-item{display:block;text-align:left;border:1px solid var(--line);background:transparent;border-radius:8px;padding:10px;margin:8px 0;width:100%;color:var(--text)}
+.tile-work-item>.badge{float:right}.tile-work-item p{font-size:12px;color:var(--muted);margin:6px 0 0}
+.page-tile-grid>.empty-state{grid-column:1/-1}
+.page-dock-settings{margin-top:14px}.page-dock-settings>summary{cursor:pointer;color:var(--muted);font-size:12px;padding:10px 0}
+#modal:has(#item-pages-editor){width:min(1080px,96vw)}
+@media(max-width:900px){.page-tile{grid-column:1/-1}.tile-page{padding:10px}}
+#main.tiled-page-main{padding:0}

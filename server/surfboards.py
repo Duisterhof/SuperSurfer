@@ -36,10 +36,10 @@ ROLE_TOOLS = {
 }
 ALL_TOOLS = sorted(set.union(*ROLE_TOOLS.values()))
 GATE_REQUIREMENTS = ("user_authorization", "exact_commit", "verified_pr")
-KINDS = ("brief", "agent", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "approval", "document", "timer", "artifacts", "activity")
+KINDS = ("brief", "agent", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "approval", "document", "timer", "artifacts", "activity", "editor")
 ACTION_KINDS = {"code", "check", "preview"}
-VIEW_KINDS = {"results", "visualizer", "document", "artifacts", "activity", "preview"}
-SOURCE_KINDS = {"brief", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "document", "artifacts", "activity"}
+VIEW_KINDS = {"results", "visualizer", "document", "artifacts", "activity", "preview", "editor"}
+SOURCE_KINDS = {"brief", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "document", "artifacts", "activity", "editor"}
 RELATIONS = ("feeds", "requires", "owns", "handoff", "triggers", "recovers")
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$")
 MAX_BYTES = 256 * 1024
@@ -68,6 +68,7 @@ def catalog():
     descriptions = {
         "brief": ("Brief", "The goal, scope and acceptance criteria for a work item.", ["context"], ["context"]),
         "agent": ("Agent", "A lead or worker with instructions and a bounded set of project tools.", ["task", "context", "event"], ["task", "artifact"]),
+        "editor": ("Code editor", "Browse and edit repository files in a visual editor. This view grants no command or agent permissions.", ["source", "context"], ["source"]),
         "code": ("Code", "Implementation work and an optional named command in the project repository.", ["context", "evidence"], ["source", "artifact"]),
         "check": ("Check", "A repeatable command whose recorded success can gate the next step.", ["source", "evidence"], ["evidence"]),
         "experiment": ("Experiment", "A recorded research run using committed source and managed resources.", ["source", "evidence", "resources"], ["run", "metrics"]),
@@ -102,6 +103,10 @@ def catalog():
                           order={"type": "integer", "minimum": 0, "maximum": 1000, "default": 50})
         if kind in ACTION_KINDS | {"experiment", "compute"}:
             fields["recovery_attempts"] = {"type": "integer", "minimum": 1, "maximum": 3, "default": 3}
+        if kind == "compute":
+            for key, minimum, limit_label in (("gpu_limit", 0, "GPU allocation"), ("run_limit", 1, "Concurrent runs")):
+                fields[key] = {"type": ["integer", "string"], "minimum": minimum, "maximum": 1024,
+                               "default": "unlimited", "description": limit_label + ": a number or 'unlimited'. No cap by default."}
         if kind == "approval":
             fields["requirements"] = {"type": "array", "items": {"type": "string", "enum": list(GATE_REQUIREMENTS)}, "default": ["user_authorization"]}
         if kind == "wandb":
@@ -121,6 +126,8 @@ def catalog():
                "ports": {"inputs": inputs, "outputs": outputs}, "config_fields": fields, "relations": _relations(kind)}
         if kind in {"wandb", "visualizer"}:
             row["skills"] = ["supersurfer-wandb-data" if kind == "wandb" else "supersurfer-experiment-visualizer"]
+        if kind == "editor":
+            row["skills"] = ["supersurfer-code-editor"]
         answer.append(row)
     return answer
 
@@ -162,10 +169,11 @@ def template(workflow="research"):
                   _edge("experiment", "worker", "recovers"), _edge("worker", "compute", "owns"),
                   _edge("monitor", "worker", "triggers")]
     else:
-        nodes += [_node("checks", "check", "Project checks", 590, 190),
+        nodes += [_node("editor", "editor", "Code editor", 590, 580, order=25),
+                  _node("checks", "check", "Project checks", 590, 190),
                   _node("preview", "preview", "App preview" if workflow == "software" else "Browser preview", 840, 190),
                   _node("results", "results", "Review", 1090, 190)]
-        edges += [_edge("code", "checks", "feeds"), _edge("checks", "preview", "requires"),
+        edges += [_edge("brief", "editor", "feeds"), _edge("code", "checks", "feeds"), _edge("checks", "preview", "requires"),
                   _edge("preview", "results", "feeds"), _edge("checks", "worker", "recovers")]
         if workflow == "web":
             nodes.append(_node("visual_checks", "document", "Visual review", 840, 390, format="markdown",
@@ -232,7 +240,7 @@ def validate(board, *, allow_pending=False):
         if isinstance(error, SurfboardError):
             raise
         _fail("board", "must contain finite JSON values")
-    _fields(board, {"schema", "name", "workflow", "nodes", "edges", "defaults"}, "board")
+    _fields(board, {"schema", "name", "workflow", "nodes", "edges", "defaults", "layouts", "pages"}, "board")
     if type(board.get("schema")) is not int or board["schema"] != 1:
         _fail("schema", "only schema version 1 is supported")
     name = _text(board.get("name"), "name", 100, 1, False).strip()
@@ -263,7 +271,13 @@ def validate(board, *, allow_pending=False):
             field_path, spec = path + ".config." + field, fields[field]
             if "enum" in spec and value not in spec["enum"]:
                 _fail(field_path, "choose a supported value")
-            if spec["type"] == "string":
+            if kind == "compute" and field in {"gpu_limit", "run_limit"}:
+                from .project_limits import encode_limit
+                try:
+                    encode_limit(field, value)
+                except ValueError as error:
+                    _fail(field_path, str(error))
+            elif spec["type"] == "string":
                 _text(value, field_path, spec.get("maxLength", 100), 0)
             elif spec["type"] == "integer":
                 _number(value, field_path, spec["minimum"], spec["maximum"], True)
@@ -300,6 +314,15 @@ def validate(board, *, allow_pending=False):
         nodes.append({"id": key, "kind": kind, "label": _text(raw.get("label", definitions[kind]["label"]), path + ".label", 100, 1, False).strip(),
                       "x": _number(raw.get("x", 0), path + ".x", -100000, 100000),
                       "y": _number(raw.get("y", 0), path + ".y", -100000, 100000), "config": config})
+    limit_policy = {}
+    for node in nodes:
+        if node["kind"] != "compute":
+            continue
+        for key in ("gpu_limit", "run_limit"):
+            if key in node["config"]:
+                if key in limit_policy and node["config"][key] != limit_policy[key]:
+                    _fail("nodes", "Compute blocks share one project budget; conflicting " + key + " values are not allowed")
+                limit_policy[key] = node["config"][key]
     by_id, edges, edge_ids, connections = {node["id"]: node for node in nodes}, [], set(), set()
     for i, raw in enumerate(raw_edges):
         path = f"edges[{i}]"
@@ -361,7 +384,210 @@ def validate(board, *, allow_pending=False):
         _fail("defaults.fast_mode", "must be true or false")
     if defaults.setdefault("data_sharing", "project") not in ("project", "item"):
         _fail("defaults.data_sharing", "choose project or item")
-    return {"schema": 1, "name": name, "workflow": workflow, "nodes": nodes, "edges": edges, "defaults": defaults}
+    result = {"schema": 1, "name": name, "workflow": workflow, "nodes": nodes, "edges": edges, "defaults": defaults}
+    if "layouts" in board:
+        _fields(board["layouts"], {"project", "item"}, "layouts")
+        result["layouts"] = {level: validate_layout(rows, result, level) for level, rows in board["layouts"].items()}
+    if "pages" in board:
+        _fields(board["pages"], {"project", "item"}, "pages")
+        result["pages"] = {level: validate_pages(pages, result, level) for level, pages in board["pages"].items()}
+    return result
+
+
+# Layouts are presentation only. They are compiled independently of capability
+# reachability: showing or hiding a page never grants or removes a managed tool.
+_LAYOUT_DEFINITIONS = (
+    ("overview", "Overview", ("brief",)),
+    ("compute", "Compute", ("compute",)),
+    ("runs", "Runs", ("experiment",)),
+    ("results", "Results", ("results", "visualizer", "wandb")),
+    ("documents", "Documents", ("document",)),
+    ("artifacts", "Files", ("artifacts",)),
+    ("activity", "Activity", ("activity",)),
+    ("editor", "Code editor", ("editor",)),
+    ("chat", "Agent chat", ("agent",)),
+    ("preview", "Preview", ("preview",)),
+)
+
+
+def layout_catalog(board, level="item"):
+    """Semantic views available to this scope, with source blocks for runtime use."""
+    if level not in ("project", "item"):
+        _fail("layouts", "choose project or item")
+    kinds = {node["kind"] for node in board["nodes"]}
+    result = []
+    for key, label, source_kinds in _LAYOUT_DEFINITIONS:
+        if key == "compute" and (level != "project" or board["workflow"] != "research"):
+            continue
+        if key in {"editor", "preview"} and key not in kinds:
+            continue
+        if key == "results" and board["workflow"] != "research" and not kinds.intersection({"results", "visualizer", "wandb", "preview"}):
+            continue
+        sources = [node for kind in source_kinds for node in board["nodes"] if node["kind"] == kind]
+        row = {"id": key, "kind": key, "label": label}
+        if sources:
+            row.update(node_id=sources[0]["id"], node_ids=[node["id"] for node in sources])
+        result.append(row)
+    return result
+
+
+def validate_layout(rows, board, level="item"):
+    """Validate portable rows for a board or an individual work-item override.
+
+    Omitted available views are hidden. Empty layouts are valid: the app always
+    keeps its Layout control outside the configurable pages as a recovery path.
+    """
+    available = {row["id"] for row in layout_catalog(board, level)}
+    path = "layouts." + level
+    if not isinstance(rows, list) or len(rows) > len(_LAYOUT_DEFINITIONS):
+        _fail(path, "must be a list of available views")
+    seen, result = set(), []
+    for index, raw in enumerate(rows):
+        at = f"{path}[{index}]"
+        _fields(raw, {"id", "placement", "order"}, at)
+        key = raw.get("id")
+        if not isinstance(key, str) or key not in available:
+            _fail(at + ".id", "choose a view available in this scope")
+        if key in seen:
+            _fail(at + ".id", "view IDs must be unique within a scope")
+        seen.add(key)
+        placement = raw.get("placement")
+        if placement not in ("main", "right", "hidden"):
+            _fail(at + ".placement", "choose main, right or hidden")
+        result.append({"id": key, "placement": placement,
+                       "order": _number(raw.get("order", index * 10), at + ".order", 0, 1000, True)})
+    return sorted(result, key=lambda row: (row["order"], row["id"]))
+
+
+def _default_layout(board, level):
+    """Keep previous navigation until a scope is explicitly arranged."""
+    defaults = {"overview": ("main", 0), "chat": ("right", 100),
+                "activity": ("right", 50), "editor": ("main", 25)}
+    if level == "project":
+        defaults.update(compute=("main", 10), artifacts=("main", 40))
+    else:
+        defaults.update(runs=("main" if board["workflow"] == "research" else "hidden", 10),
+                        results=("main", 20), documents=("main", 30))
+    by_id = {node["id"]: node for node in board["nodes"]}
+    answer = []
+    for row in layout_catalog(board, level):
+        key = row["id"]
+        placement, order = defaults.get(key, ("hidden", 90))
+        node = by_id.get(row.get("node_id"), {})
+        config = node.get("config", {})
+        # 0.1.24 right panels were explicit and visible in both scopes.
+        if key in {"results", "documents", "artifacts", "activity", "editor"}:
+            if config.get("placement") == "right":
+                placement = "right"
+            elif key == "activity" and config.get("placement") == "main":
+                placement = "main"
+            if "order" in config:
+                order = config["order"]
+        answer.append({"id": key, "placement": placement, "order": order})
+    return answer
+
+
+def compile_layouts(board):
+    """Resolve both independent scope layouts; retain hidden entries for editing."""
+    layouts = {}
+    for level in ("project", "item"):
+        available = layout_catalog(board, level)
+        raw = board.get("layouts", {}).get(level)
+        rows = _default_layout(board, level) if raw is None else validate_layout(raw, board, level)
+        by_id = {row["id"]: row for row in rows}
+        layouts[level] = sorted([{**view, **by_id.get(view["id"], {"placement": "hidden", "order": 1000})}
+                                 for view in available], key=lambda row: (row["order"], row["id"]))
+    return layouts
+
+
+def tile_catalog(board, level="item"):
+    """Code tiles expose authenticated repository views, never agent capabilities."""
+    result = [{**row, "title": row["label"]} for row in layout_catalog(board, level)]
+    editor = next((row for row in result if row["kind"] == "editor"), None)
+    if editor is None:
+        editor = {"id": "editor", "kind": "editor", "label": "Code editor", "title": "Code editor"}
+        result.append(editor)
+    for kind, title in (("file_explorer", "Repository files"), ("agent_changes", "Agent changes")):
+        result.append({**editor, "id": kind, "kind": kind, "label": title, "title": title})
+    return result
+
+
+def _page_identifier(value, path):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", value):
+        _fail(path, "must be 1–64 letters, numbers, underscores or hyphens")
+    if value.lower() in {"surfboard", "empty-layout"}:
+        _fail(path, "this ID is reserved for workspace navigation")
+    return value
+
+
+def validate_pages(pages, board, level="item"):
+    """Ordered pages and tiles are presentation only, with bounded grid sizes."""
+    available = {row["kind"] for row in tile_catalog(board, level)}
+    path = "pages." + level
+    if not isinstance(pages, list) or len(pages) > 24:
+        _fail(path, "must be a list with at most 24 pages")
+    page_ids, result = set(), []
+    for index, page in enumerate(pages):
+        at = f"{path}[{index}]"
+        _fields(page, {"id", "title", "tiles"}, at)
+        page_id = _page_identifier(page.get("id"), at + ".id")
+        if page_id in page_ids:
+            _fail(at + ".id", "page IDs must be unique within a scope")
+        page_ids.add(page_id)
+        title = _text(page.get("title"), at + ".title", 100, 1, False).strip()
+        tiles = page.get("tiles")
+        if not isinstance(tiles, list) or len(tiles) > 16:
+            _fail(at + ".tiles", "must be a list with at most 16 tiles")
+        tile_ids, tile_kinds, normalized = set(), set(), []
+        for tile_index, tile in enumerate(tiles):
+            tile_at = f"{at}.tiles[{tile_index}]"
+            _fields(tile, {"id", "kind", "span", "height"}, tile_at)
+            tile_id = _page_identifier(tile.get("id"), tile_at + ".id")
+            kind = tile.get("kind")
+            if not isinstance(kind, str) or kind not in available:
+                _fail(tile_at + ".kind", "choose a tile available in this scope")
+            if tile_id in tile_ids:
+                _fail(tile_at + ".id", "tile IDs must be unique within a page")
+            if kind in tile_kinds:
+                _fail(tile_at + ".kind", "a page can contain only one tile of each kind")
+            tile_ids.add(tile_id)
+            tile_kinds.add(kind)
+            normalized.append({"id": tile_id, "kind": kind,
+                               "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12, True),
+                               "height": _number(tile.get("height", 400), tile_at + ".height", 160, 1200, True)})
+        result.append({"id": page_id, "title": title, "tiles": normalized})
+    return result
+
+
+def compile_pages(board):
+    """Old main views become one-tile pages without writing a migration."""
+    layouts = compile_layouts(board)
+    result = {}
+    for level in ("project", "item"):
+        pages = board.get("pages", {}).get(level)
+        if pages is None:
+            pages = [{"id": row["id"], "title": row["label"],
+                      "tiles": [{"id": row["id"], "kind": row["kind"], "span": 12, "height": 400}]}
+                     for row in layouts[level] if row["placement"] == "main"]
+        result[level] = validate_pages(pages, board, level)
+    return result
+
+
+def configured_limits(board):
+    """Only explicitly configured caps; omission never edits a legacy scheduler."""
+    result = {}
+    for node in board["nodes"]:
+        if node["kind"] == "compute":
+            result.update({key: node.get("config", {})[key] for key in ("gpu_limit", "run_limit") if key in node.get("config", {})})
+    return result
+
+
+def with_limits(board, limits):
+    result = deepcopy(board)
+    for node in result["nodes"]:
+        if node["kind"] == "compute":
+            node.setdefault("config", {}).update({key: limits[key] for key in ("gpu_limit", "run_limit")})
+    return result
 
 
 def compile_board(board):
@@ -504,7 +730,10 @@ def compile_board(board):
     return {"workflow": workflow, "item_label": {"research": "Experiment", "software": "Feature", "web": "Design task"}[workflow],
             "tabs": tabs, "tools_by_role": tools_by_role, "requirements": requirements, "defaults": deepcopy(board["defaults"]),
             "instructions": instructions, "actions": actions, "actions_by_role": actions_by_role, "data_sharing": board["defaults"]["data_sharing"],
-            "data_sources": data_sources, "visualizers": visualizers, "timers": timers, "recovery": recovery, "views": views, "warnings": warnings}
+            "data_sources": data_sources, "visualizers": visualizers, "timers": timers, "recovery": recovery, "views": views,
+            "layouts": compile_layouts(board), "pages": compile_pages(board),
+            "limits": {"gpu_limit": "unlimited", "run_limit": "unlimited", **configured_limits(board)},
+            "available_tiles": {level: tile_catalog(board, level) for level in ("project", "item")}, "warnings": warnings}
 
 
 def diff_summary(before, after):
@@ -528,6 +757,11 @@ def diff_summary(before, after):
         result.append("Update workflow connections and their meaning.")
     if before["defaults"] != after["defaults"]:
         result.append("Change project defaults.")
+    for level in ("project", "item"):
+        if before.get("layouts", {}).get(level) != after.get("layouts", {}).get(level):
+            result.append("Arrange " + ("project" if level == "project" else "work-item") + " views.")
+        if before.get("pages", {}).get(level) != after.get("pages", {}).get(level):
+            result.append("Update " + ("project" if level == "project" else "work-item") + " pages and tiles.")
     return result or ["Update the diagram layout."]
 
 
@@ -578,7 +812,7 @@ class Surfboards:
         if actual != expected_draft_version or (not actual and not allow_new):
             raise SurfboardError("The surfboard draft changed. Reload it to preserve the newer edits.", 409)
 
-    def save_draft(self, project_id, board, expected_version, expected_draft_version=None):
+    def save_draft(self, project_id, board, expected_version, expected_draft_version=None, *, limits_baseline=None):
         board = validate(board, allow_pending=True)
         errors = []
         try:
@@ -590,12 +824,16 @@ class Surfboards:
             record["next_draft_version"] = record.get("next_draft_version", 0) + 1
             record["draft"] = {"board": board, "draft_version": record["next_draft_version"], "base_version": record["version"],
                                "summary": diff_summary(record["board"], board), "errors": errors, "updated_at": time.time()}
+            if limits_baseline is not None:
+                record["draft"]["limits_baseline"] = deepcopy(limits_baseline)
         return self._mutate(project_id, expected_version, change)
 
-    def apply(self, project_id, expected_version, expected_draft_version):
+    def apply(self, project_id, expected_version, expected_draft_version, *, board_override=None):
         def change(record):
             self._expect_draft(record, expected_draft_version)
-            board = validate(record["draft"]["board"])
+            if record["draft"]["base_version"] != record["version"]:
+                raise SurfboardError("The active project policy changed. Reread and reconcile this draft before applying.", 409)
+            board = validate(board_override if board_override is not None else record["draft"]["board"])
             compile_board(board)
             history = record.setdefault("history", [])
             history.append({"version": record["version"], "board": record["board"], "replaced_at": time.time()})
@@ -604,6 +842,26 @@ class Surfboards:
             record["board"] = board
             record["draft"] = None
         return self._mutate(project_id, expected_version, change)
+
+    def sync_limits(self, project_id, limits):
+        """Mirror confirmed scheduler edits, invalidating stale draft versions."""
+        key = self._key(project_id)
+        with self.store.lock:
+            self.store.db.execute("BEGIN IMMEDIATE")
+            try:
+                record = self._record(project_id)
+                board = with_limits(record["board"], limits)
+                if board != record["board"]:
+                    history = record.setdefault("history", [])
+                    history.append({"version": record["version"], "board": record["board"], "replaced_at": time.time()})
+                    record["history"] = history[-30:]
+                    record.update(version=record["version"] + 1, board=validate(board))
+                    self.store.db.execute("INSERT OR REPLACE INTO kv VALUES (?,?)", (key, json.dumps(record)))
+                self.store.db.commit()
+            except BaseException:
+                self.store.db.rollback()
+                raise
+        return self._public(project_id, record)
 
     def discard(self, project_id, expected_version, expected_draft_version):
         def change(record):
