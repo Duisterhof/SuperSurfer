@@ -1,3 +1,51 @@
+## 0.1.26 contained paper builds and responsive scheduling
+
+- Writing is an independent Surfboard workflow. Its default graph grants source,
+  document, artifact and LaTeX capabilities, without research/GPU/W&B requirements.
+  LaTeX tools are scoped by project, work item and connected role. Starts obey
+  configured exact-commit/PR/check requirements. Omitted operation is guarded as
+  start, matching the runtime; raw HTTP callers cannot skip a gate that way. Gated
+  compilation binds the admitted saved-source digest to the immutable copied source;
+  a concurrent edit rejects that build before any compiler executes.
+- `compile_latex` supports start/status/inspect/stop/publish. A stable request ID
+  identifies one build across lost replies, restarts and history pruning. Starting,
+  stopping and publishing require active user-requested work. Inspection and status
+  only read scoped builds. UI actions require authenticated workspace access.
+- Builds snapshot saved Git tracked/nonignored source without following links or
+  including private state. They use fixed pdfLaTeX/BibTeX commands in a networkless
+  bubblewrap namespace with read-only source, writable isolated output, no shell
+  escape and no home directory. Unsupported containment fails explicitly.
+- Source is bounded to 100 MiB/10,000 files, logs 256 KiB, PDF 50 MiB, output 100 MiB/2,000
+  files, process address space 1 GiB and configured wall time1–300 seconds (default 120).
+  At most four builds run per workspace and one per repository/paper path. Source
+  snapshots and scratch outputs are cleaned; retain 20 recent builds per paper plus
+  its last successful PDF. Explicitly published artifacts have independent retention.
+- PDF inspection mounts only the exact completed PDF, uses fixed contained Poppler
+  commands, and returns bounded text/page images through native MCP image blocks.
+  It returns build identity and source freshness, never a private service path.
+  Browser PDFs use authenticated-issued, expiring capabilities with range support.
+  PDF.js workers/fonts are bundled locally; viewer scripting is disabled.
+- A failed/new build never substitutes a partial PDF for the last good output.
+  Unknown source freshness is distinct from changed source. Auto compilation is
+  opt-in for a visible view, waits for confirmed saves, respects dirty buffers and
+  stops on navigation. Leaving the view does not cancel an already accepted build.
+- Explicit Chat Stop cancels only builds created by that agent scope; direct user
+  compiler work retains its separate Stop control. Restart interrupts in-flight
+  builds without replaying them and preserves prior successful PDFs. Activity and
+  diagnostic exports include bounded compiler lifecycle metadata, not source/PDFs.
+- Starting/cancelling runner checks use a one-second interval for 30 seconds, then
+  the ordinary ten-second interval. Terminal confirmation releases owned capacity,
+  wakes scheduling and coalesces fresh host probes to at most once per 10 seconds.
+  Physical occupancy remains authoritative; unrelated processes are not treated
+  as free. Node admission with stale observations uses the same bounded event
+  refresh. A recovered host clears the owned-run status backoff without releasing
+  uncertain reservations. Idle-host probes remain five minutes, with failure backoff.
+- Successful `acquire_new_node` remembers newly prepared nodes by default only
+  after their exact source/environment/data checks and run admission succeed.
+  Pool edits use a version check and preserve other nodes, shared defaults,
+  existing disabled entries and GPU masks. A failed pool save is reported separately
+  and does not undo current-run admission. `save_for_project:false` is run-only.
+
 ## 0.1.25 source editor and view layout contract
 
 - The `editor` block is presentation. It adds no agent tool, command or launch
@@ -19,7 +67,8 @@
   changes remain unattributed, and repository contents are not backfilled as an
   invented before/after snapshot. Shared repositories retain per-project agent scope.
 - `pages.project` and `pages.item` are ordered lists of `{id,title,tiles}`. Each
-  tile is `{id,kind,span,height}`: span 1–12, height 160–1200 px. There are at most
+  tile is `{id,kind,span,height}`: span 1–12, height 160–1200 px
+  (PDF preview minimum 400 px from 0.1.26). There are at most
   24 pages per scope and 16 tiles per page, with unique tile IDs/kinds within a page.
   The same kind can recur on other pages. Omitted pages derive from existing main
   views without writing a migration; explicit empty pages are valid. Coding tiles

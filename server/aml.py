@@ -148,6 +148,26 @@ def latest_activity(row):
     return max(stamps) if stamps else None
 
 
+def wait_codes(value):
+    return [code[:100] for code in value[:64] if isinstance(code, str)] if isinstance(value, list) else []
+
+
+def placement_candidates(value):
+    if not isinstance(value, list):
+        return []
+    rows = []
+    for candidate in value[:64]:
+        if not isinstance(candidate, dict) or not isinstance(candidate.get("host_id"), str):
+            continue
+        row = {key: candidate[key][:1000] for key in ("host_id", "host_name", "state") if isinstance(candidate.get(key), str)}
+        row["wait_reason"] = candidate.get("wait_reason", "")[:16000] if isinstance(candidate.get("wait_reason"), str) else ""
+        row["wait_reasons"] = wait_codes(candidate.get("wait_reasons"))
+        checked = candidate.get("checked_at")
+        row["checked_at"] = checked if type(checked) in (int, float) and math.isfinite(checked) else None
+        rows.append(row)
+    return rows
+
+
 def normalize(snapshot):
     projects = [{k: p.get(k) for k in ("id", "name", "repo", "goal", "gpu_limit", "run_limit")} for p in snapshot.get("projects", [])]
     agents = [{k: a.get(k) for k in ("id", "name", "role", "project_id", "task_id", "status", "model", "session_id", "created", "updated", "error")} for a in snapshot.get("agents", [])]
@@ -175,6 +195,9 @@ def normalize(snapshot):
                    last_activity_at=latest_activity(r),
                    config=config, pr_url=config.get("pr_url"), wandb_url=config.get("wandb_url"),
                    waiting_reason=r.get("wait_reason", ""), experiment_id=None,
+                   wait_reasons=wait_codes(r.get("wait_reasons")),
+                   candidate_hosts=placement_candidates(r.get("candidate_hosts")),
+                   placement_state=r.get("placement_state") if isinstance(r.get("placement_state"), str) else None,
                    command=decoded(r.get("command"), []), storage_gib=(config.get("storage") or {}).get("min_free_gib"))
         runs.append(row)
     queue = {"paused": bool(snapshot.get("queue", {}).get("paused")), "run_ids": [r["id"] for r in sorted(runs, key=lambda r: (r.get("queue_order") or 0, r["id"])) if r["status"] == "queued"]}

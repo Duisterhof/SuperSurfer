@@ -42,6 +42,8 @@ from .board_runtime import BoardRuntime
 from .project_artifacts import ProjectArtifacts
 from .code_editor import CodeEditor
 from .editor_service import EditorService
+from .writing_service import WritingService
+from .latex import LatexCompiler
 
 
 
@@ -149,7 +151,7 @@ def directory_suggestions(value, limit=50, scan_limit=10000):
 from .node_setup import NodeSetup
 from .run_recovery import RunRecovery
 
-class Service(SurfboardService, EditorService):
+class Service(SurfboardService, EditorService, WritingService):
     def __init__(self, state_dir, aml_home, read_only=False, aml=None, codex=None, start_monitor=True, tracking=None):
         self.store = Store(state_dir)
         self.directory = self.store.directory
@@ -198,6 +200,7 @@ class Service(SurfboardService, EditorService):
         self.codex = codex
         self.shutdown = threading.Event()
         self.board_runtime = BoardRuntime(self)
+        self.latex = LatexCompiler(self)
         self.nodes = NodeSetup(self)
         self.recovery = RunRecovery(self)
         self.message_event = threading.Event()
@@ -489,7 +492,7 @@ class Service(SurfboardService, EditorService):
         lead = "project:" + project_id
         chats = {c["scope"]: c for c in self.codex.list_chats()} if hasattr(self.codex, "list_chats") else {}
         chat = chats.get(lead, {})
-        agents = [{"scope": lead, "name": self.store.get("chat_name:" + lead, project["name"] + " research lead"), "owner": "supersurfer", "role": "lead", "task_state": chat.get("task_state", "ready"),
+        agents = [{"scope": lead, "name": self.store.get("chat_name:" + lead, self.default_lead_name(project)), "owner": "supersurfer", "role": "lead", "task_state": chat.get("task_state", "ready"),
                    "status": chat.get("status") or "idle", "busy": bool(chat.get("busy")), "can_resume": False,
                    "created_at": chat.get("created_at"), "updated_at": chat.get("updated_at"), "error": chat.get("error")}]
         state = self.state()
@@ -561,7 +564,7 @@ class Service(SurfboardService, EditorService):
             raise APIError("Project repository is unavailable on this remote", 409)
         instructions.extend([f"Project: {project['name']}\nRepository: {cwd}\nExisting project goal (preserve any stop orders):\n{project.get('goal', '')}",
             "This is a new SuperSurfer-owned conversation. Existing AutoML agents remain separate owners of their original conversations. Do not take over their sessions or duplicate their active work. These instructions prohibit new autonomous launches even when older project records mention prior launch authorization."])
-        context = {"cwd": str(cwd), "instructions": "", "name": f"{experiment['name']} worker" if experiment else f"{project['name']} research lead", "role": "worker" if experiment else "lead"}
+        context = {"cwd": str(cwd), "instructions": "", "name": f"{experiment['name']} worker" if experiment else self.default_lead_name(project), "role": "worker" if experiment else "lead"}
         if kind == "conversation":
             context["name"] = self.store.conversation(scope)["name"]
         if experiment:
@@ -681,6 +684,14 @@ class Service(SurfboardService, EditorService):
 
     def agent_action(self, scope, name, arguments):
         """Each capability is confined to its project or experiment and user turn."""
+        if name == "supersurfer_compile_latex" and isinstance(arguments, dict) and arguments.get("operation") == "inspect":
+            # PDF decoding is a bounded read, but can take seconds. Chat Stop
+            # must be able to reach the compiler while that read is running.
+            with self.action_lock:
+                self.guard_board_tool(scope, name, arguments)
+                if self.read_only:
+                    raise APIError("Read-only preview: agent tools are disabled", 403)
+            return self.board_tool(scope, name, arguments)
         if name == "supersurfer_ask_user":
             self.guard_board_tool(scope, name, arguments)
             # Waiting must not own action_lock: chat.answer and chat.stop need it.
@@ -697,7 +708,7 @@ class Service(SurfboardService, EditorService):
             self.guard_board_tool(scope, name, arguments)
             if self.read_only:
                 raise APIError("Read-only preview: agent tools are disabled", 403)
-            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                 return self.board_tool(scope, name, arguments)
             alias = ALIASES.get(name.removeprefix("supersurfer_"))
             if alias:
@@ -1402,6 +1413,8 @@ class Service(SurfboardService, EditorService):
     def action(self, op, params):
         if not isinstance(op, str) or not isinstance(params, dict):
             raise APIError("Action requires op and a params object")
+        if op == "latex.action" and params.get("operation") == "inspect":
+            return self.latex_action(params)
         with self.action_lock:
             result = self._action(op, params)
             if op == "chat.send":
@@ -1411,6 +1424,8 @@ class Service(SurfboardService, EditorService):
     def _action(self, op, params):
         if op.startswith("code."):
             return self.code_action(op, params)
+        if op == "latex.action":
+            return self.latex_action(params)
         if op == "view-layout.save":
             return self.save_view_layout(params)
         if op.startswith("surfboard."):
@@ -1591,6 +1606,7 @@ class Service(SurfboardService, EditorService):
             if op == "chat.stop":
                 self.store.put("agent_messages_paused:" + scope, True)
                 self.recovery.pause(scope=scope)
+                self.latex.stop_scope(scope)
                 return self.codex.stop(scope)
             preferences = self.chat_preferences(scope, strict=True)
             content = text_field(params, "text", 100000)
@@ -1702,6 +1718,7 @@ class Service(SurfboardService, EditorService):
         if self.monitor_thread:
             self.monitor_thread.join(timeout=30)
         self.nodes.close()
+        self.latex.close()
         self.board_runtime.close()
         self.codex.close()
         # A bounded external call may still be unwinding on process shutdown.
@@ -1747,11 +1764,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
-    def artifact_response(self, path, query):
-        token, separator, filename = path.removeprefix("/project-artifact/").partition("/")
+    def artifact_response(self, path, query, latex=False):
+        token, separator, filename = path.removeprefix("/latex-output/" if latex else "/project-artifact/").partition("/")
         if not separator:
             raise APIError("Artifact not found", 404)
-        payload = self.server.service.artifacts.payload(token, filename)
+        payload = (self.server.service.latex if latex else self.server.service.artifacts).payload(token, filename)
         with payload["stream"] as stream:
             size, start, end = payload["size"], 0, payload["size"] - 1
             status = 200
@@ -1799,6 +1816,9 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith("/project-artifact/"):
                 self.artifact_response(path, parsed.query)
                 return
+            if path.startswith("/latex-output/"):
+                self.artifact_response(path, parsed.query, latex=True)
+                return
             if path.startswith("/board-preview/"):
                 token, separator, relative = path.removeprefix("/board-preview/").partition("/")
                 if not separator:
@@ -1830,6 +1850,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.surfboard(query.get("project_id", [""])[0])
                 elif path == "/api/view-layout":
                     result = self.server.service.view_layout(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
+                elif path == "/api/latex":
+                    result = self.server.service.latex_status({key: value[0] for key, value in query.items()})
                 elif path.startswith("/api/code/"):
                     result = self.server.service.code_query(path.removeprefix("/api/code/"), {key: value[0] for key, value in query.items()})
                 elif path == "/api/artifacts":
@@ -1927,7 +1949,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

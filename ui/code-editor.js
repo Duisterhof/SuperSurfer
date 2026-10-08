@@ -10,14 +10,31 @@ const recordedTime = value => {
   return Number.isFinite(date.getTime())?date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
 };
 
+// Local syntax coloring only; compilation diagnostics come from the writing service.
+function registerWritingLanguages(monaco) {
+  if(monaco.languages.getLanguages().some(language=>language.id==='latex'))return;
+  monaco.languages.register({id:'latex',extensions:['.tex','.latex','.sty','.cls'],aliases:['LaTeX']});
+  monaco.languages.setMonarchTokensProvider('latex',{tokenizer:{
+    root:[[/%.*/,'comment'],[/\\(?:[a-zA-Z@]+|.)/,'keyword'],[/\$\$?/,{token:'delimiter',next:'@math'}],[/[{}\[\]]/,'delimiter.bracket'],[/[&#_^]/,'operator']],
+    math:[[/%.*/,'comment'],[/\$\$?/,{token:'delimiter',next:'@pop'}],[/\\(?:[a-zA-Z@]+|.)/,'keyword'],[/[{}\[\]]/,'delimiter.bracket'],[/\d+(?:\.\d+)?/,'number'],[/[=+*/_^&<>-]/,'operator'],[/[a-zA-Z]+/,'variable']]
+  }});
+  monaco.languages.setLanguageConfiguration('latex',{comments:{lineComment:'%'},brackets:[['{','}'],['[',']'],['(',')']],autoClosingPairs:[{open:'{',close:'}',notIn:['comment']},{open:'[',close:']',notIn:['comment']}]});
+  monaco.languages.register({id:'bibtex',extensions:['.bib'],aliases:['BibTeX']});
+  monaco.languages.setMonarchTokensProvider('bibtex',{tokenizer:{
+    root:[[/%.*/,'comment'],[/@[a-zA-Z]+/,'keyword'],[/[a-zA-Z][\w-]*(?=\s*=)/,'attribute.name'],[/"/,{token:'string.quote',next:'@string'}],[/[{},=]/,'delimiter'],[/\b\d+\b/,'number']],
+    string:[[/\\./,'string.escape'],[/"/,{token:'string.quote',next:'@pop'}],[/[^"\\]+/,'string']]
+  }});
+}
+const writingLanguage=path=>/\.(tex|latex|sty|cls)$/i.test(path||'')?'latex':/\.bib$/i.test(path||'')?'bibtex':null;
+
 export function createCodeEditor(options) {
   const instance = ++nextEditorId, projects = new Map();
-  let root, context, state, monaco, editor, editorFile, diffEditor, diffModels = [], observer, poll, epoch = 0, navigation = 0;
-  let view = 'file', sidebar = 'files', selected = '', message = '', refreshError = false, searching = 0, busy = false;
+  let root, context, state, monaco, editor, editorFile, selectionEditor, diffEditor, diffModels = [], observer, poll, epoch = 0, navigation = 0;
+  let view = 'file', sidebar = 'files', sidebarOpen = true, evidence = null, selected = '', message = '', refreshError = false, searching = 0, busy = false;
   const readonly = () => Boolean(options.readOnly?.());
   const active = () => state?.files.get(selected);
   const dirty = file => Boolean(file?.model && file.model.getValue() !== file.base);
-  const hasUnsaved = () => [...projects.values()].some(project => [...project.files.values()].some(dirty));
+  const hasUnsaved = projectId => [...projects.values()].filter(project=>!projectId||project.projectId===projectId).some(project => [...project.files.values()].some(dirty));
   const query = (path, extra = {}, projectId = context.projectId) => path + '?' + new URLSearchParams({project_id:projectId, ...extra});
   const button = (action, label, title = label, disabled = false) => `<button type="button" data-code="${action}" title="${escapeHTML(title)}"${disabled?' disabled':''}>${escapeHTML(label)}</button>`;
   const call = (op, params, projectId = context.projectId) => options.action(op, {project_id:projectId, ...params});
@@ -48,7 +65,7 @@ export function createCodeEditor(options) {
     if (editor && editorFile) editorFile.viewState = editor.saveViewState();
   }
   function disposeView() {
-    rememberView(); editor?.dispose(); editor = null; editorFile = null; diffEditor?.dispose(); diffEditor = null;
+    rememberView(); editor?.dispose(); editor = null; editorFile = null; selectionEditor=null;diffEditor?.dispose(); diffEditor = null;
     for (const model of diffModels) model.dispose(); diffModels = [];
   }
   function renderStatus() {
@@ -57,7 +74,7 @@ export function createCodeEditor(options) {
     const details = [file?.path || 'Choose a file', dirty(file)?'Unsaved changes':'', readonly()?'Read-only workspace':''].filter(Boolean).join(' · ');
     status.textContent = message || details;
     status.classList.toggle('error', Boolean(message));
-    root.querySelector('[data-code="save"]').disabled = readonly() || !file?.model || file.readOnly || !dirty(file) || Boolean(file.remote) || file.saving;
+    root.querySelector('[data-code="save"]').disabled = view!=='file' || readonly() || !file?.model || file.readOnly || !dirty(file) || Boolean(file.remote) || file.saving;
     root.querySelector('[data-code="ask"]').disabled = !file || !options.onAskAgent;
     for (const action of ['new-file','new-folder']) root.querySelector(`[data-code="${action}"]`).disabled = readonly();
     for(const control of root.querySelectorAll('[data-code-review]'))control.disabled=readonly();
@@ -100,14 +117,15 @@ export function createCodeEditor(options) {
       const data = filtered ? state.searchResults : state.tree.get('');
       list.innerHTML = data ? data.entries.map(entry=>entryHTML(entry)).join('') + (!data.entries.length?'<p class="code-list-note">No files found.</p>':'') + (data.truncated?'<p class="code-list-note">More matches exist. Refine the file name.</p>':'') : '<p class="code-list-note">Loading files…</p>';
     }
-    root.querySelector('[data-code="files"]').setAttribute('aria-pressed',sidebar==='files');
-    root.querySelector('[data-code="changes"]').setAttribute('aria-pressed',sidebar==='changes');
-    root.querySelector('[data-code="agents"]').setAttribute('aria-pressed',sidebar==='agents');
+    root.classList.toggle('code-list-closed',!sidebarOpen);
+    root.querySelector('[data-code="files"]').setAttribute('aria-pressed',sidebarOpen&&sidebar==='files');
+    root.querySelector('[data-code="changes"]').setAttribute('aria-pressed',sidebarOpen&&sidebar==='changes');
+    root.querySelector('[data-code="agents"]').setAttribute('aria-pressed',sidebarOpen&&sidebar==='agents');
     root.querySelector('.code-find').hidden = sidebar !== 'files';
   }
 
   function modelFor(file, projectId) {
-    file.model = monaco.editor.createModel(file.content ?? '', file.language || undefined, fileURI(projectId,file.path));
+    file.model = monaco.editor.createModel(file.content ?? '', writingLanguage(file.path) || file.language || undefined, fileURI(projectId,file.path));
     file.listener = file.model.onDidChangeContent(() => {if (state?.projectId === projectId) renderStatus();});
     file.base = file.content ?? '';
     return file;
@@ -122,24 +140,32 @@ export function createCodeEditor(options) {
     project.files.set(path,file);
     return file;
   }
-  async function openFile(path) {
+  function closeTemporaryList(){if(context.mode==='editor'||root.clientWidth<500){sidebarOpen=false;renderTree();}}
+  function revealRange(range) {
+    if(!range||!editorFile?.model||!editor)return;
+    const positive=value=>Number.isFinite(Number(value))?Math.max(1,Math.floor(Number(value))):1;
+    const model=editorFile.model,start=model.validatePosition({lineNumber:positive(range.line),column:positive(range.column)});
+    const end=model.validatePosition({lineNumber:positive(range.endLine??start.lineNumber),column:positive(range.endColumn??start.column)});
+    editor.setSelection(new monaco.Selection(start.lineNumber,start.column,end.lineNumber,end.column));editor.revealPositionInCenter(start);editor.focus();rememberView();
+  }
+  async function openFile(path,range) {
     const token = epoch, nav=++navigation;
     try {
       const file = await loadFile(path);
       if (!current(token) || nav!==navigation) return;
       rememberView(); selected = file.path; state.selected = selected; view = 'file'; message = '';
-      renderTabs(); showEditor();return true;
+      renderTabs(); showEditor();revealRange(range);closeTemporaryList();return true;
     } catch(error) {if(current(token)) tell(error);return false;}
   }
   function editorOptions() {
     return {automaticLayout:true,fontSize:13,lineHeight:21,minimap:{enabled:false},scrollBeyondLastLine:false,
-      padding:{top:10,bottom:10},smoothScrolling:true,renderLineHighlight:'gutter',wordWrap:'off',
+      padding:{top:10,bottom:10},smoothScrolling:true,renderLineHighlight:'gutter',wordWrap:writingLanguage(active()?.path)?'on':'off',
       folding:true,stickyScroll:{enabled:true},tabSize:2,readOnly:readonly(),ariaLabel:'Source code editor',
       fixedOverflowWidgets:true,contextmenu:true};
   }
   function showEditor() {
     if (!root || !monaco) return;
-    disposeView();
+    disposeView();evidence=null;
     const host = root.querySelector('.code-monaco'), file = active(); host.replaceChildren();
     root.querySelector('.code-diff-heading').hidden = true;
     if (!file?.model) {
@@ -150,7 +176,7 @@ export function createCodeEditor(options) {
     editorFile=file;
     if (file.viewState) editor.restoreViewState(file.viewState);
     editor.addAction({id:'supersurfer-save',label:'Save file',keybindings:[monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyS],run:()=>save()});
-    editor.addAction({id:'supersurfer-ask',label:'Ask SuperSurfer agent about selection',contextMenuGroupId:'navigation',run:()=>askAgent()});
+    selectionAction([editor]);
     renderStatus(); theme();
   }
   async function showDiff(path, staged = false, conflict = false) {
@@ -175,12 +201,14 @@ export function createCodeEditor(options) {
       const host = root.querySelector('.code-monaco'); host.replaceChildren();
       const heading = root.querySelector('.code-diff-heading'); heading.hidden = false;
       heading.querySelector('span').textContent = conflict?'Disk ↔ Your unsaved changes':staged?'HEAD ↔ Index (staged)':'HEAD ↔ Working file (including staged changes)';
+      evidence={source:conflict?'conflict':'git',path,staged,original:data.original??'',modified:data.modified??''};
       if(data.binary || data.too_large) {host.innerHTML='<div class="code-empty">This diff cannot be displayed as text.</div>';return;}
       diffModels = [monaco.editor.createModel(data.original ?? '',data.language),monaco.editor.createModel(data.modified ?? '',data.language)];
       diffEditor = monaco.editor.createDiffEditor(host,{...editorOptions(),readOnly:true,originalEditable:false,
         renderGutterMenu:false,renderMarginRevertIcon:false,
         renderSideBySide:state.sideBySide,renderSideBySideInlineBreakpoint:600,enableSplitViewResizing:true});
       diffEditor.setModel({original:diffModels[0],modified:diffModels[1]}); theme(); renderStatus();
+      selectionAction([diffEditor.getOriginalEditor(),diffEditor.getModifiedEditor()]);closeTemporaryList();
     } catch(error) {if(current(token)) tell(error);}
   }
 
@@ -209,7 +237,7 @@ export function createCodeEditor(options) {
         editor=monaco.editor.create(host,{...editorOptions(),readOnly:true,model:diffModels[0],ariaLabel:'Recorded agent patch'});
         heading.querySelector('span').textContent+=' · recorded patch only';
       } else host.innerHTML='<div class="code-empty">This agent edit has no available patch. Current Git changes are listed separately.</div>';
-      theme();renderStatus();return true;
+      evidence={source:'agent',path:data.path,scope,changeId,agentName:data.agent_name||project.agentChanges?.agents.find(row=>row.scope===scope)?.name||scope,diff:data.diff,original:data.original,modified:data.modified};selectionAction(diffEditor?[diffEditor.getOriginalEditor(),diffEditor.getModifiedEditor()]:editor?[editor]:[]);closeTemporaryList();theme();renderStatus();return true;
     }catch(error){if(current(token))tell(error);return false;}
   }
 
@@ -236,6 +264,7 @@ export function createCodeEditor(options) {
     try {
       const saved = await call('code.save',{path:file.path,content,revision:file.revision},project.projectId);
       file.base = content; file.revision = saved.revision; file.exists = true; file.remote=null;
+      Promise.resolve(options.onSave?.({projectId:project.projectId,path:file.path,revision:saved.revision})).catch(error=>{if(state===project)tell(error);});
       if (state===project) {message=''; await refreshTree();}
     } catch(error) {
       if (error.status === 409 || /changed|revision|conflict|already exists/i.test(error.message || '')) {
@@ -255,16 +284,26 @@ export function createCodeEditor(options) {
     if(!keepMine) file.model.setValue(file.remote.content ?? '');
     file.base=file.remote.content ?? '';file.revision=file.remote.revision;file.exists=file.remote.exists;file.remote=null;message='';view='file';showEditor();renderTabs();
   }
+  function selectionAction(editors) {
+    if(!options.onAskAgent||!editors.length)return;
+    const button=document.createElement('button');button.type='button';button.className='code-selection-action';button.dataset.code='ask-selection';button.textContent='Ask about selection ↗';button.title='Add selected text to your agent message (⌘/Ctrl I)';button.hidden=true;button.onpointerdown=event=>event.preventDefault();root.querySelector('.code-monaco').append(button);
+    for(const candidate of editors){candidate.addAction({id:'supersurfer-ask',label:'Ask SuperSurfer agent about selection',keybindings:[monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyI],contextMenuGroupId:'navigation',run:()=>askAgent()});const update=()=>{selectionEditor=candidate;button.hidden=!candidate.getSelection()||candidate.getSelection().isEmpty();};candidate.onDidChangeCursorSelection(update);candidate.onDidFocusEditorText(update);}
+  }
   function askAgent() {
     const file = active(); if(!file || !options.onAskAgent) return;
-    const selection = editorFile===file ? editor?.getSelection() : null;
-    let text = `Please help with ${file.path}`;
-    if(selection && !selection.isEmpty()) {
-      const content = file.model.getValueInRange(selection), bounded = content.slice(0,16000);
-      text += `, lines ${selection.startLineNumber}–${selection.endLineNumber}.\n\n${bounded}${content.length>bounded.length?'\n[Selection truncated]':''}`;
-    } else text += '.';
-    if(dirty(file)) text += '\n\nThis file has unsaved editor changes. The disk version may differ; do not assume these edits have been saved.';
-    options.onAskAgent(text);
+    const focused=selectionEditor||editor,selection=focused?.getSelection(),model=focused?.getModel();
+    const selectedText=selection&&!selection.isEmpty()?model?.getValueInRange(selection):'';
+    const excerpt=value=>{const text=String(value??'');return text.slice(0,16000)+(text.length>16000?'\n[Excerpt truncated]':'');};
+    let text;
+    if(view==='agent'&&evidence){text=`Please help review the recorded change to ${evidence.path} by ${evidence.agentName} (change ${evidence.changeId}, agent ${evidence.scope}).\n\nThis is recorded edit evidence; the current working file may differ.`;
+      if(selectedText)text+='\n\nSelected text from the recorded change:\n'+excerpt(selectedText);
+      else if(evidence.diff)text+='\n\nRecorded patch:\n'+excerpt(evidence.diff);
+      else text+='\n\nBefore:\n'+excerpt(evidence.original)+'\n\nAfter:\n'+excerpt(evidence.modified);
+    }else if(view!=='file'&&evidence){text=`Please help review ${evidence.path}: ${view==='conflict'?'disk version versus my unsaved changes':evidence.staged?'HEAD versus staged index':'HEAD versus working file'}.`;
+      if(selectedText)text+='\n\nSelected diff text:\n'+excerpt(selectedText);
+      else text+='\n\nBefore:\n'+excerpt(evidence.original)+'\n\nAfter:\n'+excerpt(evidence.modified);
+    }else{text=`Please help with ${file.path}`;if(selectedText)text+=`, lines ${selection.startLineNumber}–${selection.endLineNumber}.\n\n${excerpt(selectedText)}`;else text+='.';if(dirty(file))text+='\n\nThis file has unsaved editor changes. The disk version may differ; do not assume these edits have been saved.';}
+    Promise.resolve(options.onAskAgent(text)).catch(tell);
   }
   function closeFile(path) {
     const file = state.files.get(path);
@@ -367,12 +406,12 @@ export function createCodeEditor(options) {
       renderTree();return;
     }
     switch(target.dataset.code) {
-      case 'files':sidebar='files';renderTree();break;
-      case 'changes':sidebar='changes';renderTree();await changes();break;
-      case 'agents':sidebar='agents';renderTree();await agentChanges();break;
+      case 'files':sidebarOpen=sidebar!=='files'||!sidebarOpen;sidebar='files';renderTree();break;
+      case 'changes':sidebarOpen=sidebar!=='changes'||!sidebarOpen;sidebar='changes';renderTree();if(sidebarOpen)await changes();break;
+      case 'agents':sidebarOpen=sidebar!=='agents'||!sidebarOpen;sidebar='agents';renderTree();if(sidebarOpen)await agentChanges();break;
       case 'refresh':await refresh();break;
       case 'save':await save();break;
-      case 'ask':askAgent();break;
+      case 'ask':case 'ask-selection':askAgent();break;
       case 'new-file':showCreate('file');break;
       case 'new-folder':showCreate('directory');break;
       case 'cancel-create':root.querySelector('.code-create').hidden=true;break;
@@ -394,7 +433,7 @@ export function createCodeEditor(options) {
     monacoPromise ||= import('/vendor/monaco/editor.js').catch(error=>{monacoPromise=null;throw error;});
     const module=await monacoPromise;
     if(!current(token))return false;
-    monaco=module.monaco||module;return true;
+    monaco=module.monaco||module;registerWritingLanguages(monaco);return true;
   }
 
   async function mount(element, nextContext) {
@@ -407,7 +446,7 @@ export function createCodeEditor(options) {
     unmount();root=element;context={...nextContext};const token=++epoch;
     if(!context.projectId)throw new Error('Source editor needs a project.');
     if(!projects.has(context.projectId))projects.set(context.projectId,{projectId:context.projectId,files:new Map(),tree:new Map(),expanded:new Set(),selected:'',search:'',searchResults:null,changes:null,sideBySide:true});
-    state=projects.get(context.projectId);selected=state.selected;sidebar='files';view='file';message='';
+    state=projects.get(context.projectId);selected=state.selected;sidebar='files';sidebarOpen=context.mode!=='editor';view='file';evidence=null;message='';
     root.classList.add('code-editor');
     root.dataset.codeMode=context.mode==='editor'?'editor':'full';
     root.innerHTML=`<div class="code-toolbar"><div>${button('files','Files')}${button('changes','Git','Repository Git changes')}${button('agents','Agents','Recorded edits by agent')}</div><div>${button('new-file','+ File','Create a file',readonly())}${button('new-folder','+ Folder','Create a folder',readonly())}${button('refresh','↻','Refresh source and Git changes')}</div><div class="code-toolbar-end">${button('ask','Ask agent','Add selected code or file reference to the agent composer')}${button('save','Save','Save file (⌘/Ctrl S)',true)}</div></div>
@@ -435,6 +474,6 @@ export function createCodeEditor(options) {
     projects.clear();window.removeEventListener('beforeunload',beforeUnload);window.removeEventListener('focus',onFocus);
   }
   return {mount,unmount,hasUnsaved,refresh,dispose,
-    async openFile(path){const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path);},
+    async openFile(path,range){const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path,range);},
     async showAgentChange(scope,changeId){const token=epoch;if(!await ensureReady()||!current(token))return false;return showAgentDiff(changeId,scope);}};
 }

@@ -1,3 +1,92 @@
+# SuperSurfer 0.1.26 workflow audit — October 7–8, 2026
+
+The release was exercised as three actual workflows: research scheduling, software
+implementation and LaTeX writing. Real Codex turns used the scoped native tools in
+disposable services. Production research runs were not used as test jobs.
+
+The final frozen source passes **582 Python tests**, **212 engine regressions**,
+**31 Chromium suites**, **20 Node/SSH checks** and **three native Linux Electron
+suites**. The full Python and browser passes include the final shared-repository,
+Auto-compile, delayed-error and large-workspace navigation fixes.
+
+## Real workflow evidence
+
+- Research: a real worker queued three tiny CPU processes under simulated GPU
+  capacity, diagnosed a missing environment/data/source candidate, acquired the
+  spare node and admitted the same queued run IDs. The worker used no manager
+  handoff, completed cleanup and then closed its tracked task. A 21-minute manager
+  soak exercised 43 launch intents: 31 successes, one deliberate failure and
+  11 cancellations. It retained no reservations or owned processes afterward.
+  Three idle-host refresh cycles stayed at approximately 300 seconds. The original
+  outage/admission delays were preserved in the audit record, then reproduced in
+  focused regressions after the fixes.
+- Coding: a real agent implemented a small Unicode/ASCII feature, executed five
+  real tests through its configured check block, emitted two attributed patches
+  and verified the original deliverable. A real configurator added a Review desk
+  page while preserving the existing graph; the browser explicitly applied its
+  draft and verified the resulting editor/agent-change tile widths.
+- Writing: a real agent revised exactly the selected source passage, compiled the
+  paper, inspected its actual rendered page and text through native image tool
+  output, and completed the assignment after verifying the result. The first
+  attempt's broad private-output search was recorded as an ergonomics failure;
+  adding `compile_latex(inspect)` and clear skill guidance removed that behavior
+  in the clean rerun.
+- Results: a real worker published labeled synthetic two-method train/validation
+  curves and a 3D trajectory explorer. Chromium verified exact input values,
+  method toggles, hover units, rotation/zoom/reset, narrow layout and no external
+  requests or browser errors. The worker honestly reported that its fixture lacked
+  a browser; the separate browser pass supplied that verification.
+
+ML fixtures run the actual scheduler, local runner and source/data/environment
+preparation. GPU observations, GitHub verification and W&B responses are synthetic.
+They establish lifecycle and UI behavior, not CUDA performance or external-service
+availability. No real training metric or scientific result is claimed.
+
+## Failure cases and UI review
+
+Compiler checks use system pdfLaTeX/BibTeX, bubblewrap and Poppler. They cover source
+traversal/link/private-file rejection, output/log/memory/time bounds, stable request
+recovery, history pruning, cancellation, interrupted restart, retained last-good PDF,
+scoped publication, raw HTTP gates and authenticated Range requests. Shared-code
+projects retain separate histories, layouts and published artifacts while source
+saves invalidate both PDF freshness caches; concurrent same-paper builds are
+excluded even through a repository alias. Restart expires old output tokens and
+issues new scoped links without replaying interrupted builds. Source changes
+during or after a required check/commit/PR gate reject compilation before TeX runs.
+Inspection renders the exact successful PDF in a contained process and returns
+bounded native images without exposing service paths.
+
+Browser checks use bundled Monaco and PDF.js under the real CSP. They cover source
+and PDF selections, dirty buffers, two-paper histories, lost replies, late scope
+responses, Auto save timing, failed builds, missing dependencies and a 320px-wide
+PDF tile. The PDF's 400px minimum preserves controls and the document. A long real
+compile remains stoppable. Setup and selection buttons prepare drafts without
+sending an agent message automatically.
+
+A populated actual-service UI with 40 hosts/320 GPU entries, 240 runs (200 queued)
+and 80 conversations verified scope filtering, finite/unlimited capacity, uncertain
+reservations and compact agent lists. Initial load was 332ms in this fixture;
+filters 100–142ms and scope changes 318–388ms. These are local fixture observations,
+not performance guarantees. Unknown/stale readings were excluded from available
+capacity. Light and dark narrow layouts had no horizontal overflow. Repeated
+keyboard queue moves retain focus, and the queue summary jumps directly to waiting
+runs without changing priority or submitting a scheduler action.
+
+All eleven role/block skills were reviewed and revised for 0.1.26. The three-minute
+1080p walkthrough uses recorded app interactions, actual agent transcripts and real
+compiler output. Captions identify synthetic research jobs/data.
+
+## Practical limits
+
+Compilation currently requires a Linux workspace with installed compiler,
+containment and inspection dependencies. Mac clients can connect to it; direct Mac
+compilation, XeLaTeX/LuaLaTeX/Biber and automatic package installation are deferred.
+PDF selection includes build/page/text, not an invented source mapping. Monaco has
+no VS Code extension host or language server; edit attribution depends on emitted
+file events. Unsaved buffers are not crash-recovery backups. Source digest checks
+handle ordinary concurrent edits but cannot lock external editors that ignore the
+workspace locks. Native macOS execution is unavailable here; Mac builds are unsigned.
+
 # SuperSurfer 0.1.25 validation — October 7, 2026
 
 The full **518 Python tests** pass, including 16 repository-editor, 8 durable

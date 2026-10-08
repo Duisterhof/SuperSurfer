@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.25. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.26. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -15,6 +15,12 @@ recoverable failures and reconnects; preserve prior authorization, task/run IDs,
 stop orders and resource limits. A turn ending is not completion.
 
 ## Complete the work
+
+Requested paper edits may use the same project's connected `compile_latex` block.
+Follow [writing guidance](../supersurfer-writing/SKILL.md), preserve recorded
+scientific provenance, and inspect the generated PDF. A PDF selection identifies
+its build/page rather than a source line; a prior successful PDF may be stale.
+Compiling text does not launch an experiment or save the user's dirty editor buffer.
 
 1. Read the current user direction, outstanding deliverables, source, protocol
    and run state. Use `update_task` to record the deliverable and retain its ID.
@@ -34,7 +40,14 @@ stop orders and resource limits. A turn ending is not completion.
    add the verified candidate to the **same queued run**. Inspect durable progress
    with `recover_run` status instead of duplicating setup. Read
    [host onboarding](../supersurfer-host-onboarding/SKILL.md) for the full workflow.
+   Status is compact by default; use `include_details: true` only when diagnosing
+   full source, command, probe or contract receipts. Ordinary polls use the live
+   blocker/readiness summary and preserve any pool-save warning.
    A pool edit alone still does not add candidates to an existing run.
+   Successful acquisition remembers a newly prepared host for future project runs
+   by default; use `save_for_project: false` for intended run-only setup. Inspect
+   `project_pool` and `reusable_node`: conflicting existing settings are preserved,
+   and a warning about future reuse does not undo the current run's admission.
 4. If the user explicitly changes a project budget, apply `set_project_limits`
    directly and read back the saved values. GPU and concurrent-run limits are
    separate. A queue wait alone authorizes neither an increase nor displacement

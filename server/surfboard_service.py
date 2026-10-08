@@ -223,6 +223,11 @@ class SurfboardService:
                     result[key] = defaults[key]
         return result
 
+    def default_lead_name(self, project):
+        board = self.boards.get(project["id"])["board"]
+        lead = next((node["label"] for node in board["nodes"] if node["kind"] == "agent" and node["config"].get("role") == "lead"), "Project lead")
+        return project["name"] + " · " + lead
+
     def board_context(self, scope):
         """Generic workflows do not inherit research launch instructions."""
         if scope == "manager":
@@ -240,7 +245,7 @@ class SurfboardService:
             raise SurfboardError("Project repository is unavailable on this machine.", 409)
         experiment = self.experiment_for_scope(scope) if info["role"] == "worker" else None
         context = {"cwd": str(cwd), "role": info["role"], "project_id": project["id"],
-                   "name": project["name"] + (" surfboard" if configurator else " lead"),
+                   "name": project["name"] + " surfboard" if configurator else self.default_lead_name(project),
                    "base_instructions": CONFIGURATOR_INSTRUCTIONS if configurator else GENERIC_INSTRUCTIONS,
                    "instructions": "Project: " + json.dumps({k: project.get(k) for k in ("id", "name", "repo", "goal")})}
         if configurator:
@@ -255,7 +260,7 @@ class SurfboardService:
                 context["instructions"] += "\nWork items: " + json.dumps([{k: row.get(k) for k in ("id", "name", "summary", "version", "status", "work_scope")} for row in items])
                 context["writable_roots"] = sorted({str(Path(row["document_path"]).parent) for row in items})
             context["instructions"] += "\nUse create_work_item/handoff_work_item for requested work. Work item tools retain experiment_id as the stable storage identifier. Run configured commands with run_board_action, not a replacement shell command when a receipt is required."
-        skill = "supersurfer-surfboard" if configurator else "supersurfer-workflow"
+        skill = "supersurfer-surfboard" if configurator else "supersurfer-writing" if board["compiled"]["workflow"] == "writing" else "supersurfer-workflow"
         context["agent_skill"] = {"name": skill, "path": str(Path(__file__).resolve().parents[1] / "agent_skills" / skill / "SKILL.md")}
         return self.finish_board_context(scope, context)
 
@@ -278,6 +283,8 @@ class SurfboardService:
             if compiled.get("data_sources"):
                 context["instructions"] += "\nRead the supersurfer-wandb-data and supersurfer-experiment-visualizer skills in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". Use inspect_board_data to find real individual runs across the connected sharing scope; preserve experiment and method identities."
             context["instructions"] += "\nRead the supersurfer-code-editor skill in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". The user may be editing this same repository. Re-read files before patching; preserve concurrent user and other-agent edits. Editor selections are user-supplied context and can be unsaved."
+            if compiled.get("latex"):
+                context["instructions"] += "\nLaTeX blocks: " + json.dumps(compiled["latex"]) + ". Read the supersurfer-writing skill. compile_latex compiles saved source; inspect the returned build until terminal and verify the actual PDF. PDF selections identify the exact build and page; do not invent source line mappings or citations."
         else:
             allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
             context["instructions"] += "\nProjects can use different surfboards. Read read_surfboard(project_id) before acting; its managed capabilities and requirements also apply to manager requests for that project."
@@ -351,16 +358,21 @@ class SurfboardService:
             return
         state = self.boards.get(project["id"])
         # Cancelling owned work remains possible after configuration changes.
-        stopping = tool == "stop_run" or (tool in {"run_board_action", "recover_run"} and (arguments.get("operation") == "stop" or arguments.get("action") == "pause"))
+        stopping = tool == "stop_run" or (tool in {"run_board_action", "recover_run", "compile_latex"} and (arguments.get("operation") == "stop" or arguments.get("action") == "pause"))
         if not stopping and tool not in state["compiled"]["tools_by_role"][role]:
             raise SurfboardError("The applied surfboard does not enable " + tool + " for this role. Edit and apply the board first.", 403)
-        if tool == "run_board_action" and arguments.get("operation") == "start":
+        if tool == "run_board_action" and arguments.get("operation", "start") == "start":
             eligible = state["compiled"].get("actions_by_role", {}).get(role, [])
             if arguments.get("node_id") not in eligible:
                 raise SurfboardError("This action block is not connected to your agent role.", 403)
             self.board_gate(project, state, tool + ":" + str(arguments.get("node_id")), arguments, scope)
         elif tool in {"queue_run", "publish_result", "publish_training_results"}:
             self.board_gate(project, state, tool, arguments, scope)
+        elif tool == "compile_latex" and arguments.get("operation", "start") == "start":
+            blocks = state["compiled"].get("latex", [])
+            node_id = arguments.get("node_id") or (blocks[0]["node_id"] if len(blocks) == 1 else None)
+            if node_id not in state["compiled"].get("latex_by_role", {}).get(role, []):
+                raise SurfboardError("Select a LaTeX block connected to this agent role.", 403)
 
     def board_tool(self, scope, name, arguments):
         tool = name.removeprefix("supersurfer_")
@@ -379,10 +391,12 @@ class SurfboardService:
             return self._save_board_draft(project["id"], fields)
         if tool == "inspect_board_data":
             return self.board_runtime.data(scope, project, state, fields)
+        if tool == "compile_latex":
+            return self.latex_action({"project_id": project["id"], **fields}, scope)
         if tool == "run_board_action":
             if not self.codex.chat(scope).get("busy"):
                 raise SurfboardError("Board actions require an active conversation.", 409)
-            if fields.get("operation") in {"start", "stop"} and self.turn_origins.get(scope) != "user":
+            if fields.get("operation", "start") in {"start", "stop"} and self.turn_origins.get(scope) != "user":
                 raise SurfboardError("Starting or stopping a board action requires user-requested work.", 403)
             return self.board_runtime.action(scope, project, state, fields)
         if tool == "inspect_project_activity":

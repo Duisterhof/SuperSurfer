@@ -20,13 +20,13 @@ class SurfboardError(ValueError):
 
 
 ROLES = ("lead", "worker", "manager")
-WORKFLOWS = ("research", "software", "web")
+WORKFLOWS = ("research", "software", "web", "writing")
 COMMON_TOOLS = {"ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "inspect_board_data", "export_diagnostics"}
 ITEM_TOOLS = {"create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item"}
 EXPERIMENT_TOOLS = {"create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment"}
 COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node",
                  "check_available_node", "acquire_new_node", "recover_run", "set_project_limits", "stop_run"}
-SHARED_CONTENT = {"publish_result", "publish_markdown_tab", "update_experiment_brief", "publish_training_results", "run_board_action",
+SHARED_CONTENT = {"publish_result", "publish_markdown_tab", "update_experiment_brief", "publish_training_results", "run_board_action", "compile_latex",
                   "list_project_artifacts", "publish_artifact", "inspect_project_activity"}
 ROLE_TOOLS = {
     "worker": COMMON_TOOLS | SHARED_CONTENT | COMPUTE_TOOLS | {"prepare_run", "queue_run", "configure_worker_wakeup"},
@@ -36,10 +36,10 @@ ROLE_TOOLS = {
 }
 ALL_TOOLS = sorted(set.union(*ROLE_TOOLS.values()))
 GATE_REQUIREMENTS = ("user_authorization", "exact_commit", "verified_pr")
-KINDS = ("brief", "agent", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "approval", "document", "timer", "artifacts", "activity", "editor")
+KINDS = ("brief", "agent", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "approval", "document", "timer", "artifacts", "activity", "editor", "latex")
 ACTION_KINDS = {"code", "check", "preview"}
-VIEW_KINDS = {"results", "visualizer", "document", "artifacts", "activity", "preview", "editor"}
-SOURCE_KINDS = {"brief", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "document", "artifacts", "activity", "editor"}
+VIEW_KINDS = {"results", "visualizer", "document", "artifacts", "activity", "preview", "editor", "latex"}
+SOURCE_KINDS = {"brief", "code", "check", "experiment", "compute", "wandb", "results", "visualizer", "preview", "document", "artifacts", "activity", "editor", "latex"}
 RELATIONS = ("feeds", "requires", "owns", "handoff", "triggers", "recovers")
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$")
 MAX_BYTES = 256 * 1024
@@ -50,7 +50,7 @@ def _relations(kind):
     if kind in SOURCE_KINDS:
         options.append({"relation": "feeds", "label": "Provides data or context", "targets": sorted(SOURCE_KINDS | {"agent"})})
     if kind in {"approval", "check"}:
-        options.append({"relation": "requires", "label": "Must be satisfied before", "targets": ["code", "check", "experiment", "preview", "results", "visualizer"]})
+        options.append({"relation": "requires", "label": "Must be satisfied before", "targets": ["code", "check", "experiment", "preview", "results", "visualizer", "latex"]})
     if kind == "agent":
         options.extend([
             {"relation": "owns", "label": "Is responsible for", "targets": [k for k in KINDS if k != "agent"]},
@@ -69,6 +69,7 @@ def catalog():
         "brief": ("Brief", "The goal, scope and acceptance criteria for a work item.", ["context"], ["context"]),
         "agent": ("Agent", "A lead or worker with instructions and a bounded set of project tools.", ["task", "context", "event"], ["task", "artifact"]),
         "editor": ("Code editor", "Browse and edit repository files in a visual editor. This view grants no command or agent permissions.", ["source", "context"], ["source"]),
+        "latex": ("LaTeX + PDF", "Compile saved paper source on the connected Linux workspace and review a live, selectable PDF. Builds are isolated and never publish automatically.", ["source", "context"], ["artifact"]),
         "code": ("Code", "Implementation work and an optional named command in the project repository.", ["context", "evidence"], ["source", "artifact"]),
         "check": ("Check", "A repeatable command whose recorded success can gate the next step.", ["source", "evidence"], ["evidence"]),
         "experiment": ("Experiment", "A recorded research run using committed source and managed resources.", ["source", "evidence", "resources"], ["run", "metrics"]),
@@ -128,6 +129,10 @@ def catalog():
             row["skills"] = ["supersurfer-wandb-data" if kind == "wandb" else "supersurfer-experiment-visualizer"]
         if kind == "editor":
             row["skills"] = ["supersurfer-code-editor"]
+        if kind == "latex":
+            fields.update(main_file={"type": "string", "maxLength": 1024, "default": "main.tex"},
+                          timeout_seconds={"type": "integer", "minimum": 1, "maximum": 300, "default": 120})
+            row["skills"] = ["supersurfer-writing"]
         answer.append(row)
     return answer
 
@@ -141,9 +146,37 @@ def _edge(source, target, relation, description=""):
             "relation": relation, "description": description}
 
 
+def _writing_template():
+    nodes = [_node("brief", "brief", "Paper brief", 80, 190),
+             _node("lead", "agent", "Writing lead", 80, 30, role="lead"),
+             _node("worker", "agent", "Writing collaborator", 340, 30, role="worker"),
+             _node("source", "editor", "Paper source", 340, 190),
+             _node("latex", "latex", "Compile and review PDF", 600, 190, main_file="main.tex", timeout_seconds=120),
+             _node("notes", "document", "Review notes", 80, 390, format="markdown"),
+             _node("artifacts", "artifacts", "Paper artifacts", 860, 190),
+             _node("activity", "activity", "Background activity", 340, 390, placement="right")]
+    edges = [_edge("lead", "brief", "owns"), _edge("lead", "worker", "handoff"),
+             _edge("worker", "source", "owns"), _edge("worker", "latex", "owns"),
+             _edge("brief", "source", "feeds"), _edge("source", "latex", "feeds"),
+             _edge("latex", "artifacts", "feeds"), _edge("latex", "notes", "feeds"),
+             _edge("brief", "activity", "feeds")]
+    writing = {"id": "writing", "title": "Writing", "tiles": [
+        {"id": "source", "kind": "editor", "span": 6, "height": 620},
+        {"id": "pdf", "kind": "pdf", "span": 6, "height": 620}]}
+    def page(key, title):
+        return {"id": key, "title": title, "tiles": [{"id": key, "kind": key, "span": 12, "height": 400}]}
+    return validate({"schema": 1, "name": "Research writing", "workflow": "writing",
+                     "nodes": nodes, "edges": edges,
+                     "defaults": {"models": {}, "reasoning": {}, "data_sharing": "project"},
+                     "pages": {"project": [writing, page("overview", "Brief & tasks"), page("artifacts", "Files")],
+                               "item": [writing, page("overview", "Brief"), page("documents", "Notes")]}})
+
+
 def template(workflow="research"):
     if workflow not in WORKFLOWS:
-        raise SurfboardError("Choose research, software or web.")
+        raise SurfboardError("Choose research, software, web or writing.")
+    if workflow == "writing":
+        return _writing_template()
     nodes = [_node("brief", "brief", "Research question" if workflow == "research" else "Feature brief" if workflow == "software" else "Design brief", 80, 190),
              _node("lead", "agent", "Research lead" if workflow == "research" else "Technical lead" if workflow == "software" else "Design lead", 80, 30, role="lead"),
              _node("worker", "agent", "Experiment worker" if workflow == "research" else "Developer" if workflow == "software" else "Builder", 340, 30, role="worker"),
@@ -246,7 +279,7 @@ def validate(board, *, allow_pending=False):
     name = _text(board.get("name"), "name", 100, 1, False).strip()
     workflow = board.get("workflow")
     if workflow not in WORKFLOWS:
-        _fail("workflow", "choose research, software or web")
+        _fail("workflow", "choose research, software, web or writing")
     definitions = {row["kind"]: row for row in catalog()}
     raw_nodes, raw_edges = board.get("nodes"), board.get("edges")
     if not isinstance(raw_nodes, list) or not 1 <= len(raw_nodes) <= 100:
@@ -303,6 +336,14 @@ def validate(board, *, allow_pending=False):
                 _fail(path + ".config.experiment_ids", "select at least one experiment")
             if config.get("sharing") != "selected" and config.get("experiment_ids") and not allow_pending:
                 _fail(path + ".config.experiment_ids", "experiment IDs apply only to selected sharing")
+        elif kind == "latex":
+            config.setdefault("main_file", "main.tex")
+            config.setdefault("timeout_seconds", 120)
+            main_file = config["main_file"]
+            if (not main_file.endswith(".tex") or main_file.startswith(("/", "-")) or
+                    any(part in ("", ".", "..") for part in main_file.split("/")) or
+                    "\\" in main_file or any(ord(c) < 32 for c in main_file)):
+                _fail(path + ".config.main_file", "choose a repository-relative .tex file without traversal")
         elif kind == "timer":
             config.setdefault("event", "interval")
             config.setdefault("interval_minutes", 10)
@@ -407,6 +448,7 @@ _LAYOUT_DEFINITIONS = (
     ("editor", "Code editor", ("editor",)),
     ("chat", "Agent chat", ("agent",)),
     ("preview", "Preview", ("preview",)),
+    ("pdf", "PDF preview", ("latex",)),
 )
 
 
@@ -420,6 +462,8 @@ def layout_catalog(board, level="item"):
         if key == "compute" and (level != "project" or board["workflow"] != "research"):
             continue
         if key in {"editor", "preview"} and key not in kinds:
+            continue
+        if key == "pdf" and "latex" not in kinds:
             continue
         if key == "results" and board["workflow"] != "research" and not kinds.intersection({"results", "visualizer", "wandb", "preview"}):
             continue
@@ -462,7 +506,7 @@ def validate_layout(rows, board, level="item"):
 def _default_layout(board, level):
     """Keep previous navigation until a scope is explicitly arranged."""
     defaults = {"overview": ("main", 0), "chat": ("right", 100),
-                "activity": ("right", 50), "editor": ("main", 25)}
+                "activity": ("right", 50), "editor": ("main", 25), "pdf": ("main", 26)}
     if level == "project":
         defaults.update(compute=("main", 10), artifacts=("main", 40))
     else:
@@ -476,7 +520,7 @@ def _default_layout(board, level):
         node = by_id.get(row.get("node_id"), {})
         config = node.get("config", {})
         # 0.1.24 right panels were explicit and visible in both scopes.
-        if key in {"results", "documents", "artifacts", "activity", "editor"}:
+        if key in {"results", "documents", "artifacts", "activity", "editor", "pdf"}:
             if config.get("placement") == "right":
                 placement = "right"
             elif key == "activity" and config.get("placement") == "main":
@@ -502,7 +546,8 @@ def compile_layouts(board):
 
 def tile_catalog(board, level="item"):
     """Code tiles expose authenticated repository views, never agent capabilities."""
-    result = [{**row, "title": row["label"]} for row in layout_catalog(board, level)]
+    result = [{**row, "title": row["label"], **({"min_height": 400} if row["kind"] == "pdf" else {})}
+              for row in layout_catalog(board, level)]
     editor = next((row for row in result if row["kind"] == "editor"), None)
     if editor is None:
         editor = {"id": "editor", "kind": "editor", "label": "Code editor", "title": "Code editor"}
@@ -554,7 +599,8 @@ def validate_pages(pages, board, level="item"):
             tile_kinds.add(kind)
             normalized.append({"id": tile_id, "kind": kind,
                                "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12, True),
-                               "height": _number(tile.get("height", 400), tile_at + ".height", 160, 1200, True)})
+                               "height": _number(tile.get("height", 400), tile_at + ".height" + (" (PDF preview)" if kind == "pdf" else ""),
+                                                 400 if kind == "pdf" else 160, 1200, True)})
         result.append({"id": page_id, "title": title, "tiles": normalized})
     return result
 
@@ -624,6 +670,8 @@ def compile_board(board):
             enabled.add("publish_training_results")
         if block_kinds & ACTION_KINDS:
             enabled.add("run_board_action")
+        if "latex" in block_kinds:
+            enabled.add("compile_latex")
         if workflow == "research":
             if "experiment" in block_kinds:
                 enabled.update(EXPERIMENT_TOOLS | {"prepare_run", "queue_run"})
@@ -674,6 +722,8 @@ def compile_board(board):
             return ["publish_training_results"]
         if node["kind"] == "results":
             return ["publish_result"]
+        if node["kind"] == "latex":
+            return ["compile_latex:" + node["id"]]
         return []
     requirements = []
     for edge in edges:
@@ -727,10 +777,14 @@ def compile_board(board):
     if unconnected:
         warnings.append("Disconnected blocks grant no tools: " + ", ".join(nodes[key]["label"] for key in unconnected))
     actions_by_role = {role: sorted(key for key in actions if key in role_nodes[role]) if "run_board_action" in tools_by_role[role] else [] for role in ROLES}
-    return {"workflow": workflow, "item_label": {"research": "Experiment", "software": "Feature", "web": "Design task"}[workflow],
+    latex = [{"node_id": key, "label": node["label"], **deepcopy(node["config"])}
+             for key, node in active.items() if node["kind"] == "latex"]
+    return {"workflow": workflow, "item_label": {"research": "Experiment", "software": "Feature", "web": "Design task", "writing": "Writing task"}[workflow],
             "tabs": tabs, "tools_by_role": tools_by_role, "requirements": requirements, "defaults": deepcopy(board["defaults"]),
             "instructions": instructions, "actions": actions, "actions_by_role": actions_by_role, "data_sharing": board["defaults"]["data_sharing"],
             "data_sources": data_sources, "visualizers": visualizers, "timers": timers, "recovery": recovery, "views": views,
+            "latex": latex, "latex_by_role": {role: [row["node_id"] for row in latex if row["node_id"] in role_nodes[role]]
+                                              if "compile_latex" in tools_by_role[role] else [] for role in ROLES},
             "layouts": compile_layouts(board), "pages": compile_pages(board),
             "limits": {"gpu_limit": "unlimited", "run_limit": "unlimited", **configured_limits(board)},
             "available_tiles": {level: tile_catalog(board, level) for level in ("project", "item")}, "warnings": warnings}

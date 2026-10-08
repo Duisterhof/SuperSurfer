@@ -1,3 +1,54 @@
+## 0.1.26 research, coding and writing workspaces
+
+**Writing** is a fourth Surfboard preset. It opens a Monaco source editor beside a
+local PDF viewer, with project and writing-task pages you can rearrange like other
+tiles. Existing projects can add a **LaTeX + PDF** block and a **Writing page**
+preset. Select saved `main.tex`, then **Compile**. For a paper inside a larger
+repository, set **Options → Source folder**; the main path remains relative to the
+repository. Multiple compiler blocks are selectable in the view. Switching papers
+resets the source-folder override. PDF tiles keep enough height for their controls
+and document, including narrow layouts.
+
+The compiler runs on the connected Linux workspace. It needs system pdfLaTeX,
+optional BibTeX, bubblewrap and prlimit with working user namespaces. Inspection
+uses Poppler's pdfinfo, pdftotext and pdftoppm. A missing dependency is shown in the
+view/tool. **Ask agent to set up compiler** prepares a message for review; nothing
+is installed or uploaded automatically. Mac desktop clients
+can use this through a Linux workspace. Direct compilation on a Mac workspace,
+XeLaTeX/LuaLaTeX/Biber and automatic package downloads are not supported yet.
+
+**Auto** recompiles saved changes while the PDF view is open. It never saves dirty
+editor buffers or runs while that view is closed. Failed builds retain the last good
+PDF, labeled with its build and source freshness. Compiler errors link back to
+known source files. PDF selection prepares an agent message with the exact build,
+page and quoted text; it does not invent a matching source line. Source selections
+carry the file and line range. Review and send the draft normally.
+
+Agents use `compile_latex` to compile, read status, inspect rendered PDF pages and
+text, stop a build, or publish its successful PDF to the project's artifact library.
+Publication is explicit. Project Activity shows builds and their stopping criteria.
+Chat Stop cancels that agent's compile, while a build you started directly in the
+PDF view has its own Stop button. All eleven role/block skills are revised for this
+release, including a dedicated writing skill.
+
+**Coding** pages keep Files, Git and Agents controls reachable even beside a
+standalone file explorer. Agent-patch questions retain the actual selected patch
+and attribution. Source selection has a small inline Ask action; TeX source has
+syntax coloring and wrapping. Narrow pages stack tiles based on their available
+space, and applying a new page updates navigation immediately.
+
+**Compute** now shows each project's active/reserved GPUs and concurrent runs
+beside its limits. Queued run details explain candidate-node blockers and link
+directly to Surfboard limits. Starting/cancelling jobs get brief one-second checks;
+running jobs retain ten-second checks and idle host observations keep their
+five-minute cadence. Confirmed completion wakes eligible queued work and requests
+a fresh reading instead of assuming the GPU is free. A successfully acquired new
+node is remembered in the project pool by default; existing node overrides and
+GPU masks are preserved. Agents can opt out with `save_for_project: false`.
+Recovered hosts and newly admitted stale candidates request a bounded fresh
+observation immediately. Recovery status is compact; agents can request full
+receipts with `include_details: true`. Queued runs do not show empty training cards.
+
 ## 0.1.25 configurable pages, tiles and coding editor
 
 Use **Add page** to create a named page, or **Layout** to edit any existing one.

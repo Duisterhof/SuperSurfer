@@ -30,7 +30,7 @@ MAX_PREVIEW = 8 * 1024 * 1024
 
 
 def source_fingerprint(cwd):
-    """Hash tracked and nonignored untracked contents, never symlink targets."""
+    """Hash source contents, excluding only untracked generated Python bytecode."""
     cwd = Path(cwd).resolve()
     def git(*args):
         proc = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, timeout=30)
@@ -44,7 +44,12 @@ def source_fingerprint(cwd):
     # Index/diff state matters even when the worktree contents happen to match.
     digest.update(git("diff", "--raw", "HEAD") if head.returncode == 0 else git("diff", "--cached", "--raw"))
     digest.update(git("ls-files", "--stage", "-z"))
-    paths = set(filter(None, git("ls-files", "-z", "--cached", "--others", "--exclude-standard").split(b"\0")))
+    tracked = set(filter(None, git("ls-files", "-z", "--cached").split(b"\0")))
+    untracked = set(filter(None, git("ls-files", "-z", "--others", "--exclude-standard").split(b"\0")))
+    # A first Python test run normally creates bytecode. It must not invalidate
+    # its own successful source check. Tracked bytecode and any actual source
+    # under a cache-named directory still participate in the receipt.
+    paths = tracked | {raw for raw in untracked if not (raw.endswith(b".pyc") and b"__pycache__" in raw.split(b"/")[:-1])}
     if len(paths) > 50000:
         raise SurfboardError("Source receipt exceeds 50,000 files; ignore generated data before checking", 409)
     consumed = 0

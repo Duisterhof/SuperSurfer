@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.25. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.26. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -48,3 +48,9 @@ A data connection does not launch experiments, alter measurement logging or
 republish a report on every sample. Publication is agent work; declared live
 sources refresh when the page opens or the user refreshes. Report unsupported
 inputs without fabricating an automatic pipeline.
+
+For a figure requested for a paper, export a measured snapshot with source,
+split, units and reading time while preserving the live Results report. A PDF
+tile displays a particular compiled build; it does not make that snapshot refresh
+with W&B. Check figure readability in the actual PDF as well as the interactive
+view, and do not report new measurements merely because the paper recompiled.

@@ -39,6 +39,8 @@ def run_metrics(reader, run, state):
     try:
         if url and parse_target(url)["run"]:
             result.update(reader.live_metrics(url))
+        elif not url and requirement.get("job_type") in {"evaluation", "data", "other"}:
+            result["notice"] = "No metrics logged yet. Add an individual W&B run link to show this job's measurements."
         else:
             result["error"] = "This run does not have an individual W&B run link yet. Experiment group metrics cannot identify this job."
     except ValueError as exc:
