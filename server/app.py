@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 import uuid
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from . import __version__
 from .aml import AMLClient, ManagerError, normalize
@@ -36,12 +36,11 @@ from .wakeups import Wakeups
 from .results import Results
 from .coordination import AgentMessages
 from . import brief, telemetry
+from .surfboards import Surfboards, SurfboardError as APIError, template as board_template
+from .surfboard_service import SurfboardService, ALIASES
+from .board_runtime import BoardRuntime
+from .project_artifacts import ProjectArtifacts
 
-
-class APIError(ValueError):
-    def __init__(self, message, status=400):
-        super().__init__(message)
-        self.status = status
 
 
 def text_field(params, key, limit=20000, required=True):
@@ -148,11 +147,13 @@ def directory_suggestions(value, limit=50, scan_limit=10000):
 from .node_setup import NodeSetup
 from .run_recovery import RunRecovery
 
-class Service:
+class Service(SurfboardService):
     def __init__(self, state_dir, aml_home, read_only=False, aml=None, codex=None, start_monitor=True, tracking=None):
         self.store = Store(state_dir)
         self.directory = self.store.directory
         self.read_only = read_only
+        self.boards = Surfboards(self.store)
+        self.artifacts = ProjectArtifacts(self)
         self.wandb = WandBReader()
         self.result_data = ResultData(self.wandb)
         self.results = Results(self.store)
@@ -193,6 +194,7 @@ class Service:
             codex = CodexBridge(self.directory / "codex", self.context_provider, action_handler=self.agent_action)
         self.codex = codex
         self.shutdown = threading.Event()
+        self.board_runtime = BoardRuntime(self)
         self.nodes = NodeSetup(self)
         self.recovery = RunRecovery(self)
         self.message_event = threading.Event()
@@ -222,6 +224,14 @@ class Service:
             self._snapshot_saved = updated_at
         state = normalize(snapshot)
         state.update(connected=error is None and bool(snapshot), error=error, updated_at=updated_at, read_only=self.read_only)
+        known = {project["id"] for project in state["projects"]}
+        state["projects"].extend(project for project in self.store.get("local_projects", []) if project["id"] not in known)
+        state["manager_connected"] = state["connected"]
+        if self.store.get("local_projects", []):
+            state["connected"] = True
+        for project in state["projects"]:
+            board = self.boards.get(project["id"])
+            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views")}, "name": board["board"]["name"], "version": board["version"]}
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
         projects = {project["id"]: project for project in state["projects"]}
@@ -250,7 +260,7 @@ class Service:
 
     def sync_experiment_tracking(self, experiment_id, snapshot=None, required=False):
         experiment = self.store.experiment(experiment_id)
-        if self.read_only:
+        if self.read_only or not self.boards.get(experiment["project_id"])["compiled"].get("data_sources"):
             return experiment
         snapshot = snapshot or self.state()
         project = next((p for p in snapshot["projects"] if p["id"] == experiment["project_id"]), None)
@@ -401,10 +411,12 @@ class Service:
 
     def lookup(self, collection, key, fresh=False):
         state = self.state(force=fresh)
-        if fresh and not state["connected"]:
-            raise APIError(state["error"] or "AutoML manager is disconnected", 503)
+        local_ids = {project["id"] for project in self.store.get("local_projects", [])}
         for value in state[collection]:
             if value["id"] == key:
+                local = (collection == "projects" and key in local_ids) or (collection == "experiments" and value["project_id"] in local_ids)
+                if fresh and not state.get("manager_connected", state["connected"]) and not local:
+                    raise APIError("AutoML manager is unavailable: " + (state["error"] or "disconnected"), 503)
                 return value
         raise APIError(f"{collection.rstrip('s').capitalize()} not found", 404)
 
@@ -513,6 +525,9 @@ class Service:
         return f"[Workspace time: {clock['current_time']} ({clock['timezone']})]\n\n{text}"
 
     def context_provider(self, scope):
+        configured = self.board_context(scope)
+        if configured is not None:
+            return configured
         instructions = ["You are a SuperSurfer research assistant. The user owns decisions about launching experiments.",
             "Suggest new research ideas and explain evidence. Never launch training, run GPU commands, release queued jobs, change scheduler state, or send work to other agents on your own. A suggested experiment is not launch authorization. Every launched run must have a verified PR for its exact committed source. An explicit user request to queue or run an experiment authorizes its worker, or the workspace manager selecting that experiment, to use queue_run, which verifies the PR and releases through the scheduler. Never invoke aml run ready, launch processes directly, or bypass this tool and scheduler.",
             "Keep explanations concise and distinguish cached findings, measured results, and unknowns. You may update the specified experiment document when the user requests an explanation or correction. Preserve provenance and avoid unsupported scientific claims.",
@@ -526,7 +541,7 @@ class Service:
             project_ids = {project["id"] for project in state["projects"]}
             instructions.append("Registered experiments: " + json.dumps([{**{key: experiment.get(key) for key in ("id", "project_id", "name", "summary", "status", "worker_id", "work_scope")}, **self.experiment_agent_context(experiment["id"])} for experiment in state["experiments"] if experiment["project_id"] in project_ids]))
             instructions.append("Your primary responsibility is shared compute, host registration, queue/resource coordination, cross-project dependencies and explicit workspace-wide user requests. Keep research decisions, dataset interpretation, protocol details and Results ownership with the project lead and workers. A peer update does not make you their research supervisor or an extra approval gate. Route misplaced domain requests to the owning lead without independently duplicating scientific review. Preserve explicit user tasks addressed to you.\nAs workspace manager, complete an explicit user queue/run request with queue_run, always naming the registered experiment_id. Include either {experiment_id,run_id,pr_url} for an existing held run, or experiment_id plus complete new-run fields and the exact-source PR. This verifies and releases through AutoML; do not tell the user to perform the manual queue/verify/release steps after you can complete them. For requested code or PR preparation, use handoff_experiment with experiment_id and a concrete task; it preserves worker ownership and model settings. You may hand off at most three distinct experiments. Queue explicitly requested arms using a stable request_id per new run; reuse that ID on retry. Reuse a known run_id after a partial failure. These tools work across registered projects; never use shell commands or arbitrary scheduler APIs as a substitute. New research ideas still require the user's decision.")
-            instructions.append("Current queue and run observations: " + json.dumps({"queue": state["queue"], "runs": self.run_context(state["runs"]), "hosts": state["hosts"], "observed_at": state["updated_at"], "connected": state["connected"]}))
+            instructions.append("Current queue and run observations: " + json.dumps({"queue": state["queue"], "runs": self.run_context(state["runs"]), "hosts": state["hosts"], "observed_at": state["updated_at"], "connected": state.get("manager_connected", state["connected"])}))
             return self.with_agent_tools(scope, {"cwd": str(directory), "instructions": "\n\n".join(instructions), "name": "SuperSurfer manager", "role": "manager"})
         kind, separator, key = scope.partition(":")
         if not separator or kind not in {"project", "experiment", "conversation"}:
@@ -568,7 +583,7 @@ class Service:
             current = self.state()
             runs = [run for run in current["runs"] if run.get("experiment_id") == experiment["id"]]
             hosts = [host for host in current["hosts"] if host["id"] in {run["host_id"] for run in runs}]
-            instructions.append("Current scheduler evidence (a status is not a scientific result): " + json.dumps({"runs": self.run_context(runs), "hosts": hosts, "observed_at": current["updated_at"], "connected": current["connected"], "error": current["error"]}))
+            instructions.append("Current scheduler evidence (a status is not a scientific result): " + json.dumps({"runs": self.run_context(runs), "hosts": hosts, "observed_at": current["updated_at"], "connected": current.get("manager_connected", current["connected"]), "error": current["error"]}))
             instructions.append("When the user asks only to prepare a draft, use prepare_run; it stays HELD and may omit the PR. When the user explicitly asks you to queue or run this experiment, use queue_run to finish the task: it creates or reuses a held run, verifies its exact-source PR, then releases through AutoML. A separate click on Release run is not needed for this explicit request. Supply either existing {run_id,pr_url} or complete new-run fields with mandatory pr_url. Use committed source and explicit GPU, memory and storage requirements. If a known run ID is returned with an error, reuse it instead of creating another run. If creation returns no run ID, retry the same request_id and unchanged original fields in this conversation; the current bundled manager reconciles that identity without duplication. Do not move the request to another worker or manager to recover it. Never use queue_run for a scheduled review or an unsolicited idea. Never bypass the tools or launch a process directly.")
             instructions.append("Registered hosts available for a user-requested held draft: " + json.dumps([{key: host.get(key) for key in ("id", "name", "target", "root", "gpus", "status", "stale")} for host in current["hosts"]]))
         else:
@@ -642,13 +657,10 @@ class Service:
                 "Default handoff chooses a SuperSurfer worker; previous AutoML histories are not a route around missing tools. "
                 "Do not spawn workers or new research work for unsolicited ideas.")
         context["agent_skill"] = {"name": "supersurfer-" + role, "path": str(Path(__file__).resolve().parents[1] / "agent_skills" / ("supersurfer-" + role) / "SKILL.md")}
-        if self.agent_tool_endpoint and not self.read_only:
-            capability = self.agent_tool_capability(scope)
-            context["mcp_servers"] = {"supersurfer": {"command": sys.executable, "args": [str(Path(__file__).with_name("agent_tools.py"))], "tool_timeout_sec": 86420, "env": {"SUPERSURFER_AGENT_ENDPOINT": self.agent_tool_endpoint, "SUPERSURFER_AGENT_CAPABILITY": capability, "SUPERSURFER_AGENT_ROLE": context["role"]}}}
-        return context
+        return self.finish_board_context(scope, context)
 
     def agent_tool_capability(self, scope):
-        if not isinstance(scope, str) or (scope != "manager" and not scope.startswith(("experiment:", "conversation:", "project:"))):
+        if not isinstance(scope, str) or (scope != "manager" and not scope.startswith(("experiment:", "conversation:", "project:", "surfboard:"))):
             raise APIError("Only SuperSurfer conversations receive scoped tool capabilities", 403)
         self._chat_scope(scope)
         with self.agent_tool_lock:
@@ -667,6 +679,7 @@ class Service:
     def agent_action(self, scope, name, arguments):
         """Each capability is confined to its project or experiment and user turn."""
         if name == "supersurfer_ask_user":
+            self.guard_board_tool(scope, name, arguments)
             # Waiting must not own action_lock: chat.answer and chat.stop need it.
             if self.read_only:
                 raise APIError("Read-only preview: agent questions are disabled", 403)
@@ -678,8 +691,14 @@ class Service:
                 raise APIError("Questions require an active conversation turn", 409)
             return self.codex.ask_user(scope, arguments["questions"])
         with self.action_lock:
+            self.guard_board_tool(scope, name, arguments)
             if self.read_only:
                 raise APIError("Read-only preview: agent tools are disabled", 403)
+            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                return self.board_tool(scope, name, arguments)
+            alias = ALIASES.get(name.removeprefix("supersurfer_"))
+            if alias:
+                name = "supersurfer_" + alias
             if name == "supersurfer_message_agent":
                 return self.messages.send(scope, arguments)
             if name == "supersurfer_list_agent_messages":
@@ -941,6 +960,12 @@ class Service:
         arguments = {key: value for key, value in arguments.items() if key != "request_id"}
         review_url = pr_url(text_field(arguments, "pr_url", 2048))
         experiment = experiment or self.experiment_for_scope(scope)
+        project = self.lookup("projects", experiment["project_id"], fresh=True)
+        board = self.boards.get(project["id"])
+        if not any("queue_run" in tools for tools in board["compiled"]["tools_by_role"].values()):
+            raise APIError("The applied surfboard has no enabled experiment launch step", 403)
+        self.board_gate(project, board, "queue_run", {**arguments, "experiment_id": experiment["id"]},
+                        scope if scope in self.turn_origins else None)
         if request_id is not None:
             scope = "agent-request:" + hashlib.sha256(json.dumps([scope, experiment["id"], request_id]).encode()).hexdigest()
         if existing:
@@ -956,7 +981,7 @@ class Service:
                     raise APIError("Only one new queued run can be created in this conversation turn. Continue with an existing run_id or ask for another run in a new turn.", 409)
                 if not prior.get("run_id") and durable_key:
                     snapshot = self.state(force=True)
-                    if not snapshot["connected"]:
+                    if not snapshot.get("manager_connected", snapshot["connected"]):
                         raise APIError("Cannot reconcile this request while the manager is unavailable. Retry the same request_id when it reconnects.", 503)
                     matches = [run for run in snapshot["runs"] if run.get("config", {}).get("supersurfer_request_id") == scope]
                     if len(matches) > 1 or (matches and (matches[0].get("project_id") != experiment["project_id"] or matches[0].get("experiment_id") != experiment["id"])):
@@ -1054,7 +1079,7 @@ class Service:
         count = integer(params, "gpu_count", 0, 1024)
         if count > project["gpu_limit"]:
             raise APIError("GPU request exceeds the project limit")
-        config = {"supersurfer_experiment_id": experiment["id"], "experiment": experiment["name"], "min_free_mib": integer(params, "min_free_mib", 0, 100000000, 1024)}
+        config = {"supersurfer_surfboard": {"version": self.boards.get(project["id"])["version"], "workflow": self.boards.get(project["id"])["compiled"]["workflow"]}, "supersurfer_experiment_id": experiment["id"], "experiment": experiment["name"], "min_free_mib": integer(params, "min_free_mib", 0, 100000000, 1024)}
         try:
             config["telemetry"] = telemetry.contract(params)
         except ValueError as exc:
@@ -1133,6 +1158,10 @@ class Service:
             "may use queue_run to verify the exact-source PR and release through AutoML. Preparation-only requests stay held. "
             "If essential information is missing, ask in this conversation."
         )
+        if self.boards.get(experiment["project_id"])["compiled"]["workflow"] != "research":
+            prompt = (f"The user requested work on {experiment['name']}.\n\nTask:\n{task}\n\n"
+                      f"Read {experiment['document_path']}, preserve the scope and acceptance criteria, implement the requested work, "
+                      "run configured checks with run_board_action and deliver reviewable evidence. Persist through recoverable failures; ask_user for a missing decision.")
         if agent:
             preferences = None
             skill = Path(__file__).resolve().parents[1] / "agent_skills" / "supersurfer-worker" / "SKILL.md"
@@ -1159,7 +1188,7 @@ class Service:
             raise
         self.store.put("chat_archived:" + scope, False)
         return {"accepted": True, "scope": scope, "experiment": self.store.record_work(key, scope, "accepted"),
-                "capabilities": [] if agent else ["prepare_run", "queue_run", "stop_run", "set_project_limits", "publish_training_results", "configure_worker_wakeup", "ask_user"],
+                "capabilities": [] if agent else self.boards.get(experiment["project_id"])["compiled"]["tools_by_role"]["worker"],
                 "message": "AutoML owns this conversation and SuperSurfer tools are unavailable there. Create a SuperSurfer agent for run queuing." if agent else "Experiment work accepted."}
 
     def resume_experiment_agent(self, experiment_id, scope):
@@ -1261,14 +1290,14 @@ class Service:
             directory.mkdir(exist_ok=True)
             return {"role": "manager", "cwd": str(directory)}
         kind, separator, key = scope.partition(":")
-        if not separator or not key or kind not in {"project", "experiment", "conversation", "agent"}:
+        if not separator or not key or kind not in {"project", "experiment", "conversation", "agent", "surfboard"}:
             raise APIError("Unknown conversation scope")
         if kind == "agent":
             agent = self.lookup("agents", key)
             return {"role": agent.get("role") or "worker", "agent": agent}
         project_id = self.experiment_for_scope(scope)["project_id"] if kind in {"experiment", "conversation"} else key
         project = self.lookup("projects", project_id)
-        return {"role": "lead" if kind == "project" else "worker", "cwd": project["repo"]}
+        return {"role": "lead" if kind in {"project", "surfboard"} else "worker", "cwd": project["repo"], "project_id": project_id}
 
     def chat_preferences(self, scope, overrides=None, strict=False, refresh=False):
         information = self._chat_scope(scope)
@@ -1280,16 +1309,16 @@ class Service:
                     "editable": False, "available": bool(current["model"]), "owner": "AutoML", "supported_reasoning": [], "error": None,
                     "note": "Previous AutoML conversation is read-only; create a SuperSurfer agent to continue work." if self.native_retired(agent["id"]) else "AutoML does not expose model or reasoning changes for existing conversations. Use that agent's native Codex controls. SuperSurfer role defaults do not change it."}
         settings = self.store.settings()
-        defaults = {"model": settings["models"][role], "reasoning": settings["reasoning"][role], "fast_mode": False, "approval_mode": settings["approval_mode"]}
+        defaults = self.board_defaults(scope)
         overrides = self.store.chat_settings(scope) if overrides is None else overrides
         effective = {key: overrides[key] if overrides[key] is not None else defaults[key] for key in ("model", "reasoning")}
-        effective["fast_mode"] = overrides.get("fast_mode", False)
+        effective["fast_mode"] = overrides.get("fast_mode") if overrides.get("fast_mode") is not None else defaults["fast_mode"]
         effective["approval_mode"] = overrides.get("approval_mode") or defaults["approval_mode"]
         preferences = {"role": role, "defaults": defaults, "overrides": overrides, "effective": effective,
                        "editable": not self.read_only, "available": False, "owner": "SuperSurfer", "supported_reasoning": [], "note": None, "error": None}
         try:
             resolved, supported, note = self._model_choice(effective["model"], effective["reasoning"], overrides["reasoning"] is not None, information["cwd"], refresh)
-            resolved["fast_mode"] = overrides.get("fast_mode", False)
+            resolved["fast_mode"] = effective["fast_mode"]
             resolved["approval_mode"] = effective["approval_mode"]
             preferences.update(effective=resolved, supported_reasoning=supported, note=note, available=True)
         except Exception as exc:
@@ -1355,7 +1384,7 @@ class Service:
             try:
                 if "agent" in self._chat_scope(scope):
                     continue
-                updates.append(self.codex.set_approval_mode(scope, mode))
+                updates.append(self.codex.set_approval_mode(scope, self.board_defaults(scope)["approval_mode"]))
             except Exception as exc:
                 updates.append({"scope": scope, "error": str(exc), "applied": False})
         failures = [update for update in updates if update.get("error")]
@@ -1377,6 +1406,8 @@ class Service:
             return result
 
     def _action(self, op, params):
+        if op.startswith("surfboard."):
+            return self.surfboard_action(op, params)
         if op == "settings.save":
             result = self.store.save_settings(params, validate=lambda values: self._validate_role_settings(values, params))
             monitoring = self.store.get("monitoring", {"last_check": None, "alerts": []})
@@ -1493,7 +1524,10 @@ class Service:
         if op == "experiment.start":
             if set(params) != {"id"}:
                 raise APIError("Start working accepts only the experiment id")
-            return self.start_experiment_work(text_field(params, "id", 180), "Start preparing this drafted experiment. Turn its research question into an implementable protocol and document the next concrete steps. Prepare implementation changes where the scope is clear. Do not submit or launch GPU runs without a separate explicit request.")
+            item = self.lookup("experiments", text_field(params, "id", 180), fresh=True)
+            if self.boards.get(item["project_id"])["compiled"]["workflow"] != "research":
+                return self.start_experiment_work(item["id"], "Implement this work item's requested scope, clarify missing acceptance criteria, run its configured checks and produce a reviewable deliverable. Preserve the user's limits.")
+            return self.start_experiment_work(item["id"], "Start preparing this drafted experiment. Turn its research question into an implementable protocol and document the next concrete steps. Prepare implementation changes where the scope is clear. Do not submit or launch GPU runs without a separate explicit request.")
         if op == "chat.approve":
             if set(params) - {"scope", "approval_id", "decision"}:
                 raise APIError("Approval accepts only scope, approval_id and decision")
@@ -1520,7 +1554,7 @@ class Service:
                 if {"model", "reasoning"} & set(changes):
                     self.chat_preferences(scope, values, strict=True, refresh=True)
                 if "approval_mode" in changes:
-                    mode = values["approval_mode"] or self.store.settings()["approval_mode"]
+                    mode = values["approval_mode"] or self.board_defaults(scope)["approval_mode"]
                     permission_update = self.codex.set_approval_mode(scope, mode)
             self.store.save_chat_settings(scope, changes, validate=validate_and_apply)
             preferences = self.chat_preferences(scope)
@@ -1569,12 +1603,26 @@ class Service:
                 raise APIError("Invalid project limit fields")
             return self.project_limits.set(text_field(params, "project_id", 150), {key: value for key, value in params.items() if key != "project_id"})
         if op == "project.add":
-            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": integer(params, "gpu_limit", 0, 1024), "run_limit": integer(params, "run_limit", 1, 1024, 1), "goal": text_field(params, "goal", required=False)}
+            payload = {"name_": text_field(params, "name", 100), "repo": text_field(params, "repo", 4096), "gpu_limit": integer(params, "gpu_limit", 0, 1024, 0), "run_limit": integer(params, "run_limit", 1, 1024, 1), "goal": text_field(params, "goal", required=False)}
             if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", payload["name_"]) or len(payload["name_"]) > 64:
                 raise APIError("Project name must use lowercase letters, numbers and single hyphens, up to 64 characters")
             payload["repo"] = prepare_project_repository(payload["repo"])
-            project = self.aml.call(op, payload)
-            self.aml.invalidate()
+            workflow = params.get("surfboard_template", "research")
+            board = board_template(workflow)  # Validate before registering anything.
+            if workflow == "research":
+                project = self.aml.call(op, payload)
+                self.aml.invalidate()
+            else:
+                projects = self.store.get("local_projects", [])
+                if any(row["name"] == payload["name_"] for row in self.state()["projects"]):
+                    raise APIError("A project with that name already exists", 409)
+                project = {"id": "proj_" + uuid.uuid4().hex[:12], "name": payload["name_"], "repo": payload["repo"],
+                           "goal": payload["goal"], "gpu_limit": 0, "run_limit": payload["run_limit"],
+                           "workflow": workflow, "status": "active", "created_at": time.time()}
+                projects.append(project)
+                self.store.put("local_projects", projects)
+                draft = self.boards.save_draft(project["id"], board, 0)
+                self.boards.apply(project["id"], 0, draft["draft"]["draft_version"])
             try:
                 initialized = self.store.initialize(project)
             except (OSError, ValueError) as exc:
@@ -1604,6 +1652,11 @@ class Service:
             if op != "run.cancel" and run["status"] != "queued":
                 raise APIError("Only queued runs can be changed", 409)
             if op == "run.ready":
+                project = self.lookup("projects", run["project_id"], fresh=True)
+                board = self.boards.get(project["id"])
+                if not any("queue_run" in tools for tools in board["compiled"]["tools_by_role"].values()):
+                    raise APIError("The applied surfboard has no enabled experiment launch step", 403)
+                self.board_gate(project, board, "queue_run", {**params, "experiment_id": run.get("experiment_id")})
                 pr_url(params.get("pr_url") or run.get("pr_url"))
                 if params.get("pr_url"):
                     payload["pr_url"] = pr_url(params["pr_url"])
@@ -1642,6 +1695,7 @@ class Service:
         if self.monitor_thread:
             self.monitor_thread.join(timeout=30)
         self.nodes.close()
+        self.board_runtime.close()
         self.codex.close()
         # A bounded external call may still be unwinding on process shutdown.
         # Do not close SQLite underneath a live background writer.
@@ -1676,16 +1730,81 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' https://wandb.ai https://*.wandb.ai; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def authenticated(self):
         provided = self.headers.get("Authorization", "")
         return hmac.compare_digest(provided, "Bearer " + self.server.service.token)
 
+    def do_HEAD(self):
+        self.do_GET()
+
+    def artifact_response(self, path, query):
+        token, separator, filename = path.removeprefix("/project-artifact/").partition("/")
+        if not separator:
+            raise APIError("Artifact not found", 404)
+        payload = self.server.service.artifacts.payload(token, filename)
+        with payload["stream"] as stream:
+            size, start, end = payload["size"], 0, payload["size"] - 1
+            status = 200
+            requested = self.headers.get("Range")
+            if requested:
+                match = re.fullmatch(r"bytes=(\d*)-(\d*)", requested)
+                if not match or not any(match.groups()) or not size:
+                    raise APIError("Unsupported artifact range", 416)
+                left, right = match.groups()
+                if left:
+                    start, end = int(left), min(int(right), end) if right else end
+                else:
+                    start = max(0, size - int(right))
+                if not 0 <= start <= end < size:
+                    raise APIError("Artifact range is outside the file", 416)
+                status = 206
+            self.send_response(status)
+            self.send_header("Content-Type", payload["mime"])
+            self.send_header("Content-Length", str(max(0, end - start + 1)))
+            self.send_header("Accept-Ranges", "bytes")
+            if status == 206:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            disposition = "attachment" if parse_qs(query).get("download") == ["1"] else "inline"
+            self.send_header("Content-Disposition", disposition + "; filename*=UTF-8''" + quote(payload["filename"], safe=""))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", payload["csp"])
+            self.end_headers()
+            if self.command != "HEAD":
+                stream.seek(start)
+                remaining = max(0, end - start + 1)
+                while remaining:
+                    chunk = stream.read(min(remaining, 512 * 1024))
+                    if not chunk:
+                        self.close_connection = True
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+
     def do_GET(self):
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
         try:
+            if path.startswith("/project-artifact/"):
+                self.artifact_response(path, parsed.query)
+                return
+            if path.startswith("/board-preview/"):
+                token, separator, relative = path.removeprefix("/board-preview/").partition("/")
+                if not separator:
+                    raise APIError("Preview not found", 404)
+                result = self.server.service.board_runtime.preview(token, "/" + relative + ("?" + parsed.query if parsed.query else ""), self.command)
+                self.send_response(result["status"])
+                for key, value in result["headers"].items():
+                    self.send_header(key, value)
+                self.send_header("Content-Length", str(len(result["body"])))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(result["body"])
+                return
             if path.startswith("/result-preview/"):
                 self.respond(200, self.server.service.results.preview(path.removeprefix("/result-preview/")), "text/html; charset=utf-8", preview=True)
                 return
@@ -1700,6 +1819,14 @@ class Handler(BaseHTTPRequestHandler):
                     result = {"ok": True, "version": __version__, "state_dir": str(self.server.service.directory), "aml_home": str(self.server.service.aml.home), "read_only": self.server.service.read_only}
                 elif path == "/api/state":
                     result = self.server.service.state()
+                elif path == "/api/surfboard":
+                    result = self.server.service.surfboard(query.get("project_id", [""])[0])
+                elif path == "/api/artifacts":
+                    result = self.server.service.artifacts.list(self.server.service.lookup("projects", query.get("project_id", [""])[0]), query.get("path", [""])[0])
+                elif path == "/api/project-activity":
+                    result = self.server.service.project_activity(query.get("project_id", [""])[0])
+                elif path == "/api/diagnostics":
+                    result = self.server.service.diagnostics(query.get("project_id", [""])[0])
                 elif path == "/api/experiment":
                     result = self.server.service.store.experiment(query.get("id", [""])[0])
                     result["brief"] = brief.read(self.server.service.store, result["id"])
@@ -1785,7 +1912,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(request, dict):
                 raise APIError("Expected a JSON object")
             if path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

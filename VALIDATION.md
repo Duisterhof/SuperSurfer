@@ -1,3 +1,42 @@
+# SuperSurfer 0.1.24 validation — October 7, 2026
+
+All **444 Python tests** pass in the final randomized campaign (seed 20261010),
+alongside **212 engine regressions**, **20 Node/SSH checks** without skips,
+**18 Chromium suites** and **two native Linux Electron suites**. Actual-service UI
+onboarding passes for all three workflows at 1440×900 and 1000×700. The 18 service
+integration tests include legacy background reviews and actual MCP proposals.
+
+Release verification compares the packaged service, UI, skills and documentation
+with the checked source and produces SHA-256 checksums for each archive. Native
+macOS execution is unavailable on this Linux host; Mac builds are unsigned.
+
+Focused coverage includes:
+
+- 20 board-runtime tests execute isolated commands and temporary loopback previews:
+  source/work-item/board-bound check evidence, failed and source-mutating checks,
+  stable request recovery, explicit Stop/timeouts, removed-node Stop, owner scope,
+  interrupted restart receipts, bounded logs, project/current/selected/empty data
+  inputs, no cross-project sources, malformed inputs, preview lifetime, occupied
+  ports, redirect/size limits, credential-free proxy headers and preserved empty argv.
+- Service integration exercises all three workflows, actual MCP JSON through the
+  capability-bound HTTP endpoint, draft-only proposals, board permissions applied
+  to active inherited chats, source-check/queue binding, local projects with an
+  unavailable research manager, and artifact/diagnostic HTTP behavior. Activity
+  checks use the real metadata-only chat-list contract, saved legacy review times,
+  continuation state, read-only pauses, run timestamps and process return codes.
+- Four packaging-gate tests cover all nine skill review markers, missing guidance
+  and required tools. All four new skills passed skill-creator frontmatter checks.
+
+A real Codex configurator smoke test also completed an actual question, user answer
+and shared-data proposal without applying the board. It used explicit YOLO, low
+effort and Fast test settings; it does not demonstrate every model/permission mode.
+
+No live research job was launched or stopped by these fixtures. The source/docs
+review records explicit limits for timer/recovery activation, graph policy versus
+Codex shell access, metadata-only data inspection and WebSocket/HMR previews.
+
+## Previous release baseline
+
 # SuperSurfer 0.1.23 validation — October 7, 2026
 
 All 360 Python tests, 20 Node/SSH checks without skips, 17 Chromium suites, two native Linux Electron suites and the preserved 212-test engine regression suite pass. The targeted node suite also passes after final fixes for creating missing registered roots and repairing previously acquired nodes. All five skills were independently reviewed and revised, including the roles/tools/authority schematic.

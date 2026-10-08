@@ -9,10 +9,20 @@ sys.path.insert(0, str(ROOT))
 from server.agent_tools import ROLE_TOOLS, COMPUTE_TOOLS, QUESTION_TOOL, RESULT_TOOL, TRAINING_RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL
 
 
+CAPABILITY_GUIDANCE = {
+    "surfboard": ("read_surfboard", "propose_surfboard", "ask_user"),
+    "workflow": ("read_surfboard", "inspect_board_data", "run_board_action", "update_task", "handoff_work_item", "create_work_item", "create_work_item_agent", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"),
+    "wandb-data": ("read_surfboard", "inspect_board_data", "propose_surfboard"),
+    "experiment-visualizer": ("inspect_board_data", "publish_training_results", "publish_result", "publish_markdown_tab"),
+}
+
+
 def check(root=ROOT):
     version = json.loads((root / "package.json").read_text())["version"]
     errors = []
-    for role, tools in {**ROLE_TOOLS, "host-onboarding": [*COMPUTE_TOOLS, QUESTION_TOOL], "results": [RESULT_TOOL, TRAINING_RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL]}.items():
+    guidance = {**{("surfboard" if role == "configurator" else role): tools for role, tools in ROLE_TOOLS.items()}, "host-onboarding": [*COMPUTE_TOOLS, QUESTION_TOOL], "results": [RESULT_TOOL, TRAINING_RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL],
+                **{name: [{"name": tool} for tool in tools] for name, tools in CAPABILITY_GUIDANCE.items()}}
+    for role, tools in guidance.items():
         name = "supersurfer-" + role
         path = root / "agent_skills" / name / "SKILL.md"
         if not path.is_file():

@@ -22,7 +22,7 @@ class AgentSkillsTests(unittest.TestCase):
             shutil.copytree(ROOT / "agent_skills", root / "agent_skills")
             (root / "package.json").write_text(json.dumps({"version": "999.0.0"}))
             errors = checker.check(root)
-            self.assertEqual(5, len(errors))
+            self.assertEqual(9, len(errors))
             self.assertTrue(all("review capabilities" in error for error in errors))
 
     def test_missing_skill_or_tool_guidance_blocks_packaging(self):
@@ -36,3 +36,15 @@ class AgentSkillsTests(unittest.TestCase):
             errors = checker.check(root)
             self.assertTrue(any("missing SKILL.md" in error for error in errors))
             self.assertTrue(any("document its queue_run" in error for error in errors))
+
+    def test_missing_data_block_guidance_blocks_packaging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            shutil.copytree(ROOT / "agent_skills", root / "agent_skills")
+            shutil.copyfile(ROOT / "package.json", root / "package.json")
+            (root / "agent_skills/supersurfer-wandb-data/SKILL.md").unlink()
+            visualizer = root / "agent_skills/supersurfer-experiment-visualizer/SKILL.md"
+            visualizer.write_text(visualizer.read_text().replace("`inspect_board_data`", "data inspection"))
+            errors = checker.check(root)
+            self.assertTrue(any("supersurfer-wandb-data: missing SKILL.md" in error for error in errors))
+            self.assertTrue(any("supersurfer-experiment-visualizer: document its inspect_board_data" in error for error in errors))

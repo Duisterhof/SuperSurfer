@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.23'
+  supersurfer-version: '0.1.24'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.23. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.24. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -93,6 +93,31 @@ content stays with its owner otherwise. Results opening requires no manager
 review, model turn or new monitoring task. Preserve existing report identities,
 measured gaps and source provenance.
 
+## Project surfboard
+
+Use `read_surfboard` for the applied project graph when configuration affects the
+task. The role policy filters tools and server actions; the graph's requirements
+must be satisfied by actual service evidence. Markdown claims do not pass a gate.
+The guidance above describes the built-in Research board. For a Software
+engineering or Web design project, use the generic workflow skill selected by the
+service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
+A workspace manager must resolve the board of the project it is acting on.
+
+`inspect_board_data` resolves a configured input's experiment/run/artifact sources.
+Research defaults to sharing data within the project; current-experiment and named
+experiment selections narrow that input. Preserve the selection and source
+provenance. Read the W&B/visualizer skills attached to those blocks before creating
+a comparison. Availability for comparison does not authorize training on held-out
+data or crossing project boundaries.
+
+`run_board_action` executes a configured permitted action with a durable record;
+use its recorded result rather than claiming that a command passed. Research GPU
+launches continue through their existing exact-source PR and scheduler workflow.
+For a requested board change, prepare the concrete change for the project
+configurator. That conversation has `propose_surfboard` and the user applies its
+reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
+changes. Never alter board state to grant yourself a denied capability.
+
 ## Tool index
 
 Manager project-pool/budget operations require `project_id`; host inspection and
@@ -103,6 +128,10 @@ Node/recovery tools use `run_id` to derive project/experiment scope, with no ext
 
 | Tools | Use |
 |---|---|
+| `read_surfboard`, `inspect_board_data`, `run_board_action` | Applied graph, scoped data inputs and permitted configured commands. |
+| `list_project_artifacts`, `publish_artifact` | Browse or save requested project outputs in the project's isolated library. |
+| `inspect_project_activity`, `export_diagnostics` | Actual background work or a bounded redacted diagnostic report; never publish it externally without the user's request. |
+| `create_work_item`, `create_work_item_agent`, `handoff_work_item` | Nonresearch names for requested scoped item creation and assignment. |
 | `update_task` | Track the actual workspace deliverable, not unsolicited peer reviews. |
 | `create_experiment`, `create_experiment_agent`, `handoff_experiment` | Requested creation and bounded worker assignment; preserve ownership. |
 | `queue_run` | Explicit manager-assigned launch through the verified-PR queue. |

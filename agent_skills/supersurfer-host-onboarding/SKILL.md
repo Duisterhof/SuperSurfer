@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.23'
+  supersurfer-version: '0.1.24'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.23. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.24. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -15,6 +15,13 @@ project, and managers explicitly select the registered project for pool operatio
 Run-specific tools infer scope from `run_id`. Suggestions and ordinary scheduled
 checks do not authorize setup, budget changes or launches; a saved recovery grant
 separately permits bounded repair for its owner and latest run only.
+
+The active surfboard must expose compute capabilities for this task. These are
+Research execution tools, not prerequisites for a software check or web preview.
+A disabled tool is not permission to use an unscoped shell replacement. Resolve
+a requested board change through the configurator. Existing queued/running
+contracts retain their source, resource and review evidence; a later graph edit
+cannot retroactively prove missing readiness or erase a stop.
 
 ## Separate the causes of a queue wait
 

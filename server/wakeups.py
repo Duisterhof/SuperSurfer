@@ -256,7 +256,7 @@ class Wakeups:
                     changes = {'last_checked_at': now, 'error': None}
                     try:
                         if condition['kind'] != 'interval':
-                            if not snapshot.get('connected') or not _finite(snapshot.get('updated_at')) or now - snapshot['updated_at'] > SNAPSHOT_STALE_SECONDS or snapshot['updated_at'] > now + 60:
+                            if not snapshot.get('manager_connected', snapshot.get('connected')) or not _finite(snapshot.get('updated_at')) or now - snapshot['updated_at'] > SNAPSHOT_STALE_SECONDS or snapshot['updated_at'] > now + 60:
                                 raise WakeupError('Run observations are unavailable or stale; waiting for a fresh snapshot')
                             run = self._run(rule, snapshot)
                             changes['bound_run_id'] = run['id']

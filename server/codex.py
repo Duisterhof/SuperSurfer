@@ -140,7 +140,7 @@ class CodexBridge:
 
     @staticmethod
     def _validate_scope(scope):
-        if not isinstance(scope, str) or not (scope == "manager" or (scope.startswith(("project:", "experiment:", "conversation:")) and len(scope.split(":", 1)[1]) > 0)) or len(scope) > 256:
+        if not isinstance(scope, str) or not (scope == "manager" or (scope.startswith(("project:", "experiment:", "conversation:", "surfboard:")) and len(scope.split(":", 1)[1]) > 0)) or len(scope) > 256:
             raise ValueError("Use a registered SuperSurfer manager, project, experiment, or conversation scope. Existing workers must use their original owner.")
 
     def _context(self, scope):
@@ -601,7 +601,7 @@ class CodexBridge:
                 # thread's override. Fail honestly if it cannot be reset.
                 if not model or not reasoning:
                     raise CodexError("Cannot resolve Codex model and reasoning defaults. Choose both explicitly in chat settings.")
-            instructions = _INSTRUCTIONS + "\n\n" + str(context.get("instructions", ""))
+            instructions = context.get("base_instructions", _INSTRUCTIONS) + "\n\n" + str(context.get("instructions", ""))
             if context.get("document_path"):
                 instructions += "\nThe canonical experiment document is: " + str(context["document_path"]) + ". Read the latest content before editing; preserve unrelated work."
             tier = "fast" if fast_mode else "default"
@@ -678,7 +678,7 @@ class CodexBridge:
             clock = local_time_context(clock["timezone"])
             turn_params["additionalContext"] = {
                 "supersurfer-time": {"kind": "application", "value": "Current local time for this turn: " + json.dumps(clock, ensure_ascii=False) + ". Use this timezone for dates, schedules, reports, and interpreting relative times. The remote host may use another timezone. For time-sensitive shell commands explicitly set the command's TZ environment variable to " + clock["timezone"] + "; a loaded Codex thread may retain its older shell environment."},
-                "supersurfer-permissions": {"kind": "application", "value": "Current SuperSurfer permission mode: " + approval_mode + ". Approval policy: " + approval_policy + ". Sandbox: " + sandbox + ". These settings supersede older permission-mode snapshots. They do not replace user intent or the scoped research queue workflow. Research questions still require the user's answer."},
+                "supersurfer-permissions": {"kind": "application", "value": "Current SuperSurfer permission mode: " + approval_mode + ". Approval policy: " + approval_policy + ". Sandbox: " + sandbox + ". These settings supersede older permission-mode snapshots. They do not replace user intent or the applied surfboard requirements. Questions still require the user's answer."},
             }
             with self._lock:
                 tasks = copy.deepcopy(chat.get("tasks", []))
@@ -689,7 +689,7 @@ class CodexBridge:
                 # Research files, imported records and model-authored documents
                 # remain evidence, not higher-priority instructions.
                 turn_params["additionalContext"].update({
-                    "supersurfer-policy": {"kind": "application", "value": "Current SuperSurfer role and capability policy for this turn; supersedes older SuperSurfer policy snapshots.\n" + _INSTRUCTIONS + "\nCurrent role: " + str(context.get("role", "worker"))},
+                    "supersurfer-policy": {"kind": "application", "value": "Current SuperSurfer role and capability policy for this turn; supersedes older SuperSurfer policy snapshots.\n" + context.get("base_instructions", _INSTRUCTIONS) + "\nCurrent role: " + str(context.get("role", "worker"))},
                     "supersurfer-context": {"kind": "untrusted", "value": str(context.get("instructions", "")) + ("\nCanonical experiment document: " + str(context["document_path"]) if context.get("document_path") else "")},
                 })
             if model:

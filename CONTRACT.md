@@ -1,3 +1,105 @@
+## 0.1.24 surfboards and project data flow
+
+A project surfboard is a versioned definition of typed nodes and edges. Research,
+Software engineering and Web design are built-in templates. Runtime state,
+credentials, host paths and existing work records remain separate from the graph.
+Migration selects Research for existing projects without rewriting their identities
+or replaying an action. Role scopes remain manager/workspace, lead/project and
+worker/experiment (the UI may label the item differently).
+
+- **Editing:** unresolved arrows are draft-only. An applied edge has a supported
+  relationship such as data input or prerequisite. Definitions are validated and
+  compare-and-swapped against their base version; stale or invalid edits cannot
+  replace the active board. Agent `read_surfboard` is scoped to the project and
+  `propose_surfboard` creates a proposal only. Application is a user action. Importing,
+  duplicating or saving a board starts no inference, process, schedule or run.
+- **Authority:** the graph's capabilities and role tool selections narrow actual
+  tools; the service also enforces them on calls. They cannot add a tool outside
+  the role's supported scope or override workspace permissions. Repeated agent
+  blocks for the same role share the intersection of that role's configured tool
+  policies; they do not create distinct runtime identities with independent rights.
+  Board instructions are context, not authorization. Stop remains authoritative.
+  These controls cover managed SuperSurfer APIs. Codex's generic shell/file tools
+  remain governed by its selected sandbox and Ask/automatic-review/YOLO mode;
+  the surfboard is not an operating-system isolation boundary between projects.
+  Agents must not use shell access to bypass a managed workflow requirement.
+- **Evidence:** prerequisite checks require successful service records for the
+  relevant source. Agent prose, artifact titles and arrow labels cannot stand in
+  for a receipt. An exact-source PR belongs to its recorded commit. Changes require
+  new evidence. Existing Research queue/source/resource/recovery contracts remain
+  in force; moving blocks cannot waive the scheduler's checks or rewrite a run.
+- **Configured actions:** `run_board_action` executes a configured, permitted local
+  action and exposes its durable outcome. Generic software checks and web previews
+  do not require W&B, GPUs or research-launch PRs. A check or reachable preview is
+  evidence for that action, not proof of the entire user deliverable or authorization
+  to merge, publish or deploy. An agent should inspect the record after uncertainty.
+- **Command records:** `run_board_action` takes `node_id`, `operation` (`start`,
+  `status`, `stop`), a stable `request_id` for start, and optional `execution_id`
+  and in-scope `experiment_id`. Commands are taken from the applied board, never
+  arbitrary tool arguments. Receipts bind project, work item, board version, owner,
+  command, optional PR and source fingerprint. A reused request returns its original
+  receipt; changed intent conflicts. Stop kills the owned process group, and removed
+  nodes remain stoppable. Service restart records uncertain work as interrupted;
+  it never silently reruns it. Only a successful latest check with unchanged source
+  satisfies a prerequisite. Tracked/untracked nonignored contents invalidate old
+  evidence. Logs retain a bounded tail. There are at most 16 concurrent board actions.
+- **Previews:** a configured preview port must be unused before its action starts.
+  Its live process receives `SUPERSURFER_PREVIEW_BASE` and `SUPERSURFER_PREVIEW_PORT`.
+  A short-lived process-bound URL proxies GET/HEAD to that local port, with no app
+  credentials/cookies forwarded, no redirects, an 8 MiB response limit and a sandbox
+  without same-origin access. Common relative/root asset links are rewritten; apps
+  with client routing should use the supplied base. WebSocket/HMR proxying is not
+  supported in this release. Stop/restart expires the URL. This proxy does not
+  publish the site externally.
+- **Sharing:** W&B blocks default to `sharing: "project"`; `"item"` selects the
+  current experiment and `"selected"` uses explicit `experiment_ids`. Selection is
+  constrained to the board's project. A visualizer resolves its connected data
+  inputs with `inspect_board_data`, retaining experiment/run/source/artifact IDs.
+  Missing or empty input stays empty; it does not fall back to unrelated data.
+  Sharing supplies evidence to views, not cross-project access, credentials,
+  physical dataset replication or permission to train on held-out observations.
+- **Rendering:** the W&B and Experiment visualizer blocks bind their respective
+  release-reviewed skills. `publish_training_results` binds individual live writers
+  and real metric keys. Training, validation and test retain their distinct splits;
+  compatible methods share axes, and requested domain visuals supplement the curves.
+  A project-wide input is a source pool, not an instruction to plot every run.
+  Publication is agent work; opening a declared live Results view fetches fresh
+  measurements without another agent turn. Data arrows are not general event buses.
+- **Triggers:** timer/recovery connections contribute their configured intent to
+  the graph and agent context. Existing explicit wakeup/recovery tools own persisted
+  execution. A drawn arrow does not itself activate a recurring job or authorize
+  a new launch. Live run contracts and stopped monitoring are preserved on edits.
+
+Project artifacts live under `.SuperSurfer/projects/<project_id>/artifacts`, so
+projects sharing a repository retain distinct libraries. Publishing copies a regular
+project output into that library; traversal, symlinks, hardlinks and reserved
+credential/service paths are rejected. Limits are 512 MiB per file and 1,000 entries
+per listing. File previews/downloads use short-lived file capabilities; HTML previews
+remain sandboxed. This does not expose arbitrary workspace paths or grant other
+projects a listing capability. Portable board export is separate from this library;
+the `.SuperSurfer` runtime directory remains ignored by default.
+
+`inspect_project_activity` reports saved tasks, enabled wakeups, existing periodic
+experiment reviews and recovery grants, plus durable board actions. Legacy reviews
+have stable `review:<experiment_id>` identities, their actual selected/active worker,
+saved next/last review times and errors. Read-only mode distinguishes configured
+rules from effectively enabled dispatch without changing saved settings. Agent rows
+include the actual continuation stall counter and note: three unchanged turn endings
+stop continuation, while task progress resets that guard. Interval rules repeat after accepted work until paused
+or removed; metric/status rules disarm after one accepted trigger. Ambiguous wakeup
+delivery pauses instead of replaying. Graph trigger templates are explicitly separate
+from enabled rules. `export_diagnostics` prepares a redacted Markdown artifact with
+version/environment details, scoped run state/timing, bounded process logs and
+recent tool activity. It does not automatically send the report elsewhere. Full chat
+messages, source files, environment variables and account records are not read for
+the export, but logs may contain private excerpts; redaction is best effort and the
+user should review the file before sharing it.
+
+The nine bundled skills are manager, research lead, experiment worker, host
+onboarding, scientific Results, generic workflow, surfboard configurator, W&B data
+and experiment visualizer. Packaging checks every skill's release review markers
+and capability coverage; service context selects the appropriate workflow guidance.
+
 ## 0.1.23 exact-node setup and owned recovery
 
 `check_available_node(run_id, host_id, node?)` derives a placement variant from the frozen pooled request. It checks the full Git revision in an isolated checkout, committed submodules, executable command, Python distributions, required input paths, storage and current GPU readings/reservations. It preserves active worktrees. `ready` describes setup; `available` additionally describes observed capacity. Neither reserves GPUs. Inputs are checked for existence; agents must retain the protocol's hash/provenance checks where required.

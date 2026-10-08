@@ -533,7 +533,7 @@ class BackendTests(unittest.TestCase):
             process = subprocess.run([config["command"], *config["args"]], input="\n".join(json.dumps(item) for item in requests) + "\n", text=True, capture_output=True, timeout=15, env={**os.environ, **config["env"]})
             self.assertEqual(process.returncode, 0, process.stderr)
             responses = [json.loads(line) for line in process.stdout.splitlines()]
-            self.assertEqual({tool["name"] for tool in responses[0]["result"]["tools"]}, {"create_experiment", "update_experiment", "handoff_experiment", "create_experiment_agent", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"})
+            self.assertEqual({tool["name"] for tool in responses[0]["result"]["tools"]}, {"create_experiment", "update_experiment", "handoff_experiment", "create_experiment_agent", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run", "read_surfboard", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"})
             self.assertFalse(responses[1]["result"]["isError"])
             self.assertFalse(responses[2]["result"]["isError"])
             handoff = json.loads(responses[2]["result"]["content"][0]["text"])
@@ -561,7 +561,7 @@ class BackendTests(unittest.TestCase):
         worker = "experiment:" + self.service.state()["experiments"][0]["id"]
         self.service.action("chat.settings", {"scope": "manager", "model": "model-a", "reasoning": "ultra", "fast_mode": True, "approval_mode": "auto_review"})
         self.service.action("chat.settings", {"scope": "project:p1", "model": "model-b", "reasoning": "max"})
-        self.assertEqual(self.service.chat(worker)["preferences"]["overrides"], {"model": None, "reasoning": None, "fast_mode": False, "approval_mode": None})
+        self.assertEqual(self.service.chat(worker)["preferences"]["overrides"], {"model": None, "reasoning": None, "fast_mode": None, "approval_mode": None})
         self.service.close()
         self.service = Service(self.root / "state", self.root / "aml", aml=AMLClient(self.root / "aml", rpc=self.manager), codex=FakeCodex(), start_monitor=False, tracking=FakeTracking())
         self.assertEqual(self.service.chat("manager")["preferences"]["effective"], {"model": "model-a", "reasoning": "ultra", "fast_mode": True, "approval_mode": "auto_review"})
@@ -572,7 +572,7 @@ class BackendTests(unittest.TestCase):
         self.service.action("settings.save", {"models": {"manager": "model-a"}, "reasoning": {"manager": "ultra"}})
         self.assertEqual(self.service.chat_preferences("manager")["effective"], {"model": "model-b", "reasoning": "max", "fast_mode": False, "approval_mode": "ask"})
         reset_effort = self.service.action("chat.settings", {"scope": "manager", "reasoning": None})["preferences"]
-        self.assertEqual(reset_effort["overrides"], {"model": "model-b", "reasoning": None, "fast_mode": False, "approval_mode": None})
+        self.assertEqual(reset_effort["overrides"], {"model": "model-b", "reasoning": None, "fast_mode": None, "approval_mode": None})
         self.assertEqual(reset_effort["effective"], {"model": "model-b", "reasoning": "low", "fast_mode": False, "approval_mode": "ask"})
         self.assertIn("ultra reasoning is unavailable", reset_effort["note"])
         reset_model = self.service.action("chat.settings", {"scope": "manager", "model": None})["preferences"]
@@ -583,7 +583,7 @@ class BackendTests(unittest.TestCase):
         self.service.action("chat.settings", {"scope": "manager", "model": "model-a", "reasoning": "ultra"})
         for changes in [{"model": "missing"}, {"model": "model-b", "reasoning": "ultra"}, {"reasoning": "invented"}]:
             with self.assertRaises(APIError): self.service.action("chat.settings", {"scope": "manager", **changes})
-        self.assertEqual(self.service.store.chat_settings("manager"), {"model": "model-a", "reasoning": "ultra", "fast_mode": False, "approval_mode": None})
+        self.assertEqual(self.service.store.chat_settings("manager"), {"model": "model-a", "reasoning": "ultra", "fast_mode": None, "approval_mode": None})
         with self.assertRaises(APIError): self.service.action("settings.save", {"models": {"worker": "model-b"}, "reasoning": {"worker": "ultra"}})
         self.assertEqual(self.service.store.settings()["models"]["worker"], "")
         for scope in ["unknown", "project:missing", "experiment:missing", "agent:missing"]:
@@ -650,7 +650,7 @@ class BackendTests(unittest.TestCase):
         with self.assertRaises(APIError): self.service.action("chat.settings", {"scope": "agent:a1", "approval_mode": "auto_review"})
     def test_fast_mode_validates_boolean_and_resets_without_interrupting_turn(self):
         self.service.action("chat.settings", {"scope": "manager", "fast_mode": True})
-        for value in (None, 1, "true", [], {}):
+        for value in (1, "true", [], {}):
             with self.assertRaises(ValueError): self.service.action("chat.settings", {"scope": "manager", "fast_mode": value})
         self.service.action("chat.send", {"scope": "manager", "text": "Work on this"})
         self.assertTrue(self.service.codex.sent[-1][2]["fast_mode"])
@@ -759,7 +759,7 @@ class BackendTests(unittest.TestCase):
             process = subprocess.run([config["command"], *config["args"]], input="\n".join(json.dumps(request) for request in requests) + "\n", text=True, capture_output=True, timeout=15, env={**os.environ, **config["env"]})
             self.assertEqual(process.returncode, 0, process.stderr)
             responses = [json.loads(line) for line in process.stdout.splitlines()]
-            self.assertEqual([tool["name"] for tool in responses[1]["result"]["tools"]], ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"])
+            self.assertEqual([tool["name"] for tool in responses[1]["result"]["tools"]], ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run", "read_surfboard", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"])
             self.assertFalse(responses[2]["result"]["isError"])
             held = json.loads(responses[2]["result"]["content"][0]["text"])
             self.assertFalse(held["ready"])

@@ -64,7 +64,7 @@ class ProjectLimits:
             if not restores:
                 return
             snapshot = self.service.state(force=True)
-            if not snapshot['connected']:
+            if not snapshot.get('manager_connected', snapshot['connected']):
                 return
             runs = {run['id']: run for run in snapshot['runs']}
             projects = {project['id']: project for project in snapshot['projects']}

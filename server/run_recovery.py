@@ -94,7 +94,7 @@ class RunRecovery:
         if not service.action_lock.acquire(timeout=.1): return
         try:
             snapshot = service.state()
-            if not snapshot.get('connected'): return
+            if not snapshot.get('manager_connected', snapshot.get('connected')): return
             runs = {run['id']:run for run in snapshot['runs']}
             for record in service.store.get('run_recovery', []):
                 run = runs.get(record['runs'][-1]); scope = record['scope']
