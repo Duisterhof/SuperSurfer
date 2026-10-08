@@ -2,21 +2,23 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.27. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.28. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
 or extra research to fill gaps.
 
 Cancellation does not erase a run's measured evidence or establish experiment
-failure. Preserve its curves and label the actual run state. A reporting request
-does not authorize `stop_run`; requested cancellations use the role's scheduler
-tool separately and may remain cancelling until confirmed.
+failure. Cancelling an obsolete admission check after a candidate replacement is
+also separate from the run's outcome; use the actual run record before labelling
+an experiment failed or cancelled. Preserve its curves and label the actual run
+state. A reporting request does not authorize `stop_run`; requested cancellations
+use the role's scheduler tool separately and may remain cancelling until confirmed.
 
 Node acquisition preserves the existing queued run. A confirmed-failure recovery
 creates a linked attempt with a new run/W&B identity; keep both attempts' provenance

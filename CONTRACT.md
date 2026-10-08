@@ -1,3 +1,12 @@
+## 0.1.28 cancellation is not a connection failure
+
+Cancelling an obsolete scheduler check propagates cancellation through the
+existing owned control-process cleanup. It does not add a node or gateway outage
+to the transport cache. Genuine connection errors and request timeouts retain
+their existing five-minute backoff. Cancellation does not establish node health,
+free GPUs, release reservations or bypass source/resource checks; the normal
+scheduler must verify the replacement candidate before launch.
+
 ## 0.1.27 recovery and layout follow-up
 
 Compute header actions remain within the available main-column width, including

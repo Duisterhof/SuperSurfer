@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.27. The visual Code editor uses Monaco, the editor
+Reviewed for SuperSurfer 0.1.28. The visual Code editor uses Monaco, the editor
 component of VS Code. Its files are the registered repository shared by the user
 and project agents, not an isolated agent checkout. The `editor` surfboard block
 is a view; it adds no shell tool, executable action or launch permission.

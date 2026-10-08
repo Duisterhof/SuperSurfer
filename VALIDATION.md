@@ -1,3 +1,25 @@
+# SuperSurfer 0.1.28 scheduler cancellation follow-up — October 8, 2026
+
+Live E17 recovery successfully retained its original request identity and created
+one replacement run. The worker then prepared a node that passed readiness and
+availability checks, but the scheduler delayed launch by 302.6 seconds. An isolated
+real Manager/Transport reproduction confirmed that replacing a candidate cancelled
+its obsolete check and incorrectly cached that cancellation as a 300-second SSH
+failure, rejecting subsequent work before a transport call.
+
+The transport now propagates caller cancellation without recording an outage;
+genuine connection errors/timeouts retain their backoff. Existing process cleanup,
+reservations and source/resource admission are unchanged. E17's replacement was
+already running before this follow-up; no extra scientific run was submitted.
+
+Final source passes **606 Python tests** and **212 engine regressions**. Six new
+regressions exercise real Manager candidate replacement, bounded host deadlines,
+reservation retention, gateway-lock cancellation, real control-process cleanup
+and preserved real timeout/connection backoff. The original reproduction failed
+three cancellation cases before the fix. All eleven skills were reviewed; their
+checker and four tests pass. The unchanged UI retains the 0.1.27 browser/live
+verification and the broader workflow checks recorded below.
+
 # SuperSurfer 0.1.27 recovery and layout follow-up — October 8, 2026
 
 A read-only check against the updated real workspace found a clipped Compute

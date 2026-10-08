@@ -75,7 +75,9 @@ class Transport:
             except HostConfigurationError as exc:
                 self.host_failures[target] = (time.monotonic() + 300, str(exc))
                 raise
-            except (ConnectionError, TimeoutError, asyncio.CancelledError) as exc:
+            # Replacing an obsolete admission check deliberately cancels it.
+            # _request reaps its process; cancellation is not a node outage.
+            except (ConnectionError, TimeoutError) as exc:
                 failure = (time.monotonic() + 300, str(exc) or "SSH request timed out or was cancelled")
                 self.connection_failures[target] = failure
                 failed = self.gateway_failed_targets.setdefault(gateway, set())

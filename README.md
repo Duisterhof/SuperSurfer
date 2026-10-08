@@ -1,3 +1,11 @@
+## 0.1.28 prompt admission after node preparation
+
+Updating a queued run's node contract cancels its obsolete readiness check. That
+cancellation no longer creates a false five-minute SSH outage, so the scheduler
+can check the prepared node promptly. Actual connection failures retain their
+normal backoff and uncertain jobs keep their reservations. This includes the
+research, coding and writing workflows described below.
+
 ## 0.1.27 recovery and compact Compute controls
 
 Compute actions wrap within the space left by your chat panel, keeping Refresh and

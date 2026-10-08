@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.27'
+  supersurfer-version: '0.1.28'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.27. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.28. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -88,6 +88,9 @@ For genuinely missing physical registration,
 manager-only `register_compute_gpus` adds observed authorized indices to an
 existing host while preserving reservations; it changes neither project masks
 nor queued candidates and starts no job. Do not duplicate registrations.
+An obsolete admission check cancelled after a candidate replacement does not
+establish an SSH outage. Keep remediation with the same run and owner; do not
+force polling or re-register hosts to work around that cancellation.
 
 All owned roles can apply explicit user budget decisions with `set_project_limits`.
 Here, supply `project_id`; do not make workers route an already authorized edit
