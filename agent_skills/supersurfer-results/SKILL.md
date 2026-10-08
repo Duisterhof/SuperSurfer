@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.24. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.25. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -37,6 +37,14 @@ skills cover source resolution and publication. For a requested selection or gra
 change, the configurator uses `propose_surfboard`; only an applied proposal changes
 the active input.
 Generic software/web artifacts need neither W&B nor training plots.
+
+Project and experiment layouts can place Results in the main pane or the right
+panel independently. Repositioning that view does not require copying or
+republishing reports, changing W&B writers, or scheduling a new agent. Keep the
+existing live source bindings and verify the requested view at its actual size.
+HTML edited in the Code editor is a shared source file; unsaved text or a reviewed
+agent patch does not mean the report was published. Preserve concurrent edits and
+use the normal versioned publishing tool when publication was requested.
 
 ## Use the standard training renderer
 

@@ -40,6 +40,8 @@ from .surfboards import Surfboards, SurfboardError as APIError, template as boar
 from .surfboard_service import SurfboardService, ALIASES
 from .board_runtime import BoardRuntime
 from .project_artifacts import ProjectArtifacts
+from .code_editor import CodeEditor
+from .editor_service import EditorService
 
 
 
@@ -147,13 +149,14 @@ def directory_suggestions(value, limit=50, scan_limit=10000):
 from .node_setup import NodeSetup
 from .run_recovery import RunRecovery
 
-class Service(SurfboardService):
+class Service(SurfboardService, EditorService):
     def __init__(self, state_dir, aml_home, read_only=False, aml=None, codex=None, start_monitor=True, tracking=None):
         self.store = Store(state_dir)
         self.directory = self.store.directory
         self.read_only = read_only
         self.boards = Surfboards(self.store)
         self.artifacts = ProjectArtifacts(self)
+        self.code = CodeEditor()
         self.wandb = WandBReader()
         self.result_data = ResultData(self.wandb)
         self.results = Results(self.store)
@@ -231,7 +234,7 @@ class Service(SurfboardService):
             state["connected"] = True
         for project in state["projects"]:
             board = self.boards.get(project["id"])
-            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views")}, "name": board["board"]["name"], "version": board["version"]}
+            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts")}, "name": board["board"]["name"], "version": board["version"]}
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
         projects = {project["id"]: project for project in state["projects"]}
@@ -1406,6 +1409,10 @@ class Service(SurfboardService):
             return result
 
     def _action(self, op, params):
+        if op.startswith("code."):
+            return self.code_action(op, params)
+        if op == "view-layout.save":
+            return self.save_view_layout(params)
         if op.startswith("surfboard."):
             return self.surfboard_action(op, params)
         if op == "settings.save":
@@ -1821,6 +1828,10 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.state()
                 elif path == "/api/surfboard":
                     result = self.server.service.surfboard(query.get("project_id", [""])[0])
+                elif path == "/api/view-layout":
+                    result = self.server.service.view_layout(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
+                elif path.startswith("/api/code/"):
+                    result = self.server.service.code_query(path.removeprefix("/api/code/"), {key: value[0] for key, value in query.items()})
                 elif path == "/api/artifacts":
                     result = self.server.service.artifacts.list(self.server.service.lookup("projects", query.get("project_id", [""])[0]), query.get("path", [""])[0])
                 elif path == "/api/project-activity":
@@ -1829,6 +1840,7 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.diagnostics(query.get("project_id", [""])[0])
                 elif path == "/api/experiment":
                     result = self.server.service.store.experiment(query.get("id", [""])[0])
+                    result["view_layout"] = self.server.service.view_layout(result["project_id"], result["id"])
                     result["brief"] = brief.read(self.server.service.store, result["id"])
                     result["pages"] = self.server.service.results.pages(result["id"])
                 elif path == "/api/experiment-page":
@@ -1882,7 +1894,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             path = urlsplit(self.path).path
-            if path not in {"/api/action", "/api/agent-tool"}:
+            if path not in {"/api/action", "/api/agent-tool", "/api/code/save"}:
                 raise APIError("Not found", 404)
             agent_scope = None
             if path == "/api/agent-tool":
@@ -1906,12 +1918,15 @@ class Handler(BaseHTTPRequestHandler):
                 size = int(self.headers.get("Content-Length", "0"))
             except ValueError as exc:
                 raise APIError("Invalid Content-Length") from exc
-            if not 0 < size <= 2 * 1024 * 1024:
-                raise APIError("Request body must be 1 byte to 2 MiB", 413)
+            maximum = 16 * 1024 * 1024 if path == "/api/code/save" else 2 * 1024 * 1024
+            if not 0 < size <= maximum:
+                raise APIError(f"Request body must be 1 byte to {maximum // (1024 * 1024)} MiB", 413)
             request = json.loads(self.rfile.read(size))
             if not isinstance(request, dict):
                 raise APIError("Expected a JSON object")
-            if path == "/api/agent-tool":
+            if path == "/api/code/save":
+                result = self.server.service.action("code.save", request)
+            elif path == "/api/agent-tool":
                 if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))

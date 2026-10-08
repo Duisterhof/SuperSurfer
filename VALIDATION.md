@@ -1,3 +1,42 @@
+# SuperSurfer 0.1.25 validation — October 7, 2026
+
+The full **485 Python tests** pass, including 16 repository-editor, 8 durable
+agent-attribution, 9 real HTTP integration, and 8 new layout-schema cases.
+All **20 Node/SSH tests** pass with the isolated localhost SSH checks enabled.
+The **21 Chromium suites** cover the existing app plus Monaco and the visual layout
+editor; the read-only wakeup check now waits for its asynchronous refresh response.
+Three native Linux Electron suites cover workspace isolation/restore and actual
+Monaco unsaved-close handling. The native tests automate the modal response while
+exercising the real Electron beforeunload and window lifecycle.
+
+New behavior was exercised through the real service for Research, Software and Web
+workflows at 1440×900 and 1000×700. Monaco tests load the bundled editor and workers,
+not a textarea stand-in. Nine editor scenario groups cover source create/save,
+revision conflicts, dirty buffers across navigation, delayed saves/reads, staged and
+working Git diffs, separately attributed agent patches, scoped composer drafts,
+read-only/binary handling, deleted-folder recovery and narrow dark layouts.
+
+Actual file/Git tests cover traversal, symlinks, hard links, internal state, binary
+and size limits, executable modes, two writers, changed-during-save conflicts,
+renames/deletes/untracked/unborn repositories and distinct index/worktree contents.
+Agent receipts survive chat clipping and restart, keep overlapping agents separate,
+upgrade only compatible partial receipts, retain review state and enforce UTF-8 byte
+limits. HTTP checks use real sockets and token/origin enforcement; full-size saves
+also exercise JSON escaping above the ordinary API body's 2 MiB bound.
+
+Layout tests cover project/item separation, per-item overrides and reset, stale
+board/version conflicts, empty-layout recovery, hidden chat, main/right editor and
+chat, side-panel ordering, collapsed views, fullscreen and scoped previews. Layout
+edits never dispatch a command or change workflow authority.
+
+All **ten role/block skills** were reviewed, revised and checked for this release.
+The editor is Monaco; there is no VS Code extension host or Python language server.
+Agent patches cover emitted file-edit events, not shell-only edits or arbitrary
+external writers. Source save checks cannot eliminate the final filesystem race
+against external tools that ignore the editor lock. Unsaved buffers are in-memory,
+not a crash-recovery backup. Native Mac execution remains unavailable on this Linux
+host; Mac packages are unsigned.
+
 # SuperSurfer 0.1.24 validation — October 7, 2026
 
 All **444 Python tests** pass in the final randomized campaign (seed 20261010),

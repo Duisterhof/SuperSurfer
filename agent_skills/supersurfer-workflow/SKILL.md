@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # Work from the project's surfboard
 
-Reviewed for SuperSurfer 0.1.24. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.25. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
@@ -28,6 +28,14 @@ with the current document version. These names retain the established project/it
 ownership rules without introducing research metadata. Workers finish
 their own task; a handoff acknowledgment or passing check is not the whole delivery.
 Do not duplicate a busy owner. Create another conversation only for distinct work.
+
+The Code editor block is a visual view of the shared project repository. It is
+different from a Code action with a configured command: opening or editing source
+adds no launch authority. Read [editor collaboration](../supersurfer-code-editor/SKILL.md)
+when acting on selected code or reviewing agent changes. Preserve user and peer
+edits, including unsaved-selection warnings. A Reviewed patch marker is not a
+check receipt. Project and work-item layouts are independent presentation choices;
+moving a pane does not create a new task or duplicate its owner.
 
 Use `run_board_action` for an action configured on the current board, such as a
 check or preview. Inspect the durable record after uncertainty before starting it

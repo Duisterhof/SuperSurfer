@@ -1,3 +1,12 @@
+## Completed in 0.1.25
+
+- Monaco editor block, local language workers, file browser/search, tabs and revision-checked saves.
+- Separate Git working/index diffs and durable agent-attributed patch review.
+- Selected-code handoff into project/task agent composers, preserving unsaved user edits.
+- Independent visual project/task layouts, per-item overrides/reset, all-hidden recovery.
+- Scoped and bounded source APIs, path/link defenses, overlap/conflict tests and native unsaved-close handling.
+- Review all ten role/block skills against the shipped editor and layout behavior.
+
 ## 0.1.24 surfboards — implementation and validation
 
 - [x] Per-project versioned Research, Software engineering and Web design graphs with scoped roles and supported requirements.

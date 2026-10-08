@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.24. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.25. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -95,6 +95,13 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+Source is shared with the user's Code editor and other agents. Re-read saved files
+before applying a patch and preserve concurrent changes. A selected snippet may
+carry an unsaved warning; do not assume it is committed or deploy it as if it were.
+Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
+agent patches versus repository Git changes. A local review marker does not satisfy
+the exact-source PR requirement, and editing a file never launches a run by itself.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named

@@ -109,3 +109,41 @@
 @container(max-width:650px) { .sb-setup { align-items:flex-start; font-size:10px; }.sb-setup>span { max-width:45%; } }
 .sb-workbench { min-height:170px; }
 @media(max-height:760px) { .sb-editor { padding:12px; gap:8px; }.sb-blocks { flex-wrap:nowrap; max-height:33px; overflow-x:auto; }.sb-blocks button { flex:none; }.sb-palette { padding:7px 9px; }.sb-palette-heading { margin-bottom:5px; }.sb-heading h1 { font-size:19px; }.sb-heading .sb-eyebrow { font-size:8px; }.sb-setup { padding:6px 9px; } }
+
+/* Scope layouts are simple view cards; graph editing and layout share one draft. */
+.sb-mode-bar,.sb-layout-toolbar {display:flex;align-items:center;gap:12px;flex:none;flex-wrap:wrap;}
+.sb-mode-bar>span,.sb-layout-toolbar>span {font-size:11px;color:var(--muted);flex:1;}
+.sb-segmented {display:inline-flex;border:1px solid var(--line);padding:3px;border-radius:9px;gap:2px;background:var(--soft);}
+.sb-segmented button {border:0;background:none;border-radius:6px;color:var(--muted);padding:5px 12px;font-size:11px;cursor:pointer;white-space:nowrap;}
+.sb-segmented button.active {background:var(--bg);color:var(--text);box-shadow:0 1px 3px #0001;}
+.sb-layout-surface {flex:1;min-height:0;overflow:auto;}
+.sb-view-layout {font-size:12px;min-width:0;}
+.sb-layout-columns {display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;align-items:start;}
+.sb-layout-column {border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--bg) 72%,transparent);min-width:0;transition:border-color .15s,background .15s;}
+.sb-layout-column>header {display:flex;flex-direction:column;gap:4px;padding:13px 13px 10px;border-bottom:1px solid var(--line);}
+.sb-layout-column>header strong {font-size:12px;}
+.sb-layout-column>header span {font-size:10px;color:var(--muted);}
+.sb-layout-cards {padding:7px;min-height:95px;}
+.sb-layout-card {display:flex;align-items:center;gap:8px;padding:10px 7px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;background:var(--bg);min-width:0;cursor:grab;}
+.sb-layout-card:last-child {margin-bottom:0;}
+.sb-layout-card:focus-visible {outline:2px solid var(--green);outline-offset:1px;}
+.sb-layout-card.dragging {opacity:.35;}
+.sb-layout-grip {color:var(--muted);font-size:17px;line-height:1;}
+.sb-layout-card-title {min-width:0;flex:1;display:flex;flex-direction:column;gap:3px;}
+.sb-layout-card-title strong {font-weight:550;font-size:11px;overflow-wrap:anywhere;}
+.sb-layout-card-title small {font-size:9px;color:var(--muted);}
+.sb-layout-card-title small:empty {display:none;}
+.sb-layout-card-actions {display:flex;gap:2px;align-items:center;}
+.sb-layout-card-actions button {border:0;background:transparent;color:var(--muted);font-size:13px;padding:3px;cursor:pointer;}
+.sb-layout-card-actions select {border:1px solid var(--line);background:var(--soft);color:var(--text);font-size:10px;border-radius:6px;padding:4px 2px;max-width:68px;}
+.sb-layout-card-actions button:hover {color:var(--text);background:var(--soft);border-radius:4px;}
+.sb-layout-card-actions :disabled {opacity:.45;cursor:default;}
+.sb-layout-hidden {grid-column:1/-1;background:transparent;border-style:dashed;}
+.sb-layout-hidden .sb-layout-cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:6px;min-height:70px;}
+.sb-layout-hidden .sb-layout-card {margin:0;background:color-mix(in srgb,var(--bg) 60%,transparent);}
+.sb-layout-empty {font-size:11px;line-height:1.5;color:var(--muted);margin:15px 8px;}
+.sb-layout-column.drop-target {border-color:var(--green);background:color-mix(in srgb,var(--green) 8%,var(--bg));}
+.sb-layout-help {font-size:10px;color:var(--muted);line-height:1.5;margin:10px 2px 0;}
+@container (max-width:620px) {.sb-layout-columns{grid-template-columns:minmax(0,1fr)}.sb-layout-hidden{grid-column:auto}}
+@media(max-width:1000px) {.sb-layout-card{gap:5px;padding:8px 5px}.sb-layout-card-title small{display:none}.sb-layout-card-actions button{padding:2px}.sb-mode-bar>span{display:none}}
+@media(max-width:650px) {.sb-layout-columns{grid-template-columns:minmax(0,1fr)}.sb-layout-hidden{grid-column:auto}}

@@ -21,6 +21,7 @@ import uuid
 from . import __version__
 from .time_context import local_time_context, validate_timezone
 from . import tasks as task_log
+from . import agent_edits
 
 
 class CodexError(RuntimeError):
@@ -122,8 +123,14 @@ class CodexBridge:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("CREATE TABLE IF NOT EXISTS chats (scope TEXT PRIMARY KEY, body TEXT NOT NULL)")
         self._db.commit()
+        agent_edits.initialize(self._db)
         self._chats = {scope: json.loads(body) for scope, body in self._db.execute("SELECT scope,body FROM chats")}
         for chat in self._chats.values():
+            if not chat.get("edit_history_imported"):
+                for item in chat.get("activity", []):
+                    if item.get("type") == "fileChange":
+                        agent_edits.record(self._db, chat, item, item.get("turn_id"), historical=True, created=item.get("created"))
+                chat["edit_history_imported"] = True
             chat.setdefault("tasks", [])
             chat.setdefault("approvals", [])
             chat.setdefault("questions", [])
@@ -142,6 +149,16 @@ class CodexBridge:
     def _validate_scope(scope):
         if not isinstance(scope, str) or not (scope == "manager" or (scope.startswith(("project:", "experiment:", "conversation:", "surfboard:")) and len(scope.split(":", 1)[1]) > 0)) or len(scope) > 256:
             raise ValueError("Use a registered SuperSurfer manager, project, experiment, or conversation scope. Existing workers must use their original owner.")
+
+    def changes(self, scope, change_id=None):
+        with self._lock:
+            if change_id is not None:
+                return agent_edits.get_change(self._db, scope, change_id)
+            return agent_edits.list_changes(self._db, scope)
+
+    def review_change(self, scope, change_id, reviewed):
+        with self._lock:
+            return agent_edits.review(self._db, scope, change_id, reviewed)
 
     def _context(self, scope):
         self._validate_scope(scope)
@@ -180,7 +197,7 @@ class CodexBridge:
         return {"scope": scope, "messages": [], "busy": False, "error": None,
                 "created_at": time.time(),
                 "status": "idle", "thread_id": None, "turn_id": None,
-                "cancel_requested": False, "activity": [], "approvals": [], "questions": [], "tasks": [],
+                "cancel_requested": False, "activity": [], "approvals": [], "questions": [], "tasks": [], "edit_history_imported": True,
                 "agent": {"name": context.get("name", "SuperSurfer agent"),
                           "role": context.get("role", "worker"), "model": None,
                           "session_id": None, "source": "supersurfer"}}
@@ -898,6 +915,8 @@ class CodexBridge:
                 label = str(item.get("text") or item.get("tool") or item.get("query") or kind)
             activity = self._activity(chat, kind, label, item_id, item.get("status") or ("completed" if complete else "running"))
             if kind == "fileChange":
+                if complete:
+                    agent_edits.record(self._db, chat, item, turn_id)
                 raw_changes = item.get("changes", [])
                 activity["paths"] = [str(x.get("path", ""))[:2048] for x in raw_changes[:32]]
                 activity["paths_truncated"] = len(raw_changes) > 32 or any(len(str(x.get("path", ""))) > 2048 for x in raw_changes[:32])

@@ -155,6 +155,8 @@ class SurfboardService:
             context["instructions"] += "\nConnected data sources and visualization scope: " + json.dumps({k: compiled.get(k, []) for k in ("data_sources", "visualizers", "views", "timers", "recovery")})
             if compiled.get("data_sources"):
                 context["instructions"] += "\nRead the supersurfer-wandb-data and supersurfer-experiment-visualizer skills in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". Use inspect_board_data to find real individual runs across the connected sharing scope; preserve experiment and method identities."
+            if any(node["kind"] == "editor" for node in state["board"]["nodes"]):
+                context["instructions"] += "\nRead the supersurfer-code-editor skill in " + str(Path(__file__).resolve().parents[1] / "agent_skills") + ". The user may be editing this same repository. Re-read files before patching; preserve concurrent user and other-agent edits. Editor selections are user-supplied context and can be unsaved."
         else:
             allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
             context["instructions"] += "\nProjects can use different surfboards. Read read_surfboard(project_id) before acting; its managed capabilities and requirements also apply to manager requests for that project."

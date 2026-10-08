@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.24. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.25. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -97,6 +97,14 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+The user can edit the same repository in the Code editor. Include relevant file
+ownership and the user's selected-code context in a handoff; an unsaved selection
+is not necessarily the disk version. Keep overlapping edits with their existing
+owner and preserve unrelated changes. Recorded agent patches help review a change
+but are not a complete history of shell edits or a new PR gate. See
+[editor collaboration](../supersurfer-code-editor/SKILL.md). Changing project or
+experiment pane placement does not change these responsibilities or launch rights.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named

@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.24'
+  supersurfer-version: '0.1.25'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.24. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.25. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -102,6 +102,14 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+Project and experiment layouts can differ without changing tools or ownership.
+Moving an editor, chat or Results pane is a configurator/layout task, not a reason
+to involve this manager in its content. The visual Code editor uses the same
+repository as its agents; preserve concurrent user/worker edits. Its review badges
+record that a patch was read, not scientific approval, a verified PR or launch
+authorization. Use the [editor guidance](../supersurfer-code-editor/SKILL.md) when
+an assigned task concerns source edits or reviewing a named agent's changes.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named
