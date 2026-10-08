@@ -21,6 +21,8 @@ import time
 import uuid
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 
+from .chat_context import attachments as chat_attachments
+
 from . import __version__
 from .aml import AMLClient, ManagerError, normalize
 from .store import Store, atomic_write
@@ -1543,14 +1545,17 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Answer existing AutoML conversations in their native console", 409)
             return self.codex.answer(scope, text_field(params, "question_id", 256), params["answers"])
         if op == "chat.steer":
-            if set(params) - {"scope", "text", "view"} or not {"scope", "text"} <= set(params):
+            if set(params) - {"scope", "text", "view", "attachments"} or not {"scope", "text"} <= set(params):
                 raise APIError("Steering accepts scope, text and optional view context")
             scope = text_field(params, "scope", 256)
             if "agent" in self._chat_scope(scope):
                 raise APIError("Steer an existing AutoML conversation in its native console", 409)
             content = text_field(params, "text", 100000)
             view_context = self.chat_view_context(scope, params.get("view"))
-            result = self.codex.steer(scope, content + view_context, **({"display_text": content} if view_context else {}))
+            attached, attachment_context = chat_attachments(self, scope, params.get("attachments"))
+            if len(content + view_context + attachment_context) > 100000:
+                raise APIError("Message and attached context exceed 100,000 characters")
+            result = self.codex.steer(scope, content + view_context + attachment_context, **({"display_text": content} if view_context or attached else {}), **({"attachments": attached} if attached else {}))
             # Subsequent outgoing coordination must cite the direct user request,
             # rather than the unrelated peer request that began this turn.
             self.turn_coordination.pop(scope, None)
@@ -1600,6 +1605,8 @@ class Service(SurfboardService, EditorService, WritingService):
         if op in {"chat.send", "chat.stop"}:
             scope = text_field(params, "scope", 200)
             if scope.startswith("agent:"):
+                if params.get("attachments"):
+                    raise APIError("Attachments require a SuperSurfer-owned conversation", 409)
                 agent = self.lookup("agents", scope.removeprefix("agent:"), fresh=True)
                 if op == "chat.stop":
                     raise APIError("This conversation is owned by AutoML. Stop it in its existing console; SuperSurfer will not interrupt another owner.", 409)
@@ -1625,13 +1632,16 @@ class Service(SurfboardService, EditorService, WritingService):
             if self.codex.chat(scope).get("busy"):
                 raise APIError("An agent turn is already running in this conversation", 409)
             view_context = self.chat_view_context(scope, params.get("view"))
+            attached, attachment_context = chat_attachments(self, scope, params.get("attachments"))
+            if len(content + view_context + attachment_context) > 100000:
+                raise APIError("Message and attached context exceed 100,000 characters")
             self.turn_origins[scope] = "user"
             self.turn_coordination.pop(scope, None)
             self.store.put("agent_messages_paused:" + scope, False)
             self.turn_handoffs[scope] = set()
             self.turn_agent_creations[scope] = 0
             self.turn_queue_requests.pop(scope, None)
-            return self.codex.send(scope, content + view_context, **({"display_text": content} if view_context else {}), model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
+            return self.codex.send(scope, content + view_context + attachment_context, **({"display_text": content} if view_context or attached else {}), **({"attachments": attached} if attached else {}), model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
         if op == "project.initialize":
             return self.store.initialize(self.lookup("projects", text_field(params, "project_id", 150), fresh=True))
         if op == "project.limits":

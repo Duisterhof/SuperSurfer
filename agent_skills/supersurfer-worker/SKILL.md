@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.29. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.30. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -19,7 +19,8 @@ stop orders and resource limits. A turn ending is not completion.
 Requested paper edits may use the same project's connected `compile_latex` block.
 Follow [writing guidance](../supersurfer-writing/SKILL.md), preserve recorded
 scientific provenance, and inspect the generated PDF. A PDF selection identifies
-its build/page rather than a source line; a prior successful PDF may be stale.
+its file/page and any supplied build rather than a source line; a prior PDF may
+be stale.
 Compiling text does not launch an experiment or save the user's dirty editor buffer.
 
 1. Read the current user direction, outstanding deliverables, source, protocol
@@ -140,6 +141,10 @@ carry an unsaved warning; do not assume it is committed or deploy it as if it we
 Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
 agent patches versus repository Git changes. A local review marker does not satisfy
 the exact-source PR requirement, and editing a file never launches a run by itself.
+File/selection attachments arrive only with the user's explicit send and may be
+snapshots of unsaved source or one side of a diff. Resolve their exact workspace
+path and provenance before editing; do not replace current files with an attached
+older snapshot or mistake PDF page numbers for source lines.
 
 When a compact Compute view is unclear, inspect the existing run and its node
 readiness through your scoped tools. A layout issue does not justify duplicate

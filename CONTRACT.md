@@ -1,3 +1,22 @@
+## 0.1.30 explicit context attachments and editor presentation
+
+- File pickers browse registered workspace repositories through existing bounded
+  code APIs. PDF tabs retain authenticated same-origin PDF reads and existing path,
+  file-type and size boundaries. Displayed absolute paths refer to the workspace
+  host. No native local file path is substituted, uploaded or executed.
+- User send/steer accepts up to eight typed context records. The server validates
+  identity, kind, strings, bounds, repository path and project scope, computes the
+  absolute workspace path, and caps combined model text at 100,000 characters.
+  Context is a user-selected snapshot, not a filesystem operation or fresh read.
+  The model receives context; history retains it separately from the typed message.
+  Confirmed sends clear only the submitted chips; failures retain them. Native
+  historical owners do not gain this capability or any new execution authority.
+- The internal file-column width is local presentation state. Fullscreen uses the
+  browser top layer with the same DOM/model and restores without a layout write.
+  Side-view refreshes preserve the fullscreen container. Layout permissions,
+  conflict-checked source saves, compiler gates and scheduler ownership remain
+  unchanged. Escape closes a file chooser before acting on the underlying panel.
+
 ## 0.1.29 scoped presentation and monitoring provenance
 
 - Direct page updates accept validated presentation fields only. Manager selects

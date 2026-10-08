@@ -1,3 +1,6 @@
+import {createFilePicker} from './file-picker.js';
+import {createPanelFocus} from './panel-focus.js';
+import {createChatContext,contextMarkup} from './chat-context.js';
 import {createSurfboardEditor, createViewLayoutEditor, createPageLayoutEditor} from './surfboard.js';
 import {createCodeEditor} from './code-editor.js';
 import {createLatexPanel} from './latex-panel.js';
@@ -176,14 +179,14 @@ const itemLabel = (p=project()) => p?.surfboard?.item_label||({research:'experim
 const pluralItems = (p=project()) => itemLabel(p)+'s';
 const leadLabel = (p=project()) => ({research:'Research lead',software:'Technical lead',web:'Design lead',writing:'Writing lead'}[projectWorkflow(p)]||'Project lead');
 const surfboardEditor=createSurfboardEditor({api,action,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
-const codeEditor=createCodeEditor({api,action,readOnly:()=>readOnly(),onAskAgent:prepareCodeQuestion,onSave:record=>latexPanel.sourceSaved(record)});
+const filePicker=createFilePicker({api}),panelFocus=createPanelFocus();
+function pickWorkspaceFile(onChoose,{pdfOnly=false,title='Open file'}={}){const p=project();if(!p)return;filePicker.open({projectId:p.id,repo:p.repo,pdfOnly,title,onChoose,onError:error=>toast(error.message,true)});}
+async function loadWorkspacePdf(url,{signal}={}){const response=await fetch(url,{signal,headers:sessionStorage.getItem('supersurfer-token')?{Authorization:'Bearer '+sessionStorage.getItem('supersurfer-token')}:{}});if(!response.ok)throw new Error('PDF could not be loaded ('+response.status+').');return new Uint8Array(await response.arrayBuffer());}
+const codeEditor=createCodeEditor({api,action,readOnly:()=>readOnly(),onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
 const latexPanel=createLatexPanel({api,action,readOnly:()=>readOnly(),hasUnsaved:projectId=>codeEditor.hasUnsaved(projectId),
  onSource:({path,...range})=>openPageCode({path,range}),
  onSetup:()=>prepareCodeQuestion('Set up the supported LaTeX compiler on this connected workspace. Check system pdfLaTeX, BibTeX, bubblewrap, prlimit and Poppler (pdfinfo, pdftotext, pdftoppm), then verify compile_latex can compile and inspect a small paper. Preserve project source and existing host environments. If administrator access is needed, explain the exact missing dependency and ask for that access. Do not use an external compiler service or search private service state.', 'Compiler setup message prepared. Send when ready.'),
- onSelection:record=>prepareCodeQuestion('Please review this selected text from the compiled PDF.\n\n'+
-  'Source: '+record.source_path+' · PDF page '+record.page+' · Build '+record.build_id+
-  '\nThis is PDF text, not a source-line mapping. Check the current source before editing.\n\n'+record.text+
-  (record.truncated?'\n[Selection truncated]':''))});
+ onSelection:record=>prepareCodeQuestion({kind:'pdf',project_id:state.projectId,path:record.source_path,label:record.source_path.split('/').at(-1)+' · p. '+record.page,text:'Compiled PDF · Source: '+record.source_path+' · PDF page '+record.page+' · Build '+record.build_id+'\nThis is PDF text, not a source-line mapping.\n'+record.text+(record.truncated?'\n[Selection truncated]':'')})});
 const repositoryExplorer=createRepositoryExplorer({api,onOpenFile:path=>openPageCode({path})});
 const agentChangesTile=createAgentChanges({api,action,readOnly:()=>readOnly(),onOpenChange:(scope,changeId)=>openPageCode({scope,changeId})});
 const projectRuns = id => (state.data?.runs||[]).filter(r=>r.project_id===id);
@@ -206,8 +209,9 @@ function scopedAgents(){
 }
 function selectedAgent(){return scopedAgents().find(agent=>agent.scope===state.scope);}
 function rememberScope(scope){const key=directoryKey()||'manager';Object.defineProperty(scopeChoices,key,{value:scope,enumerable:true,writable:true,configurable:true});try{localStorage.setItem('supersurfer-conversation-selection',JSON.stringify(scopeChoices));}catch{}}
+const chatContext=createChatContext({scope:()=>state.scope,onChange:()=>updateChatHeader(),onError:error=>toast(error.message,true),onPickFile:()=>{const projectId=state.projectId,scope=state.scope;pickWorkspaceFile(async path=>{if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');let text='Reference file '+path+' on the connected workspace. Read the current file before editing.';if(!/\.pdf$/i.test(path)){const file=await api('code/file?'+new URLSearchParams({project_id:projectId,path}));if(typeof file.content==='string')text+='\nSaved file excerpt:\n'+file.content.slice(0,16000)+(file.content.length>16000?'\n[Excerpt truncated]':'');}if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');await prepareCodeQuestion({kind:/\.pdf$/i.test(path)?'pdf':'file',project_id:projectId,path,label:path.split('/').at(-1),text});},{title:'Attach workspace file'});}});
 function stashMessageDraft(){if(state.scope)conversationDrafts.set(state.scope,$('#chat-input').value);}
-function restoreMessageDraft(){ $('#chat-input').value=conversationDrafts.get(state.scope)||'';resizeComposer(); }
+function restoreMessageDraft(){ chatContext.render();$('#chat-input').value=conversationDrafts.get(state.scope)||'';resizeComposer(); }
 function resizeComposer(){const input=$('#chat-input');input.style.height='auto';input.style.height=Math.min(140,Math.max(30,input.scrollHeight))+'px';}
 function agentLabel(agent){
  if(agent.archived)return agent.busy?'Archived · Working':'Archived';
@@ -314,7 +318,7 @@ async function refreshState(force=false){if(stateBusy){if(force){await new Promi
  if(!state.edit&&!$('#modal').open)await Promise.all([state.experimentId?fetchExperiment():Promise.resolve(),loadAgentDirectory({initial:!currentAgentDirectory()})]);
  }catch(error){connectionStatus(error);if(!state.data){$('#main').innerHTML=empty('Connect your research workspace',error.message,`<button class="button primary" data-action="${error.status===401?'auth':'refresh'}">${error.status===401?'Enter connection token':'Try again'}</button>`);if(error.status===401&&!$('#modal').open)showAuth();}}finally{stateBusy=false;const waiting=stateWaiters;stateWaiters=[];waiting.forEach(resolve=>resolve());}}
 async function navigate({view='workspace',projectId=state.projectId,experimentId=null,tab='overview'}={}){
- const wasBoard=!!isSurfboard();stashMessageDraft();scopeSelectionRevision++;if(isSurfboard()&&tab!=='surfboard'&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}if(state.edit){stashEditor();}state.view=view;state.projectId=projectId;state.experimentId=experimentId;state.tab=tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}state.edit=false;state.experiment=null;state.experimentRequest++;state.scope=null;state.chat=null;state.chatSignature='';state.sidebarSignature='';persistNavigation();syncNavigation();renderMain();syncAgentChooser();restoreMessageDraft();refreshChat(true);await Promise.all([experimentId?fetchExperiment(true):Promise.resolve(),!experimentId&&tab==='compute'?loadProjectCompute(projectId,{force:true}).catch(()=>{}):Promise.resolve(),loadAgentDirectory({initial:true})]);}
+ panelFocus.close();const wasBoard=!!isSurfboard();stashMessageDraft();scopeSelectionRevision++;if(isSurfboard()&&tab!=='surfboard'&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}if(state.edit){stashEditor();}state.view=view;state.projectId=projectId;state.experimentId=experimentId;state.tab=tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}state.edit=false;state.experiment=null;state.experimentRequest++;state.scope=null;state.chat=null;state.chatSignature='';state.sidebarSignature='';persistNavigation();syncNavigation();renderMain();syncAgentChooser();restoreMessageDraft();refreshChat(true);await Promise.all([experimentId?fetchExperiment(true):Promise.resolve(),!experimentId&&tab==='compute'?loadProjectCompute(projectId,{force:true}).catch(()=>{}):Promise.resolve(),loadAgentDirectory({initial:true})]);}
 async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||JSON.stringify(data.view_layout)!==JSON.stringify(state.experiment.view_layout)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;let pageCacheChanged=false;for(const page of data.pages||[]){const key=data.id+':'+page.id,cached=markdownPages.get(key);if(cached?.data&&page.version&&cached.data.version!==page.version&&!cached.loading){markdownPages.delete(key);pageCacheChanged=true;}}
  state.experiment=data;if((changed||force||pageCacheChanged)&&!state.edit&&!$('#modal').open)renderMain();if(pageHasTile('results')){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(pageHasTile('overview'))loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
 function renderMain(){
@@ -477,13 +481,13 @@ function dockChat(){
  $('#chat-resizer').hidden=dock.hidden||state.chatMaximized;
 }
 async function prepareCodeQuestion(text,notice='Selection context added to your agent message.'){
- const projectId=state.projectId,experimentId=state.experimentId;
- await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId)return;
+ const projectId=state.projectId,experimentId=state.experimentId,requestedScope=state.scope;
+ await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId||requestedScope&&requestedScope!==state.scope)return;
  if(!state.scope||state.scope.startsWith('surfboard:'))syncAgentChooser();
  state.chatVisible=true;chatRevealScope=chatLayoutKey();
  if(currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
  applyChatLayout();dockChat();
- const input=$('#chat-input'),previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;
+ panelFocus.close();const input=$('#chat-input');if(typeof text==='object'){if(text.project_id!==state.projectId)return;chatContext.add(text);}else{const previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;}
  stashMessageDraft();resizeComposer();input.focus();toast(notice);
 }
 async function showViewLayout({addPage=false}={}){
@@ -602,7 +606,9 @@ function renderTilePage(){
 function pageTileCatalog(){return (state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];}
 const tileLayout=createTileLayout({
  key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly,render:()=>renderMain(),resize:applyPageTileSizes,
- async save(page,base){
+ save:savePageLayout
+});
+async function savePageLayout(page,base){
   const projectId=state.projectId,experimentId=state.experimentId;
   const record=await api('view-layout?'+new URLSearchParams({project_id:projectId,...(experimentId?{experiment_id:experimentId}:{})}));
   const original=record.pages.find(row=>row.id===base.id);
@@ -611,10 +617,9 @@ const tileLayout=createTileLayout({
   await action('view-layout.save',{project_id:projectId,experiment_id:experimentId,version:record.version,board_version:record.board_version,pages:record.pages.map(row=>row.id===page.id?page:row)});
   await refreshState(true);toast('Page layout saved.');
  }
-});
-const standalonePdf=createPdfPreview({
+const standalonePdf=createPdfPreview({onChooseFile:()=>handleAction('choose-pdf'),
  async loadBytes(url,{signal}){const token=sessionStorage.getItem('supersurfer-token');const response=await fetch(url,{signal,headers:token?{Authorization:'Bearer '+token}:{}});if(!response.ok)throw new Error('PDF could not be opened ('+response.status+'). Check its repository path.');return new Uint8Array(await response.arrayBuffer());},
- onSelection:selection=>prepareCodeQuestion('About '+selection.source_path+', PDF page '+selection.page+':\n\n'+selection.text)
+ onSelection:selection=>prepareCodeQuestion({kind:'pdf',project_id:state.projectId,path:selection.source_path,label:selection.source_path.split('/').at(-1)+' · p. '+selection.page,text:'PDF page '+selection.page+' (not a source-line mapping):\n'+selection.text+(selection.truncated?'\n[Selection truncated]':'')})
 });
 async function openPageCode({path,scope,changeId,range}){
  const projectId=state.projectId,experimentId=state.experimentId;
@@ -624,7 +629,7 @@ async function openPageCode({path,scope,changeId,range}){
  }
  let root=$('#code-editor-root');
  if(!root){toast('Add a Code editor tile to this page to open files and agent changes.');await showViewLayout();return;}
- await codeEditor.mount(root,{projectId,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'});
+ await codeEditor.mount(root,{projectId,repo:project()?.repo,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'});
  if(projectId!==state.projectId||experimentId!==state.experimentId||!root.isConnected)return;
  if(path)await codeEditor.openFile(path,range);else await codeEditor.showAgentChange(scope,changeId);
 }
@@ -660,10 +665,10 @@ function configuredViewBody(kind,{right=false}={}){
 }
 function syncConfiguredEditors(){
  const root=$('#code-editor-root');
- if(root)codeEditor.mount(root,{projectId:state.projectId,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
- const context={projectId:state.projectId,experimentId:state.experimentId};
+ if(root)codeEditor.mount(root,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
+ const context={projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId};
  const pdfTile=activePage()?.tiles.find(tile=>tile.kind==='pdf'),pdfViewer=$('#standalone-pdf-tile');
- if(pdfViewer){if(pdfTile?.path){standalonePdf.mount(pdfViewer,{url:'/api/code/pdf?'+new URLSearchParams({project_id:state.projectId,path:pdfTile.path}),source_path:pdfTile.path,title:pdfTile.path});}else{standalonePdf.unmount();pdfViewer.innerHTML='<div class="empty-state"><strong>Choose a PDF</strong><p>Ask your agent to add a repository PDF path to this tile, or set its PDF path in Pages & tiles.</p></div>';}}else standalonePdf.unmount();
+ if(pdfViewer){if(pdfTile?.path){standalonePdf.mount(pdfViewer,{url:'/api/code/pdf?'+new URLSearchParams({project_id:state.projectId,path:pdfTile.path}),source_path:pdfTile.path,title:(project()?.repo||'').replace(/\/$/,'')+'/'+pdfTile.path});}else{standalonePdf.unmount();pdfViewer.innerHTML='<div class="empty-state"><strong>Choose a PDF</strong><p>Open a PDF from this project’s repository.</p><button type="button" class="button" data-action="choose-pdf">Choose PDF…</button></div>';}}else standalonePdf.unmount();
  const pdfRoot=$('#latex-panel-root');if(pdfRoot)latexPanel.mount(pdfRoot,context);else latexPanel.unmount();
  const explorer=$('#repository-explorer-tile'),changes=$('#agent-changes-tile');
  if(explorer)repositoryExplorer.mount(explorer,context).catch(error=>toast(error.message,true));else repositoryExplorer.unmount();
@@ -693,8 +698,8 @@ function renderProjectSlots(){
   if(['results','visualizer','preview'].includes(view.kind)){const pages=resultPages.get(x?.id)?.pages||[];return pages.length?pages.map(page=>`<details class="slot-result"><summary>${e(page.title)}</summary><iframe data-right-results="${e(page.id)}" title="${e(page.title)}" src="${e(page.preview_url)}" sandbox="allow-scripts allow-downloads" loading="lazy"></iframe></details>`).join(''):'<p class="muted small">Published results appear here when you open a work item.</p>';}
   return '<p class="muted small">Open a work item to view its content.</p>';
  };
- const html=views.map(view=>`<details class="project-view-slot" data-node="${e(view.node_id)}" data-kind="${e(view.kind)}" style="order:${Number(view.order)||0}" ${opened.has(view.node_id)?'open':''}><summary>${icon(view.kind==='activity'?'activity':view.kind==='artifacts'?'folder':'file')}<strong>${e(view.label)}</strong></summary><div class="project-view-slot-body">${content(view)}</div></details>`).join('');
- if(container.dataset.signature!==html){container.dataset.signature=html;const template=document.createElement('template');template.innerHTML=html;const next=[...template.content.children];for(const element of next){const existing=[...container.children].find(old=>old.dataset.node===element.dataset.node);if(existing&&(existing.innerHTML===element.innerHTML||['editor','pdf'].includes(element.dataset.kind))){existing.open=element.open;existing.style.order=element.style.order;container.append(existing);}else if(existing)existing.replaceWith(element);else container.append(element);}const ids=new Set(next.map(el=>el.dataset.node));for(const el of [...container.children])if(!ids.has(el.dataset.node))el.remove();}
+ const html=views.map(view=>`<details class="project-view-slot" data-node="${e(view.node_id)}" data-kind="${e(view.kind)}" style="order:${Number(view.order)||0}" ${opened.has(view.node_id)?'open':''}><summary>${icon(view.kind==='activity'?'activity':view.kind==='artifacts'?'folder':'file')}<strong>${e(view.label)}</strong><button type="button" data-panel-fullscreen aria-label="Full screen" title="Full screen">⤢</button></summary><div class="project-view-slot-body">${content(view)}</div></details>`).join('');
+ if(container.dataset.signature!==html){container.dataset.signature=html;const template=document.createElement('template');template.innerHTML=html;const next=[...template.content.children];for(const element of next){const existing=[...container.children].find(old=>old.dataset.node===element.dataset.node);if(existing){existing.open=element.open;existing.style.order=element.style.order;const oldSummary=existing.querySelector(':scope>summary'),newSummary=element.querySelector(':scope>summary');if(oldSummary.innerHTML!==newSummary.innerHTML)oldSummary.innerHTML=newSummary.innerHTML;const oldBody=existing.querySelector(':scope>.project-view-slot-body'),newBody=element.querySelector(':scope>.project-view-slot-body');if(!['editor','pdf'].includes(element.dataset.kind)&&oldBody.innerHTML!==newBody.innerHTML)oldBody.innerHTML=newBody.innerHTML;}else container.append(element);}const ids=new Set(next.map(el=>el.dataset.node));for(const el of [...container.children])if(!ids.has(el.dataset.node))el.remove();}
  for(const [frame,bridge] of rightResultBridges){if(!frame.isConnected){bridge.dispose();rightResultBridges.delete(frame);}}
  for(const frame of $$('iframe[data-right-results]',container)){if(rightResultBridges.has(frame))continue;const experimentId=x?.id;rightResultBridges.set(frame,connectLiveResults({api,frame:()=>frame.isConnected?frame:null,selection:()=>state.experimentId===experimentId?{...(resultPages.get(experimentId)?.pages||[]).find(page=>page.id===frame.dataset.rightResults),experimentId}:null}));}
 }
@@ -900,7 +905,7 @@ function updateChatHeader(){
  $('#chat-policy').textContent=isSurfboard()?'Describe changes to your workflow. Review the draft before applying.':native?'Message the existing agent in its original session.':role==='manager'?'Coordinate project work and shared resources.':projectWorkflow()==='research'?'Ideas are suggestions. Runs need your request and a verified PR.':'Work follows this project’s surfboard, permissions, and your instructions.';
  $('#chat-name').title=$('#chat-name').textContent;$('#chat-meta').title=$('#chat-meta').textContent+' · '+$('#chat-policy').textContent;
  $('#chat-input').placeholder=busy?'Add direction for the current work…':isSurfboard()?'Describe a workflow change…':state.experimentId?`Ask about this ${itemLabel()}…`:'Discuss your next project step…';$('#chat-input').disabled=readOnly()||!accountGate.ready();
- const send=$('#chat-send');send.disabled=readOnly()||!accountGate.ready()||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
+ chatContext.setDisabled(readOnly()||native||!state.scope);const send=$('#chat-send');send.disabled=readOnly()||!accountGate.ready()||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
  $('#chat-stop').hidden=!busy||native;
  $('#chat-hint').textContent=readOnly()?'Read-only connection':!accountGate.ready()?accountGate.hint():question?'Answer the question above to continue':approval?'Review the approval request above':sending?(busy?'Sending direction…':'Sending message…'):steerable?'Steer adds direction to the current work':busy?'Agent is starting or finishing · Direction will be available shortly':'Enter to send · Shift Enter for a new line';
  renderAgentChooser();renderChatPreferences();renderChatApprovals();renderChatQuestions();renderChatTasks();renderAgentSessionState();
@@ -1114,15 +1119,15 @@ function showRenameAgent(){
 }
 const chatCheckExpansion=new Map();
 $('#chat-messages').addEventListener('toggle',event=>{const details=event.target;if(!details.isConnected||!details.matches('details[data-check-key]'))return;let expanded=chatCheckExpansion.get(state.scope);if(!expanded){expanded=new Set();chatCheckExpansion.set(state.scope,expanded);}const key=details.dataset.checkKey;if(expanded.has(key)===details.open)return;if(details.open)expanded.add(key);else expanded.delete(key);renderChat();},true);
-function renderChat(){const c=state.chat||{messages:[]},el=$('#chat-messages'),nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100,old=el.scrollTop;const messages=c.messages||[];const prompts=isSurfboard()?['Explain this workflow and its requirements','Add a shared data source and visualizer','Change agent responsibilities and permissions']:projectWorkflow()!=='research'?['Help me scope the next task','Review progress and blockers','Suggest checks for this project']:state.experimentId?['Explain the hypothesis and current evidence','Suggest the next experiment','Improve this experiment’s explanation']:['What should we focus on next?','Summarize the current experiments','Suggest a promising research direction'];el.innerHTML=messages.length?renderChatTimeline(messages,{renderMessage:m=>`<div class="message ${e(m.role)}"><div class="message-label"><strong>${m.role==='user'?'You':m.role==='system'?(m.agent_sender?e(m.agent_sender.name)+' · Agent':'System'):e(c.agent?.name||'Agent')}</strong><time>${e(date(m.created,true))}</time></div><div class="message-text markdown">${markdown(m.text||'')}</div>${m.status==='steering'?'<div class="message-delivery" role="status">Sending direction to the active turn…</div>':['failed','uncertain'].includes(m.status)?`<div class="message-delivery error" role="status">${m.status==='uncertain'?'Delivery not confirmed':'Message failed'}${m.error?': '+e(m.error):''}</div>`:''}</div>`,escape:e,date,expanded:chatCheckExpansion.get(state.scope)||new Set(),busy:c.busy}):`<div class="chat-empty"><span class="agent-orb">${icon('spark')}</span><h3>${isSurfboard()?'Shape how this project works.':projectWorkflow()!=='research'?'Build with your project agent.':state.experimentId?'Stay close to the experiment.':'A thought partner for your research.'}</h3><p>${isSurfboard()?'Describe a change, or draw an arrow and answer a short question. Review the proposed graph before applying it.':state.scope?.startsWith('agent:')?'Talk to this existing AutoML agent in its original conversation.':'Ask a question, explore an idea, or refine the explanation. Your conversation and project context stay here.'}</p><div class="chat-suggestions">${prompts.map(p=>`<button data-prompt="${e(p)}"${disabled()}>${e(p)}${icon('arrowRight')}</button>`).join('')}</div></div>`;
+function renderChat(){const c=state.chat||{messages:[]},el=$('#chat-messages'),nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100,old=el.scrollTop;const messages=c.messages||[];const prompts=isSurfboard()?['Explain this workflow and its requirements','Add a shared data source and visualizer','Change agent responsibilities and permissions']:projectWorkflow()!=='research'?['Help me scope the next task','Review progress and blockers','Suggest checks for this project']:state.experimentId?['Explain the hypothesis and current evidence','Suggest the next experiment','Improve this experiment’s explanation']:['What should we focus on next?','Summarize the current experiments','Suggest a promising research direction'];el.innerHTML=messages.length?renderChatTimeline(messages,{renderMessage:m=>`<div class="message ${e(m.role)}"><div class="message-label"><strong>${m.role==='user'?'You':m.role==='system'?(m.agent_sender?e(m.agent_sender.name)+' · Agent':'System'):e(c.agent?.name||'Agent')}</strong><time>${e(date(m.created,true))}</time></div><div class="message-text markdown">${markdown(m.text||'')}</div>${contextMarkup(m.attachments)}${m.status==='steering'?'<div class="message-delivery" role="status">Sending direction to the active turn…</div>':['failed','uncertain'].includes(m.status)?`<div class="message-delivery error" role="status">${m.status==='uncertain'?'Delivery not confirmed':'Message failed'}${m.error?': '+e(m.error):''}</div>`:''}</div>`,escape:e,date,expanded:chatCheckExpansion.get(state.scope)||new Set(),busy:c.busy}):`<div class="chat-empty"><span class="agent-orb">${icon('spark')}</span><h3>${isSurfboard()?'Shape how this project works.':projectWorkflow()!=='research'?'Build with your project agent.':state.experimentId?'Stay close to the experiment.':'A thought partner for your research.'}</h3><p>${isSurfboard()?'Describe a change, or draw an arrow and answer a short question. Review the proposed graph before applying it.':state.scope?.startsWith('agent:')?'Talk to this existing AutoML agent in its original conversation.':'Ask a question, explore an idea, or refine the explanation. Your conversation and project context stay here.'}</p><div class="chat-suggestions">${prompts.map(p=>`<button data-prompt="${e(p)}"${disabled()}>${e(p)}${icon('arrowRight')}</button>`).join('')}</div></div>`;
  if((c.questions||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('message')}Waiting for your answer</div>`;else if((c.approvals||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('lock')}Waiting for your approval</div>`;else if(c.busy)el.innerHTML+='<div class="chat-status"><span class="spinner"></span>Working in your workspace…</div>';if(c.error)el.innerHTML+=`<div class="chat-error">${e(c.error)}</div>`;if(nearBottom||!messages.length)el.scrollTop=el.scrollHeight;else el.scrollTop=old;}
 async function sendChat(event){
  event?.preventDefault();const scope=state.scope,busy=!!state.chat?.busy;
  if(readOnly()||!accountGate.ready()||selectedAgent()?.retired||state.chat?.retired||state.chat?.archived||chatSending.has(scope)||pendingQuestions()||pendingApprovals()||(busy&&!state.chat?.steerable))return;
- const input=$('#chat-input'),original=input.value,text=original.trim();if(!text)return;
+ const input=$('#chat-input'),original=input.value,attachments=chatContext.get().slice(),text=original.trim()||(attachments.length?'Please review the attached context.':'');if(!text)return;
  chatSending.add(scope);updateChatHeader();
  try{
-   await action(busy?'chat.steer':'chat.send',{scope,text,...(activePage()&&!scope.startsWith('agent:')?{view:{project_id:state.projectId,experiment_id:state.experimentId,page_id:activePage().id}}:{})});conversationDrafts.delete(scope);
+   await action(busy?'chat.steer':'chat.send',{scope,text,...(attachments.length?{attachments}:{}),...(activePage()&&!scope.startsWith('agent:')?{view:{project_id:state.projectId,experiment_id:state.experimentId,page_id:activePage().id}}:{})});conversationDrafts.delete(scope);chatContext.sent(scope,attachments.map(row=>row.id));
    if(state.scope===scope){if(input.value===original){input.value='';resizeComposer();}state.chat={...state.chat,busy:true};state.chatSignature='';await refreshChat(true);}
  }catch(error){toast(error.message,true);if(error.status===403)await accountGate.refresh();}
  finally{chatSending.delete(scope);updateChatHeader();}
@@ -1342,6 +1347,7 @@ async function handleAction(name,el){switch(name){
  case 'login':await showLogin();break;
  case 'refresh-run-metrics':await refreshRunTelemetry(el.dataset.id);break;
  case 'refresh-metrics':await loadMetrics(true);break;
+ case 'choose-pdf':{if(tileLayout.editing()){toast('Save or cancel the current arrangement before choosing a PDF.',true);break;}const page=activePage(),base=structuredClone(savedActivePage()),projectId=state.projectId,experimentId=state.experimentId,pageId=state.tab;pickWorkspaceFile(async path=>{if(state.projectId!==projectId||state.experimentId!==experimentId||state.tab!==pageId)throw new Error('Return to the original page before choosing its PDF.');const changed=structuredClone(page);changed.tiles.find(row=>row.kind==='pdf').path=path;await savePageLayout(changed,base);},{pdfOnly:true,title:'Choose PDF'});break;}
  case 'configure-wandb':state.tab='overview';persistNavigation();state.edit=true;renderMain();$('#document-wandb')?.focus();break;
  }}
 document.addEventListener('click',async event=>{const target=event.target.closest('button,a,[data-run]');if(!target)return;if(target.disabled)return;try{
@@ -1403,3 +1409,5 @@ window.addEventListener('supersurfer-theme',()=>{
 });
 window.addEventListener('focus',syncClientTimezone);
 window.addEventListener('beforeunload',stashEditor);
+
+document.addEventListener('keydown',event=>{if(!event.defaultPrevented&&(event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='p'&&!event.shiftKey&&project()&&!document.querySelector('dialog[open]')){event.preventDefault();pickWorkspaceFile(path=>openPageCode({path}));}});

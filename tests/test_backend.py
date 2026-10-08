@@ -78,7 +78,7 @@ class FakeCodex:
         return {"scope": scope, "approval_mode": mode, "active": scope in self.busy,
                 "runtime_approval_mode": runtime.get("runtime_approval_mode"), "active_sandbox": runtime.get("active_sandbox"),
                 "applied": applied, "approved_count": approved}
-    def steer(self, scope, text):
+    def steer(self, scope, text, **kwargs):
         if scope not in self.busy:
             raise APIError("No active turn to steer", 409)
         self.steered.append((scope, text))

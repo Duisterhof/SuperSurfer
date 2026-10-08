@@ -1,3 +1,14 @@
+## Completed in 0.1.30
+
+- Resize the editor's file column and remember its width per project.
+- Show/copy absolute workspace paths and search/browse files with Cmd/Ctrl+P.
+- Open repository PDFs in editor tabs; choose/change a standalone PDF tile's file.
+- Cmd/Ctrl+L, Shift+L and I attach selections as compact scoped chat chips.
+- Preserve source/diff/PDF provenance, unsaved markers and explicit-send behavior.
+- Fullscreen/restore individual tiles, side views and pages while preserving buffers.
+- Navigate Git and agent diff hunks with buttons or F7/Shift+F7.
+- Review all eleven skills against the shipped editor and attachment contracts.
+
 ## Completed in 0.1.29
 
 - Drag page tiles into either sidebar; resize tiles and sidebar widths, with Save/Cancel and conflict protection.

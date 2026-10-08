@@ -1,3 +1,30 @@
+## 0.1.30 editor workflow
+
+Drag the divider inside the editor to resize its Files/Git/Agents column; the
+width is remembered for this project in this window's workspace storage. The
+location bar shows the absolute path **on the connected workspace**, with Copy
+path. Use **Open…** or **Cmd/Ctrl+P** to browse/search repository files, including
+PDFs. PDF files open in editor tabs with page navigation, zoom, selectable text
+and download. A standalone PDF tile has **Choose PDF** and **Open…** controls.
+
+Select code or PDF text and press **Cmd/Ctrl+L** (also Cmd/Ctrl+Shift+L or the
+existing Cmd/Ctrl+I) to add it to the current chat. Context appears as removable,
+expandable chips. The message box stays yours. The **+** button attaches a saved
+workspace file. Selection snapshots retain unsaved warnings, displayed line
+ranges, diff side/agent edit identity, or PDF page/build identity where applicable.
+They are sent only when you submit the message and remain expandable in history.
+Unsent chips stay with their conversation while navigating in the current window;
+they are not a crash/reload backup. Up to eight items and 64,000 context characters
+per message; larger selections/excerpts are explicitly truncated.
+
+Use a panel's **Full screen** button, or the page button in the top bar, to expand
+it. **Escape** or **Restore** returns to the previous layout without saving or
+remounting the editor. Files, agent changes, PDFs, results and side views share
+this control. Git and agent-recorded diffs remain distinct; **F7 / Shift+F7** and
+arrow buttons navigate diff hunks. Standard Monaco text/line/multiple-selection
+bindings remain available apart from the documented chat shortcuts. This is the
+bundled Monaco editor, not Cursor's extension host or inline AI editing engine.
+
 ## 0.1.29 arrange your workspace and quiet monitoring
 
 Choose **Arrange** on any project or work-item page. Drag tiles into the page,
