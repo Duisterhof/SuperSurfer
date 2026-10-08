@@ -73,3 +73,6 @@
 @media(max-width:1050px){.project-capacity{gap:8px;flex-wrap:wrap}.project-capacity>strong{min-width:90px}.project-capacity .button{margin-left:auto}}
 .compute-summary .queue-summary-jump{padding:0;color:inherit;font:inherit;text-align:left;border-radius:5px}
 .compute-summary .queue-summary-jump:hover{text-decoration:underline;text-underline-offset:3px}
+/* Compute actions follow available pane width, including a resized chat dock. */
+.compute-page .page-heading{flex-wrap:wrap}
+.compute-page .heading-actions{max-width:100%;flex-wrap:wrap}

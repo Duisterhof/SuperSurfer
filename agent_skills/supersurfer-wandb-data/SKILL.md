@@ -2,12 +2,12 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.26'
+  supersurfer-version: '0.1.27'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.26. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.27. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.
@@ -36,6 +36,12 @@ commit/checkpoint, split and step/time provenance. Failed or cancelled runs can
 contain useful measurements; retries are distinct attempts, not independent seeds.
 Absent validation, media or metrics remain missing. Do not substitute summary
 values for histories or a W&B file-view page for a playable video.
+
+A successful response with no numeric history differs from an inaccessible
+source. Report that distinction and inspect the writer's logged keys and run state
+before suggesting a chart fix. Missing observation time is not a fresh reading;
+GPU availability timestamps describe another data source and cannot substitute
+for W&B measurement freshness.
 
 When this evidence informs a paper, retain the same source identities and note
 when the measurements were read. A LaTeX/PDF block does not automatically pull or

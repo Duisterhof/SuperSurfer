@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.26'
+  supersurfer-version: '0.1.27'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.26. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.27. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -57,6 +57,13 @@ Reuse the existing live report instead of republishing it for each tile. Honor t
 page's experiment/source scope and test the actual tile size. A requested layout
 change belongs to page configuration; it does not authorize altering metric keys,
 comparison cohorts or the report's scientific content.
+
+When a live comparison is empty, distinguish a successful fetch with no numeric
+history from an authentication or transport error. Check each declared writer's
+actual run state, metric keys and logging before changing the renderer. A running
+run can still have no measurements; a failed run may retain useful ones. Keep the
+empty state honest and preserve source identities. **Refresh results** refreshes
+the report's live sources; Compute's **Refresh availability** probes host capacity.
 
 ## Use the standard training renderer
 

@@ -1,3 +1,8 @@
+## Completed in 0.1.27
+
+- Keep Compute header actions reachable beside a wide chat panel in narrow windows.
+- Recheck all eleven skills against the shipped controls and unchanged role capabilities.
+
 ## Completed in 0.1.26
 
 - Writing Surfboard with configurable source/PDF tiles, scoped compiler tools and a writing skill.

@@ -1,3 +1,9 @@
+## 0.1.27 compact Compute controls
+
+Compute actions wrap within the space left by your chat panel, keeping Refresh and
+Register machine visible in a narrow window. This patch follows the research,
+coding and writing workflow release below.
+
 ## 0.1.26 research, coding and writing workspaces
 
 **Writing** is a fourth Surfboard preset. It opens a Monaco source editor beside a

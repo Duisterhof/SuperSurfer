@@ -1,3 +1,26 @@
+# SuperSurfer 0.1.27 compact-layout follow-up — October 8, 2026
+
+A read-only check against the updated real workspace found a clipped Compute
+header at a 1000px window width with a wide agent panel: Register machine extended
+22px outside the main column. Two scoped flex-wrap rules keep both actions visible.
+The full Compute browser suite passes, including exact bounds and hit targets at
+1000px and 1600px with a resized chat, plus the existing pool, run and limits flows.
+All eleven skills were reviewed again; the checker and four skill tests pass.
+
+The underlying workflow code retains the 0.1.26 full-suite baseline below. An
+additional native Linux test used the actual packaged desktop and extracted remote
+bundle: real ten-page math/citation compilation, page navigation/zoom/selection,
+local PDF/Monaco workers, CSP, untrusted-page IPC denial and unsaved-close protection.
+Only connection/account transport and OS dialog responses were fixture-driven.
+
+Post-deployment read-only browsing checked the existing project and E12/E15/E17
+views at 1600×1000 and 1000×700 with all writes blocked. No JS/API errors or mutation
+attempts occurred. Six E12 video previews loaded. E15's three live sources returned
+measurements and populated curves. E17's linked failed training run and active
+evaluation currently returned no numeric histories or metrics; no data was invented
+and no viewer/auth error was found. Results skills now explicitly distinguish this
+state from a broken fetch and direct diagnosis toward the linked writers/loggers.
+
 # SuperSurfer 0.1.26 workflow audit — October 7–8, 2026
 
 The release was exercised as three actual workflows: research scheduling, software
