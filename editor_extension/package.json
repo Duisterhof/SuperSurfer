@@ -2,7 +2,7 @@
   "name": "workspace",
   "displayName": "SuperSurfer workspace",
   "publisher": "supersurfer",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "engines": {
     "vscode": "^1.90.0"
   },

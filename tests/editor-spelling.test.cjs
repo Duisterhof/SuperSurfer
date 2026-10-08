@@ -35,3 +35,10 @@ test('LaTeX save on another page coalesces while a build runs and ignores source
  assert.equal(calls.length,1);assert.equal(calls[0].experiment_id,'t1');assert.equal(calls[0].main_file,'paper/main.tex');
  settings.latex_auto_compile=false;await compiler.saved({projectId:'p1',path:'main.tex'});assert.equal(calls.length,1);
 });
+
+test('Application continuations compact with their turn while user text and errors stay visible',async()=>{
+ const {groupChatChecks}=await import('../ui/chat-checks.js');
+ const prompt={id:'s',role:'system',text:'Application continuation: unfinished deliverables',application_event:'continuation'};
+ const rows=groupChatChecks([prompt,{id:'a',role:'assistant',turn_id:'one',text:'Progress'}, {id:'u',role:'user',text:prompt.text}, {id:'d',role:'assistant',turn_id:'one',text:'Direct answer'}, {...prompt,id:'failure',status:'failed'}]);
+ assert.equal(rows[0].category,'activity');assert.equal(rows[0].checks[0].messages.length,2);assert.equal(rows[1].type,'message');assert.equal(rows[2].type,'message');assert.equal(rows[3].type,'message');
+});

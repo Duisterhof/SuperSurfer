@@ -41,6 +41,9 @@ user navigates. The page beside a pinned worker cannot grant it another task's
 authority or supply that page as its own view context. Resolve references against
 the actual conversation and supplied context; do not quietly retarget work.
 Archiving a task or chat hides it from the ordinary list while preserving history,
-active work and monitoring. It does not complete deliverables, cancel runs or
+active work and monitoring. Task right-click Archive/Restore uses the Archived
+folder; project Archive hides the full tree under Archived projects. These folders
+start collapsed. The app controls change organization only; restoring does not
+dispatch a new assignment. It does not complete deliverables, cancel runs or
 revoke a recovery grant. Use the explicit stop/cancel operation for requested
 cancellation, and read its resulting state.

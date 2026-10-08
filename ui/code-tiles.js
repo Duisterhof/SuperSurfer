@@ -1,3 +1,4 @@
+import {agentReviewControls,decideAgentEdit} from './agent-review.js';
 import {workspacePath} from './workspace-files.js';
 /* Independent repository tiles. File/patch navigation is delegated to one shared editor. */
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -26,7 +27,7 @@ function createTile(options,kind) {
       if(!agents.some(row=>row.scope===state.scope))state.scope=agents[0]?.scope||'';
       const agent=agents.find(row=>row.scope===state.scope);
       list.innerHTML=data?`<label class="code-agent-label">Agent<select class="code-agent-select" aria-label="Agent changes">${agents.map(row=>`<option value="${escapeHTML(row.scope)}"${row.scope===state.scope?' selected':''}>${escapeHTML(row.name)}</option>`).join('')}</select></label><details class="code-coverage"><summary>About recorded edits</summary><p>${escapeHTML(typeof data.coverage==='string'?data.coverage:'Recorded patches only; shell edits may be unattributed.')}</p></details>`+
-        (agent?.changes||[]).map(change=>`<div class="code-change-row"><button type="button" data-tile-change="${escapeHTML(change.id)}" title="${escapeHTML([change.path,localTime(change.created),change.turn_id?'Turn '+change.turn_id:''].filter(Boolean).join(' · '))}"><span>${escapeHTML(change.path)}</span><small>${escapeHTML(change.kind||'recorded edit')}${change.partial||change.truncated?' · partial':''}${change.created?' · '+escapeHTML(localTime(change.created)):''}</small></button><button type="button" data-tile-review="${escapeHTML(change.id)}" aria-pressed="${Boolean(change.reviewed)}" title="${change.reviewed?'Mark unreviewed':'Mark reviewed (does not change code)'}"${readonly()||state.saving.has(change.id)?' disabled':''}>${change.reviewed?'✓':'Review'}</button></div>`).join('')+(!agent?.changes?.length?'<p class="code-list-note">No recorded changes for this agent.</p>':''):'<p class="code-list-note">Loading recorded changes…</p>';
+        (agent?.changes||[]).map(change=>`<div class="code-change-row"><button type="button" data-tile-change="${escapeHTML(change.id)}" title="${escapeHTML([change.path,localTime(change.created),change.turn_id?'Turn '+change.turn_id:''].filter(Boolean).join(' · '))}"><span>${escapeHTML(change.path)}</span><small>${escapeHTML(change.kind||'recorded edit')}${change.partial||change.truncated?' · partial':''}${change.created?' · '+escapeHTML(localTime(change.created)):''}</small></button><button type="button" data-tile-review="${escapeHTML(change.id)}" aria-pressed="${Boolean(change.reviewed)}" title="${change.reviewed?'Mark unreviewed':'Mark reviewed (does not change code)'}"${readonly()||state.saving.has(change.id)?' disabled':''}>${change.reviewed?'✓':'Review'}</button>${agentReviewControls(change,state.scope,{readOnly:readonly(),busy:state.saving.has(change.id)})}</div>`).join('')+(!agent?.changes?.length?'<p class="code-list-note">No recorded changes for this agent.</p>':''):'<p class="code-list-note">Loading recorded changes…</p>';
     }
   }
   async function refresh() {
@@ -74,6 +75,11 @@ function createTile(options,kind) {
       if(button.hasAttribute('data-tile-change')) {
         if(!options.onOpenChange){report('Add or open a Code editor to inspect this recorded patch.');return;}
         await options.onOpenChange(saved.scope,button.dataset.tileChange);return;
+      }
+      if(button.dataset.agentDecision){
+        if(readonly())return;const id=button.dataset.agentChange;if(saved.saving.has(id))return;saved.saving.add(id);render();
+        try{await decideAgentEdit({api:options.api,action:options.action,projectId:ctx.projectId,scope:button.dataset.agentScope,changeId:id,decision:button.dataset.agentDecision,hasUnsaved:()=>options.hasUnsaved?.(ctx.projectId),isCurrent:()=>current(token)});await options.onDecision?.();if(current(token))await refresh();}
+        finally{saved.saving.delete(id);if(current(token))render();}return;
       }
       if(button.hasAttribute('data-tile-review')) {
         if(readonly())return;

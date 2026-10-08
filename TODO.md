@@ -1,3 +1,18 @@
+## Completed in 0.1.32
+
+- Stable Settings updates, extension search and native extension Configure controls.
+- Accept/Reject recorded agent edits with conflict, dirty-buffer and retry protection.
+- Repair a definitively rejected source folder under the existing queue request ID.
+- Compact system continuations while retaining full evidence and direct replies.
+- Right-click archive/restore tasks and projects, with collapsed archive folders.
+- Compact title/navigation row and latest-message entry/reentry for agent chats.
+- Fix concurrent task page saves so one window cannot overwrite a newer layout.
+- Review all eleven role skills against these tools and recovery contracts.
+
+## Review follow-ups
+
+- Per-hunk acceptance and rejection; partial/unattributed changes currently need manual review.
+
 ## Completed in 0.1.31
 
 - Task-owned Surfboards with mixed research, software, web and writing workflows.

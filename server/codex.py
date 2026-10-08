@@ -167,6 +167,10 @@ class CodexBridge:
         with self._lock:
             return agent_edits.review(self._db, scope, change_id, reviewed)
 
+    def decide_change(self, scope, change_id, decision):
+        with self._lock:
+            return agent_edits.decide(self._db, scope, change_id, decision)
+
     def _context(self, scope):
         self._validate_scope(scope)
         context = dict(self.context_provider(scope))
@@ -360,6 +364,7 @@ class CodexBridge:
     def _followup(self, chat, text, display_text=None):
         """Reserve one same-conversation continuation without replaying tool calls."""
         message = self._message(chat, "system", display_text or text)
+        message["application_event"] = "continuation"
         message["status"] = "pending"
         chat.update(busy=True, status="starting", error=None, turn_id=None, cancel_requested=False, request_id=message["id"])
         self._save(chat)

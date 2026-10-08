@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.31'
+  supersurfer-version: '0.1.32'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.31. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.32. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -56,8 +56,12 @@ This lead has no `prepare_run`, `queue_run` or worker-wakeup tool. Forward the
 user's existing launch intent to the worker; it can complete exact-source PR
 verification and queueing directly. Do not route ordinary launches through the
 manager. Use [run submission](../supersurfer-worker/references/run-submission.md)
-for requirements to include in a handoff. Necessary setup within that authorized
-task needs no invented extra approval.
+for requirements to include in a handoff. A worker's definitive rejected
+source-folder error can use the same request ID with only `repo` corrected after
+fresh service absence reconciliation; uncertain submissions keep their original
+fields and owner. Do not recover it by dispatching another worker or asking the
+manager to submit it again. Necessary setup within that authorized task needs no
+invented extra approval.
 
 For an existing run, this lead has `check_available_node`, `acquire_new_node`
 and `recover_run` within its project. Prefer the worker's existing recovery owner;
@@ -178,7 +182,10 @@ use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
-retains its original authority; archiving an item or chat leaves work running.
+retains its original authority. Task right-click Archive/Restore and the Archived
+folder organize items; project Archive hides its tree under Archived projects.
+These app controls and chat archiving preserve history, running work and monitoring;
+restore is not a new assignment or launch.
 
 ## Tool index
 

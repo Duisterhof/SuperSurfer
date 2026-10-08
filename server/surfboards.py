@@ -865,7 +865,8 @@ class Surfboards:
         key = self._key(identity)
         with self.store.lock:
             if self.store.get(key) is None and not read_only:
-                self.store.put(key, self.task_seed(project_id, workflow))
+                with self.store.db:
+                    self.store.db.execute("INSERT OR IGNORE INTO kv(key,value) VALUES(?,?)", (key,json.dumps(self.task_seed(project_id,workflow),allow_nan=False)))
         return identity
 
     def task_seed(self, project_id, workflow=None):

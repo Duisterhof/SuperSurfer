@@ -247,6 +247,7 @@ class Service(SurfboardService, EditorService, WritingService):
         if self.store.get("local_projects", []):
             state["connected"] = True
         for project in state["projects"]:
+            project["archived"] = bool(self.store.get("project_archived:"+project["id"],False))
             board = self.boards.get(project["id"])
             project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
@@ -607,7 +608,7 @@ class Service(SurfboardService, EditorService, WritingService):
             runs = [run for run in current["runs"] if run.get("experiment_id") == experiment["id"]]
             hosts = [host for host in current["hosts"] if host["id"] in {run["host_id"] for run in runs}]
             instructions.append("Current scheduler evidence (a status is not a scientific result): " + json.dumps({"runs": self.run_context(runs), "hosts": hosts, "observed_at": current["updated_at"], "connected": current.get("manager_connected", current["connected"]), "error": current["error"]}))
-            instructions.append("When the user asks only to prepare a draft, use prepare_run; it stays HELD and may omit the PR. When the user explicitly asks you to queue or run this experiment, use queue_run to finish the task: it creates or reuses a held run, verifies its exact-source PR, then releases through AutoML. A separate click on Release run is not needed for this explicit request. Supply either existing {run_id,pr_url} or complete new-run fields with mandatory pr_url. Use committed source and explicit GPU, memory and storage requirements. If a known run ID is returned with an error, reuse it instead of creating another run. If creation returns no run ID, retry the same request_id and unchanged original fields in this conversation; the current bundled manager reconciles that identity without duplication. Do not move the request to another worker or manager to recover it. Never use queue_run for a scheduled review or an unsolicited idea. Never bypass the tools or launch a process directly.")
+            instructions.append("When the user asks only to prepare a draft, use prepare_run; it stays HELD and may omit the PR. When the user explicitly asks you to queue or run this experiment, use queue_run to finish the task: it creates or reuses a held run, verifies its exact-source PR, then releases through AutoML. A separate click on Release run is not needed for this explicit request. Supply either existing {run_id,pr_url} or complete new-run fields with mandatory pr_url. Use committed source and explicit GPU, memory and storage requirements. If a known run ID is returned with an error, reuse it instead of creating another run. If creation returns no run ID, retry the same request_id and fields after a timeout or uncertain reply. For a definitively rejected source-folder error, correct only repo under that same request_id; the service first confirms no run exists. The current bundled manager prevents duplication. Do not move the request to another worker or manager to recover it. Never use queue_run for a scheduled review or an unsolicited idea. Never bypass the tools or launch a process directly.")
             instructions.append("Registered hosts available for a user-requested held draft: " + json.dumps([{key: host.get(key) for key in ("id", "name", "target", "root", "gpus", "status", "stale")} for host in current["hosts"]]))
         else:
             documents = [e for e in self.state()["experiments"] if e["project_id"] == project["id"]]
@@ -976,6 +977,56 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.action("host.add", fields)
         return self.compute.save(project_id, fields)
 
+    def amend_rejected_queue_request(self, identity, durable_key, prior, experiment, fingerprint):
+        """Only a definitive rejected, absent run can receive corrected draft fields."""
+        old = json.loads(prior["fingerprint"])
+        corrected = json.loads(fingerprint)
+        if old.get("experiment_id") != corrected.get("experiment_id") or {key:value for key,value in old["arguments"].items() if key != "repo"} != {key:value for key,value in corrected["arguments"].items() if key != "repo"}:
+            raise APIError("This request records different run fields. Only a rejected source folder may be corrected; another requested run needs its own request_id.", 409)
+        if prior.get("run_id"):
+            error = APIError("This request already created run " + prior["run_id"] + ". Reuse that run_id; its submitted fields cannot be replaced.", 409)
+            error.run_id = prior["run_id"]
+            raise error
+        if "run.submit_idempotent.v1" not in self.aml.call("ping").get("capabilities", []):
+            raise APIError("Correcting this draft requires the manager's idempotent submission support", 409)
+        def reconcile():
+            snapshot = self.state(force=True)
+            if not snapshot.get("manager_connected", snapshot["connected"]):
+                raise APIError("Cannot confirm this request while the manager is unavailable. Its original fields are preserved.", 503)
+            matches = [run for run in snapshot["runs"] if run.get("config", {}).get("supersurfer_request_id") == identity]
+            if len(matches) > 1 or any(run.get("project_id") != experiment["project_id"] or run.get("experiment_id") != experiment["id"] for run in matches):
+                raise APIError("Conflicting submission receipts; inspect ownership before correcting this draft", 409)
+            if matches:
+                prior["run_id"] = matches[0]["id"]
+                self.store.bind_run(prior["run_id"], experiment["id"])
+                self.store.put(durable_key, prior)
+                error = APIError("The original request created run " + prior["run_id"] + ". Reuse that run_id; no replacement was submitted.", 409)
+                error.run_id = prior["run_id"]
+                raise error
+        reconcile()
+        if not prior.get("rejected"):
+            payload = prior.get("payload")
+            if not payload:
+                raise APIError("Retry the original request fields first to reconcile this legacy draft", 409)
+            try:
+                created = self.aml.call("run.submit", payload)
+            except Exception as error:
+                if not isinstance(error, ManagerError) or not error.definitive:
+                    raise APIError("Original submission is still uncertain; its fields were preserved. Retry the original request first.", 503) from error
+                reconcile()
+                prior["rejected"] = True
+                self.store.put(durable_key, prior)
+            else:
+                prior["run_id"] = created["id"]
+                self.store.bind_run(prior["run_id"], experiment["id"])
+                self.store.put(durable_key, prior)
+                error = APIError("The original request created held run " + prior["run_id"] + ". Reuse that run_id; no replacement was submitted or released.", 409)
+                error.run_id = prior["run_id"]
+                raise error
+        # The caller revalidates corrected parameters before replacing this
+        # rejected receipt. The manager still prevents duplicate request IDs.
+        return None
+
     def queue_agent_run(self, scope, arguments, experiment=None):
         """Explicit user queue requests retain AML's exact-source review and scheduler."""
         if not isinstance(arguments, dict):
@@ -1007,10 +1058,11 @@ class Service(SurfboardService, EditorService, WritingService):
             prior = self.store.get(durable_key) if durable_key else self.turn_queue_requests.get(scope)
             if prior:
                 if prior["fingerprint"] != fingerprint:
-                    if request_id is not None:
-                        raise APIError("This run request_id already records different run fields. Reuse its run_id or use a different ID for another explicitly requested run.", 409)
-                    raise APIError("Only one new queued run can be created in this conversation turn. Continue with an existing run_id or ask for another run in a new turn.", 409)
-                if not prior.get("run_id") and durable_key:
+                    if request_id is not None and durable_key:
+                        prior = self.amend_rejected_queue_request(scope, durable_key, prior, experiment, fingerprint)
+                    else:
+                        raise APIError("Only one new queued run can be created in this conversation turn. Continue with an existing run_id or ask for another run in a new turn.", 409)
+                if prior and not prior.get("run_id") and durable_key:
                     snapshot = self.state(force=True)
                     if not snapshot.get("manager_connected", snapshot["connected"]):
                         raise APIError("Cannot reconcile this request while the manager is unavailable. Retry the same request_id when it reconnects.", 503)
@@ -1021,7 +1073,7 @@ class Service(SurfboardService, EditorService, WritingService):
                         prior["run_id"] = matches[0]["id"]
                         self.store.bind_run(prior["run_id"], experiment["id"])
                         self.store.put(durable_key, prior)
-                if not prior.get("run_id"):
+                if prior and not prior.get("run_id"):
                     if not durable_key or "run.submit_idempotent.v1" not in self.aml.call("ping").get("capabilities", []):
                         raise APIError("The earlier run creation could not be confirmed; no second run was created. A missing run ID with a durable request requires the bundled manager's idempotent-submit update, then retry the same request_id and original fields.", 409)
             if prior and prior.get("run_id"):
@@ -1050,6 +1102,9 @@ class Service(SurfboardService, EditorService, WritingService):
                         self.store.put(durable_key, record)
                     self.store.bind_run(run_id, experiment["id"])
                 except Exception as exc:
+                    if isinstance(exc, ManagerError) and exc.definitive:
+                        record["rejected"] = True
+                        if durable_key: self.store.put(durable_key, record)
                     hint = "Retry the same request_id and unchanged original fields; the service reconciles it without creating a duplicate." if durable_key else "Inspect this experiment's runs before retrying; no second run will be created automatically."
                     error = APIError(f"Run creation could not be confirmed: {exc}. {hint}", 503)
                     if record.get("run_id"):
@@ -1502,6 +1557,12 @@ class Service(SurfboardService, EditorService, WritingService):
             return {"requested": True, "requested_at": time.time()}
         if op == "todos.save":
             return todos.save(self, params)
+        if op == "project.archive":
+            if set(params) != {"id","archived"} or type(params["archived"]) is not bool:
+                raise APIError("Project archive requires id and archived boolean")
+            project = self.lookup("projects",text_field(params,"id",150))
+            self.store.put("project_archived:"+project["id"],params["archived"])
+            return {"id":project["id"],"archived":params["archived"]}
         if op == "experiment.archive":
             if set(params) != {"id", "archived"} or type(params.get("archived")) is not bool:
                 raise APIError("Archive requires an item ID and boolean archived value")
@@ -1910,6 +1971,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.state()
                 elif path == "/api/editor":
                     result = {"settings": editor_settings.read(self.server.service.store), "workbench": self.server.service.workbench.status()}
+                elif path == "/api/editor/extensions":
+                    result = self.server.service.workbench.catalog.search(query.get("query", [""])[0], query.get("offset", [0])[0])
                 elif path == "/api/editor/session":
                     result = self.server.service.workbench.poll(query.get("id", [""])[0], query.get("after", [0])[0])
                 elif path == "/api/surfboard":

@@ -74,7 +74,7 @@ class QueueRecoveryTests(unittest.TestCase):
         try:
             result = self.wait(self.manager.call(operation, deepcopy(params)))
         except Exception as exc:
-            raise ManagerError(str(exc)) from exc
+            raise ManagerError(str(exc), definitive=True) from exc
         if operation == 'ping' and self.old_engine:
             result['capabilities'].remove('run.submit_idempotent.v1')
         if operation == 'run.submit' and self.lose_response:
@@ -210,6 +210,37 @@ class QueueRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(APIError, 'conflicting run ownership'): self.queue()
         self.assertFalse(self.runs()[0]['ready'])
 
+
+
+    def test_correcting_rejected_source_keeps_request_id_and_creates_one_run(self):
+        clean=self.root/'clean-worktree'
+        self.git('worktree','add','--detach',str(clean),self.revision)
+        (self.repo/'main.py').write_text('uncommitted unrelated work\n')
+        with self.assertRaises(APIError):self.queue()
+        key,identity=self.receipt();self.assertTrue(self.service.store.get(key)['rejected'])
+        corrected={**self.params,'repo':str(clean)}
+        result=self.queue(corrected)
+        self.assertTrue(result['ready']);self.assertEqual(1,len(self.runs()))
+        self.assertEqual(identity,self.runs()[0]['config']['supersurfer_request_id'] if isinstance(self.runs()[0]['config'],dict) else json.loads(self.runs()[0]['config'])['supersurfer_request_id'])
+        self.assertEqual(result['run_id'],self.queue(corrected)['run_id'])
+        self.assertEqual('uncommitted unrelated work\n',(self.repo/'main.py').read_text())
+
+    def test_legacy_rejected_source_is_rechecked_before_correcting_path(self):
+        clean=self.root/'legacy-clean';self.git('worktree','add','--detach',str(clean),self.revision)
+        (self.repo/'main.py').write_text('dirty\n')
+        with self.assertRaises(APIError):self.queue()
+        key,_=self.receipt();prior=self.service.store.get(key);prior.pop('rejected');self.service.store.put(key,prior)
+        corrected={**self.params,'repo':str(clean)}
+        self.assertTrue(self.queue(corrected)['ready']);self.assertEqual(1,len(self.runs()))
+        self.assertEqual(3,sum(op=='run.submit' for op,_ in self.calls))
+
+    def test_lost_reply_cannot_amend_an_existing_run(self):
+        self.lose_response=True
+        with self.assertRaises(APIError):self.queue()
+        self.lose_response=False
+        with self.assertRaises(APIError) as error:self.queue({**self.params,'repo':str(self.root/'another-repo')})
+        self.assertEqual(self.runs()[0]['id'],error.exception.run_id)
+        self.assertEqual(1,len(self.runs()));self.assertEqual(1,sum(op=='run.submit' for op,_ in self.calls))
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,8 @@
 """Authenticated repository editing and scoped view preferences."""
 from copy import deepcopy
 import json
+import hashlib
+from .agent_diff_review import undo
 import uuid
 from pathlib import Path
 
@@ -84,7 +86,11 @@ class EditorService:
         with self.store.lock:
             self.store.db.execute("BEGIN IMMEDIATE")
             try:
-                board = self.board_record(project_id, experiment_id)
+                # experiment() imports Markdown and commits its connection. Calling
+                # it inside this transaction would release the write lock.
+                # Scope and task initialization were checked above; read only
+                # the task policy here so both version checks stay atomic.
+                board = self.boards.get("task:" + experiment_id)
                 saved = self.store.get(key, {"version": 0, "rows": None, "pages": None})
                 if (type(params["version"]) is not int or type(params["board_version"]) is not int or
                         saved["version"] != params["version"] or board["version"] != params["board_version"]):
@@ -205,6 +211,8 @@ class EditorService:
             if set(fields) != {"project_id", "path"}:
                 raise SurfboardError("Creating a folder requires project_id and path")
             return self.code.mkdir(project, fields["path"])
+        if operation == "code.decide":
+            return self.decide_agent_change(project, fields)
         if operation == "code.review":
             if set(fields) != {"project_id", "scope", "change_id", "reviewed"} or type(fields["reviewed"]) is not bool:
                 raise SurfboardError("Review requires project, agent scope, change_id and reviewed boolean")
@@ -212,6 +220,45 @@ class EditorService:
             self.codex.review_change(fields["scope"], fields["change_id"], fields["reviewed"])
             return {"reviewed": fields["reviewed"]}
         raise SurfboardError("Unknown editor action", 404)
+
+    def change_current_file(self, project, path):
+        try: return self.code.read(project, path)
+        except SurfboardError as error:
+            if error.status == 404: return {"content":None,"revision":None,"exists":False}
+            raise
+
+    def decide_agent_change(self, project, fields):
+        if set(fields) != {"project_id","scope","change_id","decision","revision"} or fields["decision"] not in {"accept","reject"}:
+            raise SurfboardError("Choose accept/reject for a scoped agent edit and its current file revision")
+        change = self.agent_change(project, fields["scope"], fields["change_id"])
+        decision = fields["decision"]
+        prior = change.get("review_decision")
+        if prior and prior.get("state") in {"accepted","rejected"}:
+            if prior['decision'] != decision: raise SurfboardError("This edit already has a final review decision",409)
+            return {"decision":prior['state'],"path":change['path'],"already_decided":True}
+        current = self.change_current_file(project, change['path'])
+        if current.get('read_only'): raise SurfboardError("This file cannot be changed safely by the editor",403)
+        revision = current['revision']
+        if prior and prior.get('state') == 'applying':
+            if prior['decision'] != decision: raise SurfboardError("A different review decision is pending; retry that decision first",409)
+            if revision == prior['after_revision']:
+                prior['state'] = 'accepted' if decision == 'accept' else 'rejected'
+                self.codex.decide_change(fields['scope'],fields['change_id'],prior)
+                return {"decision":prior['state'],"path":change['path'],"reconciled":True}
+            if revision != prior['before_revision']: raise SurfboardError("The file changed during review. Newer work was preserved.",409)
+        elif fields['revision'] != revision:
+            raise SurfboardError("The file changed after opening this diff. Reload it before deciding; newer work was preserved.",409)
+        operation,content = ('keep', current.get('content')) if decision == 'accept' else undo(change,current.get('content'))
+        target_revision = hashlib.sha256(content.encode()).hexdigest() if content is not None else None
+        receipt = {"decision":decision,"state":"applying","before_revision":revision,"after_revision":target_revision,"operation":operation}
+        if prior and target_revision != prior['after_revision']: raise SurfboardError("The recorded edit changed during review",409)
+        self.codex.decide_change(fields['scope'],fields['change_id'],receipt)
+        if operation == 'delete': self.code.delete(project,change['path'],revision)
+        if operation == 'save': self.code.save(project,change['path'],content,revision)
+        receipt['state'] = 'accepted' if decision == 'accept' else 'rejected'
+        self.codex.decide_change(fields['scope'],fields['change_id'],receipt)
+        if hasattr(self,'latex') and decision == 'reject': self.latex.invalidate(project['id'],repo=project['repo'])
+        return {"decision":receipt['state'],"path":change['path']}
 
     def _change_scope(self, project_id, scope, experiment_id=None):
         if scope == "manager":
@@ -273,7 +320,18 @@ class EditorService:
         path = self._change_path(project, row)
         if not path:
             raise SurfboardError("The change is outside this project repository", 403)
+        review = {"can_accept":True,"can_reject":False,"revision":None,"reason":""}
+        try:
+            current = self.change_current_file(project,path)
+            review["revision"] = current['revision']
+            if current.get('read_only'):
+                review['can_accept'] = False
+                raise SurfboardError("Binary or unsupported file; review it manually",409)
+            undo(row,current.get('content'));review['can_reject'] = True
+        except SurfboardError as error:
+            review['reason'] = str(error)
+            if error.status in {403,404}: review['can_accept'] = False
         # A patch is exact evidence of this agent's edit. We do not fabricate a
         # full before/after file from today's potentially overlapping worktree.
         return {**row, "path": path, "agent_name": self.store.get("chat_name:" + scope) or row.get("agent_name") or scope,
-                "source": "recorded_patch", "partial": bool(row.get("truncated"))}
+                "source": "recorded_patch", "partial": bool(row.get("truncated")), "review":review}

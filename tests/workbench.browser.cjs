@@ -9,9 +9,7 @@ if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
  await request('action',{op:'editor.extension',params:{operation:'install',extension_id:'vscodevim.vim'}});
  let runtime;for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
  assert.equal(runtime.job.status,'succeeded',JSON.stringify(runtime.job));assert.ok(runtime.extensions.some(row=>row.id.toLowerCase()==='vscodevim.vim'));
- await request('action',{op:'editor.extension',params:{operation:'uninstall',extension_id:'vscodevim.vim'}});
- for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
- assert.equal(runtime.job.status,'succeeded');assert.ok(!runtime.extensions.some(row=>row.id.toLowerCase()==='vscodevim.vim'));console.log('PASS real Open VSX extension install and removal');
+ console.log('PASS real Open VSX extension installation');
 }
 await request('action',{op:'editor.settings',params:{engine:'vscode'}});
 browser=await chromium.launch({...(process.env.SUPERSURFER_CHROMIUM?{executablePath:process.env.SUPERSURFER_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1650,height:1100}});page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -23,12 +21,18 @@ console.log('trust handled');await page.waitForFunction(()=>document.querySelect
 console.log('bridge ready');await frame.getByRole('treeitem').filter({hasText:'main.py'}).first().dblclick();await frame.locator('.monaco-editor').first().waitFor();
 await page.screenshot({path:path.resolve(root,'../../work/release031-workbench.png')});
 const session=JSON.parse(fs.readFileSync(fs.readdirSync(path.join(service.directory,'editor/workspaces')).map(name=>path.join(service.directory,'editor/workspaces',name))[0],'utf8')).settings['supersurfer.session'];
-await request('action',{op:'editor.command',params:{id:session,kind:'file',path:'main.py'}});await page.waitForTimeout(1100);await frame.locator('.view-lines').first().click();await page.keyboard.press('Control+a');await page.keyboard.press('Control+i');await page.locator('.chat-context-chip').waitFor({timeout:10000});assert.match(await page.locator('.chat-context-chip').textContent(),/main.py/);
-await frame.locator('.view-lines').first().click();await page.keyboard.press('Control+End');await page.keyboard.type('# unsaved workspace edit');
+await request('action',{op:'editor.command',params:{id:session,kind:'file',path:'main.py'}});await page.waitForTimeout(1100);await frame.locator('.view-line').first().dblclick();await page.locator('.workbench-toolbar button').getByText('Ask agent',{exact:true}).click();await page.locator('.chat-context-chip').waitFor({timeout:10000});assert.match(await page.locator('.chat-context-chip').textContent(),/main.py/);
+await frame.locator('.view-lines').first().click();await page.keyboard.press('Escape');await page.keyboard.press('Control+End');if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1')await page.keyboard.press('i');await page.keyboard.type('# unsaved workspace edit');
 await page.waitForTimeout(2500);assert.equal((await request('editor/session?id='+session)).dirty,true);
 const identity=await page.locator('.workbench-frame iframe').getAttribute('src');const originalFrame=page.frames().find(row=>row.url().includes('/workbench/'));await originalFrame.evaluate(()=>window.__paneIdentity='keep-me');
 await page.locator('#project-tree [data-project="'+service.projects.research+'"]').click();await page.locator('#project-tree [data-project="'+pid+'"]').click();await page.locator('#main [data-tab="desk"]').click();await page.locator('.workbench-frame iframe').waitFor();
 assert.equal(await page.locator('.workbench-frame iframe').getAttribute('src'),identity);assert.equal(await originalFrame.evaluate(()=>window.__paneIdentity),'keep-me');assert.equal((await request('editor/session?id='+session)).dirty,true);console.log('PASS extension editor retains its iframe, unsaved file and session across page navigation');
 
+await request('action',{op:'editor.command',params:{id:session,kind:'settings',extension_id:'vscodevim.vim'}});await frame.locator('.settings-editor').waitFor();await frame.getByText('Argument Object Closing Delimiters',{exact:false}).first().waitFor();console.log('PASS native Configure opens actual extension settings');
+if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
+ await request('action',{op:'editor.extension',params:{operation:'uninstall',extension_id:'vscodevim.vim'}});
+ let runtime;for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
+ assert.equal(runtime.job.status,'succeeded');assert.ok(!runtime.extensions.some(row=>row.id.toLowerCase()==='vscodevim.vim'));console.log('PASS real Open VSX extension removal');
+}
 assert.ok(!(await fetch(base+'/workbench/invalid/')).ok);assert.equal((await request('editor/session?id='+session)).connected,true);console.log('PASS real Code OSS HTTP/WebSocket, extension host, file opening, selected code to agent chip and capability rejection');
 }catch(error){console.error('TEST ERROR',error);if(browser){const p=browser.contexts()[0]?.pages()[0];if(p)await p.screenshot({path:path.resolve(root,'../../work/release031-workbench-failed.png')}).catch(()=>{});}throw error;}finally{child.stdin.end();await browser?.close();}})().catch(e=>{console.error(e);process.exitCode=1});

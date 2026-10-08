@@ -66,6 +66,15 @@ reset service records or assume the run is absent. If the engine explicitly lack
 safe reconciliation, preserve the request and report that concrete limitation
 while continuing independent preparation. It is not another launch approval.
 
+A definitively rejected source-folder error has one narrow correction path:
+repeat the same request ID in its owning conversation with only `repo` changed to
+the verified clean committed source checkout. The service must freshly reconcile
+that no run exists before replacing the rejected receipt; every other field stays
+fixed. This does not permit changing commands, resources, revision or tracking
+identity. Lost/uncertain responses are not definitive rejections: retry the original
+fields first and preserve uncertainty if reconciliation is unavailable. If a run
+is found, use its returned `run_id` instead of correcting or resubmitting its fields.
+
 An error that returns `run_id` identifies the existing draft: retain it, fix the
 cause, then retry with only `run_id` and `pr_url` (plus manager `experiment_id`).
 Failed PR verification leaves the draft held. Inspect readiness errors and actual

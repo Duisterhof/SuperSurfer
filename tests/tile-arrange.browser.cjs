@@ -44,7 +44,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Add a standalone PDF from a non-writing project. Verify its authenticated route and live viewer.
   const project=(await request('state')).projects.find(p=>p.id===pid);fs.writeFileSync(path.join(project.repo,'paper.pdf'),require('./fixtures/pdf.cjs')());
   const pdfLayout=await read();pdfLayout.pages.find(p=>p.id==='desk').tiles.push({id:'paper',kind:'pdf',path:'paper.pdf',placement:'main',span:12,height:600});await save(pdfLayout.pages);
-  await page.locator('[data-action="refresh"]').first().click();await page.locator('#standalone-pdf-tile .pdf-sheet canvas').waitFor();assert.ok(await page.locator('#standalone-pdf-tile .textLayer').textContent());
+  await page.locator('[data-action="refresh"]').first().click();await page.locator('#standalone-pdf-tile .pdf-sheet canvas').waitFor();await page.waitForFunction(()=>document.querySelector('#standalone-pdf-tile .textLayer')?.textContent);assert.ok(await page.locator('#standalone-pdf-tile .textLayer').textContent());
   const unauth=await fetch(base+'/api/code/pdf?project_id='+pid+'&path=paper.pdf');assert.equal(unauth.status,401);
   await page.locator('#arrange-page').click();await page.locator('[data-tile-placement="paper"]').selectOption('right');await page.locator('#page-right-tiles .pdf-sheet canvas').waitFor();await page.locator('[data-tile-command="save"]').click();await page.locator('[data-tile-command="save"]').waitFor({state:'detached'});
   const download=page.waitForEvent('download');await page.locator('#standalone-pdf-tile .pdf-download').click();const file=await download;assert.equal(file.suggestedFilename(),'paper.pdf');

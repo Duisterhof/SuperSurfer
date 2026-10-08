@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.31'
+  supersurfer-version: '0.1.32'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.31. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.32. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional Code OSS workbench requires its separate runtime
 to be installed and selected before VS Code extension-host capabilities are
@@ -61,12 +61,25 @@ outside the visible range is not proof that those pages are absent.
 
 Workspace editor defaults select the engine, theme, text/tab size, word wrapping
 and minimap. They apply across projects without changing source or task scope.
-Monaco itself has no VS Code extension host. The optional Code OSS workbench's
-Extensions view uses Open VSX or compatible VSIX packages;
-do not promise the Microsoft Marketplace, proprietary-extension compatibility
-or Grammarly integration. An installed extension may execute on the connected
-workspace host; recommend/install it only for requested editor capabilities,
-without treating extension installation as a way to evade an agent-tool denial.
+Monaco itself has no VS Code extension host. Settings → Code editor → Extensions
+can search Open VSX by name or capability and show publisher/extension IDs before
+installation. Searching does not install anything or change the selected engine.
+Use the actual publisher ID and requested capability when recommending a result;
+a similar display name does not prove compatibility. A search result's Install
+uses its exact `publisher.name@version`; Load more and Retry search browse the
+same catalogue without installing anything. Installation/removal affects the
+connected workspace computer and requires the optional Code OSS workbench.
+Installed extensions expose Configure, which opens their native `@ext` settings
+in the File viewer when the VS Code workbench engine is selected; it does not
+install another extension or change task policy. Its Extensions view also supports
+compatible VSIX packages. Do not promise the
+Microsoft Marketplace, proprietary-extension compatibility or Grammarly integration.
+A catalogue/network failure is distinct from a missing extension or failed runtime
+installation. Read the visible operation status before retrying an install; a search
+result or accepted install request is not evidence that an extension is active.
+Install only for requested editor capabilities, without treating installation as
+a way to evade an agent-tool denial. These workspace editor preferences and installs
+are app Settings operations, not a new managed tool granted by a surfboard block.
 Both editors include offline English spelling diagnostics for `.tex`/`.latex`
 prose, controlled by the workspace LaTeX spelling preference. They exclude commands,
 equations, labels, citation keys and code; a suggested change still needs context.
@@ -107,8 +120,17 @@ be truncated; they are not reconstructed full files. Historical changes without
 recorded patches and shell-only edits may be unattributed. **Git** shows repository
 changes separately, including staged changes; never label all of that diff as the
 selected agent's work. Re-read the current file because later edits can supersede
-a recorded patch. A user's Reviewed marker records inspection only, without
-accepting/reverting source or satisfying a PR/check requirement.
+a recorded patch. **Accept edit** records the user's decision and keeps the
+current saved source; it does not reapply the patch or prove that no later edits
+exist. **Reject edit** reverses only complete text hunks that still match uniquely,
+with revision/conflict checks; it can remove a fully recorded unchanged added file
+or restore a fully recorded deleted file that has not been recreated. Unrelated
+edits are preserved. Partial, renamed, missing-context or ambiguous patches require
+manual comparison rather than a whole-file rollback. Save dirty editor buffers
+before rejection. Pending/final decision receipts survive lost replies, so inspect
+and retry that same edit/decision instead of applying another reverse patch.
+These are user review controls, not agent tools. A Reviewed marker alone remains
+inspection only; neither marker nor Accept edit satisfies a PR/check requirement.
 
 Use existing authorized file-editing tools for the requested implementation.
 Validate the changed source through the active workflow; code changes invalidate

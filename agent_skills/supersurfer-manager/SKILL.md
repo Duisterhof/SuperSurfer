@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.31'
+  supersurfer-version: '0.1.32'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.31. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.32. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -59,7 +59,11 @@ supply the existing `experiment_id`. Follow
 [run submission](../supersurfer-worker/references/run-submission.md), including
 exact-source PR verification, stable identities and telemetry. A worker-owned
 uncertain request must be recovered by that original conversation, not submitted
-again by the manager. This role has no held-draft preparation, experiment planning
+again by the manager. For a launch owned here, only a definitively rejected
+source-folder error permits changing `repo` under its same request ID after fresh
+service absence reconciliation; uncertain requests and all other fields remain
+fixed. Follow the submission reference rather than resetting a receipt. This role
+has no held-draft preparation, experiment planning
 update or worker-wakeup tool; do not emulate them through unscoped AML calls.
 
 Use `stop_run` with only the exact `run_id` for a user-requested cancellation in
@@ -183,7 +187,10 @@ use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
-retains its original authority; archiving an item or chat leaves work running.
+retains its original authority. Task right-click Archive/Restore and the Archived
+folder organize items; project Archive hides its tree under Archived projects.
+These app controls and chat archiving preserve history, running work and monitoring;
+restore is not a new assignment or launch.
 
 ## Tool index
 

@@ -1,3 +1,33 @@
+# SuperSurfer 0.1.32 focused workspaces — October 8, 2026
+
+The full backend suite passes **639 Python tests**. The concurrent task layout
+save test also passes **60 repeated races** with separate database connections.
+Testing found that importing the task Markdown inside a layout transaction could
+commit the SQLite connection before both clients checked their versions; the
+transaction now reads only the initialized policy until its own commit.
+
+All **24 Node/SSH checks** pass with isolated localhost SSH enabled. All
+**41 browser suites** pass (40 regular suites and the optional native workbench).
+Browser coverage adds stable Settings polling,
+extension search/Configure, real recorded-edit accept/reject, right-click task and
+project archives, compact page headings and chat entry at the latest message.
+The optional real Code OSS workbench test installs/removes Vim through Open VSX,
+opens actual Vim settings and preserves native buffers through navigation.
+A second real native test rejects a recorded patch, then types an unsaved buffer
+and verifies that rejection waits for fresh dirty-state evidence and is blocked.
+
+Queue recovery tests use a real clean Git worktree beside a dirty source folder.
+The same durable request ID accepts the corrected folder only after definitive
+rejection and fresh absence checks; legacy receipts reconcile, lost replies bind
+existing runs, changed command/data/resource fields remain forbidden.
+Agent review tests preserve unrelated edits, refuse revision conflicts, require
+complete unambiguous recorded hunks, restore deletes/remove untouched additions,
+respect read-only/project boundaries and reconcile interruption after source write.
+Archive tests verify persistence and visibility-only semantics without stopping
+work. Continuation tests cover both new metadata and legacy system prompts while
+keeping direct replies and failed delivery visible. All eleven role skills were
+reviewed and revised against the final tools. Scheduler/engine source is unchanged.
+
 # SuperSurfer 0.1.31 task workspaces and editors — October 8, 2026
 
 The final backend suite passes **623 Python tests**. All **23 Node/SSH checks**

@@ -22,6 +22,7 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import urlopen
 
 from . import editor_settings
+from .editor_extensions import ExtensionCatalog
 from .store import atomic_write
 from .surfboards import SurfboardError
 
@@ -68,6 +69,7 @@ class Workbench:
         self.job = None
         self.job_thread = None
         self.bridge_token = secrets.token_urlsafe(32)
+        self.catalog = ExtensionCatalog()
 
     def platform_key(self):
         system = {"Linux": "linux", "Darwin": "macos"}.get(platform.system())
@@ -312,7 +314,7 @@ class Workbench:
     def poll(self, identity, after=0):
         with self.lock:
             row = self.session(identity)
-            return {"events": [event for event in row["events"] if event["sequence"] > int(after)], "dirty": row["dirty"], "connected": row["connected_at"] is not None}
+            return {"events": [event for event in row["events"] if event["sequence"] > int(after)], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "dirty_observed_at":row.get("dirty_observed_at")}
 
     def command(self, fields):
         with self.lock:
@@ -320,10 +322,15 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection"}:
+            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
+            if kind == "settings":
+                extension_id = fields.get("extension_id")
+                if not isinstance(extension_id, str) or not EXTENSION_ID.fullmatch(extension_id) or "@" in extension_id:
+                    raise SurfboardError("Choose an extension publisher.name")
+                result["extension_id"] = extension_id
             if kind == "file":
                 target, path = self.service.code_file_target(project, fields.get("path"))
                 data = self.service.code.read(target, path)
@@ -348,6 +355,7 @@ class Workbench:
                 return self.service.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path"))
             if fields.get("operation") == "poll":
                 row["dirty"] = fields.get("dirty") is True
+                row["dirty_observed_at"] = time.time()
                 ack = fields.get("ack", [])
                 row["commands"] = [command for command in row["commands"] if command["id"] not in ack]
                 return {"commands": row["commands"]}
