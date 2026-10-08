@@ -1,0 +1,11 @@
+// The top layer keeps the same editor, iframe and PDF nodes alive while expanded.
+export function createPanelFocus(){
+ let active=null,previousFocus=null,wasOpen=false;
+ const update=()=>{for(const button of document.querySelectorAll('[data-panel-fullscreen]')){const target=button.dataset.panelFullscreen?document.querySelector(button.dataset.panelFullscreen):button.closest('.page-tile,.project-view-slot');const expanded=target===active;if(button.textContent!==(expanded?'⤡':'⤢'))button.textContent=expanded?'⤡':'⤢';button.title=expanded?'Restore panel (Esc)':'Full screen';button.setAttribute('aria-label',expanded?'Restore panel':'Full screen');button.setAttribute('aria-pressed',String(expanded));}};
+ function close(){if(!active)return;const old=active;active=null;if(old.matches(':popover-open'))old.hidePopover();old.removeAttribute('popover');old.classList.remove('panel-focused');if(old.tagName==='DETAILS'&&!wasOpen)old.open=false;document.body.classList.remove('has-focused-panel');update();if(previousFocus?.isConnected)previousFocus.focus({preventScroll:true});}
+ function toggle(target){if(!target)return;if(target===active){close();return;}close();previousFocus=document.activeElement;wasOpen=target.open;active=target;if(target.tagName==='DETAILS')target.open=true;target.classList.add('panel-focused');target.setAttribute('popover','manual');target.showPopover();document.body.classList.add('has-focused-panel');update();target.querySelector('[data-panel-fullscreen]')?.focus({preventScroll:true});}
+ document.addEventListener('click',event=>{const button=event.target.closest('[data-panel-fullscreen]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();toggle(button.dataset.panelFullscreen?document.querySelector(button.dataset.panelFullscreen):button.closest('.page-tile,.project-view-slot'));},true);
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&active&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();close();}},true);
+ new MutationObserver(()=>{if(active&&!active.isConnected)close();else if(active)update();}).observe(document.body,{childList:true,subtree:true});
+ return {close,toggle,refresh:update};
+}

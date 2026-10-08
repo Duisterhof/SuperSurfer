@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.29. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.30. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -29,6 +29,10 @@ committed source or PR evidence. Resolve the run's exact recorded revision befor
 checking or staging a node; preserve concurrent working-tree edits instead of
 copying them into an existing reviewed run. Moving/hiding Compute in a project
 layout changes presentation only, not readiness, reservations or setup authority.
+The editor's visible absolute path belongs to the connected workspace host. An
+attached file or PDF does not establish that the same path exists on a compute
+node; continue to resolve that node's own repository, environment and data paths
+against the saved run contract.
 
 The same compute/run view can appear on a custom page beside source or agent-change
 tiles. Its presence, absence or dimensions do not register a host, acquire a node

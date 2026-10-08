@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.29. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.30. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -56,6 +56,10 @@ existing live source bindings and verify the requested view at its actual size.
 HTML edited in the Code editor is a shared source file; unsaved text or a reviewed
 agent patch does not mean the report was published. Preserve concurrent edits and
 use the normal versioned publishing tool when publication was requested.
+Fullscreen and restore change the view, not its report identity or evidence. Keep
+existing interactive chart/media state instead of republishing to enlarge it.
+A source/diff/PDF attachment can describe a requested revision; preserve its
+selection provenance and check the actual measured writers before changing claims.
 
 Results can also be a tile on a custom page beside notes, source or agent changes.
 Reuse the existing live report instead of republishing it for each tile. Honor the

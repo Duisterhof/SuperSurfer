@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.29. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.30. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -140,6 +140,10 @@ uses the same repository as its agents; preserve concurrent user/worker edits. I
 record that a patch was read, not scientific approval, a verified PR or launch
 authorization. Use the [editor guidance](../supersurfer-code-editor/SKILL.md) when
 an assigned task concerns source edits or reviewing a named agent's changes.
+File, diff and PDF attachments belong to the selected conversation and enter its
+context only when the user sends. Preserve the connected workspace path, selection
+provenance and unsaved warning; adding context does not assign a new manager task
+or authorize a launch. Fullscreen/restore does not transfer ownership.
 
 Custom pages compose existing views into tiles. An Agent changes tile is a review
 surface for recorded edits, not a new coordination channel or approval assignment.

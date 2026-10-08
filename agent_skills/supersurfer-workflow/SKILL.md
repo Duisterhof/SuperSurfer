@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # Work from the project's surfboard
 
-Reviewed for SuperSurfer 0.1.29. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.30. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
@@ -51,6 +51,10 @@ when acting on selected code or reviewing agent changes. Preserve user and peer
 edits, including unsaved-selection warnings. A Reviewed patch marker is not a
 check receipt. Project and work-item layouts are independent presentation choices;
 moving a pane does not create a new task or duplicate its owner.
+Editor attachment chips preserve source/diff/PDF context for the existing chat;
+adding one does not send work. After the user sends, follow the actual request and
+its unsaved/provenance warnings. Monaco navigation and shared-file editing do not
+provide a VS Code extension host or a separate inline-edit execution engine.
 
 Custom project/work-item pages can combine separate explorer, editor, agent-change,
 chat and artifact tiles. Reuse the shared source and existing report/agent identity

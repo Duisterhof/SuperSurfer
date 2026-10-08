@@ -653,7 +653,7 @@ class CodexBridge:
                 self._login_status = {"loginId": result["loginId"], "status": "pending", "error": None}
         return {key: result[key] for key in ("verificationUrl", "userCode", "loginId")}
 
-    def send(self, scope, text, model=None, reasoning=None, fast_mode=False, approval_mode="ask", *, message_role="user", display_text=None, agent_sender=None, background_check=None):
+    def send(self, scope, text, model=None, reasoning=None, fast_mode=False, approval_mode="ask", *, message_role="user", display_text=None, agent_sender=None, background_check=None, attachments=None):
         if message_role not in {"user", "system"}:
             raise ValueError("Invalid message origin")
         if type(fast_mode) is not bool:
@@ -677,6 +677,8 @@ class CodexBridge:
             chat["agent"].update(name=context.get("name", chat["agent"]["name"]), role=context.get("role", chat["agent"]["role"]))
             chat["agent"].update(approval_mode=approval_mode, runtime_approval_mode=None, active_sandbox=None)
             user_message = self._message(chat, message_role, display_text if display_text is not None else text.strip())
+            if attachments:
+                user_message["attachments"] = copy.deepcopy(attachments)
             user_message["origin"] = "background_check" if background_check is not None else message_role
             # Preserve direct-user priority through automatic goal continuations.
             chat["user_priority_since"] = user_message["created"] if message_role == "user" else None
@@ -893,7 +895,7 @@ class CodexBridge:
                     and not any(message.get("status") == "steering" for message in chat.get("messages", []))
                     and not any(item["status"] == "pending" for field in ("approvals", "questions") for item in chat.get(field, [])))
 
-    def steer(self, scope, text, *, message_role="user", display_text=None, agent_sender=None):
+    def steer(self, scope, text, *, message_role="user", display_text=None, agent_sender=None, attachments=None):
         """Send input to the exact current turn, with no restart or retry."""
         if message_role not in {"user", "system"}:
             raise ValueError("Invalid message origin")
@@ -906,6 +908,9 @@ class CodexBridge:
                 raise CodexError("This conversation cannot receive steering right now. Answer any pending question or approval, or wait for its current turn.", status=409)
             turn_id, thread_id, proc = chat["turn_id"], chat["thread_id"], self._proc
             message = self._message(chat, message_role, display_text if display_text is not None else text.strip())
+            if attachments:
+                message["attachments"] = copy.deepcopy(attachments)
+            message["origin"] = message_role
             previous_priority = chat.get("user_priority_since")
             if message_role == "user":
                 chat["user_priority_since"] = message["created"]

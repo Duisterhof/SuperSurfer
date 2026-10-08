@@ -195,6 +195,20 @@ class CodexBridgeTests(unittest.TestCase):
             self.assertFalse(self.bridge.chat('project:vla')['busy'])
             self.assertFalse(self.bridge.chat('project:vla')['messages'])
 
+    def test_attachment_history_keeps_labels_while_model_receives_context(self):
+        item={'id':'ctx1','kind':'code','path':'main.py','label':'main.py L1','text':'selected = 42'}
+        self.bridge.send('project:vla','hold with attached selected = 42',display_text='Explain this',attachments=[item])
+        self.wait_for(lambda:self.bridge.chat('project:vla').get('steerable'))
+        self.bridge.steer('project:vla','Now inspect attached selected = 42',display_text='Now inspect',attachments=[item])
+        chat=self.bridge.chat('project:vla');user=[m for m in chat['messages'] if m['role']=='user']
+        self.assertEqual(['Explain this','Now inspect'],[m['text'] for m in user])
+        self.assertEqual([item],user[-1]['attachments'])
+        item['text']='changed locally'
+        self.assertEqual('selected = 42',self.bridge.chat('project:vla')['messages'][-1]['attachments'][0]['text'])
+        request=next(r for r in self.requests() if r.get('method')=='turn/steer')
+        self.assertIn('selected = 42',request['params']['input'][0]['text'])
+        self.bridge.stop('project:vla');self.finished()
+
     def test_background_check_provenance_does_not_label_a_real_user_as_monitoring(self):
         prompt = 'Perform this worker check explicitly scheduled by the user.\n\nSaved task:\nCheck metrics\n\nWakeup evidence:\n{}'
         self.bridge.send('project:vla', prompt, message_role='system',

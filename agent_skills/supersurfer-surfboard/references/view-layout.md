@@ -46,3 +46,9 @@ LaTeX block and that role's existing permissions. Preserve the selected PDF/buil
 identity and distinguish a saved PDF from current source. Moving a tile does not
 save dirty editor buffers, republish Results, create W&B writers, start work or
 cancel remote work. Verify the requested arrangement at its actual pane size.
+
+Fullscreen/restore (including Escape) is temporary viewing state, not a saved
+layout change. Do not call `update_view_layout` solely to maximize a tile or
+create another copy of it. Preserve the same editor buffers and iframe/report
+instance. The editor's internal file-sidebar width is separate from page tile
+`span`; resizing that sidebar does not change the workflow graph.

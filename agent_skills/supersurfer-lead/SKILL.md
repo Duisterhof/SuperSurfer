@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.29. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.30. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -126,6 +126,11 @@ owner and preserve unrelated changes. Recorded agent patches help review a chang
 but are not a complete history of shell edits or a new PR gate. See
 [editor collaboration](../supersurfer-code-editor/SKILL.md). Changing project or
 experiment pane placement does not change these responsibilities or launch rights.
+When handing off a task that uses an attachment, preserve its connected-workspace
+path, selected lines, diff side or PDF page and supplied build identity, and any
+unsaved warning.
+The user adds/removes context before sending; do not treat an attachment alone as
+a request to spawn another worker or approve execution.
 
 A narrow Compute view does not change the project's registered resources or your
 scoped tools. Treat availability counts as observed capacity, then check the

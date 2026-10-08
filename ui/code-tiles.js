@@ -11,7 +11,7 @@ function createTile(options,kind) {
   const report=message=>{if(root){const status=root.querySelector('.code-tile-status');status.textContent=message||'';status.hidden=!message;}};
   function treeRow(entry,depth=0) {
     const directory=entry.kind==='directory',expanded=state.expanded.has(entry.path);
-    return `<button type="button" class="code-tree-entry" style="--depth:${depth}" data-tile-${directory?'directory':'file'}="${escapeHTML(entry.path)}" title="${escapeHTML(entry.path)}"${directory?` aria-expanded="${expanded}"`:''}><span class="code-entry-icon" aria-hidden="true">${directory?(expanded?'⌄':'›'):'·'}</span><span>${escapeHTML(state.search?entry.path:entry.name)}</span></button>`+
+    return `<button type="button" class="code-tree-entry" style="--depth:${depth}" data-tile-${directory?'directory':'file'}="${escapeHTML(entry.path)}" title="${escapeHTML((context.repo||'').replace(/\/$/,'')+'/'+entry.path)}"${directory?` aria-expanded="${expanded}"`:''}><span class="code-entry-icon" aria-hidden="true">${directory?(expanded?'⌄':'›'):'·'}</span><span>${escapeHTML(state.search?entry.path:entry.name)}</span></button>`+
       (directory&&expanded?(state.tree.get(entry.path)?.entries||[]).map(child=>treeRow(child,depth+1)).join(''):'');
   }
   function render() {
@@ -95,7 +95,7 @@ function createTile(options,kind) {
     unmount();root=element;context={...nextContext};const token=++epoch;
     if(!states.has(key(context)))states.set(key(context),{tree:new Map(),expanded:new Set(),search:'',searchResults:null,data:null,scope:'',saving:new Set()});
     state=states.get(key(context));root.classList.add('code-repository-tile');root.dataset.codeTile=kind;
-    root.innerHTML=`<header class="code-tile-heading"><span>${kind==='files'?'Files':'Agent changes'}</span><button type="button" data-tile-refresh title="Refresh ${kind==='files'?'files':'agent changes'}" aria-label="Refresh ${kind==='files'?'files':'agent changes'}">↻</button></header>${kind==='files'?`<div class="code-find"><input class="code-tile-search" type="search" placeholder="Find file by name…" aria-label="Find file by name" value="${escapeHTML(state.search)}"></div>`:''}<div class="code-tile-list"></div><div class="code-tile-status" role="status" hidden></div>`;
+    root.innerHTML=`<header class="code-tile-heading"><span>${kind==='files'?'Files':'Agent changes'}</span><button type="button" data-panel-fullscreen aria-label="Full screen" title="Full screen">⤢</button><button type="button" data-tile-refresh title="Refresh ${kind==='files'?'files':'agent changes'}" aria-label="Refresh ${kind==='files'?'files':'agent changes'}">↻</button></header>${kind==='files'?`<div class="code-find"><input class="code-tile-search" type="search" placeholder="Find file by name…" aria-label="Find file by name" value="${escapeHTML(state.search)}"></div>`:''}<div class="code-tile-list"></div><div class="code-tile-status" role="status" hidden></div>`;
     root.addEventListener('click',click);root.addEventListener('input',onInput);root.addEventListener('change',onChange);render();
     const result=await refresh();if(!current(token))return false;
     timer=setInterval(()=>{if(!document.hidden)refresh();},15000);return result;

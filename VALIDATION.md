@@ -1,3 +1,32 @@
+# SuperSurfer 0.1.30 editor workflow — October 8, 2026
+
+The final backend suite passes **615 Python tests** and the **20 Node/SSH checks**
+pass with disposable localhost SSH enabled. All **35 Chromium suites** pass,
+including targeted reruns after fixing picker Escape handling and a PDF header
+height regression. All eleven role/block skills were reviewed and revised; their
+checker passes. Scheduler/engine source is unchanged from 0.1.29.
+
+The new real-service editor suite drags and persists the internal file column,
+opens a searchable file picker and repository PDFs, checks absolute workspace
+paths, and retains the same dirty Monaco model through tile/page fullscreen.
+It exercises code and PDF selection attachments, typed-message preservation,
+conversation scoping, explicit send, compact history, PDF tile configuration and
+stale-query rejection. A delayed file read cannot attach to another agent after
+switching conversations within the same project. Source files remain unchanged
+by these presentation actions.
+Existing suites cover Git and per-agent diffs, dirty-file conflicts, PDF selection,
+real LaTeX compilation, layout save/reload, both sidebars and narrow viewports.
+
+Backend cases validate attachment scope, private-path exclusion, type/size/count
+bounds and spoofed paths. They verify exact selected context reaches the model
+while chat history stores the concise user message with separate attachment
+metadata, including steering and a defensive copy against later mutation.
+
+The editor uses bundled Monaco and PDF.js. This release does not implement a
+VS Code extension host or an inline AI editing engine. Unsent attachment drafts
+are scoped to conversations in the current window. Desktop packages are
+cross-built on Linux; native macOS behavior is not verified on a Mac here.
+
 # SuperSurfer 0.1.29 layout, reconnect and monitoring — October 8, 2026
 
 The final backend suite passes **613 Python tests**. All **34 Chromium suites**

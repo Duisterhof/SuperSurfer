@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.29'
+  supersurfer-version: '0.1.30'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.29. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.30. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for the applied writing
 workflow and configured compiler. Record actionable deliverables with `update_task`
 and retain their IDs. A compiled PDF proves compilation, not completion of a
@@ -23,10 +23,12 @@ external publication, repository push or submission authority.
 
 Source editor selections can be unsaved. Re-read saved source before editing,
 preserve unrelated and concurrent work, and reconcile differences instead of
-assuming selected text is already on disk. **Ask agent** drafts a message; it does
-not send it. PDF selections identify a particular build and page. Locate the text
-in the actual source; a PDF page is not a source line number, and a stale PDF may
-represent an older revision. Follow [shared-editor guidance](../supersurfer-code-editor/SKILL.md).
+assuming selected text is already on disk. **Ask agent** adds a removable context
+attachment to the current chat; only the user's explicit send delivers it. PDF
+selections identify the file and page, plus the compiler build when supplied. A
+PDF opened directly from the repository may have no build ID: do not invent one.
+Locate the text in the actual source; a PDF page is not a source line number, and
+a stale PDF may represent an older revision. Follow [shared-editor guidance](../supersurfer-code-editor/SKILL.md).
 Projects may share this repository: saved source edits affect each of them, while
 compiler history, layouts and artifact libraries remain project-specific. The
 same physical paper can have only one active build across those projects. Inspect
@@ -39,8 +41,11 @@ starting another build to fix layout. Resizing neither saves source nor refreshe
 a stale PDF; keep the build identity and freshness label visible. Use enabled
 `read_view_layout` / `update_view_layout` for requested tile size/order or placement
 within your role scope; follow [layout editing](../supersurfer-surfboard/references/view-layout.md).
-Adding a PDF view is presentation only. Compilation still requires a connected
-LaTeX block and its existing tool permissions; a tile never grants execution.
+Repository PDFs open directly in editor tabs, and a generic PDF tile has a file
+chooser. Preserve its selected path when enlarging or restoring the view; neither
+a chooser nor fullscreen compiles, rewrites or publishes that file. Adding a PDF
+view is presentation only. Compilation still requires a connected LaTeX block and
+its existing tool permissions; a tile never grants execution.
 
 ## Compile and inspect
 

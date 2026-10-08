@@ -92,6 +92,24 @@ class ViewLayoutToolTests(unittest.TestCase):
         with file.open('wb') as stream:stream.truncate(33*1024*1024)
         with self.assertRaisesRegex(SurfboardError,'32 MiB'):self.service.code.pdf(project,'paper.pdf')
 
+    def test_context_attachments_are_scoped_bounded_and_separate_from_display_text(self):
+        scope='experiment:'+self.exp['id']
+        item={'id':'context-1','kind':'code','project_id':'p1','path':'main.py','label':'main.py · L1–2','text':'Unsaved selection: print(42)'}
+        self.service.action('chat.send',{'scope':scope,'text':'Explain this','attachments':[item]})
+        sent=self.service.codex.sent[-1]
+        self.assertIn('Unsaved selection: print(42)',sent[1])
+        self.assertIn(str(self.repo/'main.py'),sent[1])
+        self.assertEqual('Explain this',sent[2]['display_text'])
+        self.assertEqual(str(self.repo/'main.py'),sent[2]['attachments'][0]['absolute_path'])
+        self.assertNotIn('absolute_path',item)
+        from server.chat_context import attachments
+        for changes in ({'project_id':'foreign'},{'path':'../private'},{'path':'.git/config'},
+                        {'absolute_path':'/spoofed'},{'kind':'execute'},{'text':'x'*40001}):
+            with self.subTest(changes=changes),self.assertRaises(SurfboardError):attachments(self.service,scope,[{**item,**changes}])
+        with self.assertRaises(SurfboardError):attachments(self.service,scope,[item,item])
+        with self.assertRaises(SurfboardError):attachments(self.service,scope,[{**item,'id':str(i),'text':'x'*35000} for i in range(2)])
+        self.assertEqual([],attachments(self.service,scope,None)[0])
+
     def test_current_page_reaches_model_without_changing_user_visible_text(self):
         scope='experiment:'+self.exp['id'];layout=self.service.view_layout('p1',self.exp['id'])
         view={'project_id':'p1','experiment_id':self.exp['id'],'page_id':layout['pages'][0]['id']}

@@ -54,6 +54,10 @@ with its exact run ID and waits for the scheduler's state. Preserve
 existing history, task/run/request IDs and uncertainty after reconnecting rather
 than creating replacement owners. Retired native AutoML conversations remain
 read-only. The app, not agents, controls archive/restore and additional windows.
+Editor/PDF context chips stay with the selected conversation while navigating in
+the current window. Attaching context only prepares that chat; it neither sends
+a message nor resumes work until the user explicitly sends. Fullscreen/restore
+is also presentation only, preserving existing work and unsaved editor buffers.
 
 Workspace Settings supplies the persistent default permission unless a chat
 explicitly overrides it. YOLO resolves eligible permission requests immediately,
