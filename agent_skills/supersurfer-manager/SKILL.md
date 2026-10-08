@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.28. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.29. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -131,17 +131,21 @@ that a project needs another manager. Use the existing scoped tools for requeste
 actions and preserve current budgets and reservations.
 
 Project and experiment layouts can differ without changing tools or ownership.
-Moving an editor, chat or Results pane is a configurator/layout task, not a reason
-to involve this manager in its content. The visual Code editor uses the same
-repository as its agents; preserve concurrent user/worker edits. Its review badges
+For an assigned presentation change, use `read_view_layout` then
+`update_view_layout` with the target `project_id` and current versions. Workers
+and leads can make their own scoped layout changes without routing through this
+manager. Follow [layout editing](../supersurfer-surfboard/references/view-layout.md);
+rearranging a view does not assign its content to you. The visual Code editor
+uses the same repository as its agents; preserve concurrent user/worker edits. Its review badges
 record that a patch was read, not scientific approval, a verified PR or launch
 authorization. Use the [editor guidance](../supersurfer-code-editor/SKILL.md) when
 an assigned task concerns source edits or reviewing a named agent's changes.
 
 Custom pages compose existing views into tiles. An Agent changes tile is a review
 surface for recorded edits, not a new coordination channel or approval assignment.
-Let project configurators arrange requested pages without routing ordinary page
-composition through the workspace manager or changing resource allocations.
+Keep ordinary page composition with its current scoped agent. Use the
+configurator only for requested workflow policy, capabilities or data-flow changes;
+presentation tools do not change resource allocations.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named
@@ -153,7 +157,7 @@ data or crossing project boundaries.
 `run_board_action` executes a configured permitted action with a durable record;
 use its recorded result rather than claiming that a command passed. Research GPU
 launches continue through their existing exact-source PR and scheduler workflow.
-For a requested board change, prepare the concrete change for the project
+For a requested workflow policy or capability change, prepare the concrete change for the project
 configurator. That conversation has `propose_surfboard` and the user applies its
 reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
 changes. Never alter board state to grant yourself a denied capability.

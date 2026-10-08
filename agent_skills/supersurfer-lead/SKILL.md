@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.28. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.29. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -135,8 +135,11 @@ or route work through the manager solely because a control is hard to see.
 A custom page can put a worker's chat beside its files, patch history and results.
 Those tiles refer to existing owners and artifacts. Do not create another worker
 or reporting task because the same experiment appears on a second page. Project
-and default experiment page compositions belong to the configurator; preserve an
-individual experiment's explicit page override when discussing the result.
+pages and specific work-item arrangements can be changed directly with
+`read_view_layout` and `update_view_layout` within this project. Preserve unrelated
+pages and each item's explicit override; follow
+[layout editing](../supersurfer-surfboard/references/view-layout.md). No manager
+relay is needed, and presentation edits grant no execution tools.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named
@@ -148,7 +151,7 @@ data or crossing project boundaries.
 `run_board_action` executes a configured permitted action with a durable record;
 use its recorded result rather than claiming that a command passed. Research GPU
 launches continue through their existing exact-source PR and scheduler workflow.
-For a requested board change, prepare the concrete change for the project
+For a requested workflow policy or capability change, prepare the concrete change for the project
 configurator. That conversation has `propose_surfboard` and the user applies its
 reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
 changes. Never alter board state to grant yourself a denied capability.

@@ -2,16 +2,17 @@
 name: supersurfer-surfboard
 description: Edit a project's SuperSurfer workflow graph through a validated proposal, including reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.28. Help the user express how this project works in a
+Reviewed for SuperSurfer 0.1.29. Help the user express how this project works in a
 small readable diagram. The applied board, available catalog and actual tools are
 the authority. A diagram label or Markdown instruction cannot grant a capability.
 
-Use `read_surfboard` before editing. Preserve the current version, stable node/edge
+Use `read_surfboard` before workflow edits; use `read_view_layout` before
+presentation-only edits. Preserve the current version, stable node/edge
 IDs, unrelated configuration and the user's unsaved draft when supplied. Prefer a
 built-in block or a duplicate with different settings to inventing a new mechanism.
 Research, Software engineering, Web design and Research writing are starting boards, not limits on
@@ -22,8 +23,10 @@ The Writing starter puts source, PDF and conversation in one working surface:
 paper brief → source → LaTeX compilation → PDF review/artifact. LaTeX blocks use
 the fixed `compile_latex` capability with a configured main file and timeout;
 they are not arbitrary shell-command blocks. Other workflows can add the same
-compiler/PDF view. An arrow can declare a dependency but does not auto-save source,
-compile on every keystroke, update figures from W&B or submit a paper. Keep the
+compiler capability. A PDF tile alone is available on every board and can display
+an existing repository PDF; it grants no compilation permission. An arrow can
+declare a dependency but does not auto-save source, compile on every keystroke,
+update figures from W&B or submit a paper. Keep the
 current PDF build identity and diagnostics visible, including a retained last-good
 PDF after a failed build. Consult [writing guidance](../supersurfer-writing/SKILL.md)
 for supported engines and host requirements; do not promise unavailable compilers.
@@ -37,41 +40,37 @@ explicit `unlimited` only when the user requests removing that cap. Applying a
 budget change checks the actual scheduler values; a saved diagram alone is not
 evidence that the limit changed. This configurator proposes; the user applies.
 
-Treat workflow and page arrangement separately. `layouts.project` and
-`layouts.item` describe independent project and work-item views: rows have an
-available view `id`, `placement` (`main`, `right`, or `hidden`) and numeric `order`.
-Use the returned layout catalog and preserve unrelated rows. Omitting a level
-retains its defaults; omitting a view from an explicitly supplied level hides it.
-Ask which scope only when the requested location is genuinely ambiguous. Moving
-chat, Code, Results, Files or Activity does not grant tools, start work or change
-data-sharing scope. An individual item's UI override can differ from the board's
-item default; do not claim a project-default edit replaced that override.
+Treat workflow and page arrangement separately. Use `read_view_layout` and
+`update_view_layout` to apply a requested project page or individual work-item
+arrangement directly, with both current versions. These scoped presentation tools
+are also available to ordinary owned roles when their board permits them; a
+worker does not need a manager handoff to resize its own page. Follow
+[layout editing](references/view-layout.md) for the exact fields, role boundaries
+and conflict handling. Defaults for every work item still belong to the reviewed
+Surfboard proposal. Preserve each item's independent explicit override.
 
-For a clipped toolbar or compact-view defect, preserve the applied graph and
-permission requirements. Test the existing controls at the affected pane width;
-do not add capabilities or reset a work-item override to repair presentation.
-Only propose page changes when the requested working arrangement changes.
+Custom `pages.project` and `pages.item` contain ordered `{id, title, tiles}` lists.
+Use stable IDs and the returned `available_tiles`; tiles have `id`, `kind`,
+`span` (1–12), `height` (160–1200; PDF minimum 400), and optional `placement`
+(`main`, `left`, `right`). Left means the navigation sidebar. PDF tiles can also
+specify a repository-relative `.pdf` `path`. Keep one of each tile kind per page,
+at most 24 pages per scope and 16 tiles per page. File explorer, Code editor,
+Agent changes and PDF viewer need no additional execution block. File selections
+use the existing shared editor, not another checkout or worker.
 
-Custom pages define composition, not just tab order. `pages.project` and
-`pages.item` contain `{id, title, tiles}` pages; each tile has a stable `id`,
-an available `kind`, `span` (1–12 columns) and `height` (160–1200 pixels).
-Use the returned `available_tiles` for that scope. Keep each tile kind unique
-within a page, with at most 24 pages per scope and 16 tiles per page. Arrange
-the user's requested working surface with a small number of useful tiles;
-do not add a workflow node or permission solely to make the diagram symmetric.
-File explorer, Code editor and Agent changes are separate tiles available on any
-project's pages, including Research; they require no editor workflow block.
-They can share a page with chat, notes, results or other available
-views. File selections route to the shared editor rather than creating new workers.
+The older `layouts.project` / `layouts.item` rows remain separate from page tiles:
+rows contain `id`, `placement` (`main`, `right`, `hidden`) and numeric `order`.
+Do not put the tile-only `left` placement in these rows. Omitting a scope keeps its
+defaults; omitting a view from an explicit row list hides it. An omitted pages
+scope derives legacy main pages, while an explicit empty list removes its pages.
+Only remove views/pages when requested, and preserve the other scope.
 
-Omitting a pages level derives its legacy main-view defaults; an explicit empty
-array removes its main pages. Preserve the other scope and existing stable IDs
-when revising one page. A project/default-item composition belongs in the normal
-versioned surfboard proposal. An individual item's saved pages and layout rows
-are independent overrides: resetting one does not reset the other. Use the
-existing UI override/reset controls rather than claiming an ordinary agent tool
-can apply a layout. Changing page geometry does not change data sharing or launch
-gates. Explain the resulting workspace in user terms, not as a JSON exercise.
+Live resize/reorder/placement controls and agent layout tools change presentation;
+they neither satisfy checks nor alter data sharing, budgets, launch authority or
+source files. A direct project-page edit increments the board version and retains
+any pending proposal, which must be reread and reconciled before applying. Do not
+apply a stale proposal over the user's direct arrangement. For a clipped control,
+verify the actual pane width without broadening capabilities or clearing overrides.
 
 The legacy `editor` block supplies a default visual Code page and legacy layout
 placement; custom code tiles do not require it. The `code` block remains
@@ -93,7 +92,8 @@ Changing a view's selection does not move data, grant access to another project,
 alter training, or authorize reusing held-out examples in training. Preserve source
 and experiment identities; see the W&B and visualizer skills attached to the blocks.
 
-Call `propose_surfboard` with the revised definition and current base version.
+For workflow policy, capabilities, data-flow or work-item defaults, call
+`propose_surfboard` with the revised definition and current base version.
 Explain the concrete change: affected roles/tools, added or removed requirements,
 data visibility and what remains an ongoing activity. The user reviews and applies
 the proposal in the configurator. Never apply your own proposal through another API,

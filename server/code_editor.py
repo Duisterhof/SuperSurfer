@@ -152,6 +152,30 @@ class CodeEditor:
         with self._parent(project, parts) as (_, parent):
             return self._read(parent, parts[-1], path)[0]
 
+    def pdf(self, project, path):
+        """Bounded binary read through the editor's descriptor-based boundary."""
+        parts = _parts(path)
+        if not path.lower().endswith(".pdf"):
+            raise SurfboardError("Choose a PDF file")
+        with self._parent(project, parts) as (_, parent):
+            fd = os.open(parts[-1], FILE_FLAGS, dir_fd=parent)
+            try:
+                info = _regular(fd)
+                maximum = 32 * 1024 * 1024
+                if info.st_size > maximum:
+                    raise SurfboardError("PDF previews support files up to 32 MiB", 413)
+                with os.fdopen(os.dup(fd), "rb") as source:
+                    body = source.read(maximum + 1)
+                if len(body) > maximum:
+                    raise SurfboardError("PDF exceeds the preview size limit", 413)
+                if _stamp(os.fstat(fd)) != _stamp(info):
+                    raise SurfboardError("PDF changed while being read. Retry after its writer finishes", 409)
+                if not body.startswith(b"%PDF-"):
+                    raise SurfboardError("This file is not a PDF")
+                return body
+            finally:
+                os.close(fd)
+
     def list(self, project, path="", query=None):
         parts = _parts(path, empty=True)
         if query is not None:

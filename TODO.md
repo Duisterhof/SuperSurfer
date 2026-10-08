@@ -1,3 +1,12 @@
+## Completed in 0.1.29
+
+- Drag page tiles into either sidebar; resize tiles and sidebar widths, with Save/Cancel and conflict protection.
+- Direct scoped page tools for every owned agent role, with current-page context.
+- Repository PDF viewers in all workflows, using authenticated confined reads.
+- Fifteen-second quiet account reconnection and distinct transport-error state.
+- Compact consecutive monitoring checks, expandable history and visible direct steering.
+- Review all eleven role/block skills against the new tools and monitoring behavior.
+
 ## Completed in 0.1.28
 
 - Stop treating cancellation of an obsolete node check as a five-minute SSH outage.

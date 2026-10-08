@@ -21,7 +21,7 @@ export function createPdfPreview(options={}) {
   root.querySelector('[data-pdf="previous"]').disabled=!document||loading||page<=1;root.querySelector('[data-pdf="next"]').disabled=!document||loading||page>=document.numPages;
   root.querySelector('[data-pdf-zoom]').value=String(scale);
   const download=root.querySelector('.pdf-download');let href='';try{if(record?.download_url||record?.pdf_url||record?.url)href=sameOriginURL(record.download_url||record.pdf_url||record.url);}catch{}
-  download.hidden=!href;download.href=href||'#';download.download=(record?.source_path||record?.main_file||'document').split('/').at(-1).replace(/\.tex$/i,'')+'.pdf';
+  download.hidden=!href;download.href=href||'#';download.download=(record?.source_path||record?.main_file||'document').split('/').at(-1).replace(/\.(?:tex|pdf)$/i,'')+'.pdf';
   root.querySelector('.pdf-source').textContent=record?.title||record?.source_path||record?.main_file||'PDF preview';
   const diagnostics=root.querySelector('.pdf-diagnostics'),items=Array.isArray(record?.diagnostics)?record.diagnostics:[];diagnostics.hidden=!items.length;
   diagnostics.innerHTML=items.slice(0,30).map(item=>`<button type="button" data-pdf-diagnostic="${items.indexOf(item)}" ${!item.path||!options.onSource?'disabled':''}><span>${escape(item.path||item.severity||'Build')}${item.line?':'+Number(item.line):''}</span>${escape(item.message||'')}</button>`).join('');
@@ -63,7 +63,7 @@ export function createPdfPreview(options={}) {
   }catch(failure){if(current(token)&&failure.name!=='AbortError'){loading=false;error=failure.message||String(failure);showStatus();}return false;}
  }
  function changePage(value){if(!document)return;page=clamp(Math.round(Number(value)||1),1,document.numPages);root.querySelector('.pdf-viewport').scrollTop=0;showStatus();draw();}
- function click(event){const button=event.target.closest('[data-pdf],[data-pdf-diagnostic]');if(!button)return;
+ function click(event){const download=event.target.closest('.pdf-download');if(download&&options.loadBytes){event.preventDefault();const saved={...record};options.loadBytes(sameOriginURL(saved.download_url||saved.pdf_url||saved.url),{}).then(bytes=>{const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),link=window.document.createElement('a');link.href=url;link.download=download.download;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}).catch(failure=>{error=failure.message;showStatus();});return;}const button=event.target.closest('[data-pdf],[data-pdf-diagnostic]');if(!button)return;
   if(button.dataset.pdfDiagnostic!==undefined){const item=record?.diagnostics?.[Number(button.dataset.pdfDiagnostic)];if(item?.path)options.onSource?.({path:item.path,line:item.line||1,column:item.column||1});return;}
   switch(button.dataset.pdf){case'previous':changePage(page-1);break;case'next':changePage(page+1);break;case'ask':askSelection();break;case'retry':load(record,{force:true});break;case'zoom-out':case'zoom-in':{const sheet=root.querySelector('.pdf-sheet'),base=Number(sheet.style.getPropertyValue('--total-scale-factor'))||1;scale=String(clamp(base*(button.dataset.pdf==='zoom-in'?1.2:1/1.2),.2,3));const select=root.querySelector('[data-pdf-zoom]');if(![...select.options].some(o=>o.value===scale))select.add(new Option(Math.round(Number(scale)*100)+'%',scale));showStatus();draw();break;}}
  }

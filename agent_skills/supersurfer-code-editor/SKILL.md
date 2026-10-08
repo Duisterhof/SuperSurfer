@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.28. The visual Code editor uses Monaco, the editor
+Reviewed for SuperSurfer 0.1.29. The visual Code editor uses Monaco, the editor
 component of VS Code. Its files are the registered repository shared by the user
 and project agents, not an isolated agent checkout. The `editor` surfboard block
 is a view; it adds no shell tool, executable action or launch permission.
@@ -19,8 +19,11 @@ editor's buffers; opening a file from an explorer or switching pages does not
 create another checkout or agent. The editor tile can omit its built-in sidebar
 when a separate explorer is present. If the page lacks an editor, file selection
 can open the existing Code surface. Page arrangement is a presentation choice,
-not a new source owner or permission. Ask the configurator for requested default
-page composition rather than rebuilding equivalent dashboards in HTML.
+not a new source owner or permission. Use enabled `read_view_layout` and
+`update_view_layout` tools for requested page composition, resizing/reordering or
+sidebar placement within your role scope. Preserve stable tile IDs and dirty
+buffers; follow [layout editing](../supersurfer-surfboard/references/view-layout.md)
+rather than rebuilding equivalent dashboards in HTML.
 
 When the user asks about a file or selected lines, use that context for the
 requested task. **Ask agent** places a draft in chat; it does not itself send work.

@@ -1,3 +1,33 @@
+# SuperSurfer 0.1.29 layout, reconnect and monitoring — October 8, 2026
+
+The final backend suite passes **613 Python tests**. All **34 Chromium suites**
+pass, including targeted reruns after fixing PDF compiler selection and custom-page
+Arrange visibility. The **20 Node/SSH checks** pass with real disposable localhost
+SSH tests enabled. All eleven role/block skills were reviewed and revised; the
+release checker passes. Scheduler/engine source is unchanged from 0.1.28.
+
+New coverage exercises fifteen-second account grace, slow success, transient and
+prolonged transport failures, actual sign-out, explicit login and read-only access.
+Sixty repeated checks collapse with lazy history rendering; direct steering and
+errors remain visible and expansion survives polling. A read-only snapshot of
+E15's real 829-message history folded 446 monitoring messages into three groups,
+preserving the user's comparison request. No experiment message or job was sent.
+
+Real-service browser tests drag tiles into both sidebars, resize tile dimensions
+and sidebar widths, save/reload, cancel, and reject a concurrent agent layout edit.
+They retain the exact dirty Monaco model and composer draft through tile moves,
+keep project/item pages separate, and verify repository PDF display/download.
+Role tests exercise scope confinement, scheduled/read-only denial, version conflicts,
+pending draft preservation, page context and repository PDF boundary failures.
+Writing workflows compile real multi-file LaTeX, select PDF text, recompile saved
+source, retain the last good PDF after errors and survive narrow layouts.
+
+The served layout preview uses the actual UI with clearly labeled browser-local
+sample data. Its writing editor/PDF, sidebar drop, resize/save/reload and navigation
+among research, coding and writing were exercised without browser exceptions.
+It cannot run agents, compilers or production commands. Desktop platform packages
+are cross-built on Linux; native macOS behavior is not verified on a Mac here.
+
 # SuperSurfer 0.1.28 scheduler cancellation follow-up — October 8, 2026
 
 Live E17 recovery successfully retained its original request identity and created

@@ -2,12 +2,12 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.28. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.29. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.
@@ -29,6 +29,10 @@ Several custom pages can display views of the same W&B input. They retain the
 configured project/current/selected data scope; page titles and neighboring source
 tiles are not a new selection rule. Reuse individual writer identities across
 those views instead of creating another tracking run to populate a new tile.
+Enabled `read_view_layout` / `update_view_layout` tools can rearrange scoped pages
+and tiles without changing that input. Preserve source bindings and follow
+[layout editing](../supersurfer-surfboard/references/view-layout.md); changing actual
+data-sharing selection still requires the reviewed Surfboard workflow.
 
 A W&B group is context, not a measured writer. Resolve individual run URLs and
 actual logged keys before publishing curves. Retain experiment, method, attempt,

@@ -362,11 +362,13 @@ class Service(SurfboardService, EditorService, WritingService):
             self.turn_origins[scope] = "schedule"
             prompt = ("Perform this worker check explicitly scheduled by the user. Stay within the saved task; "
                       "inspect and debug only as requested. Report meaningful changes or failures and update the experiment document with evidence. "
+                      "Routine monitoring is a compact activity card: omit start-of-check narration. Give one short outcome with the latest meaningful observation; lead with any new failure, milestone or decision needed. Keep detailed repeated metrics and provenance in the saved evidence, not a long chat recap. "
                       "Do not launch or queue jobs, change GPU allocations, create agents, launch new work through peers, or add recurring tasks from this wakeup. "
                       "A metric trigger is an observation, not permission to start another experiment.\n\nSaved task:\n" + rule["task"] +
                       "\n\nWakeup evidence:\n" + json.dumps(trigger))
             result = self.codex.send(scope, prompt, model=preferences["model"], reasoning=preferences["reasoning"],
-                                     fast_mode=preferences["fast_mode"], approval_mode=preferences["approval_mode"])
+                                     fast_mode=preferences["fast_mode"], approval_mode=preferences["approval_mode"],
+                                     message_role="system", background_check={"rule_id": rule["id"], "kind": trigger.get("kind", "interval")})
             if not result.get("accepted"):
                 raise APIError("Worker did not confirm acceptance of its wakeup", 409)
             return True
@@ -715,7 +717,7 @@ class Service(SurfboardService, EditorService, WritingService):
             self.guard_board_tool(scope, name, arguments)
             if self.read_only:
                 raise APIError("Read-only preview: agent tools are disabled", 403)
-            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                 return self.board_tool(scope, name, arguments)
             alias = ALIASES.get(name.removeprefix("supersurfer_"))
             if alias:
@@ -1541,12 +1543,14 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Answer existing AutoML conversations in their native console", 409)
             return self.codex.answer(scope, text_field(params, "question_id", 256), params["answers"])
         if op == "chat.steer":
-            if set(params) != {"scope", "text"}:
-                raise APIError("Steering accepts only scope and text")
+            if set(params) - {"scope", "text", "view"} or not {"scope", "text"} <= set(params):
+                raise APIError("Steering accepts scope, text and optional view context")
             scope = text_field(params, "scope", 256)
             if "agent" in self._chat_scope(scope):
                 raise APIError("Steer an existing AutoML conversation in its native console", 409)
-            result = self.codex.steer(scope, text_field(params, "text", 100000))
+            content = text_field(params, "text", 100000)
+            view_context = self.chat_view_context(scope, params.get("view"))
+            result = self.codex.steer(scope, content + view_context, **({"display_text": content} if view_context else {}))
             # Subsequent outgoing coordination must cite the direct user request,
             # rather than the unrelated peer request that began this turn.
             self.turn_coordination.pop(scope, None)
@@ -1620,13 +1624,14 @@ class Service(SurfboardService, EditorService, WritingService):
             content = text_field(params, "text", 100000)
             if self.codex.chat(scope).get("busy"):
                 raise APIError("An agent turn is already running in this conversation", 409)
+            view_context = self.chat_view_context(scope, params.get("view"))
             self.turn_origins[scope] = "user"
             self.turn_coordination.pop(scope, None)
             self.store.put("agent_messages_paused:" + scope, False)
             self.turn_handoffs[scope] = set()
             self.turn_agent_creations[scope] = 0
             self.turn_queue_requests.pop(scope, None)
-            return self.codex.send(scope, content, model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
+            return self.codex.send(scope, content + view_context, **({"display_text": content} if view_context else {}), model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
         if op == "project.initialize":
             return self.store.initialize(self.lookup("projects", text_field(params, "project_id", 150), fresh=True))
         if op == "project.limits":
@@ -1859,6 +1864,10 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.view_layout(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/latex":
                     result = self.server.service.latex_status({key: value[0] for key, value in query.items()})
+                elif path == "/api/code/pdf":
+                    project = self.server.service.lookup("projects", query.get("project_id", [""])[0])
+                    self.respond(200, self.server.service.code.pdf(project, query.get("path", [""])[0]), "application/pdf")
+                    return
                 elif path.startswith("/api/code/"):
                     result = self.server.service.code_query(path.removeprefix("/api/code/"), {key: value[0] for key, value in query.items()})
                 elif path == "/api/artifacts":
@@ -1956,7 +1965,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

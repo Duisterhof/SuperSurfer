@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.28'
+  supersurfer-version: '0.1.29'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.28. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.29. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for the applied writing
 workflow and configured compiler. Record actionable deliverables with `update_task`
 and retain their IDs. A compiled PDF proves compilation, not completion of a
@@ -36,7 +36,11 @@ to bypass that limit through a different project or task.
 A compact PDF or editor tile still refers to the same saved source and build.
 Check the existing compile, stop and preview controls at its actual width without
 starting another build to fix layout. Resizing neither saves source nor refreshes
-a stale PDF; keep the build identity and freshness label visible.
+a stale PDF; keep the build identity and freshness label visible. Use enabled
+`read_view_layout` / `update_view_layout` for requested tile size/order or placement
+within your role scope; follow [layout editing](../supersurfer-surfboard/references/view-layout.md).
+Adding a PDF view is presentation only. Compilation still requires a connected
+LaTeX block and its existing tool permissions; a tile never grants execution.
 
 ## Compile and inspect
 

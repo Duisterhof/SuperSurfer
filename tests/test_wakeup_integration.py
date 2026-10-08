@@ -77,7 +77,7 @@ class WakeupIntegrationTests(unittest.TestCase):
         self.assertEqual([rule['id']], self.tick())
         sent = self.service.codex.sent[-1]
         self.assertEqual(scope, sent[0])
-        self.assertEqual({'model': 'model-b', 'reasoning': 'max', 'fast_mode': True, 'approval_mode': 'yolo'}, sent[2])
+        self.assertEqual({'model': 'model-b', 'reasoning': 'max', 'fast_mode': True, 'approval_mode': 'yolo', 'message_role': 'system', 'background_check': {'rule_id': rule['id'], 'kind': 'interval'}}, sent[2])
         self.assertIn('Do not launch or queue jobs', sent[1])
         self.assertEqual('schedule', self.service.turn_origins[scope])
 
