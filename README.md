@@ -245,7 +245,7 @@ A personal AI workspace for Mac and Linux: project-specific workflows, persisten
 
 ## Install
 
-**Mac:** extract `SuperSurfer-0.1.25-mac-arm64.zip` for Apple Silicon or `SuperSurfer-0.1.25-mac-x64.zip` for Intel, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
+**Mac:** download the latest release’s `mac-arm64.zip` archive for Apple Silicon or `mac-x64.zip` for Intel, extract it, quit the old app, and replace **SuperSurfer.app** in Applications. This development build is unsigned; if blocked, use **System Settings → Privacy & Security → Open Anyway**. If this downloaded build instead reports “damaged,” move it into Applications and run `xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"` in Terminal on your Mac, then reopen it. This removes quarantine only for this app; native Mac signing/notarization is still pending.
 
 **Linux x64:** extract `SuperSurfer-0.1.25-linux-x64.tar.gz` and run `SuperSurfer-linux-x64/SuperSurfer`. Keep the accompanying files together. A graphical Linux session is required for the desktop client.
 
