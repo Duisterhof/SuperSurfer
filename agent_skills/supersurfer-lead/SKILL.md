@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.30. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.31. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -33,6 +33,11 @@ initial worker without inference or a run. If work was requested, immediately
 `handoff_experiment` using the returned `experiment_id` and `agent_scope`; do not
 create an extra worker or ask for the same authorization again. Preserve its ID
 if W&B setup reports an error.
+
+Choose `surfboard_template` only when a different task workflow was requested;
+omitting it copies the applied project default. Preserve that choice on retries.
+A writing or coding task in this project needs its own workflow, not a new project
+or another copy of the shared source/data. See the task-scope reference below.
 
 For an existing experiment, reuse its owner unless distinct work needs a separate
 conversation. `create_experiment_agent` returns a scope; `handoff_experiment`
@@ -111,13 +116,14 @@ block can compile saved source and expose diagnostics/PDFs; use the
 of a finished argument, correct citation or completed writing task. Keep paper
 review separate from the Research run-launch requirements.
 
-Use `read_surfboard` for the applied project graph when configuration affects the
-task. The role policy filters tools and server actions; the graph's requirements
-must be satisfied by actual service evidence. Markdown claims do not pass a gate.
-The guidance above describes the built-in Research board. For a Software
-engineering or Web design project, use the generic workflow skill selected by the
-service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
-A workspace manager must resolve the board of the project it is acting on.
+Use `read_surfboard` for the applied task board, or the project defaults when that
+is the requested scope. Tasks snapshot their default and can choose a different
+workflow within the same project. Resolve the target `experiment_id` for lead or
+manager work; workers inherit their own task. Follow [task scope](../supersurfer-surfboard/references/task-scope.md).
+The role policy filters tools and server actions; requirements need actual service
+evidence. This guide describes Research work, not every task in a research project.
+Software, web and writing tasks use their own applied workflow. Shared source,
+artifacts, compute and project caps remain shared; a task board adds no new budget.
 
 The user can edit the same repository in the Code editor. Include relevant file
 ownership and the user's selected-code context in a handoff; an unsaved selection
@@ -131,6 +137,9 @@ path, selected lines, diff side or PDF page and supplied build identity, and any
 unsaved warning.
 The user adds/removes context before sending; do not treat an attachment alone as
 a request to spawn another worker or approve execution.
+For uploaded files, preserve the existing project-artifact identity in a handoff
+rather than copying it into another project or publishing it again just to make
+it visible.
 
 A narrow Compute view does not change the project's registered resources or your
 scoped tools. Treat availability counts as observed capacity, then check the
@@ -144,7 +153,10 @@ pages and specific work-item arrangements can be changed directly with
 `read_view_layout` and `update_view_layout` within this project. Preserve unrelated
 pages and each item's explicit override; follow
 [layout editing](../supersurfer-surfboard/references/view-layout.md). No manager
-relay is needed, and presentation edits grant no execution tools.
+relay is needed, and presentation edits grant no execution tools. A requested
+left-side file browser should reuse the existing `file_explorer` tile on that
+page, preserving its ID and other content. A visible Arrange draft is not proof
+that its layout was saved.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named
@@ -156,10 +168,17 @@ data or crossing project boundaries.
 `run_board_action` executes a configured permitted action with a durable record;
 use its recorded result rather than claiming that a command passed. Research GPU
 launches continue through their existing exact-source PR and scheduler workflow.
-For a requested workflow policy or capability change, prepare the concrete change for the project
-configurator. That conversation has `propose_surfboard` and the user applies its
+For a requested workflow policy or capability change, prepare the concrete change for the
+configurator of that task, or the project configurator for future-task defaults. That conversation has `propose_surfboard` and the user applies its
 reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
 changes. Never alter board state to grant yourself a denied capability.
+
+Use `present_code` for a requested file view or actual Git revision comparison;
+use `manage_todos` for a requested plain Markdown checklist. These scoped tools
+require existing user work for changes and do not launch jobs or finish goals.
+Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
+for exact revision handling and the difference from `update_task`. A pinned chat
+retains its original authority; archiving an item or chat leaves work running.
 
 ## Tool index
 

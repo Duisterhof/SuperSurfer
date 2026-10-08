@@ -27,10 +27,14 @@ def attachments(service, scope, value):
         ids.add(item['id'])
         if scope != 'manager' and item['project_id'] != info.get('project_id'):
             raise SurfboardError('This attachment belongs to another project', 403)
-        _parts(item['path'])
         project = service.lookup('projects', item['project_id'])
         row = deepcopy(item)
-        row['absolute_path'] = str(Path(project['repo']) / row['path'])
+        if row['path'].startswith('artifact:'):
+            entry = service.artifacts.entry(project, row['path'].removeprefix('artifact:'))
+            row['absolute_path'] = entry['absolute_path']
+        else:
+            _parts(row['path'])
+            row['absolute_path'] = str(Path(project['repo']) / row['path'])
         rows.append(row)
     context = ''.join('\n\n[Attached '+row['kind']+' context: '+row['label']+'\nWorkspace path: '+row['absolute_path']+']\n'+row['text'] for row in rows)
     if len(context) > 64000:

@@ -107,7 +107,7 @@ class WritingServiceTests(unittest.TestCase):
         other=self.service.action('experiment.create',{'project_id':pid,'name':'Private appendix','summary':'Keep scope'})
         scope='experiment:'+item['id'];self.service.action('chat.send',{'scope':scope,'text':'Compile the body.'})
         for operation in ('start','status','stop','publish'):
-            with self.assertRaisesRegex(APIError,'another writing task'):
+            with self.assertRaisesRegex(APIError,"task is fixed"):
                 self.service.agent_action(scope,'supersurfer_compile_latex',{'operation':operation,'experiment_id':other['id'],'request_id':'writing-scope-test-01'})
         with patch.object(self.service.latex,'action',return_value={}) as compiler:
             self.service.agent_action(scope,'supersurfer_compile_latex',{'operation':'status'})

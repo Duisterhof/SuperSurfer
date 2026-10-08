@@ -2,14 +2,15 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.30. Work from the paper brief, current source and the
-user's requested section or outcome. Use `read_surfboard` for the applied writing
-workflow and configured compiler. Record actionable deliverables with `update_task`
+Reviewed for SuperSurfer 0.1.31. Work from the paper brief, current source and the
+user's requested section or outcome. Use `read_surfboard` for this task's applied
+writing workflow and configured compiler, even inside a research/software project.
+See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
 and retain their IDs. A compiled PDF proves compilation, not completion of a
 writing or scientific-review assignment. Finish the requested content and inspect
 its actual PDF before marking the deliverable complete.
@@ -47,7 +48,36 @@ a chooser nor fullscreen compiles, rewrites or publishes that file. Adding a PDF
 view is presentation only. Compilation still requires a connected LaTeX block and
 its existing tool permissions; a tile never grants execution.
 
+A PDF dragged from the user's computer becomes a project artifact and may have no
+compiler build ID. Inspect its actual file/pages through the returned artifact
+path, preserve provenance and never invent a source mapping. Uploaded `.tex` or
+bibliography files are also artifacts, not automatically compiler inputs. When
+the requested paper work needs them, incorporate the intended files into ordinary
+project source while preserving the original upload, then use the normal saved-
+source compiler workflow. Uploading does not compile, publish externally or send
+a request to an agent.
+
 ## Compile and inspect
+
+Auto compile inherits the workspace editor default unless the user overrides it
+for this task. Saving a repository `.tex`, `.latex`, `.bib`, `.sty` or `.cls` file
+can schedule compilation even when its PDF panel is on another page. It requires
+one unambiguous configured LaTeX block, or the compiler previously chosen in that
+task's PDF panel. Resolve an ambiguous block in that panel rather than guessing.
+Saves coalesce while an existing build runs, then trigger one follow-up for the
+latest source. Check that build before starting a duplicate agent compile. Auto
+does not save dirty buffers, compile on every keystroke or use uploaded artifacts
+as compiler inputs. The PDF panel's Auto control can disable it; manual Stop also
+disables continuation for that task. This editor-save behavior is not a persistent
+worker schedule or a promise to observe arbitrary shell edits while the app is
+closed. An already running remote build continues when its view closes.
+
+Built-in offline English spelling checks run in both Monaco and the optional
+Code OSS workbench, controlled by the workspace LaTeX spelling setting. They check
+LaTeX prose, excluding commands, equations, labels, citation keys and code.
+Preserve technical terms and proper names; do not change meaning merely to satisfy
+a spelling suggestion. Source-code spell-checking and Grammarly integration must
+not be inferred from these LaTeX diagnostics.
 
 Use `compile_latex` with `operation: start`, a stable `request_id` and the connected
 LaTeX `node_id` when ambiguous. `main_file` is a repository-relative `.tex` path.

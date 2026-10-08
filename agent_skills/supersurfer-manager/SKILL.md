@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.30. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.31. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -41,6 +41,11 @@ stable `request_id` (16–100 ASCII letters, digits, underscores or hyphens).
 If work was requested, `handoff_experiment` with the returned `experiment_id` and
 `agent_scope` immediately. Reuse the creation identity unchanged on uncertainty,
 including W&B setup errors. An extra worker is unnecessary for that initial task.
+
+Choose `surfboard_template` only when a different task workflow was requested;
+omitting it copies the applied project default. Preserve that choice on retries.
+A writing or coding task in this project needs its own workflow, not a new project
+or another copy of the shared source/data. See the task-scope reference below.
 
 `create_experiment_agent` is for distinct requested work in an existing experiment.
 `handoff_experiment` uses an explicit idle `agent_scope` or the selected worker;
@@ -117,13 +122,14 @@ scientific content and source edits with their owner; compiling or reviewing a
 paper needs no routine manager relay and authorizes no new experiment or submission.
 Missing compiler setup is a workspace-host dependency, not a GPU-node allocation.
 
-Use `read_surfboard` for the applied project graph when configuration affects the
-task. The role policy filters tools and server actions; the graph's requirements
-must be satisfied by actual service evidence. Markdown claims do not pass a gate.
-The guidance above describes the built-in Research board. For a Software
-engineering or Web design project, use the generic workflow skill selected by the
-service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
-A workspace manager must resolve the board of the project it is acting on.
+Use `read_surfboard` for the applied task board, or the project defaults when that
+is the requested scope. Tasks snapshot their default and can choose a different
+workflow within the same project. Resolve the target `experiment_id` for lead or
+manager work; workers inherit their own task. Follow [task scope](../supersurfer-surfboard/references/task-scope.md).
+The role policy filters tools and server actions; requirements need actual service
+evidence. This guide describes Research work, not every task in a research project.
+Software, web and writing tasks use their own applied workflow. Shared source,
+artifacts, compute and project caps remain shared; a task board adds no new budget.
 
 Compact Compute layouts retain the same refresh, registration and queue controls.
 A clipped control is a UI defect, not evidence that an agent lost a capability or
@@ -144,12 +150,18 @@ File, diff and PDF attachments belong to the selected conversation and enter its
 context only when the user sends. Preserve the connected workspace path, selection
 provenance and unsaved warning; adding context does not assign a new manager task
 or authorize a launch. Fullscreen/restore does not transfer ownership.
+Uploaded local files belong to the project selected for the upload; inspect their
+returned artifact identity within that scope. A file import does not transfer
+another agent's task or require a manager relay.
 
 Custom pages compose existing views into tiles. An Agent changes tile is a review
 surface for recorded edits, not a new coordination channel or approval assignment.
 Keep ordinary page composition with its current scoped agent. Use the
 configurator only for requested workflow policy, capabilities or data-flow changes;
-presentation tools do not change resource allocations.
+presentation tools do not change resource allocations. Moving Repository files
+left reuses that page's existing `file_explorer` tile; it does not need a new agent
+or file copy. Preserve the target project/item and unrelated pages, and use the
+version-checked layout tool for an assigned page change.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
 Research defaults to sharing data within the project; current-experiment and named
@@ -161,10 +173,17 @@ data or crossing project boundaries.
 `run_board_action` executes a configured permitted action with a durable record;
 use its recorded result rather than claiming that a command passed. Research GPU
 launches continue through their existing exact-source PR and scheduler workflow.
-For a requested workflow policy or capability change, prepare the concrete change for the project
-configurator. That conversation has `propose_surfboard` and the user applies its
+For a requested workflow policy or capability change, prepare the concrete change for the
+configurator of that task, or the project configurator for future-task defaults. That conversation has `propose_surfboard` and the user applies its
 reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
 changes. Never alter board state to grant yourself a denied capability.
+
+Use `present_code` for a requested file view or actual Git revision comparison;
+use `manage_todos` for a requested plain Markdown checklist. These scoped tools
+require existing user work for changes and do not launch jobs or finish goals.
+Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
+for exact revision handling and the difference from `update_task`. A pinned chat
+retains its original authority; archiving an item or chat leaves work running.
 
 ## Tool index
 

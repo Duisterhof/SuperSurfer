@@ -34,7 +34,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
   });
   let page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://coordination.test/');
-  await page.locator('#chat-messages .message.system').waitFor();
+  await page.locator('.chat-checks>summary').click();await page.locator('.chat-check>summary').click();await page.locator('#chat-messages .message.system').waitFor();
   assert.equal(await page.locator('#chat-messages .message.system .message-label strong').textContent(),'VLA lead <script>bad()</script> · Agent');
   assert.equal(await page.locator('#chat-messages .message.system script').count(),0);
   assert.equal(await page.locator('#chat-messages .message.user .message-label strong').textContent(),'You');

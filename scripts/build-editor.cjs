@@ -25,3 +25,8 @@ for (const name of ['LICENSE','ThirdPartyNotices.txt']) {
 const version = JSON.parse(fs.readFileSync(path.join(root,'node_modules/monaco-editor/package.json'),'utf8')).version;
 fs.writeFileSync(path.join(output,'version.json'),JSON.stringify({monaco:version})+'\n');
 console.log('Bundled Monaco editor and local language workers.');
+const spelling=path.join(root,'ui/vendor/spelling');fs.mkdirSync(spelling,{recursive:true});
+esbuild.buildSync({...base,entryPoints:[path.join(root,'ui/latex-spelling.worker.js')],outfile:path.join(spelling,'worker.js')});
+for(const name of ['index.aff','index.dic','license'])fs.copyFileSync(path.join(root,'node_modules/dictionary-en',name),path.join(spelling,name));
+esbuild.buildSync({absWorkingDir:root,bundle:true,format:'cjs',platform:'node',target:'node20',minify:true,legalComments:'linked',entryPoints:['editor_extension/spelling-source.js'],outfile:'editor_extension/spelling.cjs'});
+for(const [from,to]of [['index.aff','dictionary.aff'],['index.dic','dictionary.dic'],['license','DICTIONARY-LICENSE']])fs.copyFileSync(path.join(root,'node_modules/dictionary-en',from),path.join(root,'editor_extension',to));

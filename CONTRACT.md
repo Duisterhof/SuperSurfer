@@ -1,3 +1,32 @@
+## 0.1.31 task scope, files and extension runtime
+
+- A task snapshots its Surfboard when created. Legacy tasks are frozen before
+  project defaults change. Task configurators and workers cannot edit another
+  task's workflow or checklist; task boards cannot change shared compute budgets.
+  Workflow proposals still require reviewed apply. Applying a board starts no work.
+- `present_code` requires active user-requested work. It resolves revisions to full
+  commit IDs and records a scoped presentation; it never checks out or edits code.
+- To-do writes use a content revision check and retain Markdown prose. Uploaded
+  files have independent project artifact identities, atomic publication, bounded
+  sizes and idempotent upload receipts. They cannot replace source files. Archive
+  flags affect visibility only; pinning preserves the original chat's scope.
+- Native editor setup is explicit, read-only workspaces reject it, downloads are
+  version/checksum pinned, and extraction confines paths and links. Code-server
+  listens on a private Unix socket behind a loopback capability proxy. The editor
+  bridge requires a separate bearer credential; selection paths must belong to the
+  project. VS Code extensions have the workspace user's filesystem/process access;
+  ordinary scoped agent tools and their gates are unchanged.
+- The editor's bridge is installed through the supported VSIX installer. Native
+  workspaces are separate per desktop window/project/task; user settings and
+  extensions are shared across that workspace. Unsaved buffers are retained while
+  navigating. Explicit saved-source events drive compilation, and a queued save
+  coalesces behind an existing build. Failed compilation preserves the last good PDF.
+- Offline spelling is English, LaTeX-only, and avoids recognized syntax/math/code.
+  No document text is sent to a grammar service. Manager-message compaction uses
+  app-owned sender metadata, preserves history and never absorbs a user-turn reply
+  merely because another agent steered that turn.
+- Scheduler, engine and GPU ownership logic is unchanged in this release.
+
 ## 0.1.30 explicit context attachments and editor presentation
 
 - File pickers browse registered workspace repositories through existing bounded

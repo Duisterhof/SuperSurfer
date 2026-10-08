@@ -1,6 +1,7 @@
 """Authenticated repository editing and scoped view preferences."""
 from copy import deepcopy
 import json
+import uuid
 from pathlib import Path
 
 from .surfboards import SurfboardError
@@ -27,7 +28,7 @@ class EditorService:
 
     def view_layout(self, project_id, experiment_id=None, *, board=None):
         from .surfboards import compile_layouts, compile_pages, layout_catalog, tile_catalog, validate_layout, validate_pages
-        record = board or self.boards.get(project_id)
+        record = board or self.board_record(project_id, experiment_id)
         if board is None:
             self.lookup("projects", project_id)
         level = "item" if experiment_id else "project"
@@ -76,13 +77,14 @@ class EditorService:
             return self.view_layout(project_id)
         if self.store.experiment(experiment_id)["project_id"] != project_id:
             raise SurfboardError("This work item belongs to another project", 403)
+        self.board_record(project_id, experiment_id)  # Initialize before the transaction.
         key = "view_layout:" + experiment_id
         # One transaction checks both versions and saves both independent
         # overrides, including when another service connection applies a board.
         with self.store.lock:
             self.store.db.execute("BEGIN IMMEDIATE")
             try:
-                board = self.boards.get(project_id)
+                board = self.board_record(project_id, experiment_id)
                 saved = self.store.get(key, {"version": 0, "rows": None, "pages": None})
                 if (type(params["version"]) is not int or type(params["board_version"]) is not int or
                         saved["version"] != params["version"] or board["version"] != params["board_version"]):
@@ -104,7 +106,8 @@ class EditorService:
         if not project:
             raise SurfboardError("Select project_id for this operation")
         fields = {key: value for key, value in arguments.items() if key != "project_id"}
-        item_id = fields.pop("experiment_id", None)
+        item_id = self.board_item(scope, fields)
+        fields.pop("experiment_id", None)
         if scope.startswith(("experiment:", "conversation:")):
             owned = self.experiment_for_scope(scope)["id"]
             if item_id not in (None, owned):
@@ -118,14 +121,61 @@ class EditorService:
             raise SurfboardError("Changing a layout requires an active user task", 403)
         return self.save_view_layout({**fields, "project_id": project["id"], "experiment_id": item_id})
 
+    def present_code(self, scope, arguments):
+        project = self.board_project(scope, arguments)
+        if not project:
+            raise SurfboardError("Select project_id")
+        if self.read_only or not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+            raise SurfboardError("Presenting code requires an active user task", 403)
+        fields = {key: value for key, value in arguments.items() if key != "project_id"}
+        if set(fields) - {"path", "base", "head", "title"}:
+            raise SurfboardError("Use path or a base/head comparison")
+        title = fields.get("title", "Code review")
+        if not isinstance(title, str) or not 1 <= len(title) <= 160:
+            raise SurfboardError("Choose a short presentation title")
+        if fields.get("base") or fields.get("head"):
+            comparison = self.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path"))
+            record = {"mode": "comparison", "base": comparison["base"], "head": comparison["head"], "file_count": len(comparison["files"])}
+            if fields.get("path"): record["path"] = fields["path"]
+        else:
+            path = fields.get("path")
+            mapped, relative = self.code_file_target(project, path)
+            self.code.read(mapped, relative)
+            record = {"mode": "file", "path": path}
+        record.update(id=uuid.uuid4().hex, project_id=project["id"], scope=scope, title=title)
+        self.store.put("editor_presentation:" + scope, record)
+        return {**record, "status": "ready", "note": "The active conversation can open this in its File viewer. No checkout or source edit was made."}
+
+    def code_file_target(self, project, path):
+        if isinstance(path, str) and path.startswith("artifact:"):
+            return self.artifacts.editor_target(project, path)
+        return project, path
+
     def code_query(self, operation, fields):
         project_id = fields.get("project_id")
         project = self.lookup("projects", project_id)
         path = fields.get("path", "")
         if operation == "tree":
-            return self.code.list(project, path, query=fields.get("query"))
+            if path.startswith("artifact:"):
+                _, relative = self.artifacts.editor_target(project, path, empty=True)
+                result = self.artifacts.list(project, relative)
+                # Artifact search is bounded to the current folder. Repository search remains recursive.
+                query = fields.get("query", "").casefold()
+                result["entries"] = [{**row, "path": "artifact:" + row["path"]} for row in result["entries"] if not query or query in row["path"].casefold()]
+                return result
+            result = self.code.list(project, path, query=fields.get("query"))
+            if not path and not fields.get("query") and self.artifacts.list(project)["entries"]:
+                result["entries"].insert(0, {"name": "Project artifacts", "path": "artifact:", "kind": "directory"})
+            return result
         if operation == "file":
-            return self.code.read(project, path)
+            mapped, relative = self.code_file_target(project, path)
+            result = self.code.read(mapped, relative)
+            if path.startswith("artifact:"):
+                result.update(self.artifacts.entry(project, relative))
+            result["path"] = path
+            return result
+        if operation == "comparison":
+            return self.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path") or None)
         if operation == "changes":
             return self.code.changes(project)
         if operation == "diff":
@@ -145,8 +195,10 @@ class EditorService:
         if operation == "code.save":
             if set(fields) != {"project_id", "path", "content", "revision"}:
                 raise SurfboardError("Saving requires path, content and the revision read from this file")
-            result = self.code.save(project, fields["path"], fields["content"], fields["revision"])
-            if hasattr(self, "latex"):
+            mapped, relative = self.code_file_target(project, fields["path"])
+            result = self.code.save(mapped, relative, fields["content"], fields["revision"])
+            result["path"] = fields["path"]
+            if hasattr(self, "latex") and not fields["path"].startswith("artifact:"):
                 self.latex.invalidate(project["id"], repo=project["repo"])
             return result
         if operation == "code.mkdir":

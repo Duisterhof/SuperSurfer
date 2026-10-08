@@ -47,3 +47,8 @@ A saved run-recovery grant remains with its owner and latest lineage member;
 messaging cannot transfer it or turn recovery into general user-origin work.
 A genuine scope conflict warrants one corrective exchange, then work returns to
 its owner. No routine receipt, acknowledgement or manager review loop is needed.
+
+The app compacts delivered coordination into expandable cards like monitoring
+checks. Keep the exchange tied to its concrete dependency; presentation grouping
+is not a reason to send additional pings or duplicate reports. Surface a material
+change or user decision once in the owning task, preserving its evidence link.

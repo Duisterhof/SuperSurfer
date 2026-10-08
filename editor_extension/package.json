@@ -1,0 +1,75 @@
+{
+  "name": "workspace",
+  "displayName": "SuperSurfer workspace",
+  "publisher": "supersurfer",
+  "version": "0.1.31",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "*"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "supersurfer.askAgent",
+        "title": "Add selection to SuperSurfer chat"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "supersurfer.askAgent",
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "supersurfer.askAgent",
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "when": "editorTextFocus && editorHasSelection"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "supersurfer.askAgent",
+          "group": "navigation@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SuperSurfer",
+      "properties": {
+        "supersurfer.session": {
+          "type": "string",
+          "scope": "window",
+          "default": "",
+          "description": "SuperSurfer pane identity."
+        },
+        "supersurfer.latexSpellcheck": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check English spelling in LaTeX prose only."
+        },
+        "supersurfer.dictionary": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Workspace spelling dictionary."
+        }
+      }
+    }
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  }
+}

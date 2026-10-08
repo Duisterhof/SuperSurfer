@@ -9,7 +9,7 @@ export function createTileLayout(options){
  const key=()=>options.key(),draft=()=>drafts.get(key());
  const enabled=()=>!!draft()&&!draft().saving&&!options.readOnly();
  const changed=()=>{options.render();};
- function start(){const page=options.page();if(!page||options.readOnly())return;if(!draft())drafts.set(key(),{base:copy(page),page:copy(page),error:''});changed();}
+ function start(automatic=false){const page=options.page();if(!page||options.readOnly())return;if(!draft())drafts.set(key(),{base:copy(page),page:copy(page),automatic,error:''});else if(!automatic)draft().automatic=false;if(!automatic)changed();}
  function cancel(){if(draft()?.saving)return;drafts.delete(key());changed();}
  function tile(id){return draft()?.page.tiles.find(row=>row.id===id);}
  function move(id,placement,before){if(!enabled())return;const row=tile(id);if(!row||id===before)return;row.placement=placement;const rows=draft().page.tiles.filter(item=>item!==row),index=rows.findIndex(item=>item.id===before);rows.splice(index<0?rows.length:index,0,row);draft().page.tiles=rows;changed();}
@@ -20,32 +20,37 @@ export function createTileLayout(options){
  async function save(){
   if(!enabled())return;const id=key(),value=draft();value.saving=true;value.error='';changed();
   try{await options.save(copy(value.page),copy(value.base));drafts.delete(id);}
-  catch(error){value.error=error.message;value.saving=false;}
+  catch(error){value.error=error.message;value.saving=false;value.automatic=false;}
   changed();
  }
- function toolbar(){const value=draft();if(!value)return '';const disabled=value.saving||options.readOnly();
-  return `<div class="tile-arrange-toolbar"><span>Drag tiles into the page or either sidebar. Drag a corner to resize.</span><div><button class="button small-button" data-tile-command="cancel" ${disabled?'disabled':''}>Cancel</button><button class="button small-button primary" data-tile-command="save" ${disabled?'disabled':''}>${value.saving?'Saving…':'Save layout'}</button></div></div><div class="tile-palette" aria-label="Add a page tile">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="${!disabled}" ${disabled||value.page.tiles.some(tile=>tile.kind===row.kind)||value.page.tiles.length>=16?'disabled':''}>+ ${esc(row.label)}</button>`).join('')}</div>${value.error?`<p class="notice error" role="alert">${esc(value.error)} Your layout draft is kept. Cancel to load the latest layout.</p>`:''}`;
+ function toolbar(){const value=draft();if(!value||value.automatic)return '';const disabled=value.saving||options.readOnly();
+  return `<div class="tile-arrange-toolbar"><span class="arrange-label" title="Drag tiles into the page or either sidebar; drag corners to resize.">Arranging ${esc(value.page.title)}</span><details class="tile-palette-menu"><summary class="button small-button">Add tile</summary><div class="tile-palette" aria-label="Add a page tile">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="${!disabled}" ${disabled||value.page.tiles.some(tile=>tile.kind===row.kind)||value.page.tiles.length>=16?'disabled':''}>+ ${esc(row.label)}</button>`).join('')}</div></details><button class="button small-button" data-tile-command="cancel" ${disabled?'disabled':''}>Cancel</button><button class="button small-button primary" data-tile-command="save" ${disabled?'disabled':''}>${value.saving?'Saving…':'Save layout'}</button>${value.error?`<p class="notice error arrange-error" role="alert">${esc(value.error)} Your layout draft is kept.</p>`:''}</div>`;
  }
  function controls(row,label){
-  if(!draft())return `<span>${esc(label)}</span><button type="button" data-panel-fullscreen aria-label="Full screen" title="Full screen">⤢</button>`;
+  if(!draft()||draft().automatic)return `<span>${esc(label)}</span><button type="button" data-panel-fullscreen aria-label="Full screen" title="Full screen">⤢</button>`;
   const disabled=!enabled();
   return `<button type="button" class="tile-grip" data-tile-grip="${esc(row.id)}" draggable="${!disabled}" aria-label="Drag ${esc(label)}" title="Drag this tile" ${disabled?'disabled':''}>⠿</button><span>${esc(label)}</span><select data-tile-placement="${esc(row.id)}" aria-label="Place ${esc(label)}" ${disabled?'disabled':''}>${[['main','Page'],['left','Left sidebar'],['right','Right sidebar']].map(([value,text])=>`<option value="${value}" ${place(row)===value?'selected':''}>${text}</option>`).join('')}</select><button type="button" data-tile-up="${esc(row.id)}" title="Move earlier" aria-label="Move ${esc(label)} earlier" ${disabled?'disabled':''}>↑</button><button type="button" data-tile-remove="${esc(row.id)}" title="Remove tile; keep its content" aria-label="Remove ${esc(label)} tile" ${disabled?'disabled':''}>×</button>`;
  }
  function decorate(element,row,label){
   const header=element.querySelector('.page-tile-heading'),html=controls(row,label);if(header.innerHTML!==html)header.innerHTML=html;
   let handle=element.querySelector('.tile-resize');
-  if(draft()&&!handle){handle=document.createElement('button');handle.type='button';handle.className='tile-resize';handle.dataset.tileResize=row.id;handle.setAttribute('aria-label','Resize '+label);handle.title='Drag to resize. Left/Right change width; Up/Down change height.';element.append(handle);}
-  if(!draft())handle?.remove();else if(handle)handle.disabled=!enabled();
+  if(draft()&&!draft().automatic&&!handle){handle=document.createElement('button');handle.type='button';handle.className='tile-resize';handle.dataset.tileResize=row.id;handle.setAttribute('aria-label','Resize '+label);handle.title='Drag to resize. Left/Right change width; Up/Down change height.';element.append(handle);}
+  if(!draft()||draft().automatic)handle?.remove();else if(handle)handle.disabled=!enabled();
+  for(const axis of ['x','y']){
+   let edge=element.querySelector('.tile-edge-'+axis);
+   if(!edge){edge=document.createElement('button');edge.type='button';edge.className='tile-edge tile-edge-'+axis;edge.dataset.tileResize=row.id;edge.dataset.resizeAxis=axis;edge.setAttribute('role','separator');edge.setAttribute('aria-orientation',axis==='x'?'vertical':'horizontal');edge.setAttribute('aria-label','Resize '+label+' '+(axis==='x'?'width':'height'));edge.title='Drag to resize '+label+'; arrow keys also work';element.append(edge);}
+   edge.disabled=options.readOnly()||!!draft()?.saving;
+  }
   element.dataset.tilePlacement=place(row);
  }
  function applySize(row,dx,dy,base,width){
   row.height=clamp(base.height+dy,row.kind==='pdf'?400:160,1200);
-  if(place(row)==='main')row.span=clamp(base.span+dx/(width/12),1,12);
-  else if(dx) {const field=place(row)==='left'?'left_width':'right_width',direction=place(row)==='left'?1:-1;draft().page[field]=clamp(base.width+direction*dx,place(row)==='left'?200:280,place(row)==='left'?600:760);}
+  if(place(row)==='main'&&dx)row.span=Math.max(1,Math.min(12,base.span+dx/(width/12)));else if(place(row)==='main')row.span=base.span;
+  else if(dx) {const field=place(row)==='left'?'left_width':'right_width',direction=place(row)==='left'?1:-1;draft().page[field]=clamp(base.width+direction*dx,place(row)==='left'?160:280,place(row)==='left'?600:760);}
  }
  document.addEventListener('click',event=>{
   const button=event.target.closest('[data-tile-command],[data-add-tile],[data-tile-remove],[data-tile-up]');if(!button||button.disabled)return;event.preventDefault();event.stopImmediatePropagation();
-  const command=button.dataset.tileCommand;if(command==='start')start();if(command==='cancel')cancel();if(command==='save')void save();
+  const command=button.dataset.tileCommand;if(command==='start')start();if(command==='files-left'){start();if(enabled()){const existing=draft().page.tiles.find(row=>row.kind==='file_explorer');if(existing)move(existing.id,'left');else add('file_explorer','left');}}if(command==='cancel')cancel();if(command==='save')void save();
   if(button.dataset.addTile)add(button.dataset.addTile);
   if(enabled()&&button.dataset.tileRemove){draft().page.tiles=draft().page.tiles.filter(row=>row.id!==button.dataset.tileRemove);changed();}
   if(enabled()&&button.dataset.tileUp){const row=tile(button.dataset.tileUp),rows=draft().page.tiles.filter(item=>place(item)===place(row)),i=rows.indexOf(row);if(i>0)move(row.id,place(row),rows[i-1].id);}
@@ -64,13 +69,31 @@ export function createTileLayout(options){
  },true);
  document.addEventListener('dragend',endDrag);
  document.addEventListener('pointerdown',event=>{
-  const handle=event.target.closest('[data-tile-resize]');if(!handle||!enabled()||event.button!==0)return;const row=tile(handle.dataset.tileResize);if(!row)return;
+  const handle=event.target.closest('[data-tile-resize]');if(!handle||handle.disabled||options.readOnly()||event.button!==0)return;if(!draft())start(true);if(!enabled())return;const row=tile(handle.dataset.tileResize);if(!row)return;
   event.preventDefault();handle.setPointerCapture(event.pointerId);const element=handle.closest('.page-tile'),area=element.parentElement;
-  resizing={key:key(),handle,row,startX:event.clientX,startY:event.clientY,base:{height:row.height,span:row.span,width:(place(row)==='left'?document.querySelector('.sidebar'):place(row)==='right'?document.querySelector('#view-dock'):area).getBoundingClientRect().width},width:area.getBoundingClientRect().width};document.body.classList.add('resizing-page-tile');
+  resizing={key:key(),handle,row,axis:handle.dataset.resizeAxis||'both',startX:event.clientX,startY:event.clientY,base:{height:row.height,span:row.span,width:(place(row)==='left'?document.querySelector('.sidebar'):place(row)==='right'?document.querySelector('#view-dock'):area).getBoundingClientRect().width},width:area.getBoundingClientRect().width};const rect=element.getBoundingClientRect(),next=element.nextElementSibling;
+  if(place(row)==='main'&&next?.hasAttribute('data-live-tile')&&Math.abs(next.getBoundingClientRect().top-rect.top)<3){resizing.neighbor=tile(next.dataset.tileId);resizing.neighborSpan=resizing.neighbor?.span;}
+  resizing.maxSpan=12-[...area.children].filter(el=>el!==element&&el.hasAttribute('data-live-tile')&&Math.abs(el.getBoundingClientRect().top-rect.top)<3).reduce((sum,el)=>sum+(tile(el.dataset.tileId)?.span||0),0);
+  document.body.classList.add('resizing-page-tile');
  });
- document.addEventListener('pointermove',event=>{if(!resizing||resizing.key!==key()||!enabled())return;applySize(resizing.row,event.clientX-resizing.startX,event.clientY-resizing.startY,resizing.base,resizing.width);options.resize?.(draft().page);});
- const endResize=()=>{if(!resizing)return;resizing=null;document.body.classList.remove('resizing-page-tile');changed();};
+ document.addEventListener('pointermove',event=>{if(!resizing||resizing.key!==key()||!enabled())return;const r=resizing,dx=r.axis==='y'?0:event.clientX-r.startX,dy=r.axis==='x'?0:event.clientY-r.startY;
+  applySize(r.row,dx,dy,r.base,r.width);
+  if(place(r.row)==='main'&&r.axis!=='y'){
+   const total=r.base.span+(r.neighborSpan||0),max=r.neighbor?total-1:r.maxSpan;
+   r.row.span=Math.round(Math.max(1,Math.min(max,r.base.span+dx/(r.width/12)))*100)/100;
+   if(r.neighbor)r.neighbor.span=Math.round((total-r.row.span)*100)/100;
+  }
+  options.resize?.(draft().page);});
+ const endResize=()=>{if(!resizing)return;const samePage=resizing.key===key();resizing=null;document.body.classList.remove('resizing-page-tile');if(samePage&&draft()?.automatic)void save();else changed();};
  document.addEventListener('pointerup',endResize);document.addEventListener('pointercancel',endResize);
- document.addEventListener('keydown',event=>{const handle=event.target.closest('[data-tile-resize]');if(!handle||!enabled()||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();const row=tile(handle.dataset.tileResize),area=handle.closest('.page-tile').parentElement,width=area.getBoundingClientRect().width;applySize(row,event.key==='ArrowLeft'?-width/12:event.key==='ArrowRight'?width/12:0,event.key==='ArrowUp'?-20:event.key==='ArrowDown'?20:0,{...row,width:(place(row)==='left'?document.querySelector('.sidebar'):place(row)==='right'?document.querySelector('#view-dock'):area).getBoundingClientRect().width},width);options.resize?.(draft().page);});
- return {page:page=>page?(draft()?.page||page):undefined,editing:()=>!!draft(),toolbar,decorate,active:()=>!!resizing, resizeDock(width){if(!draft())start();if(enabled()){draft().page.right_width=clamp(width,280,760);options.resize?.(draft().page);}},start};
+ document.addEventListener('keydown',event=>{
+  const handle=event.target.closest('[data-tile-resize]');if(!handle||handle.disabled||options.readOnly()||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;
+  const horizontal=['ArrowLeft','ArrowRight'].includes(event.key);if(handle.dataset.resizeAxis===(horizontal?'y':'x'))return;
+  event.preventDefault();if(!draft())start(true);if(!enabled())return;const row=tile(handle.dataset.tileResize),element=handle.closest('.page-tile'),area=element.parentElement,width=area.getBoundingClientRect().width;
+  const original=row.span,neighbors=[...area.children].filter(el=>el!==element&&el.hasAttribute('data-live-tile')&&Math.abs(el.getBoundingClientRect().top-element.getBoundingClientRect().top)<3),next=element.nextElementSibling,neighbor=neighbors.includes(next)?tile(next.dataset.tileId):null,total=original+(neighbor?.span||0);
+  applySize(row,event.key==='ArrowLeft'?-width/12:event.key==='ArrowRight'?width/12:0,event.key==='ArrowUp'?-20:event.key==='ArrowDown'?20:0,{...row,width:(place(row)==='left'?document.querySelector('.sidebar'):place(row)==='right'?document.querySelector('#view-dock'):area).getBoundingClientRect().width},width);
+  if(place(row)==='main'&&horizontal){row.span=Math.max(1,Math.min(neighbor?total-1:12-neighbors.reduce((sum,el)=>sum+(tile(el.dataset.tileId)?.span||0),0),row.span));if(neighbor)neighbor.span=total-row.span;}
+  options.resize?.(draft().page);if(draft()?.automatic)void save();
+ });
+ return {page:page=>page?(draft()?.page||page):undefined,editing:()=>!!draft()&&!draft().automatic,toolbar,decorate,active:()=>!!resizing, resizeSidebar(width){if(!draft())start(true);if(enabled()){draft().page.left_width=clamp(width,160,600);options.resize?.(draft().page);}},resizeDock(width){if(!draft())start(true);if(enabled()){draft().page.right_width=clamp(width,280,760);options.resize?.(draft().page);}},commitResize(){if(draft()?.automatic)void save();},start};
 }

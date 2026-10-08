@@ -1,14 +1,18 @@
 ---
 name: supersurfer-surfboard
-description: Edit a project's SuperSurfer workflow graph through a validated proposal, including reusable blocks, data connections, agent responsibilities and action requirements.
+description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.30. Help the user express how this project works in a
-small readable diagram. The applied board, available catalog and actual tools are
+Reviewed for SuperSurfer 0.1.31. Help the user express one task's workflow in a
+small readable diagram. Tasks own their applied boards; the project's board is a
+default copied at creation, alongside shared repository/data/compute resources.
+A project can contain research, writing and software tasks at the same time.
+Follow [task scope](references/task-scope.md) before choosing which configurator
+or version to edit. The applied board, available catalog and actual tools are
 the authority. A diagram label or Markdown instruction cannot grant a capability.
 
 Use `read_surfboard` before workflow edits; use `read_view_layout` before
@@ -31,14 +35,15 @@ current PDF build identity and diagnostics visible, including a retained last-go
 PDF after a failed build. Consult [writing guidance](../supersurfer-writing/SKILL.md)
 for supported engines and host requirements; do not promise unavailable compilers.
 
-`read_surfboard` includes live scheduler limits, active usage and observation time.
-An unavailable live reading is unknown, not zero or unlimited. Compute blocks hold
-`gpu_limit` (0–1024 or `unlimited`) and `run_limit` (1–1024 or `unlimited`); both
-default to unlimited for new projects. All compute blocks refer to the same project
-budget. Preserve existing limits on unrelated page/workflow changes, and propose
-explicit `unlimited` only when the user requests removing that cap. Applying a
-budget change checks the actual scheduler values; a saved diagram alone is not
-evidence that the limit changed. This configurator proposes; the user applies.
+`read_surfboard` includes shared live scheduler limits, active usage and observation
+time. An unavailable reading is unknown, not zero or unlimited. Project compute
+blocks hold `gpu_limit` (0–1024 or `unlimited`) and `run_limit` (1–1024 or
+`unlimited`); neither cap is imposed on new projects. Task boards expose shared
+limits but cannot set separate caps or remove the project's caps. Preserve limits
+on unrelated workflow/page changes. A requested budget change belongs to the
+project configurator or an enabled project-limit tool, not a task-board proposal.
+The scheduler response establishes the applied budget; a saved diagram alone
+does not. A configurator proposes and the user applies.
 
 Treat workflow and page arrangement separately. Use `read_view_layout` and
 `update_view_layout` to apply a requested project page or individual work-item
@@ -46,14 +51,21 @@ arrangement directly, with both current versions. These scoped presentation tool
 are also available to ordinary owned roles when their board permits them; a
 worker does not need a manager handoff to resize its own page. Follow
 [layout editing](references/view-layout.md) for the exact fields, role boundaries
-and conflict handling. Defaults for every work item still belong to the reviewed
-Surfboard proposal. Preserve each item's independent explicit override.
+and conflict handling. The task configurator changes that task's workflow defaults;
+the project configurator changes defaults for future tasks. Existing task boards
+and their explicit page overrides remain independent.
 
 Custom `pages.project` and `pages.item` contain ordered `{id, title, tiles}` lists.
 Use stable IDs and the returned `available_tiles`; tiles have `id`, `kind`,
-`span` (1–12), `height` (160–1200; PDF minimum 400), and optional `placement`
-(`main`, `left`, `right`). Left means the navigation sidebar. PDF tiles can also
-specify a repository-relative `.pdf` `path`. Keep one of each tile kind per page,
+`span` (number 1–12, including fractional widths), `height` (160–1200; PDF minimum
+400), and optional `placement`
+(`main`, `left`, `right`). Left means the navigation sidebar. Pages may specify
+`left_width` (160–600 px) or `right_width` (280–760 px), independently of the
+window's ordinary navigation width. Moving Repository files left reuses its tile
+ID; the UI shortcut prepares an Arrange draft, while the scoped agent layout
+tool applies the requested page edit with both current versions. PDF tiles can also
+specify a repository-relative `.pdf` `path` or a returned `artifact:` PDF identity
+from this project's artifact library. Keep one of each tile kind per page,
 at most 24 pages per scope and 16 tiles per page. File explorer, Code editor,
 Agent changes and PDF viewer need no additional execution block. File selections
 use the existing shared editor, not another checkout or worker.
@@ -70,7 +82,11 @@ they neither satisfy checks nor alter data sharing, budgets, launch authority or
 source files. Temporary fullscreen/restore is a viewing action, not a reason to
 save another board or duplicate a tile. Editor sidebar width, file selection and
 attachment chips likewise add no agent tools or launch authority. Preserve dirty
-buffers and existing iframe/report identities when revising a layout.
+buffers and existing iframe/report identities when revising a layout. Arrange
+controls live in the global top bar; verify its page identity before Save layout
+or Cancel. An uploaded local file is a project artifact, not a new workflow node,
+permission or executable action. Preserve its artifact identity when arranging
+an existing preview rather than duplicating the upload.
 A direct project-page edit increments the board version and retains
 any pending proposal, which must be reread and reconciled before applying. Do not
 apply a stale proposal over the user's direct arrangement. For a clipped control,

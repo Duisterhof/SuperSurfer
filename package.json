@@ -1,7 +1,7 @@
 {
   "name": "supersurfer",
   "productName": "SuperSurfer",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "A quiet workspace for research, agents, and compute.",
   "private": true,
   "main": "desktop/main.cjs",
@@ -16,10 +16,12 @@
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
+    "dictionary-en": "4.0.0",
     "electron": "44.5.1",
     "esbuild": "0.28.2",
     "katex": "0.18.7",
     "monaco-editor": "0.57.0",
+    "nspell": "2.1.5",
     "pdfjs-dist": "6.4.299",
     "playwright": "1.63.0"
   }

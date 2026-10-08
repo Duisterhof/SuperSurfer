@@ -33,9 +33,9 @@ async function fixture(){
    const data=await response.json();if(!response.ok)throw new Error(JSON.stringify(data));return data;
   },{route,body});
   async function apply(modify){
-   const data=await request('surfboard?project_id='+projectId),board=modify(data.board)||data.board;
-   const saved=await request('action',{op:'surfboard.draft',params:{project_id:projectId,expected_version:data.version,expected_draft_version:data.draft?.draft_version||0,board}});
-   return request('action',{op:'surfboard.apply',params:{project_id:projectId,expected_version:saved.version,expected_draft_version:saved.draft.draft_version}});
+   const data=await request('surfboard?project_id='+projectId+'&experiment_id='+itemId),board=modify(data.board)||data.board;
+   const saved=await request('action',{op:'surfboard.draft',params:{project_id:projectId,experiment_id:itemId,expected_version:data.version,expected_draft_version:data.draft?.draft_version||0,board}});
+   return request('action',{op:'surfboard.apply',params:{project_id:projectId,experiment_id:itemId,expected_version:saved.version,expected_draft_version:saved.draft.draft_version}});
   }
   async function open(tab){
    await page.evaluate(value=>localStorage.setItem('supersurfer-workspace',JSON.stringify(value)),{view:'workspace',projectId,experimentId:itemId,tab,chatVisible:false});

@@ -22,3 +22,63 @@
 .chat-attach-file{border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 5px}.chat-context-dialog{width:min(700px,90vw)}.chat-context-dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto;font-size:12px}
 .page-tile-heading [data-panel-fullscreen]{font-size:14px;line-height:16px;height:16px;padding:0 2px}
 .code-tile-heading>span{flex:1}.code-tile-heading [data-panel-fullscreen]{font-size:14px;line-height:16px;padding:2px 4px}
+/* The navigation divider stays in the gap, outside the clipped glass panel. */
+:root .app-shell:not(.chat-maximized){grid-template-columns:var(--sidebar-width,206px) minmax(0,1fr)}
+:root .sidebar{grid-column:1}
+.sidebar-resizer{grid-column:1;grid-row:2;justify-self:end;align-self:stretch;width:var(--panel-gap,10px);transform:translateX(100%);z-index:10;cursor:col-resize;touch-action:none;position:relative}
+.sidebar-resizer::before{content:'';position:absolute;left:calc(50% - 1px);top:calc(50% - 24px);width:2px;height:48px;border-radius:3px;background:var(--strong-line)}
+.sidebar-resizer:hover::before,.sidebar-resizer:focus-visible::before,.resizing-sidebar .sidebar-resizer::before{background:var(--green)}
+.sidebar-resizer[hidden],.app-shell.chat-maximized .sidebar-resizer{display:none}
+.resizing-sidebar{cursor:col-resize;user-select:none}.resizing-sidebar iframe{pointer-events:none}
+.sidebar-add-files{flex:none;text-align:left;font-size:11px;color:var(--muted);padding:7px 8px;border-radius:6px;margin:4px 0}
+.sidebar-add-files:hover{background:var(--soft);color:var(--text)}
+.narrow-sidebar .brand{margin-left:0;gap:5px}.narrow-sidebar .brand strong{font-size:12px}.narrow-sidebar .version,.narrow-sidebar .quick-jump kbd{display:none}
+.narrow-sidebar .remote-status>span:not(.status-dot){overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media(max-width:560px){:root .app-shell:not(.chat-maximized){grid-template-columns:minmax(0,1fr)}.sidebar-resizer{display:none}}
+.topbar #tile-arrange-controls:empty{display:none}
+.topbar .tile-arrange-toolbar{padding:0;gap:8px;position:relative;flex-wrap:nowrap}
+.topbar .arrange-label{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arranging-page .topbar .breadcrumb,.arranging-page .topbar .remote-pill,.arranging-page #layout-toggle,.arranging-page .topbar [data-panel-fullscreen]{display:none}
+.arranging-page .topbar{justify-content:flex-end;overflow:visible;z-index:25}
+.tile-palette-menu{position:relative}.tile-palette-menu summary{list-style:none;cursor:pointer;white-space:nowrap}.tile-palette-menu summary::-webkit-details-marker{display:none}
+.topbar .tile-palette{position:absolute;right:0;top:36px;width:240px;max-height:65vh;overflow:auto;padding:8px;border:1px solid var(--strong-line);border-radius:10px;background:var(--bg);box-shadow:var(--shadow);z-index:30;display:grid;margin:0}
+.topbar .tile-palette .button{justify-content:flex-start;font-size:12px}
+.arrange-error{position:absolute;right:0;top:38px;width:min(480px,80vw);z-index:29}
+.file-viewer-page .configured-view-content{min-height:0;flex:1}
+.file-drop-target{outline:2px dashed var(--green)!important;outline-offset:-5px}
+.upload-status{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:120;padding:10px 18px;border:1px solid var(--strong-line);border-radius:12px;background:var(--bg);box-shadow:var(--shadow);font-size:12px}
+.upload-status[hidden]{display:none}
+.code-media{height:100%;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:15px;overflow:auto}
+.code-media img,.code-media video{max-width:100%;max-height:calc(100% - 40px);object-fit:contain}.code-media audio{max-width:100%}
+.chat-code-presentation{padding:5px 12px;flex:none}.chat-code-presentation[hidden]{display:none}.chat-code-presentation .button{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.inline-file-link{display:inline;padding:0;font:inherit;color:var(--green);text-align:left;overflow-wrap:anywhere}.inline-file-link:hover{text-decoration:underline}
+.app-shell.has-page-left .project-tree{flex:0 0 var(--project-tree-height,200px);max-height:none;min-height:60px}
+#sidebar-projects-resizer{height:9px;flex:none;position:relative;cursor:row-resize;touch-action:none}
+#sidebar-projects-resizer::before{content:'';position:absolute;top:4px;left:calc(50% - 24px);height:2px;width:48px;border-radius:3px;background:var(--strong-line)}
+#sidebar-projects-resizer:hover::before,#sidebar-projects-resizer:focus-visible::before,.resizing-project-tree #sidebar-projects-resizer::before{background:var(--green)}
+#sidebar-projects-resizer[hidden]{display:none}.resizing-project-tree{user-select:none;cursor:row-resize}.resizing-project-tree iframe{pointer-events:none}
+.app-shell:not(.arranging-page) #page-left-tiles>.page-tile:only-child{flex:1;height:auto;min-height:0}
+.topbar-navigation{display:flex;align-items:center;gap:8px;min-width:0}
+:root .app-shell.sidebar-collapsed{grid-template-columns:minmax(0,1fr)}
+.app-shell.sidebar-collapsed>.sidebar,.app-shell.sidebar-collapsed>.sidebar-resizer{display:none}
+.app-shell.sidebar-collapsed>.workspace{grid-column:1}
+.archived-items-toggle{font-size:11px;padding:7px 8px;color:var(--muted);text-align:left}.project-group>.archived-items-toggle{margin-left:18px}
+.arranging-page #archive-item{display:none}
+.todos-view{padding:12px;min-width:0}.todos-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:15px}.todos-toolbar>span,.todos-toolbar>label{font-size:11px;color:var(--muted)}.todos-toolbar>button{margin-left:auto}
+.todo-add{display:flex;gap:8px;margin-bottom:15px}.todo-add input,.todo-row>input{flex:1;min-width:0;border:1px solid var(--strong-line);border-radius:7px;padding:8px;background:var(--bg);color:var(--text)}
+.todo-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--line)}.todo-row>label{display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;overflow-wrap:anywhere}.todo-row>label input{margin-top:4px;flex:none}.todo-row.completed>label>span{text-decoration:line-through;color:var(--muted)}.todo-row>button{font-size:11px;color:var(--muted)}.todo-path{font-size:10px;color:var(--muted);overflow-wrap:anywhere;margin-top:18px}
+
+.tile-edge{position:absolute;z-index:4;padding:0;border:0;background:transparent;touch-action:none}.tile-edge-x{right:0;top:38px;bottom:12px;width:7px;cursor:col-resize}.tile-edge-y{bottom:0;left:12px;right:12px;height:7px;cursor:row-resize}.tile-edge:hover,.tile-edge:focus-visible{background:var(--green);opacity:.6}.panel-focused .tile-edge{display:none}.page-tile-grid>.tile-drop-placeholder{width:100%}
+@media(max-width:640px){.page-tile-grid>.page-tile{flex-basis:100%}.tile-edge-x{display:none}}
+
+#chat-pin[aria-pressed=true]{color:var(--green);background:var(--green-bg)}
+.workbench-editor {height:100%;min-height:300px;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.workbench-toolbar {display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid var(--border);font-size:11px;flex-shrink:0}
+.workbench-toolbar code {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.workbench-toolbar button {font:inherit;background:none;border:0;border-radius:4px;padding:4px 7px;color:var(--text)}
+.workbench-frame {flex:1;min-height:0;position:relative}.workbench-frame iframe {width:100%;height:100%;border:0;display:block}
+.workbench-status {font-size:12px;padding:5px 10px;color:var(--muted)}
+.editor-toggles {display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.editor-toggles label {display:flex;align-items:center;gap:5px}
+.editor-extension-settings {margin-top:22px}.editor-extension-form,.editor-extension-suggestions {display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}.editor-extension-form input {flex:1;min-width:180px;padding:6px}
+.editor-settings-status,.editor-install-status {font-size:12px;color:var(--muted);margin-top:8px}
+.code-theme {max-width:90px;font:inherit;border:0;background:transparent;color:var(--text)}

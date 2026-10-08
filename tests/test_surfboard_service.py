@@ -22,11 +22,12 @@ class SurfboardServiceTests(unittest.TestCase):
     open_service = fixtures.ConversationTests.open_service
     tearDown = fixtures.ConversationTests.tearDown
 
-    def apply(self, board, project_id='p1'):
-        state = self.service.boards.get(project_id)
-        draft = self.service.action('surfboard.draft', {'project_id': project_id, 'board': board,
+    def apply(self, board, project_id='p1', experiment_id=None):
+        state = self.service.board_record(project_id, experiment_id)
+        target = {"project_id":project_id, **({"experiment_id":experiment_id} if experiment_id else {})}
+        draft = self.service.action('surfboard.draft', {**target, 'board': board,
             'expected_version': state['version'], 'expected_draft_version': (state.get('draft') or {}).get('draft_version', 0)})
-        return self.service.action('surfboard.apply', {'project_id': project_id, 'expected_version': state['version'], 'expected_draft_version': draft['draft']['draft_version']})
+        return self.service.action('surfboard.apply', {**target, 'expected_version': state['version'], 'expected_draft_version': draft['draft']['draft_version']})
 
     def local(self, workflow='software', name='local-project', repo=None):
         return self.service.action('project.add', {'name': name, 'repo': str(repo or self.root/name), 'surfboard_template': workflow})
@@ -73,7 +74,7 @@ class SurfboardServiceTests(unittest.TestCase):
         context = self.service.context_provider(scope)
         self.assertEqual(context['agent_skill']['name'], 'supersurfer-surfboard')
         env = context['mcp_servers']['supersurfer']['env']
-        self.assertEqual(set(json.loads(env['SUPERSURFER_ALLOWED_TOOLS'])), {'read_surfboard', 'propose_surfboard', 'read_view_layout', 'update_view_layout', 'ask_user'})
+        self.assertEqual(set(json.loads(env['SUPERSURFER_ALLOWED_TOOLS'])), {'read_surfboard', 'propose_surfboard', 'read_view_layout', 'update_view_layout', 'present_code', 'manage_todos', 'ask_user'})
         with self.assertRaises(APIError):
             self.service.agent_action(scope, 'supersurfer_queue_run', {})
         state = self.service.agent_action(scope, 'supersurfer_read_surfboard', {})
@@ -98,19 +99,21 @@ class SurfboardServiceTests(unittest.TestCase):
         scope = 'experiment:' + self.exp['id']
         self.service.action('chat.send', {'scope':scope,'text':'Prepare this work.'})
         board = template('software')
-        draft = self.service.boards.save_draft('p1', board, 0)
+        key = self.service.boards.task_key('p1', self.exp['id'])
+        version = self.service.boards.get(key)['version']
+        draft = self.service.boards.save_draft(key, board, version)
         self.service.guard_board_tool(scope, 'supersurfer_queue_run', {})
-        self.service.boards.apply('p1', 0, draft['draft']['draft_version'])
+        self.service.boards.apply(key, version, draft['draft']['draft_version'])
         with self.assertRaisesRegex(APIError, 'does not enable'):
             self.service.guard_board_tool(scope, 'supersurfer_queue_run', {})
         with self.assertRaisesRegex(APIError, 'does not enable'):
             self.service.guard_board_tool('manager', 'supersurfer_queue_run', {'experiment_id':self.exp['id']})
         self.service.guard_board_tool(scope, 'supersurfer_stop_run', {'run_id':'existing'})
 
-    def test_project_defaults_inherit_and_explicit_chat_override_survives_restart(self):
+    def test_task_defaults_inherit_and_explicit_chat_override_survives_restart(self):
         board = template()
         board['defaults'].update(models={'worker':'model-b'}, reasoning={'worker':'high'}, approval_mode='yolo', fast_mode=True)
-        self.apply(board)
+        self.apply(board, experiment_id=self.exp['id'])
         scope = 'experiment:' + self.exp['id']
         preferences = self.service.chat_preferences(scope)
         self.assertEqual(preferences['effective']['model'], 'model-b')
@@ -286,11 +289,11 @@ class SurfboardServiceTests(unittest.TestCase):
                 self.assertNotIn(excluded, report)
             self.assertTrue(all(call.args == (scope,) for call in detail.call_args_list))
 
-    def test_board_permission_reduction_stops_only_active_inherited_project_chats(self):
+    def test_board_permission_reduction_stops_only_active_inherited_task_chats(self):
         self.service.action('settings.save', {'approval_mode': 'yolo'})
         board = template()
         board['defaults']['approval_mode'] = 'yolo'
-        self.apply(board)
+        self.apply(board, experiment_id=self.exp['id'])
         inherited = 'experiment:' + self.exp['id']
         explicit = 'project:p1'
         outside_project = self.local('software', 'unrelated-permissions')
@@ -301,7 +304,7 @@ class SurfboardServiceTests(unittest.TestCase):
             self.assertEqual('danger-full-access', self.service.codex.runtime[scope]['active_sandbox'])
         self.service.codex.mode_updates.clear()
         board['defaults']['approval_mode'] = 'ask'
-        result = self.apply(board)
+        result = self.apply(board, experiment_id=self.exp['id'])
         self.assertNotIn(inherited, self.service.codex.busy)
         self.assertIn(explicit, self.service.codex.busy)
         self.assertIn(outside, self.service.codex.busy)
@@ -371,7 +374,7 @@ class SurfboardServiceTests(unittest.TestCase):
         board['edges'].extend([
             {'id': 'source-to-check', 'source': 'code', 'target': 'source_check', 'relation': 'feeds'},
             {'id': 'check-before-run', 'source': 'source_check', 'target': 'experiment', 'relation': 'requires'}])
-        self.apply(board)
+        self.apply(board, experiment_id=self.exp['id'])
         self.assertEqual('', git('status', '--porcelain'), 'Applying a board must not dirty an imported exact-source repository')
         scope = 'experiment:' + self.exp['id']
         self.service.action('chat.send', {'scope': scope, 'text': 'Queue the requested run after its source check.'})
@@ -386,7 +389,7 @@ class SurfboardServiceTests(unittest.TestCase):
             time.sleep(.02)
         self.assertEqual('succeeded', receipt['status'])
         project = self.service.lookup('projects', 'p1')
-        state = self.service.boards.get('p1')
+        state = self.service.board_record('p1', self.exp['id'])
         self.service.board_gate(project, state, 'queue_run', {'revision': current_commit, 'repo': str(self.repo)}, scope)
         with self.assertRaisesRegex(APIError, 'queued commit must match'):
             self.service.agent_action(scope, 'supersurfer_queue_run', {'revision': old_commit, 'repo': str(self.repo)})

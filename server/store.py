@@ -212,23 +212,28 @@ class Store:
             raise ValueError("Experiment path cannot contain symlinks")
         return path
 
-    def create(self, project, name, summary, key=None, task_ids=None, markdown=None, request_key=None):
+    def create(self, project, name, summary, key=None, task_ids=None, markdown=None, request_key=None, surfboard_template=None):
         if not isinstance(name, str) or not name.strip() or len(name) > 160:
             raise ValueError("Experiment name must be 1–160 characters")
         if not isinstance(summary, str) or len(summary) > 20000:
             raise ValueError("Experiment summary must be text up to 20,000 characters")
         key = key or "exp_" + uuid.uuid4().hex[:12]
+        from .surfboards import Surfboards, template
+        if surfboard_template is not None:
+            template(surfboard_template)  # Validate before writing documents.
         receipt = {"project_id": project["id"], "name": name.strip(), "summary": summary.strip()}
+        if surfboard_template:
+            receipt["surfboard_template"] = surfboard_template
         with self.lock, self.db:
             if request_key:
                 prior = self.get(request_key)
                 if prior:
-                    if any(prior.get(field) != value for field, value in receipt.items()):
+                    if any(prior.get(field) != receipt.get(field) for field in set(receipt) | {"surfboard_template"}):
                         raise Conflict("This experiment request_id was already used with different fields. Reuse the original request to recover its experiment, or use a new ID for a different experiment.")
                     return self.experiment(prior["experiment_id"])
             path = self._document_path(project, key)
             content = markdown or f"# {name.strip()}\n\n{summary.strip()}\n\n## Research question\n\nDescribe the hypothesis and what would count as evidence.\n\n## Protocol\n\nRecord the data, controls, metrics and budget before requesting a run.\n\n## Results\n\nNo runs have been submitted for this experiment.\n"
-            if markdown is None and (project.get("workflow") or project.get("surfboard", {}).get("workflow", "research")) != "research":
+            if markdown is None and (surfboard_template or project.get("workflow") or project.get("surfboard", {}).get("workflow", "research")) != "research":
                 content = f"# {name.strip()}\n\n{summary.strip()}\n\n## Acceptance criteria\n\nRecord the requested outcome and how it will be checked.\n\n## Implementation\n\nKeep decisions and provenance here.\n\n## Verification\n\nNo checks have been recorded yet.\n"
             atomic_write(path, content)
             now = time.time()
@@ -238,6 +243,8 @@ class Store:
             data.update(review_interval_minutes=0, next_review_at=None, last_review_at=None, review_error=None)
             self._write_data(data)
             self.db.execute("INSERT INTO revisions VALUES(?,?,?,?)", (key, 1, content, now))
+            self.db.execute("INSERT OR IGNORE INTO kv VALUES(?,?)", ("surfboard:task:" + key,
+                json.dumps(Surfboards(self).task_seed(project["id"], surfboard_template))))
             if request_key:
                 # Commit the receipt with the draft, before any external tracking call.
                 self.db.execute("INSERT INTO kv VALUES(?,?)", (request_key, json.dumps({**receipt, "experiment_id": key})))
@@ -264,6 +271,7 @@ class Store:
                 self.db.execute("INSERT INTO revisions VALUES(?,?,?,?)", (key, version, text, data["updated_at"]))
                 self._write_data(data)
             data["markdown"] = text
+            data["archived"] = bool(self.get("experiment_archived:" + key, False))
             data["history"] = [dict(r) for r in self.db.execute("SELECT version,created FROM revisions WHERE experiment_id=? ORDER BY version DESC LIMIT 100", (key,))]
             return data
 

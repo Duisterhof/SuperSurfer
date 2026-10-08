@@ -23,7 +23,8 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from .chat_context import attachments as chat_attachments
 
-from . import __version__
+from . import __version__, todos, editor_settings
+from .workbench import Workbench, proxy as workbench_proxy
 from .aml import AMLClient, ManagerError, normalize
 from .store import Store, atomic_write
 from .wandb import WandBReader
@@ -41,7 +42,7 @@ from . import brief, telemetry
 from .surfboards import Surfboards, SurfboardError as APIError, template as board_template
 from .surfboard_service import SurfboardService, ALIASES
 from .board_runtime import BoardRuntime
-from .project_artifacts import ProjectArtifacts
+from .project_artifacts import ProjectArtifacts, MAX_UPLOAD_BYTES
 from .code_editor import CodeEditor
 from .editor_service import EditorService
 from .writing_service import WritingService
@@ -210,6 +211,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.shutdown = threading.Event()
         self.board_runtime = BoardRuntime(self)
         self.latex = LatexCompiler(self)
+        self.workbench = Workbench(self)
         self.nodes = NodeSetup(self)
         self.recovery = RunRecovery(self)
         self.message_event = threading.Event()
@@ -249,6 +251,10 @@ class Service(SurfboardService, EditorService, WritingService):
             project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
+        for item in state["experiments"]:
+            item["archived"] = bool(self.store.get("experiment_archived:" + item["id"], False))
+            task_board = self.board_record(item["project_id"], item["id"])
+            item["surfboard"] = {"workflow": task_board["compiled"]["workflow"], "name": task_board["board"]["name"], "version": task_board["version"], "item_label": task_board["compiled"]["item_label"]}
         projects = {project["id"]: project for project in state["projects"]}
         experiments = {experiment["id"]: experiment for experiment in state["experiments"]}
         for run in state["runs"]:
@@ -275,7 +281,7 @@ class Service(SurfboardService, EditorService, WritingService):
 
     def sync_experiment_tracking(self, experiment_id, snapshot=None, required=False):
         experiment = self.store.experiment(experiment_id)
-        if self.read_only or not self.boards.get(experiment["project_id"])["compiled"].get("data_sources"):
+        if self.read_only or not self.board_record(experiment["project_id"], experiment["id"])["compiled"].get("data_sources"):
             return experiment
         snapshot = snapshot or self.state()
         project = next((p for p in snapshot["projects"] if p["id"] == experiment["project_id"]), None)
@@ -719,7 +725,7 @@ class Service(SurfboardService, EditorService, WritingService):
             self.guard_board_tool(scope, name, arguments)
             if self.read_only:
                 raise APIError("Read-only preview: agent tools are disabled", 403)
-            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                 return self.board_tool(scope, name, arguments)
             alias = ALIASES.get(name.removeprefix("supersurfer_"))
             if alias:
@@ -840,7 +846,7 @@ class Service(SurfboardService, EditorService, WritingService):
                         raise APIError("Experiment creation arguments must be an object")
                     if not manager and "project_id" in arguments:
                         raise APIError("This lead's project is fixed by its conversation", 403)
-                    fields = {"request_id", "name", "summary"} | ({"project_id"} if manager else set())
+                    fields = {"request_id", "name", "summary", "surfboard_template"} | ({"project_id"} if manager else set())
                     if set(arguments) - fields:
                         raise APIError("Unexpected experiment creation fields")
                     project_id = text_field(arguments, "project_id", 150) if manager else scope.removeprefix("project:")
@@ -849,7 +855,7 @@ class Service(SurfboardService, EditorService, WritingService):
                     if not re.fullmatch(r"[a-zA-Z0-9_-]{16,100}", request_id):
                         raise APIError("request_id must be 16–100 letters, digits, underscores or hyphens")
                     created = self.store.create(project, text_field(arguments, "name", 160), text_field(arguments, "summary"),
-                        request_key="experiment_request:" + json.dumps([scope, project_id, request_id]))
+                        request_key="experiment_request:" + json.dumps([scope, project_id, request_id]), surfboard_template=arguments.get("surfboard_template"))
                     experiment = self.sync_experiment_tracking(created["id"])
                     return {"experiment_id": experiment["id"], "agent_scope": "experiment:" + experiment["id"], "experiment": experiment}
                 allowed = {"supersurfer_handoff_experiment", "supersurfer_create_experiment_agent", "supersurfer_queue_run"} if manager else {"supersurfer_handoff_experiment", "supersurfer_create_experiment_agent", "supersurfer_update_experiment"}
@@ -986,7 +992,7 @@ class Service(SurfboardService, EditorService, WritingService):
         review_url = pr_url(text_field(arguments, "pr_url", 2048))
         experiment = experiment or self.experiment_for_scope(scope)
         project = self.lookup("projects", experiment["project_id"], fresh=True)
-        board = self.boards.get(project["id"])
+        board = self.board_record(project["id"], experiment["id"])
         if not any("queue_run" in tools for tools in board["compiled"]["tools_by_role"].values()):
             raise APIError("The applied surfboard has no enabled experiment launch step", 403)
         self.board_gate(project, board, "queue_run", {**arguments, "experiment_id": experiment["id"]},
@@ -1105,7 +1111,7 @@ class Service(SurfboardService, EditorService, WritingService):
         count = integer(params, "gpu_count", 0, 1024)
         if count > project["gpu_limit"]:
             raise APIError("GPU request exceeds the project limit")
-        config = {"supersurfer_surfboard": {"version": self.boards.get(project["id"])["version"], "workflow": self.boards.get(project["id"])["compiled"]["workflow"]}, "supersurfer_experiment_id": experiment["id"], "experiment": experiment["name"], "min_free_mib": integer(params, "min_free_mib", 0, 100000000, 1024)}
+        config = {"supersurfer_surfboard": {"version": self.board_record(project["id"], experiment["id"])["version"], "workflow": self.board_record(project["id"], experiment["id"])["compiled"]["workflow"]}, "supersurfer_experiment_id": experiment["id"], "experiment": experiment["name"], "min_free_mib": integer(params, "min_free_mib", 0, 100000000, 1024)}
         try:
             config["telemetry"] = telemetry.contract(params)
         except ValueError as exc:
@@ -1184,7 +1190,7 @@ class Service(SurfboardService, EditorService, WritingService):
             "may use queue_run to verify the exact-source PR and release through AutoML. Preparation-only requests stay held. "
             "If essential information is missing, ask in this conversation."
         )
-        if self.boards.get(experiment["project_id"])["compiled"]["workflow"] != "research":
+        if self.board_record(experiment["project_id"], experiment["id"])["compiled"]["workflow"] != "research":
             prompt = (f"The user requested work on {experiment['name']}.\n\nTask:\n{task}\n\n"
                       f"Read {experiment['document_path']}, preserve the scope and acceptance criteria, implement the requested work, "
                       "run configured checks with run_board_action and deliver reviewable evidence. Persist through recoverable failures; ask_user for a missing decision.")
@@ -1214,7 +1220,7 @@ class Service(SurfboardService, EditorService, WritingService):
             raise
         self.store.put("chat_archived:" + scope, False)
         return {"accepted": True, "scope": scope, "experiment": self.store.record_work(key, scope, "accepted"),
-                "capabilities": [] if agent else self.boards.get(experiment["project_id"])["compiled"]["tools_by_role"]["worker"],
+                "capabilities": [] if agent else self.board_record(experiment["project_id"], experiment["id"])["compiled"]["tools_by_role"]["worker"],
                 "message": "AutoML owns this conversation and SuperSurfer tools are unavailable there. Create a SuperSurfer agent for run queuing." if agent else "Experiment work accepted."}
 
     def resume_experiment_agent(self, experiment_id, scope):
@@ -1321,9 +1327,10 @@ class Service(SurfboardService, EditorService, WritingService):
         if kind == "agent":
             agent = self.lookup("agents", key)
             return {"role": agent.get("role") or "worker", "agent": agent}
-        project_id = self.experiment_for_scope(scope)["project_id"] if kind in {"experiment", "conversation"} else key
+        item = self.store.experiment(key.removeprefix("experiment:")) if kind == "surfboard" and key.startswith("experiment:") else self.experiment_for_scope(scope) if kind in {"experiment", "conversation"} else None
+        project_id = item["project_id"] if item else key
         project = self.lookup("projects", project_id)
-        return {"role": "lead" if kind in {"project", "surfboard"} else "worker", "cwd": project["repo"], "project_id": project_id}
+        return {"role": "lead" if kind in {"project", "surfboard"} else "worker", "cwd": project["repo"], "project_id": project_id, **({"experiment_id": item["id"]} if item else {})}
 
     def chat_preferences(self, scope, overrides=None, strict=False, refresh=False):
         information = self._chat_scope(scope)
@@ -1385,6 +1392,7 @@ class Service(SurfboardService, EditorService, WritingService):
         result.setdefault("agent", {})["name"] = self.store.get("chat_name:" + scope, result.get("agent", {}).get("name", "Agent"))
         result["preferences"] = self.chat_preferences(scope)
         result["preferences"]["runtime"] = self.permission_runtime(result)
+        result["editor_presentation"] = self.store.get("editor_presentation:" + scope)
         return result
 
     def sync_task_wakeups(self):
@@ -1434,6 +1442,26 @@ class Service(SurfboardService, EditorService, WritingService):
             return result
 
     def _action(self, op, params):
+        if op.startswith("editor."):
+            if self.read_only:
+                raise APIError("Read-only workspace: editor settings cannot be changed", 403)
+            if op == "editor.settings":
+                if params.get("engine") == "vscode" and not self.workbench.status()["installed"]:
+                    raise APIError("Install the VS Code workbench first", 409)
+                previous = editor_settings.read(self.store)
+                result = editor_settings.save(self.store, params)
+                try:
+                    if self.workbench.status()["installed"]:
+                        self.workbench.sync_settings()
+                except Exception:
+                    self.store.put("editor_settings", previous)
+                    raise
+                return result
+            if op == "editor.install": return self.workbench.install()
+            if op == "editor.extension": return self.workbench.extension(params.get("operation"), params.get("extension_id"))
+            if op == "editor.open": return self.workbench.open(params)
+            if op == "editor.command": return self.workbench.command(params)
+            raise APIError("Unknown editor action", 404)
         if op.startswith("code."):
             return self.code_action(op, params)
         if op == "latex.action":
@@ -1452,7 +1480,7 @@ class Service(SurfboardService, EditorService, WritingService):
             return result
         if op == "experiment.create":
             project = self.lookup("projects", text_field(params, "project_id", 150))
-            created = self.store.create(project, text_field(params, "name", 160), text_field(params, "summary", required=False))
+            created = self.store.create(project, text_field(params, "name", 160), text_field(params, "summary", required=False), surfboard_template=params.get("surfboard_template"))
             return self.sync_experiment_tracking(created["id"])
         if op == "experiment.save":
             return self.store.save(text_field(params, "id", 180), params.get("markdown"), params.get("version"), params.get("wandb_url"))
@@ -1472,6 +1500,14 @@ class Service(SurfboardService, EditorService, WritingService):
             self.aml.call("gpu.status", {"refresh": True})
             self.aml.invalidate()
             return {"requested": True, "requested_at": time.time()}
+        if op == "todos.save":
+            return todos.save(self, params)
+        if op == "experiment.archive":
+            if set(params) != {"id", "archived"} or type(params.get("archived")) is not bool:
+                raise APIError("Archive requires an item ID and boolean archived value")
+            item = self.store.experiment(text_field(params, "id", 180))
+            self.store.put("experiment_archived:" + item["id"], params["archived"])
+            return {"id": item["id"], "archived": params["archived"]}
         if op == "chat.archive":
             if set(params) != {"scope", "archived"} or type(params.get("archived")) is not bool:
                 raise APIError("Archive accepts scope and a boolean archived value")
@@ -1564,7 +1600,7 @@ class Service(SurfboardService, EditorService, WritingService):
             if set(params) != {"id"}:
                 raise APIError("Start working accepts only the experiment id")
             item = self.lookup("experiments", text_field(params, "id", 180), fresh=True)
-            if self.boards.get(item["project_id"])["compiled"]["workflow"] != "research":
+            if self.board_record(item["project_id"], item["id"])["compiled"]["workflow"] != "research":
                 return self.start_experiment_work(item["id"], "Implement this work item's requested scope, clarify missing acceptance criteria, run its configured checks and produce a reviewable deliverable. Preserve the user's limits.")
             return self.start_experiment_work(item["id"], "Start preparing this drafted experiment. Turn its research question into an implementable protocol and document the next concrete steps. Prepare implementation changes where the scope is clear. Do not submit or launch GPU runs without a separate explicit request.")
         if op == "chat.approve":
@@ -1698,7 +1734,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Only queued runs can be changed", 409)
             if op == "run.ready":
                 project = self.lookup("projects", run["project_id"], fresh=True)
-                board = self.boards.get(project["id"])
+                board = self.board_record(project["id"], run.get("experiment_id"))
                 if not any("queue_run" in tools for tools in board["compiled"]["tools_by_role"].values()):
                     raise APIError("The applied surfboard has no enabled experiment launch step", 403)
                 self.board_gate(project, board, "queue_run", {**params, "experiment_id": run.get("experiment_id")})
@@ -1740,6 +1776,7 @@ class Service(SurfboardService, EditorService, WritingService):
         if self.monitor_thread:
             self.monitor_thread.join(timeout=30)
         self.nodes.close()
+        self.workbench.close()
         self.latex.close()
         self.board_runtime.close()
         self.codex.close()
@@ -1835,6 +1872,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
         try:
+            if path.startswith("/workbench/"):
+                workbench_proxy(self)
+                return
             if path.startswith("/project-artifact/"):
                 self.artifact_response(path, parsed.query)
                 return
@@ -1868,18 +1908,25 @@ class Handler(BaseHTTPRequestHandler):
                     result = {"ok": True, "version": __version__, "state_dir": str(self.server.service.directory), "aml_home": str(self.server.service.aml.home), "read_only": self.server.service.read_only}
                 elif path == "/api/state":
                     result = self.server.service.state()
+                elif path == "/api/editor":
+                    result = {"settings": editor_settings.read(self.server.service.store), "workbench": self.server.service.workbench.status()}
+                elif path == "/api/editor/session":
+                    result = self.server.service.workbench.poll(query.get("id", [""])[0], query.get("after", [0])[0])
                 elif path == "/api/surfboard":
-                    result = self.server.service.surfboard(query.get("project_id", [""])[0])
+                    result = self.server.service.surfboard(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/view-layout":
                     result = self.server.service.view_layout(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/latex":
                     result = self.server.service.latex_status({key: value[0] for key, value in query.items()})
                 elif path == "/api/code/pdf":
                     project = self.server.service.lookup("projects", query.get("project_id", [""])[0])
-                    self.respond(200, self.server.service.code.pdf(project, query.get("path", [""])[0]), "application/pdf")
+                    mapped, relative = self.server.service.code_file_target(project, query.get("path", [""])[0])
+                    self.respond(200, self.server.service.code.pdf(mapped, relative), "application/pdf")
                     return
                 elif path.startswith("/api/code/"):
                     result = self.server.service.code_query(path.removeprefix("/api/code/"), {key: value[0] for key, value in query.items()})
+                elif path == "/api/todos":
+                    result = todos.read(self.server.service, query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/artifacts":
                     result = self.server.service.artifacts.list(self.server.service.lookup("projects", query.get("project_id", [""])[0]), query.get("path", [""])[0])
                 elif path == "/api/project-activity":
@@ -1889,6 +1936,8 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == "/api/experiment":
                     result = self.server.service.store.experiment(query.get("id", [""])[0])
                     result["view_layout"] = self.server.service.view_layout(result["project_id"], result["id"])
+                    board = self.server.service.board_record(result["project_id"], result["id"])
+                    result["surfboard"] = {**board["compiled"], "name": board["board"]["name"], "version": board["version"]}
                     result["brief"] = brief.read(self.server.service.store, result["id"])
                     result["pages"] = self.server.service.results.pages(result["id"])
                 elif path == "/api/experiment-page":
@@ -1942,10 +1991,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             path = urlsplit(self.path).path
-            if path not in {"/api/action", "/api/agent-tool", "/api/code/save"}:
+            if path.startswith("/workbench/"):
+                workbench_proxy(self)
+                return
+            if path not in {"/api/action", "/api/agent-tool", "/api/code/save", "/api/upload", "/api/editor-bridge"}:
                 raise APIError("Not found", 404)
             agent_scope = None
-            if path == "/api/agent-tool":
+            if path == "/api/editor-bridge":
+                authenticated = hmac.compare_digest(self.headers.get("Authorization", ""), "Bearer " + self.server.service.workbench.bridge_token)
+            elif path == "/api/agent-tool":
                 agent_scope = self.server.service.agent_tool_scope(self.headers.get("Authorization", ""))
                 authenticated = agent_scope is not None
             else:
@@ -1958,6 +2012,31 @@ class Handler(BaseHTTPRequestHandler):
                 raise APIError("Foreign Origin rejected", 403)
             if not re.fullmatch(r"(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]+)?", host):
                 raise APIError("Loopback Host required", 403)
+            if path == "/api/upload":
+                if self.server.service.read_only:
+                    raise APIError("Read-only workspace: files cannot be uploaded", 403)
+                if self.headers.get_content_type() != "application/octet-stream":
+                    raise APIError("Uploads require application/octet-stream", 415)
+                if self.headers.get("Transfer-Encoding"):
+                    raise APIError("Chunked requests are unsupported", 400)
+                try:
+                    size = int(self.headers.get("Content-Length", "-1"))
+                except ValueError as exc:
+                    raise APIError("Invalid upload size") from exc
+                if not 0 <= size <= MAX_UPLOAD_BYTES:
+                    raise APIError("Uploads support files up to 32 MiB each", 413)
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                if set(query) != {"project_id", "name", "upload_id"} or any(len(v) != 1 for v in query.values()):
+                    raise APIError("Upload requires project_id, name and upload_id")
+                project = self.server.service.lookup("projects", query["project_id"][0])
+                previous_timeout = self.connection.gettimeout()
+                try:
+                    self.connection.settimeout(60)
+                    result = self.server.service.artifacts.upload(project, query["name"][0], self.rfile, size, query["upload_id"][0])
+                finally:
+                    self.connection.settimeout(previous_timeout)
+                self.respond(200, result)
+                return
             if self.headers.get_content_type() != "application/json":
                 raise APIError("Content-Type must be application/json", 415)
             if self.headers.get("Transfer-Encoding"):
@@ -1972,10 +2051,12 @@ class Handler(BaseHTTPRequestHandler):
             request = json.loads(self.rfile.read(size))
             if not isinstance(request, dict):
                 raise APIError("Expected a JSON object")
-            if path == "/api/code/save":
+            if path == "/api/editor-bridge":
+                result = self.server.service.workbench.bridge(request)
+            elif path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:
@@ -1984,6 +2065,10 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.close_connection = True
             self.error_response(exc)
+
+    do_PUT = do_POST
+    do_PATCH = do_POST
+    do_DELETE = do_POST
 
     def error_response(self, exc):
         status = getattr(exc, "status", None)

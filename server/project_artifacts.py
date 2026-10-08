@@ -19,6 +19,8 @@ from urllib.parse import quote
 
 
 MAX_FILE_BYTES = 512 * 1024 * 1024
+MAX_UPLOAD_BYTES = 32 * 1024 * 1024
+EDITOR_PREFIX = "artifact:"
 MAX_ENTRIES = 1000
 CAPABILITY_SECONDS = 3600
 CAPABILITY_LIMIT = 4096
@@ -296,6 +298,56 @@ class ProjectArtifacts:
             if experiment.get("project_id") != project_id:
                 raise ArtifactError("The work item does not belong to this project.", 403)
         return parts
+
+    def editor_target(self, project, path, *, empty=False):
+        """Only the selected project's public artifacts; preserve descriptor traversal."""
+        relative = path.removeprefix(EDITOR_PREFIX)
+        parts = _parts(relative, empty=empty)
+        if _sensitive(parts) or any(part == ".gitignore" or part.startswith((".publish-", ".supersurfer-edit-")) for part in parts):
+            raise ArtifactError("That artifact path is not available.", 403)
+        mapped = {**project, "repo": str(self.root(project)), "_open_root": lambda: self._root_fd(project)}
+        return mapped, relative
+
+    def entry(self, project, path):
+        mapped, relative = self.editor_target(project, EDITOR_PREFIX + path)
+        parts = _parts(relative)
+        root = parent = fd = None
+        try:
+            root = self._root_fd(project)
+            parent = _open_dirs(root, parts[:-1])
+            fd = os.open(parts[-1], FILE_FLAGS, dir_fd=parent)
+            return self._entry(project, relative, _regular(fd))
+        except OSError as error:
+            raise ArtifactError("Uploaded file is unavailable. Refresh Project files.", 404) from error
+        finally:
+            if fd is not None: os.close(fd)
+            if parent is not None: os.close(parent)
+            if root is not None: os.close(root)
+
+    def upload(self, project, filename, source, size, upload_id):
+        """Bounded byte stream, atomic no-overwrite publication, stable retry identity."""
+        parts = _parts(filename)
+        if len(parts) != 1 or len(filename.encode("utf-8")) > 240:
+            raise ArtifactError("Choose a file name up to 240 UTF-8 bytes, without folders.")
+        if not isinstance(upload_id, str) or not re.fullmatch(r"[a-f0-9]{32}", upload_id):
+            raise ArtifactError("Invalid upload identity")
+        if type(size) is not int or not 0 <= size <= MAX_UPLOAD_BYTES:
+            raise ArtifactError("Uploads support files up to 32 MiB each.", 413)
+        fields = {"source_path": "uploaded-by-user", "path": "uploads/" + upload_id + "/" + filename}
+        self._destination(project, fields)
+        with tempfile.NamedTemporaryFile(dir=self.store.directory, prefix="user-upload-") as temporary:
+            remaining = size
+            while remaining:
+                block = source.read(min(512 * 1024, remaining))
+                if not block:
+                    raise ArtifactError("Upload interrupted; incomplete file was discarded.", 400)
+                temporary.write(block)
+                remaining -= len(block)
+            temporary.flush()
+            temporary.seek(0)
+            result = self._copy(project, fields, os.dup(temporary.fileno()))
+        result.update(project_id=project["id"], editor_path=EDITOR_PREFIX + result["path"])
+        return result
 
     def publish(self, project, fields):
         self._destination(project, fields)

@@ -1,3 +1,6 @@
+import {createWorkbenchEditor} from './workbench-editor.js';
+import {createLatexSpelling} from './latex-spelling.js';
+import {workspacePath} from './workspace-files.js';
 import {createPdfPreview} from './pdf-preview.js';
 /* Project source editor. Models outlive their mounted pane; no file is saved implicitly. */
 let monacoPromise;
@@ -28,12 +31,18 @@ function registerWritingLanguages(monaco) {
 }
 const writingLanguage=path=>/\.(tex|latex|sty|cls)$/i.test(path||'')?'latex':/\.bib$/i.test(path||'')?'bibtex':null;
 
-export function createCodeEditor(options) {
+function createMonacoEditor(options) {
   const instance = ++nextEditorId, projects = new Map();
   let root, context, state, monaco, editor, editorFile, selectionEditor, diffEditor, diffModels = [], observer, poll, epoch = 0, navigation = 0;
-  let sidebarDrag=null;
+  let spelling,sidebarDrag=null,fontSize=options.editorSettings?.get().font_size||13;
+  const defaults=()=>options.editorSettings?.get()||{font_size:13,theme:'match',tab_size:4,word_wrap:'auto',minimap:false,latex_spellcheck:true,dictionary:[]};
+
+  function setFontSize(value){fontSize=Math.max(8,Math.min(32,Math.round(value)));editor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});const control=root?.querySelector('[data-code="zoom-reset"]');if(control)control.textContent=fontSize+'px';options.editorSettings?.save({font_size:fontSize}).catch(tell);}
+  const unsubscribe=options.editorSettings?.subscribe(settings=>{fontSize=settings.font_size;theme();editor?.updateOptions(editorOptions());diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});spelling?.refresh();const select=root?.querySelector('.code-theme');if(select)select.value=settings.theme;const zoom=root?.querySelector('[data-code="zoom-reset"]');if(zoom)zoom.textContent=fontSize+'px';});
+
+
   const pdf=createPdfPreview({loadBytes:options.loadBytes,onSelection:record=>options.onAskAgent?.({kind:'pdf',project_id:context.projectId,path:record.source_path,label:basename(record.source_path)+' · p. '+record.page,text:'PDF page '+record.page+' (not a source-line mapping):\n'+record.text+(record.truncated?'\n[Selection truncated]':'')})});
-  const fullPath=path=>(context?.repo||'').replace(/\/$/,'')+(path?'/'+path:'');
+  const fullPath=path=>workspacePath(context?.repo,context?.projectId,path);
   let view = 'file', sidebar = 'files', sidebarOpen = true, evidence = null, selected = '', message = '', refreshError = false, searching = 0, busy = false;
   const readonly = () => Boolean(options.readOnly?.());
   const active = () => state?.files.get(selected);
@@ -48,6 +57,7 @@ export function createCodeEditor(options) {
 
   function theme() {
     if (!monaco || !root) return;
+    if(defaults().theme!=='match'){monaco.editor.setTheme(({light:'vs',dark:'vs-dark',contrast:'hc-black'})[defaults().theme]||'vs');return;}
     const css = getComputedStyle(root), color = (name,fallback) => {
       const raw = css.getPropertyValue(name).trim();
       if (!raw) return fallback;
@@ -107,7 +117,9 @@ export function createCodeEditor(options) {
   function renderTree() {
     if (!root) return;
     const list = root.querySelector('.code-file-list'), filtered = state.search.trim();
-    if (sidebar === 'changes') {
+    if(sidebar==='comparison'){
+      const data=state.comparison;list.innerHTML=data?`<p class="code-list-note">${escapeHTML(data.base.slice(0,8))} → ${escapeHTML(data.head.slice(0,8))} · ${data.files.length} files</p>`+data.files.map(file=>`<div class="code-change-row"><button type="button" data-code-comparison="${escapeHTML(file.path)}"><span>${escapeHTML(file.path)}</span><small>${escapeHTML(file.status)}</small></button></div>`).join('')+(data.truncated?'<p class="code-list-note">Change list truncated.</p>':''):'<p class="code-list-note">Choose revisions to compare.</p>';
+    } else if (sidebar === 'changes') {
       const data = state.changes;
       list.innerHTML = data ? `<p class="code-list-note">${escapeHTML(data.branch || 'Git changes')} · ${data.files.length}</p>` + data.files.map(file=>
         `<div class="code-change-row"><button type="button" data-code-diff="${escapeHTML(file.path)}" title="Compare HEAD to working file"><span>${escapeHTML(file.path)}</span><small>${escapeHTML(file.status)}</small></button>${file.staged?`<button type="button" data-code-staged="${escapeHTML(file.path)}" title="Compare HEAD to staged file">Index</button>`:''}</div>`).join('') + (!data.files.length?'<p class="code-list-note">No Git changes.</p>':'') + (data.truncated?'<p class="code-list-note">Change list is truncated.</p>':'') : '<p class="code-list-note">Loading changes…</p>';
@@ -133,6 +145,7 @@ export function createCodeEditor(options) {
     file.model = monaco.editor.createModel(file.content ?? '', writingLanguage(file.path) || file.language || undefined, fileURI(projectId,file.path));
     file.listener = file.model.onDidChangeContent(() => {if (state?.projectId === projectId) renderStatus();});
     file.base = file.content ?? '';
+    spelling?.watch(file.model,file.path);
     return file;
   }
   async function loadFile(path) {
@@ -146,7 +159,7 @@ export function createCodeEditor(options) {
     project.files.set(path,file);
     return file;
   }
-  function closeTemporaryList(){if(context.mode==='editor'||root.clientWidth<500){sidebarOpen=false;renderTree();}}
+  function closeTemporaryList(){} // Navigation stays visible until explicitly toggled.
   function revealRange(range) {
     if(!range||!editorFile?.model||!editor)return;
     const positive=value=>Number.isFinite(Number(value))?Math.max(1,Math.floor(Number(value))):1;
@@ -164,10 +177,10 @@ export function createCodeEditor(options) {
     } catch(error) {if(current(token)) tell(error);return false;}
   }
   function editorOptions() {
-    return {automaticLayout:true,fontSize:13,lineHeight:21,minimap:{enabled:false},scrollBeyondLastLine:false,
-      padding:{top:10,bottom:10},smoothScrolling:true,renderLineHighlight:'gutter',wordWrap:writingLanguage(active()?.path)?'on':'off',
-      folding:true,stickyScroll:{enabled:true},tabSize:2,readOnly:readonly(),ariaLabel:'Source code editor',
-      fixedOverflowWidgets:true,contextmenu:true};
+    return {automaticLayout:true,fontSize,lineHeight:Math.round(fontSize*1.6),minimap:{enabled:defaults().minimap},scrollBeyondLastLine:false,
+      padding:{top:10,bottom:10},smoothScrolling:true,renderLineHighlight:'gutter',wordWrap:defaults().word_wrap==='auto'?(/\.(tex|latex|md|markdown)$/i.test(active()?.path||'')?'on':'off'):defaults().word_wrap,
+      folding:true,stickyScroll:{enabled:true},tabSize:defaults().tab_size,readOnly:readonly(),ariaLabel:'Source code editor',
+      fixedOverflowWidgets:false,contextmenu:true};
   }
   function showEditor() {
     if (!root || !monaco) return;
@@ -175,8 +188,10 @@ export function createCodeEditor(options) {
     const host = root.querySelector('.code-monaco'), file = active(); host.replaceChildren();
     root.querySelector('.code-diff-heading').hidden = true;
     if(file?.pdf){host.innerHTML='<div class="code-pdf"></div>';pdf.mount(host.firstElementChild,{url:'/api/'+query('code/pdf',{path:file.path}),source_path:file.path,title:fullPath(file.path)});renderStatus();return;}
+    if(file?.preview_url&&file.mime?.startsWith('image/')){host.innerHTML=`<div class="code-media"><img src="${escapeHTML(file.preview_url)}" alt="${escapeHTML(basename(file.path))}"><a href="${escapeHTML(file.download_url)}" download>Download</a></div>`;renderStatus();return;}
+    if(file?.preview_url&&/^(video|audio)\//.test(file.mime||'')){const tag=file.mime.startsWith('video/')?'video':'audio';host.innerHTML=`<div class="code-media"><${tag} src="${escapeHTML(file.preview_url)}" controls></${tag}><a href="${escapeHTML(file.download_url)}" download>Download</a></div>`;renderStatus();return;}
     if (!file?.model) {
-      host.innerHTML = `<div class="code-empty">${escapeHTML(file?.binary?'This binary file cannot be edited as text.':file?.too_large?'This file is too large for the source editor.':'Open a file to start editing.')}</div>`;
+      host.innerHTML = `<div class="code-empty">${escapeHTML(file?.binary?'This binary file cannot be edited as text.':file?.too_large?'This file is too large for the source editor.':'Open a file to start editing.')}${file?.download_url?`<p><a href="${escapeHTML(file.download_url)}" download>Download file</a></p>`:''}</div>`;
       renderStatus(); return;
     }
     editor = monaco.editor.create(host,{...editorOptions(),model:file.model,readOnly:readonly()||file.readOnly});
@@ -217,6 +232,28 @@ export function createCodeEditor(options) {
       diffEditor.setModel({original:diffModels[0],modified:diffModels[1]}); theme(); renderStatus();
       selectionAction([diffEditor.getOriginalEditor(),diffEditor.getModifiedEditor()]);closeTemporaryList();
     } catch(error) {if(current(token)) tell(error);}
+  }
+
+  async function showComparison(value){
+    const token=epoch,nav=++navigation;
+    try{
+      let data=await options.api(query('code/comparison',{base:value.base,head:value.head,...(value.path?{path:value.path}:{})}));
+      if(!current(token)||nav!==navigation)return false;
+      const path=value.path||data.files[0]?.path;
+      if(path&&!value.path)data=await options.api(query('code/comparison',{base:data.base,head:data.head,path}));
+      if(!current(token)||nav!==navigation)return false;
+      if(path&&!state.files.has(path)){
+        try{await loadFile(path);}catch(error){if(error.status!==404)throw error;state.files.set(path,{path,readOnly:true,deleted:true});}
+      }
+      if(!current(token)||nav!==navigation)return false;
+      state.comparison=data;sidebar='comparison';sidebarOpen=true;rememberView();disposeView();view='comparison';
+      if(path){selected=path;state.selected=path;}
+      renderTabs();renderTree();const heading=root.querySelector('.code-diff-heading'),host=root.querySelector('.code-monaco');host.replaceChildren();heading.hidden=false;heading.querySelector('span').textContent=data.base.slice(0,8)+' ↔ '+data.head.slice(0,8)+' · '+(path||'No changed files');
+      evidence={source:'comparison',path,base:data.base,head:data.head,original:data.original,modified:data.modified};
+      if(!path||data.binary||data.too_large){host.innerHTML='<div class="code-empty">'+(!path?'These revisions have no file changes.':data.binary?'This changed file is binary.':'This file exceeds the text diff limit.')+'</div>';return true;}
+      diffModels=[monaco.editor.createModel(data.original??'',data.language),monaco.editor.createModel(data.modified??'',data.language)];
+      diffEditor=monaco.editor.createDiffEditor(host,{...editorOptions(),readOnly:true,originalEditable:false,renderGutterMenu:false,renderMarginRevertIcon:false,renderSideBySide:state.sideBySide,renderSideBySideInlineBreakpoint:600,enableSplitViewResizing:true});diffEditor.setModel({original:diffModels[0],modified:diffModels[1]});selectionAction([diffEditor.getOriginalEditor(),diffEditor.getModifiedEditor()]);theme();renderStatus();return true;
+    }catch(error){if(current(token))tell(error);return false;}
   }
 
   async function showAgentDiff(changeId, scope=state.agentScope) {
@@ -266,13 +303,13 @@ export function createCodeEditor(options) {
     } else file.remote = remote;
   }
   async function save() {
-    const file = active(), project = state;
+    const file = active(), project = state, experimentId=context.experimentId;
     if (!file?.model || readonly() || file.readOnly || file.remote || file.saving || !dirty(file)) return;
     const content = file.model.getValue(); file.saving = true;file.diskRead=(file.diskRead||0)+1; message=''; renderStatus();
     try {
       const saved = await call('code.save',{path:file.path,content,revision:file.revision},project.projectId);
       file.base = content; file.revision = saved.revision; file.exists = true; file.remote=null;
-      Promise.resolve(options.onSave?.({projectId:project.projectId,path:file.path,revision:saved.revision})).catch(error=>{if(state===project)tell(error);});
+      Promise.resolve(options.onSave?.({projectId:project.projectId,experimentId,path:file.path,revision:saved.revision})).catch(error=>{if(state===project)tell(error);});
       if (state===project) {message=''; await refreshTree();}
     } catch(error) {
       if (error.status === 409 || /changed|revision|conflict|already exists/i.test(error.message || '')) {
@@ -308,7 +345,7 @@ export function createCodeEditor(options) {
       if(selectedText)text+='\n\nSelected '+(diffEditor&&focused===diffEditor.getOriginalEditor()?'before':'after/patch')+' text from the recorded change:\n'+excerpt(selectedText);
       else if(evidence.diff)text+='\n\nRecorded patch:\n'+excerpt(evidence.diff);
       else text+='\n\nBefore:\n'+excerpt(evidence.original)+'\n\nAfter:\n'+excerpt(evidence.modified);
-    }else if(view!=='file'&&evidence){text=`Please help review ${evidence.path}: ${view==='conflict'?'disk version versus my unsaved changes':evidence.staged?'HEAD versus staged index':'HEAD versus working file'}.`;
+    }else if(view!=='file'&&evidence){text=`Please help review ${evidence.path}: ${view==='comparison'?evidence.base+' versus '+evidence.head:view==='conflict'?'disk version versus my unsaved changes':evidence.staged?'HEAD versus staged index':'HEAD versus working file'}.`;
       if(selectedText)text+='\n\nSelected '+(diffEditor&&focused===diffEditor.getOriginalEditor()?'original':'modified')+' diff text:\n'+excerpt(selectedText);
       else text+='\n\nBefore:\n'+excerpt(evidence.original)+'\n\nAfter:\n'+excerpt(evidence.modified);
     }else{text=`Please help with ${file.path}`;if(selectedText)text+=`, lines ${selection.startLineNumber}–${selection.endLineNumber}.\n\n${excerpt(selectedText)}`;else text+='.';if(dirty(file))text+='\n\nThis file has unsaved editor changes. The disk version may differ; do not assume these edits have been saved.';}
@@ -411,6 +448,7 @@ export function createCodeEditor(options) {
       if(!change)return;
       try{await call('code.review',{scope,change_id:change.id,reviewed:!change.reviewed});if(root)await agentChanges();}catch(error){tell(error);}return;
     }
+    if(target.dataset.codeComparison){await showComparison({...state.comparison,path:target.dataset.codeComparison});return;}
     if(target.hasAttribute('data-code-dir')) {
       const path=target.dataset.codeDir;
       if(state.expanded.has(path))state.expanded.delete(path);
@@ -419,12 +457,15 @@ export function createCodeEditor(options) {
     }
     switch(target.dataset.code) {
       case 'open':options.onPickFile?.(path=>openFile(path));break;
+      case 'upload':options.onUpload?.();break;
+      case 'compare-revisions':options.onCompare?.();break;
       case 'copy-path':try{await navigator.clipboard.writeText(fullPath(active()?.path||''));}catch{tell('Select the displayed workspace path to copy it.');}break;
       case 'next-diff':diffEditor?.goToDiff('next');break;
       case 'previous-diff':diffEditor?.goToDiff('previous');break;
-      case 'files':sidebarOpen=sidebar!=='files'||!sidebarOpen;sidebar='files';renderTree();break;
-      case 'changes':sidebarOpen=sidebar!=='changes'||!sidebarOpen;sidebar='changes';renderTree();if(sidebarOpen)await changes();break;
-      case 'agents':sidebarOpen=sidebar!=='agents'||!sidebarOpen;sidebar='agents';renderTree();if(sidebarOpen)await agentChanges();break;
+      case 'zoom-in':setFontSize(fontSize+1);break;case 'zoom-out':setFontSize(fontSize-1);break;case 'zoom-reset':setFontSize(13);break;
+      case 'files':sidebarOpen=sidebar!=='files'||!sidebarOpen;sidebar='files';state.sidebarOpen=sidebarOpen;renderTree();break;
+      case 'changes':sidebarOpen=sidebar!=='changes'||!sidebarOpen;sidebar='changes';state.sidebarOpen=sidebarOpen;renderTree();if(sidebarOpen)await changes();break;
+      case 'agents':sidebarOpen=sidebar!=='agents'||!sidebarOpen;sidebar='agents';state.sidebarOpen=sidebarOpen;renderTree();if(sidebarOpen)await agentChanges();break;
       case 'refresh':await refresh();break;
       case 'save':await save();break;
       case 'ask':case 'ask-selection':askAgent();break;
@@ -439,9 +480,9 @@ export function createCodeEditor(options) {
     }
   }
   function setSidebarWidth(width,persist){if(!root)return;const max=Math.max(120,Math.min(600,root.clientWidth-140));width=Math.max(120,Math.min(max,width));root.style.setProperty('--code-sidebar-width',width+'px');const divider=root.querySelector('.code-sidebar-divider');divider?.setAttribute('aria-valuenow',String(Math.round(width)));divider?.setAttribute('aria-valuemin','120');divider?.setAttribute('aria-valuemax',String(max));if(persist)try{localStorage.setItem('supersurfer-code-sidebar:'+context.projectId,String(width));}catch{}}
-  function onKey(event){if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='p'&&!event.shiftKey){event.preventDefault();event.stopPropagation();options.onPickFile?.(path=>openFile(path));}if(event.key==='F7'&&diffEditor){event.preventDefault();event.stopPropagation();diffEditor.goToDiff(event.shiftKey?'previous':'next');}}
+  function onKey(event){if(root?.querySelector('.code-pdf'))return;if((event.metaKey||event.ctrlKey)&&['+','=','-','0'].includes(event.key)){event.preventDefault();event.stopImmediatePropagation();setFontSize(event.key==='0'?13:fontSize+(event.key==='-'?-1:1));return;}if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='p'&&!event.shiftKey){event.preventDefault();event.stopPropagation();options.onPickFile?.(path=>openFile(path));}if(event.key==='F7'&&diffEditor){event.preventDefault();event.stopPropagation();diffEditor.goToDiff(event.shiftKey?'previous':'next');}}
   const onFocus=()=>{if(root)refresh();};
-  const onChange=event=>{if(event.target.matches('.code-agent-select')){state.agentScope=event.target.value;renderTree();}};
+  const onChange=event=>{if(event.target.matches('.code-theme'))options.editorSettings?.save({theme:event.target.value}).catch(tell);if(event.target.matches('.code-agent-select')){state.agentScope=event.target.value;renderTree();}};
   const beforeUnload=event=>{if(hasUnsaved()){event.preventDefault();event.returnValue='';}};
   window.addEventListener('beforeunload',beforeUnload);
   window.addEventListener('focus',onFocus);
@@ -451,7 +492,7 @@ export function createCodeEditor(options) {
     monacoPromise ||= import('/vendor/monaco/editor.js').catch(error=>{monacoPromise=null;throw error;});
     const module=await monacoPromise;
     if(!current(token))return false;
-    monaco=module.monaco||module;registerWritingLanguages(monaco);return true;
+    monaco=module.monaco||module;registerWritingLanguages(monaco);spelling ||= createLatexSpelling(monaco,defaults,word=>options.editorSettings?.save({dictionary:[...new Set([...defaults().dictionary,word])]}).catch(tell));return true;
   }
 
   async function mount(element, nextContext) {
@@ -464,10 +505,10 @@ export function createCodeEditor(options) {
     unmount();root=element;context={...nextContext};const token=++epoch;
     if(!context.projectId)throw new Error('Source editor needs a project.');
     if(!projects.has(context.projectId))projects.set(context.projectId,{projectId:context.projectId,files:new Map(),tree:new Map(),expanded:new Set(),selected:'',search:'',searchResults:null,changes:null,sideBySide:true});
-    state=projects.get(context.projectId);selected=state.selected;sidebar='files';sidebarOpen=context.mode!=='editor';view='file';evidence=null;message='';
+    state=projects.get(context.projectId);selected=state.selected;sidebar='files';sidebarOpen=state.sidebarOpen??context.mode!=='editor';view='file';evidence=null;message='';
     root.classList.add('code-editor');
     root.dataset.codeMode=context.mode==='editor'?'editor':'full';
-    root.innerHTML=`<div class="code-toolbar"><div>${button('files','Files')}${button('changes','Git','Repository Git changes')}${button('agents','Agents','Recorded edits by agent')}</div><div>${button('open','Open…','Open file (⌘/Ctrl P)')}${button('new-file','+ File','Create a file',readonly())}${button('new-folder','+ Folder','Create a folder',readonly())}${button('refresh','↻','Refresh source and Git changes')}</div><div class="code-toolbar-end">${button('ask','Ask agent','Add selected code or file reference to the agent composer')}${button('save','Save','Save file (⌘/Ctrl S)',true)}</div></div>
+    root.innerHTML=`<div class="code-toolbar"><div>${button('files','Files')}${button('changes','Git','Repository Git changes')}${button('agents','Agents','Recorded edits by agent')}${button('compare-revisions','Compare…','Compare two commits, branches or tags')}</div><div>${button('open','Open…','Open file (⌘/Ctrl P)')}${button('upload','Upload…','Upload from this computer',readonly())}${button('new-file','+ File','Create a file',readonly())}${button('new-folder','+ Folder','Create a folder',readonly())}${button('refresh','↻','Refresh source and Git changes')}</div><div class="code-toolbar-end"><select class="code-theme" aria-label="Editor theme">${[['match','App theme'],['light','Light'],['dark','Dark'],['contrast','Contrast']].map(([value,label])=>`<option value="${value}"${defaults().theme===value?' selected':''}>${label}</option>`).join('')}</select>${button('zoom-out','A−','Smaller text (⌘/Ctrl −)')}${button('zoom-reset',fontSize+'px','Reset text size (⌘/Ctrl 0)')}${button('zoom-in','A+','Larger text (⌘/Ctrl +)')}${button('ask','Ask agent','Add selected code or file reference to the agent composer')}${button('save','Save','Save file (⌘/Ctrl S)',true)}</div></div>
       <div class="code-location"><span>Workspace</span><code></code>${button('copy-path','Copy path')}</div><form class="code-create" hidden><label for="code-new-${instance}">New file path</label><input id="code-new-${instance}" required autocomplete="off"><button type="submit">Create</button>${button('cancel-create','Cancel')}</form>
       <div class="code-body"><aside class="code-sidebar"><div class="code-find"><input type="search" placeholder="Find file by name…" aria-label="Find file by name" value="${escapeHTML(state.search)}"></div><div class="code-file-list"></div></aside><button type="button" class="code-sidebar-divider" role="separator" aria-orientation="vertical" aria-label="Resize file column" title="Drag to resize files" tabindex="0"></button><section class="code-workbench"><div class="code-tabs" aria-label="Open files"></div><div class="code-conflict" hidden><span></span><div>${button('compare','Compare')}${button('reload','Reload disk')}${button('keep-mine','Keep mine…')}</div></div><div class="code-diff-heading" hidden><span></span>${button('previous-diff','↑','Previous change (Shift F7)')}${button('next-diff','↓','Next change (F7)')}${button('split',state.sideBySide?'Inline':'Side by side')}${button('edit','Edit file')}</div><div class="code-monaco"><div class="code-empty">Loading editor…</div></div></section></div><div class="code-status" role="status" aria-live="polite"></div>`;
     root.addEventListener('click',click);root.querySelector('.code-create').addEventListener('submit',create);root.querySelector('.code-find input').addEventListener('input',findFiles);
@@ -493,10 +534,21 @@ export function createCodeEditor(options) {
     root=null;state=null;context=null;selected='';busy=false;
   }
   function dispose() {
-    unmount();for(const project of projects.values())for(const file of project.files.values()){file.listener?.dispose();file.model?.dispose();}
+    unmount();unsubscribe?.();spelling?.dispose();for(const project of projects.values())for(const file of project.files.values()){file.listener?.dispose();file.model?.dispose();}
     projects.clear();window.removeEventListener('beforeunload',beforeUnload);window.removeEventListener('focus',onFocus);
   }
-  return {mount,unmount,hasUnsaved,refresh,dispose,
+  return {mount,unmount,hasUnsaved,refresh,dispose,showComparison,
     async openFile(path,range){const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path,range);},
     async showAgentChange(scope,changeId){const token=epoch;if(!await ensureReady()||!current(token))return false;return showAgentDiff(changeId,scope);}};
+}
+
+export function createCodeEditor(options){
+ const builtin=createMonacoEditor(options),workbench=createWorkbenchEditor(options);let current=builtin,mounted=null,ctx=null;
+ const hasUnsaved=id=>builtin.hasUnsaved(id)||workbench.hasUnsaved(id);
+ return {hasUnsaved,prepareScope(context){if(ctx&&(ctx.projectId!==context.projectId||ctx.experimentId!==context.experimentId)){current.unmount();mounted=null;ctx=null;}},detachWithin(element){if(mounted&&element?.contains(mounted)){current.unmount();mounted=null;ctx=null;}},async mount(element,context){
+  let next=options.editorSettings?.get().engine==='vscode'&&!options.readOnly?.()?workbench:builtin;
+  // A preference changed in another window must never discard this window's drafts.
+  if(current!==next&&hasUnsaved())next=current;
+  if(current!==next)current.unmount();current=next;mounted=element;ctx=context;return current.mount(element,context);
+ },unmount(){current.unmount();mounted=null;ctx=null;},refresh(){return current.refresh();},openFile(...args){return current.openFile(...args);},showComparison(...args){return current.showComparison(...args);},showAgentChange(...args){return current.showAgentChange(...args);},dispose(){builtin.dispose();workbench.dispose();}};
 }

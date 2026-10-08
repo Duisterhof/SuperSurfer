@@ -1,3 +1,4 @@
+import {workspacePath} from './workspace-files.js';
 /* Independent repository tiles. File/patch navigation is delegated to one shared editor. */
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const localTime=value=>{const date=new Date(typeof value==='number'&&value<1e12?value*1000:value);return value&&Number.isFinite(date.getTime())?date.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';};
@@ -11,7 +12,7 @@ function createTile(options,kind) {
   const report=message=>{if(root){const status=root.querySelector('.code-tile-status');status.textContent=message||'';status.hidden=!message;}};
   function treeRow(entry,depth=0) {
     const directory=entry.kind==='directory',expanded=state.expanded.has(entry.path);
-    return `<button type="button" class="code-tree-entry" style="--depth:${depth}" data-tile-${directory?'directory':'file'}="${escapeHTML(entry.path)}" title="${escapeHTML((context.repo||'').replace(/\/$/,'')+'/'+entry.path)}"${directory?` aria-expanded="${expanded}"`:''}><span class="code-entry-icon" aria-hidden="true">${directory?(expanded?'⌄':'›'):'·'}</span><span>${escapeHTML(state.search?entry.path:entry.name)}</span></button>`+
+    return `<button type="button" class="code-tree-entry" style="--depth:${depth}" data-tile-${directory?'directory':'file'}="${escapeHTML(entry.path)}" title="${escapeHTML(workspacePath(context.repo,context.projectId,entry.path))}"${directory?` aria-expanded="${expanded}"`:''}><span class="code-entry-icon" aria-hidden="true">${directory?(expanded?'⌄':'›'):'·'}</span><span>${escapeHTML(state.search?entry.path:entry.name)}</span></button>`+
       (directory&&expanded?(state.tree.get(entry.path)?.entries||[]).map(child=>treeRow(child,depth+1)).join(''):'');
   }
   function render() {

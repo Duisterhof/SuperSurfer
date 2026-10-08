@@ -1,7 +1,11 @@
+import {createTodos} from './todos.js';
+import {createFileUploads} from './file-uploads.js';
+import {workspacePath} from './workspace-files.js';
 import {createFilePicker} from './file-picker.js';
 import {createPanelFocus} from './panel-focus.js';
 import {createChatContext,contextMarkup} from './chat-context.js';
 import {createSurfboardEditor, createViewLayoutEditor, createPageLayoutEditor} from './surfboard.js';
+import {createEditorSettings} from './editor-settings.js';
 import {createCodeEditor} from './code-editor.js';
 import {createLatexPanel} from './latex-panel.js';
 import {projectCapacity,capacityWaitReason} from './run-capacity.js';
@@ -28,7 +32,7 @@ $$('[data-icon]').forEach(el => {el.innerHTML = icon(el.dataset.icon);});
 const terminal = new Set(['completed','complete','succeeded','success','failed','cancelled','canceled','error','stopped']);
 const active = new Set(['running','launching','starting','stopping']);
 const modelRoles = ['manager','lead','worker'];
-const state = {data:null,view:'workspace',runFilter:'active',queuePriority:false,projectId:null,experimentId:null,tab:'overview',experiment:null,edit:false,scope:null,chat:null,models:[],account:null,chatVisible:true,chatWidth:390,chatMaximized:false,loading:false,modalKind:null,stateSignature:'',sidebarSignature:'',chatSignature:'',experimentRequest:0};
+const state = {data:null,view:'workspace',runFilter:'active',queuePriority:false,projectId:null,experimentId:null,tab:'overview',experiment:null,edit:false,scope:null,pinnedAgent:null,chat:null,models:[],account:null,chatVisible:true,chatWidth:390,sidebarWidth:null,sidebarCollapsed:false,projectTreeHeight:null,chatMaximized:false,loading:false,modalKind:null,stateSignature:'',sidebarSignature:'',chatSignature:'',experimentRequest:0};
 const metricsCache = new Map();
 let savedNavigation = null, navigationRestored = false;
 let stateWaiters = [];
@@ -47,10 +51,15 @@ async function readNavigation() {
   }
   if (!savedNavigation || typeof savedNavigation !== 'object' || Array.isArray(savedNavigation)) savedNavigation = {};
   state.view = ['workspace', 'compute', 'settings'].includes(savedNavigation.view) ? savedNavigation.view : 'workspace';
-  state.tab = ['overview', 'runs', 'results', 'compute', 'surfboard', 'artifacts', 'activity', 'editor', 'chat', 'documents', 'preview'].includes(savedNavigation.tab)||/^(?:page:page_[a-f0-9]+|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.test(savedNavigation.tab||'') ? savedNavigation.tab : 'overview';
+  state.tab = ['_files', '_todos', 'overview', 'runs', 'results', 'compute', 'surfboard', 'artifacts', 'activity', 'editor', 'chat', 'documents', 'preview'].includes(savedNavigation.tab)||/^(?:page:page_[a-f0-9]+|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.test(savedNavigation.tab||'') ? savedNavigation.tab : 'overview';
   state.chatVisible = typeof savedNavigation.chatVisible === 'boolean' ? savedNavigation.chatVisible : true;
   state.chatWidth = Number.isFinite(savedNavigation.chatWidth) ? Math.min(760,Math.max(280,savedNavigation.chatWidth)) : 390;
+  state.sidebarWidth = Number.isFinite(savedNavigation.sidebarWidth) ? Math.min(600,Math.max(160,savedNavigation.sidebarWidth)) : null;
+  state.sidebarCollapsed=savedNavigation.sidebarCollapsed===true;
+  state.projectTreeHeight=Number.isFinite(savedNavigation.projectTreeHeight)?Math.max(60,Math.min(1200,savedNavigation.projectTreeHeight)):null;
   state.chatMaximized = savedNavigation.chatMaximized === true;
+  const pin=savedNavigation.pinnedAgent;
+  if(pin&&typeof pin.scope==='string'&&/^(manager|(?:project|experiment|conversation|surfboard):[A-Za-z0-9_:-]+)$/.test(pin.scope))state.pinnedAgent=pin;
   $('#chat-panel').hidden = !state.chatVisible;
   $('#chat-toggle').setAttribute('aria-expanded', String(state.chatVisible));
   applyChatLayout();
@@ -60,7 +69,6 @@ function restoreNavigation(data) {
     state.projectId = data.projects.some(p => p.id === savedNavigation?.projectId) ? savedNavigation.projectId : data.projects[0]?.id || null;
     state.experimentId = state.view === 'workspace' && data.experiments.some(x => x.id === savedNavigation?.experimentId && x.project_id === state.projectId) ? savedNavigation.experimentId : null;
     if (data.connected || data.projects.length) navigationRestored = true;
-    if (state.experimentId&&state.tab==='surfboard') state.tab = 'overview';
     return;
   }
   if (!data.projects.some(p => p.id === state.projectId)) {
@@ -75,10 +83,34 @@ function restoreNavigation(data) {
   }
 }
 function persistNavigation() {
-  const value = { view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, chatMaximized: state.chatMaximized };
+  const value = { view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, sidebarWidth: state.sidebarWidth, sidebarCollapsed:state.sidebarCollapsed, projectTreeHeight:state.projectTreeHeight, chatMaximized: state.chatMaximized, pinnedAgent:state.pinnedAgent };
   try { localStorage.setItem('supersurfer-workspace', JSON.stringify(value)); } catch {}
   savedNavigation = value;
   if (window.superSurferDesktop?.setWorkspace) window.superSurferDesktop.setWorkspace(value).catch(() => {});
+}
+function projectTreeBounds(){
+ const sidebar=$('.sidebar'),tree=$('#project-tree'),dock=$('#page-left-tiles');
+ const fixed=[...sidebar.children].filter(el=>el!==tree&&el!==dock).reduce((total,el)=>{const css=getComputedStyle(el);return total+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
+ return {min:60,max:Math.max(60,sidebar.clientHeight-fixed-170)};
+}
+function applyProjectTreeHeight(){
+ const divider=$('#sidebar-projects-resizer'),show=$('.app-shell').classList.contains('has-page-left');divider.hidden=!show;if(!show)return;
+ const bounds=projectTreeBounds(),height=Math.round(Math.max(bounds.min,Math.min(bounds.max,state.projectTreeHeight||Math.min(230,$('.sidebar').clientHeight*.3))));
+ $('.sidebar').style.setProperty('--project-tree-height',height+'px');divider.setAttribute('aria-valuenow',height);divider.setAttribute('aria-valuemin',bounds.min);divider.setAttribute('aria-valuemax',Math.floor(bounds.max));
+}
+function sidebarWidthBounds(){return {min:160,max:Math.max(160,Math.min(600,Math.floor(window.innerWidth*.4))) };}
+function applySidebarLayout(page=activePage()){
+ const shell=$('.app-shell'),bounds=sidebarWidthBounds(),fallback=window.innerWidth<=760?160:window.innerWidth<=1100?175:206;
+ const width=Math.round(Math.max(bounds.min,Math.min(bounds.max,page?.left_width||state.sidebarWidth||(shell.classList.contains('has-page-left')?230:fallback))));
+ shell.style.setProperty('--sidebar-width',width+'px');shell.classList.toggle('narrow-sidebar',width<200);shell.classList.toggle('sidebar-collapsed',state.sidebarCollapsed);const toggle=$('#sidebar-toggle');toggle.setAttribute('aria-expanded',String(!state.sidebarCollapsed));toggle.setAttribute('aria-label',state.sidebarCollapsed?'Show workspace sidebar':'Hide workspace sidebar');toggle.title=(state.sidebarCollapsed?'Show':'Hide')+' workspace sidebar (⌘/Ctrl B)';
+ const divider=$('#sidebar-resizer');divider.hidden=state.sidebarCollapsed||state.chatVisible&&state.chatMaximized;
+ divider.setAttribute('aria-valuemin',bounds.min);divider.setAttribute('aria-valuemax',bounds.max);divider.setAttribute('aria-valuenow',width);divider.setAttribute('aria-valuetext',width+' pixels wide');
+ divider.setAttribute('aria-disabled',String(readOnly()&&Boolean(page?.left_width||tileLayout.editing())));applyProjectTreeHeight();
+}
+function resizeSidebar(width){
+ const bounds=sidebarWidthBounds();width=Math.round(Math.max(bounds.min,Math.min(bounds.max,width)));
+ if(activePage()?.left_width||tileLayout.editing()){if(!readOnly())tileLayout.resizeSidebar(width);}
+ else {state.sidebarWidth=width;applyChatLayout();}
 }
 function chatWidthBounds(){
  const bodyWidth=$('.workspace-body')?.clientWidth||window.innerWidth;
@@ -86,7 +118,7 @@ function chatWidthBounds(){
 }
 function applyChatLayout(){
  const shell=$('.app-shell'),maximized=state.chatVisible&&state.chatMaximized;
- shell.classList.toggle('chat-maximized',maximized);
+ shell.classList.toggle('chat-maximized',maximized);applySidebarLayout();
  $('#chat-panel').hidden=!state.chatVisible;
  const bounds=chatWidthBounds(),width=Math.round(Math.min(bounds.max,Math.max(bounds.min,activePage()?.right_width||state.chatWidth||390)));
  shell.style.setProperty('--chat-panel-width',width+'px');
@@ -114,7 +146,7 @@ async function api(path, body) {
 async function action(op,params={}) {return op==='code.save'?api('code/save',params):api('action',{op,params});}
 function toast(message,error=false) {clearTimeout(toastTimeout);const el=$('#toast');el.textContent=message;el.classList.toggle('error',error);el.hidden=false;toastTimeout=setTimeout(()=>{el.hidden=true;},error?8000:4000);}
 function safeUrl(value) {if(typeof value!=='string'||!/^https?:\/\//i.test(value.trim()))return null;try {const url = new URL(value,location.origin);return ['https:','http:'].includes(url.protocol)?url.href:null;} catch {return null;}}
-function link(value,label,cls='') {const url=safeUrl(value);return url?`<a href="${e(url)}" target="_blank" rel="noopener noreferrer" class="${e(cls)}">${label}</a>`:`<span class="${e(cls)}">${label}</span>`;}
+function link(value,label,cls='') {const p=project();if(typeof value==='string'&&p?.repo&&value.startsWith(p.repo.replace(/\/$/,'')+'/')){const path=value.slice(p.repo.replace(/\/$/,'').length+1);if(!path.split('/').some(part=>['.','..',''].includes(part)))return `<button type="button" class="inline-file-link ${e(cls)}" data-workspace-file="${e(path)}" data-workspace-project="${e(p.id)}">${label}</button>`;}const url=safeUrl(value);return url?`<a href="${e(url)}" target="_blank" rel="noopener noreferrer" class="${e(cls)}">${label}</a>`:`<span class="${e(cls)}">${label}</span>`;}
 function renderMath(source, displayMode, original) {
   // Limit expansion and dimensions; never trust TeX links, HTML or resource commands.
   if (!window.katex || source.length > 16000) return `<span class="math-fallback">${e(original)}</span>`;
@@ -173,17 +205,19 @@ function date(value,short=false) {if(!value)return 'Not recorded';const d=new Da
 function elapsed(value) {if(!value)return 'Not observed';const seconds=Math.max(0,(Date.now()-new Date(typeof value==='number'?value*1000:value).getTime())/1000);if(!Number.isFinite(seconds))return 'Not observed';if(seconds<60)return 'Just now';if(seconds<3600)return `${Math.floor(seconds/60)}m ago`;if(seconds<86400)return `${Math.floor(seconds/3600)}h ago`;return `${Math.floor(seconds/86400)}d ago`;}
 const project = () => state.data?.projects.find(p=>p.id===state.projectId);
 const experiment = () => state.data?.experiments.find(x=>x.id===state.experimentId);
-const isSurfboard = () => state.view==='workspace'&&!state.experimentId&&state.tab==='surfboard'&&!!state.projectId;
-const projectWorkflow = (p=project()) => p?.surfboard?.workflow||'research';
-const itemLabel = (p=project()) => p?.surfboard?.item_label||({research:'experiment',software:'feature',web:'design task',writing:'writing task'}[projectWorkflow(p)])||'experiment';
+const isSurfboard = () => state.view==='workspace'&&state.tab==='surfboard'&&!!state.projectId;
+const scopeBoard = () => state.experimentId?(state.experiment?.id===state.experimentId?state.experiment:experiment())?.surfboard:project()?.surfboard;
+const projectWorkflow = (p=project()) => (p?.id===state.projectId&&state.experimentId?scopeBoard()?.workflow:p?.surfboard?.workflow)||'research';
+const itemLabel = (p=project()) => (p?.id===state.projectId&&state.experimentId?scopeBoard()?.item_label:null)||p?.surfboard?.item_label||({research:'experiment',software:'feature',web:'design task',writing:'writing task'}[projectWorkflow(p)])||'experiment';
 const pluralItems = (p=project()) => itemLabel(p)+'s';
 const leadLabel = (p=project()) => ({research:'Research lead',software:'Technical lead',web:'Design lead',writing:'Writing lead'}[projectWorkflow(p)]||'Project lead');
 const surfboardEditor=createSurfboardEditor({api,action,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
 const filePicker=createFilePicker({api}),panelFocus=createPanelFocus();
-function pickWorkspaceFile(onChoose,{pdfOnly=false,title='Open file'}={}){const p=project();if(!p)return;filePicker.open({projectId:p.id,repo:p.repo,pdfOnly,title,onChoose,onError:error=>toast(error.message,true)});}
+function pickWorkspaceFile(onChoose,{pdfOnly=false,title='Open file',uploadTarget='editor'}={}){const p=project();if(!p)return;filePicker.open({projectId:p.id,repo:p.repo,pdfOnly,title,onChoose,onUpload:readOnly()?null:()=>fileUploads.pick(uploadTarget),onError:error=>toast(error.message,true)});}
 async function loadWorkspacePdf(url,{signal}={}){const response=await fetch(url,{signal,headers:sessionStorage.getItem('supersurfer-token')?{Authorization:'Bearer '+sessionStorage.getItem('supersurfer-token')}:{}});if(!response.ok)throw new Error('PDF could not be loaded ('+response.status+').');return new Uint8Array(await response.arrayBuffer());}
-const codeEditor=createCodeEditor({api,action,readOnly:()=>readOnly(),onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
-const latexPanel=createLatexPanel({api,action,readOnly:()=>readOnly(),hasUnsaved:projectId=>codeEditor.hasUnsaved(projectId),
+const editorSettings=createEditorSettings({api,action,readOnly:()=>readOnly(),hasUnsaved:()=>codeEditor.hasUnsaved()});
+const codeEditor=createCodeEditor({api,action,editorSettings,readOnly:()=>readOnly(),onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onCompare:showCompareDialog,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
+const latexPanel=createLatexPanel({api,action,editorSettings,onError:error=>toast(error.message,true),readOnly:()=>readOnly(),hasUnsaved:projectId=>codeEditor.hasUnsaved(projectId),
  onSource:({path,...range})=>openPageCode({path,range}),
  onSetup:()=>prepareCodeQuestion('Set up the supported LaTeX compiler on this connected workspace. Check system pdfLaTeX, BibTeX, bubblewrap, prlimit and Poppler (pdfinfo, pdftotext, pdftoppm), then verify compile_latex can compile and inspect a small paper. Preserve project source and existing host environments. If administrator access is needed, explain the exact missing dependency and ask for that access. Do not use an external compiler service or search private service state.', 'Compiler setup message prepared. Send when ready.'),
  onSelection:record=>prepareCodeQuestion({kind:'pdf',project_id:state.projectId,path:record.source_path,label:record.source_path.split('/').at(-1)+' · p. '+record.page,text:'Compiled PDF · Source: '+record.source_path+' · PDF page '+record.page+' · Build '+record.build_id+'\nThis is PDF text, not a source-line mapping.\n'+record.text+(record.truncated?'\n[Selection truncated]':'')})});
@@ -198,18 +232,44 @@ function normalize(data){return {...data,projects:data.projects||[],experiments:
 const agentDirectories=new Map(),agentDirectoryVersions=new Map(),agentDirectoryBusy=new Set(),agentMutations=new Set(),conversationDrafts=new Map(),chatFetches=new Set();
 let scopeSelectionRevision=0,scopeChoices={},surfboardPreviousChatVisible=null;
 try{const saved=JSON.parse(localStorage.getItem('supersurfer-conversation-selection')||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))scopeChoices=saved;}catch{}
-function directoryKey(){if(isSurfboard())return 'surfboard:'+state.projectId;return state.view==='workspace'?(state.experimentId?'experiment:'+state.experimentId:state.projectId?'project:'+state.projectId:null):null;}
+function surfboardScope(){return 'surfboard:'+(state.experimentId?'experiment:'+state.experimentId:state.projectId);}
+function directoryKey(){if(isSurfboard())return surfboardScope();return state.view==='workspace'?(state.experimentId?'experiment:'+state.experimentId:state.projectId?'project:'+state.projectId:null):null;}
 function currentAgentDirectory(){return isSurfboard()?{agents:scopedAgents()}:agentDirectories.get(directoryKey());}
 function scopedAgents(){
- if(isSurfboard())return [{scope:'surfboard:'+state.projectId,name:'Surfboard configurator',owner:'supersurfer'}];
+ if(isSurfboard())return [{scope:surfboardScope(),name:'Surfboard configurator',owner:'supersurfer'}];
  const key=directoryKey(),directory=agentDirectories.get(key);if(directory?.agents)return directory.agents;
  if(state.view!=='workspace'||!state.projectId)return [{scope:'manager',name:'Workspace manager',owner:'supersurfer',archived:state.scope==='manager'&&state.chat?.archived}];
  if(state.experimentId)return [{scope:`experiment:${state.experimentId}`,name:itemLabel()+' agent',owner:'supersurfer',experiment_id:state.experimentId}];
  return [{scope:`project:${state.projectId}`,name:`${project()?.name||'Project'} ${leadLabel().toLowerCase()}`,owner:'supersurfer'}];
 }
-function selectedAgent(){return scopedAgents().find(agent=>agent.scope===state.scope);}
+function selectedAgent(){return scopedAgents().find(agent=>agent.scope===state.scope)||(state.pinnedAgent?.scope===state.scope?{...state.pinnedAgent,name:state.pinnedAgent.name||state.chat?.agent?.name}:undefined);}
+function chatOrigin(){
+ if(state.pinnedAgent?.scope===state.scope)return state.pinnedAgent;
+ const itemId=state.scope?.startsWith('experiment:')?state.scope.slice(11):selectedAgent()?.experiment_id||null;
+ return {projectId:state.scope==='manager'?null:state.projectId,experimentId:itemId};
+}
+function chatAcceptsProject(id){return state.scope==='manager'||chatOrigin().projectId===id;}
+function toggleAgentPin(){
+ stashMessageDraft();
+ if(state.pinnedAgent){state.pinnedAgent=null;syncAgentChooser();restoreMessageDraft();refreshChat(true);}
+ else if(state.scope){const origin=chatOrigin();state.pinnedAgent={...origin,scope:state.scope,name:selectedAgent()?.name||state.chat?.agent?.name||'Agent',owner:'supersurfer'};}
+ updateChatHeader();persistNavigation();
+}
 function rememberScope(scope){const key=directoryKey()||'manager';Object.defineProperty(scopeChoices,key,{value:scope,enumerable:true,writable:true,configurable:true});try{localStorage.setItem('supersurfer-conversation-selection',JSON.stringify(scopeChoices));}catch{}}
-const chatContext=createChatContext({scope:()=>state.scope,onChange:()=>updateChatHeader(),onError:error=>toast(error.message,true),onPickFile:()=>{const projectId=state.projectId,scope=state.scope;pickWorkspaceFile(async path=>{if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');let text='Reference file '+path+' on the connected workspace. Read the current file before editing.';if(!/\.pdf$/i.test(path)){const file=await api('code/file?'+new URLSearchParams({project_id:projectId,path}));if(typeof file.content==='string')text+='\nSaved file excerpt:\n'+file.content.slice(0,16000)+(file.content.length>16000?'\n[Excerpt truncated]':'');}if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');await prepareCodeQuestion({kind:/\.pdf$/i.test(path)?'pdf':'file',project_id:projectId,path,label:path.split('/').at(-1),text});},{title:'Attach workspace file'});}});
+const chatContext=createChatContext({scope:()=>state.scope,onChange:()=>updateChatHeader(),onError:error=>toast(error.message,true),onPickFile:()=>{const projectId=state.projectId,scope=state.scope;pickWorkspaceFile(async path=>{if(!chatAcceptsProject(projectId))throw new Error('This pinned agent belongs to another project. Unpin it or return to its project before attaching files.');if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');let text='Reference file '+path+' on the connected workspace. Read the current file before editing.';if(!/\.pdf$/i.test(path)){const file=await api('code/file?'+new URLSearchParams({project_id:projectId,path}));if(typeof file.content==='string')text+='\nSaved file excerpt:\n'+file.content.slice(0,16000)+(file.content.length>16000?'\n[Excerpt truncated]':'');}if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');await prepareCodeQuestion({kind:/\.pdf$/i.test(path)?'pdf':'file',project_id:projectId,path,label:path.split('/').at(-1),text});},{title:'Attach file',uploadTarget:'chat'});}});
+const fileUploads=createFileUploads({
+ capture(target){const p=project();if(!p||readOnly())throw new Error('Select a writable project before uploading.');if(target==='chat'&&!chatAcceptsProject(p.id))throw new Error('Return to the pinned agent’s project before attaching files.');if(target==='chat'&&(!state.scope||state.scope.startsWith('agent:')))throw new Error('Choose a SuperSurfer conversation first.');return {target,projectId:p.id,projectName:p.name,experimentId:state.experimentId,attachmentCount:target==='chat'?chatContext.get().length:0,scope:target==='chat'?state.scope:null};},
+ onBusy:()=>updateChatHeader(),onError:error=>toast(error.message,true),notice:message=>toast(message),
+ async onUploaded(file,original){
+  for(const key of projectPanels.keys())if(key.startsWith('artifacts:'+original.projectId+':'))projectPanels.delete(key);
+  if(original.target==='chat'){
+   let text='User-uploaded file. Workspace path: '+file.absolute_path+'\nRead this file before drawing conclusions; uploading it does not request execution.';
+   if(!file.name.toLowerCase().endsWith('.pdf')){const data=await api('code/file?'+new URLSearchParams({project_id:original.projectId,path:file.editor_path}));if(typeof data.content==='string')text+='\nSaved file excerpt:\n'+data.content.slice(0,16000)+(data.content.length>16000?'\n[Excerpt truncated]':'');}
+   chatContext.add({kind:file.name.toLowerCase().endsWith('.pdf')?'pdf':'file',project_id:original.projectId,path:file.editor_path,label:file.name,text},original.scope);
+  }else if(state.projectId===original.projectId&&state.experimentId===original.experimentId){await openPageCode({path:file.editor_path});}
+  if(state.projectId===original.projectId){codeEditor.refresh();repositoryExplorer.refresh();}
+ }
+});
 function stashMessageDraft(){if(state.scope)conversationDrafts.set(state.scope,$('#chat-input').value);}
 function restoreMessageDraft(){ chatContext.render();$('#chat-input').value=conversationDrafts.get(state.scope)||'';resizeComposer(); }
 function resizeComposer(){const input=$('#chat-input');input.style.height='auto';input.style.height=Math.min(140,Math.max(30,input.scrollHeight))+'px';}
@@ -245,13 +305,13 @@ async function loadAgentDirectory({initial=false}={}){
   agentDirectories.set(key,data);
   if(directoryKey()!==key)return;
   const preferred=isExperiment?data.selected_scope:scopeChoices[key],valid=data.agents?.some(agent=>agent.scope===preferred&&!agent.archived);
-  if(initial&&scopeSelectionRevision===selectionRevision&&valid&&state.scope!==preferred)await selectConversation(preferred,{persist:false});
+  if(initial&&!state.pinnedAgent&&scopeSelectionRevision===selectionRevision&&valid&&state.scope!==preferred)await selectConversation(preferred,{persist:false});
   syncAgentChooser();state.sidebarSignature='';syncNavigation();
  }catch(error){if(version!==(agentDirectoryVersions.get(key)||0))return;agentDirectories.set(key,{...(agentDirectories.get(key)||{}),error:error.message});if(directoryKey()===key){state.sidebarSignature='';syncNavigation();}}
  finally{agentDirectoryBusy.delete(key);}
 }
 async function selectConversation(scope,{persist=true}={}){
- const agents=scopedAgents(),agent=agents.find(item=>item.scope===scope);if(!agent)return;
+ const agents=scopedAgents(),agent=agents.find(item=>item.scope===scope);if(!agent)return;if(state.pinnedAgent?.scope!==scope)state.pinnedAgent=null;
  stashMessageDraft();scopeSelectionRevision++;const revision=scopeSelectionRevision,key=directoryKey();
  state.scope=scope;state.chat=null;state.chatSignature='';rememberScope(scope);restoreMessageDraft();state.chatVisible=true;applyChatLayout();persistNavigation();
  $('#chat-messages').innerHTML='<div class="chat-empty">Loading conversation…</div>';syncAgentChooser();state.sidebarSignature='';syncNavigation();refreshChat(true);
@@ -291,14 +351,17 @@ function experimentWorkerScope(x=state.experiment||experiment()){
  if(directory?.agents?.some(agent=>agent.scope===directory.selected_scope&&!agent.retired&&!agent.archived))return directory.selected_scope;
  return own;
 }
-function currentScope(){const agents=scopedAgents(),directory=currentAgentDirectory(),key=directoryKey(),preferred=state.experimentId?directory?.selected_scope:scopeChoices[key||'manager'];return agents.some(agent=>agent.scope===preferred&&!agent.archived)?preferred:agents.find(agent=>!agent.archived&&!agent.retired)?.scope||agents[0]?.scope||'manager';}
+function currentScope(){if(state.pinnedAgent)return state.pinnedAgent.scope;const agents=scopedAgents(),directory=currentAgentDirectory(),key=directoryKey(),preferred=state.experimentId?directory?.selected_scope:scopeChoices[key||'manager'];return agents.some(agent=>agent.scope===preferred&&!agent.archived)?preferred:agents.find(agent=>!agent.archived&&!agent.retired)?.scope||agents[0]?.scope||'manager';}
+const archivedItemProjects=new Set();
+const visibleProjectItems=projectId=>(state.data?.experiments||[]).filter(item=>item.project_id===projectId&&(!item.archived||archivedItemProjects.has(projectId)));
+function archivedItemsToggle(projectId){const count=(state.data?.experiments||[]).filter(item=>item.project_id===projectId&&item.archived).length;return count?`<button class="archived-items-toggle" data-action="toggle-archived-items" data-id="${e(projectId)}">${archivedItemProjects.has(projectId)?'Hide':'Show'} archived · ${count}</button>`:'';}
 function syncNavigation(){
  $$('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===state.view));
  const p=project(),x=experiment();
  $('#breadcrumb').innerHTML=state.view==='compute'?`<span>Workspace</span><span class="divider">/</span><span>Compute</span>`:state.view==='settings'?`<span>Workspace</span><span class="divider">/</span><span>Settings</span>`:p?`<button data-project="${e(p.id)}">${e(p.name)}</button>${x?`<span class="divider">/</span><span>${e(x.name)}</span>`:''}`:'Workspace';
  const count=state.data?queuedRuns().length:0;$('#queue-count').textContent=count||'';
- const sig=JSON.stringify([state.data?.projects,state.data?.experiments,state.projectId,state.experimentId]);if(sig!==state.sidebarSignature){state.sidebarSignature=sig;
- $('#project-tree').innerHTML=state.data?.projects.length?state.data.projects.map(p=>`<div class="project-group"><button class="project-row ${state.projectId===p.id&&!state.experimentId?'selected':''}" data-project="${e(p.id)}">${icon('folder')}<span class="project-name">${e(p.name)}</span><span class="chevron">${icon(state.projectId===p.id?'chevronDown':'chevron')}</span></button>${state.projectId===p.id?state.data.experiments.filter(x=>x.project_id===p.id).map(x=>`<button class="experiment-row ${state.experimentId===x.id?'selected':''}" data-experiment="${e(x.id)}"><span class="status-dot ${e(x.status||'unknown')}"></span><span class="exp-name">${e(x.name)}</span></button>`).join('')+`<button class="new-experiment" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel(p))}</button>`:''}</div>`).join(''):'<div class="sidebar-placeholder">Your projects will appear here.</div>';
+ const sig=JSON.stringify([state.data?.projects,state.data?.experiments,state.projectId,state.experimentId,[...archivedItemProjects]]);if(sig!==state.sidebarSignature){state.sidebarSignature=sig;
+ $('#project-tree').innerHTML=state.data?.projects.length?state.data.projects.map(p=>`<div class="project-group"><button class="project-row ${state.projectId===p.id&&!state.experimentId?'selected':''}" data-project="${e(p.id)}">${icon('folder')}<span class="project-name">${e(p.name)}</span><span class="chevron">${icon(state.projectId===p.id?'chevronDown':'chevron')}</span></button>${state.projectId===p.id?visibleProjectItems(p.id).map(x=>`<button class="experiment-row ${state.experimentId===x.id?'selected':''}" data-experiment="${e(x.id)}"><span class="status-dot ${e(x.status||'unknown')}"></span><span class="exp-name">${e(x.name)}${x.archived?' · Archived':''}</span></button>`).join('')+`<button class="new-experiment" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel(p))}</button>${archivedItemsToggle(p.id)}`:''}</div>`).join(''):'<div class="sidebar-placeholder">Your projects will appear here.</div>';
  }
  renderAgentChooser();
 }
@@ -309,29 +372,39 @@ function connectionStatus(error){
  else if(readOnly()){banner.hidden=false;banner.textContent='Read-only connection · Inspect your real workspace. Agent messages and run actions are disabled.';}
  else {banner.hidden=true;}
 }
+let editorDefaultsLoaded=false;
 async function refreshState(force=false){if(stateBusy){if(force){await new Promise(resolve=>stateWaiters.push(resolve));return refreshState(true);}return;}stateBusy=true;try{
  const incoming=normalize(await api('state'));state.data=incoming;
+ if(!editorDefaultsLoaded){try{await editorSettings.load();editorDefaultsLoaded=true;}catch{}}
  restoreNavigation(incoming);
  connectionStatus();syncNavigation();syncAgentChooser();
  const sig=JSON.stringify([incoming.projects,incoming.experiments,incoming.runs,incoming.hosts,incoming.queue,incoming.settings,incoming.monitoring,incoming.connected,incoming.read_only]);
- if(force||sig!==state.stateSignature){state.stateSignature=sig;if(!state.edit&&!$('#modal').open&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();else renderPending=true;}
+ if(force||sig!==state.stateSignature){state.stateSignature=sig;if(!state.edit&&!$('#modal').open&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||editorSettings.dirty()||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();else renderPending=true;}
  if(!state.edit&&!$('#modal').open)await Promise.all([state.experimentId?fetchExperiment():Promise.resolve(),loadAgentDirectory({initial:!currentAgentDirectory()})]);
  }catch(error){connectionStatus(error);if(!state.data){$('#main').innerHTML=empty('Connect your research workspace',error.message,`<button class="button primary" data-action="${error.status===401?'auth':'refresh'}">${error.status===401?'Enter connection token':'Try again'}</button>`);if(error.status===401&&!$('#modal').open)showAuth();}}finally{stateBusy=false;const waiting=stateWaiters;stateWaiters=[];waiting.forEach(resolve=>resolve());}}
 async function navigate({view='workspace',projectId=state.projectId,experimentId=null,tab='overview'}={}){
- panelFocus.close();const wasBoard=!!isSurfboard();stashMessageDraft();scopeSelectionRevision++;if(isSurfboard()&&tab!=='surfboard'&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}if(state.edit){stashEditor();}state.view=view;state.projectId=projectId;state.experimentId=experimentId;state.tab=tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}state.edit=false;state.experiment=null;state.experimentRequest++;state.scope=null;state.chat=null;state.chatSignature='';state.sidebarSignature='';persistNavigation();syncNavigation();renderMain();syncAgentChooser();restoreMessageDraft();refreshChat(true);await Promise.all([experimentId?fetchExperiment(true):Promise.resolve(),!experimentId&&tab==='compute'?loadProjectCompute(projectId,{force:true}).catch(()=>{}):Promise.resolve(),loadAgentDirectory({initial:true})]);}
-async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||JSON.stringify(data.view_layout)!==JSON.stringify(state.experiment.view_layout)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;let pageCacheChanged=false;for(const page of data.pages||[]){const key=data.id+':'+page.id,cached=markdownPages.get(key);if(cached?.data&&page.version&&cached.data.version!==page.version&&!cached.loading){markdownPages.delete(key);pageCacheChanged=true;}}
+ panelFocus.close();const wasBoard=!!isSurfboard();stashMessageDraft();scopeSelectionRevision++;if(isSurfboard()&&tab!=='surfboard'&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}if(state.edit){stashEditor();}state.view=view;state.projectId=projectId;state.experimentId=experimentId;state.tab=tab;if(isSurfboard()&&!wasBoard&&!state.pinnedAgent){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}state.edit=false;state.experiment=null;state.experimentRequest++;state.scope=state.pinnedAgent?.scope||null;if(!state.pinnedAgent){state.chat=null;state.chatSignature='';}state.sidebarSignature='';persistNavigation();syncNavigation();renderMain();syncAgentChooser();restoreMessageDraft();refreshChat(true);await Promise.all([experimentId?fetchExperiment(true):Promise.resolve(),!experimentId&&tab==='compute'?loadProjectCompute(projectId,{force:true}).catch(()=>{}):Promise.resolve(),loadAgentDirectory({initial:true})]);}
+async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.archived!==state.experiment.archived||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||JSON.stringify(data.view_layout)!==JSON.stringify(state.experiment.view_layout)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;let pageCacheChanged=false;for(const page of data.pages||[]){const key=data.id+':'+page.id,cached=markdownPages.get(key);if(cached?.data&&page.version&&cached.data.version!==page.version&&!cached.loading){markdownPages.delete(key);pageCacheChanged=true;}}
  state.experiment=data;if((changed||force||pageCacheChanged)&&!state.edit&&!$('#modal').open)renderMain();if(pageHasTile('results')){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(pageHasTile('overview'))loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
 function renderMain(){
  if(tileLayout.active())return;
+ codeEditor.prepareScope({projectId:state.projectId,experimentId:state.experimentId});
  if(state.data)ensureLayoutTab();
- const arrange=$('#arrange-page');arrange.hidden=!savedActivePage();arrange.disabled=readOnly();
+ const archiveItem=$('#archive-item'),item=state.experiment||experiment();archiveItem.hidden=state.view!=='workspace'||!state.experimentId;archiveItem.disabled=readOnly();archiveItem.setAttribute('aria-label',item?.archived?'Restore work item':'Archive work item');archiveItem.title=(item?.archived?'Restore':'Archive')+' '+itemLabel()+' · existing work continues';archiveItem.innerHTML=icon(item?.archived?'history':'archive');
+ const arrange=$('#arrange-page');arrange.hidden=!savedActivePage()||tileLayout.editing();arrange.disabled=readOnly();
+ const arrangeControls=$('#tile-arrange-controls'),arrangeMarkup=tileLayout.toolbar();if(arrangeControls.innerHTML!==arrangeMarkup)arrangeControls.innerHTML=arrangeMarkup;
+ const filesButton=$('#sidebar-add-files'),fileTile=activePage()?.tiles.find(tile=>tile.kind==='file_explorer');
+ filesButton.hidden=!savedActivePage()||fileTile?.placement==='left'||!pageTileCatalog().some(tile=>tile.kind==='file_explorer');
+ filesButton.disabled=readOnly()||!fileTile&&activePage()?.tiles.length>=16;filesButton.textContent=fileTile?'Move file browser here':'+ Add file browser';
  if(!isTilePage())clearPageTileDocks();
  if(!state.data)return;
  $('#layout-toggle').hidden=state.view!=='workspace'||!state.projectId;
  renderProjectSlots();
  const boardMode=isSurfboard(),boardMain=$('#main');boardMain.classList.toggle('surfboard-main',!!boardMode);
- if(boardMode){boardMain.classList.remove('tiled-page-main');delete boardMain.dataset.tilePageKey;repositoryExplorer.unmount();agentChangesTile.unmount();codeEditor.unmount();latexPanel.unmount();ensureViewDock().append($('#chat-panel'));if($('#surfboard-root')?.dataset.project!==state.projectId)boardMain.innerHTML=`<div class="sb-page"><div class="sb-page-navigation">${projectTabs('surfboard')}</div><div id="surfboard-root"></div></div>`;const boardNav=$('.sb-page-navigation',boardMain),boardTabs=projectTabs('surfboard');if(boardNav&&boardNav.innerHTML!==boardTabs)boardNav.innerHTML=boardTabs;surfboardEditor.mount($('#surfboard-root'),state.projectId);dockChat();return;}
+ if(boardMode){boardMain.classList.remove('tiled-page-main');delete boardMain.dataset.tilePageKey;repositoryExplorer.unmount();agentChangesTile.unmount();codeEditor.unmount();latexPanel.unmount();ensureViewDock().append($('#chat-panel'));if($('#surfboard-root')?.dataset.project!==state.projectId+':'+(state.experimentId||''))boardMain.innerHTML=`<div class="sb-page"><div class="sb-page-navigation">${projectTabs('surfboard')}</div><div id="surfboard-root"></div></div>`;const boardNav=$('.sb-page-navigation',boardMain),boardTabs=projectTabs('surfboard');if(boardNav&&boardNav.innerHTML!==boardTabs)boardNav.innerHTML=boardTabs;surfboardEditor.mount($('#surfboard-root'),state.projectId,state.experimentId);dockChat();return;}
  surfboardEditor.unmount();
+ if(state.tab==='_files'){renderFileViewer();return;}
+ if(state.tab==='_todos'){renderTodosPage();return;}
  $('#main').classList.toggle('tiled-page-main',!!isTilePage());
  if(!isTilePage())delete $('#main').dataset.tilePageKey;
  if(isTilePage()){renderTilePage();return;}
@@ -413,7 +486,7 @@ const artifactPaths=new Map();
 function renderArtifacts(p){
  const path=artifactPaths.get(p.id)||'',entry=projectPanels.get('artifacts:'+p.id+':'+path);if(!entry)loadProjectPanel('artifacts',p.id,path);
  const parts=path.split('/').filter(Boolean),data=entry?.data;
- return `<div class="page"><div class="page-eyebrow">${icon('folder')}Project artifacts</div><div class="page-heading"><div><h1>${e(p.name)} files</h1><p>Files published for this project. Open a folder, preview a file, or download it.</p></div><button class="button" data-action="refresh-project-panel">${icon('refresh')}Refresh</button></div>${projectTabs('artifacts')}<nav class="artifact-breadcrumb" aria-label="Artifact path"><button data-artifact-path="">${e(data?.root_label||'Project files')}</button>${parts.map((part,i)=>`<span>/</span><button data-artifact-path="${e(parts.slice(0,i+1).join('/'))}">${e(part)}</button>`).join('')}</nav>${entry?.error?`<div class="notice error">${e(entry.error)}</div>`:''}${!entry?'<div class="loading-state"><span class="spinner"></span>Loading files…</div>':!data?.entries?.length?empty('No files here yet','Ask an agent to publish project artifacts. They will appear here.'): `<div class="artifact-list">${data.entries.map(file=>`<div class="artifact-row"><span>${icon(file.kind==='directory'||file.kind==='folder'?'folder':'file')}</span><button ${['directory','folder'].includes(file.kind)?`data-artifact-path="${e(file.path)}"`:`data-artifact-preview="${e(file.path)}"`} title="${e(file.path)}">${e(file.name)}</button><small>${file.size!==undefined?file.size>1048576?(file.size/1048576).toFixed(1)+' MB':Math.ceil(file.size/1024)+' KB':''}</small><button class="icon-button" data-copy-artifact="${e(file.absolute_path||file.path)}" aria-label="Copy path for ${e(file.name)}" title="Copy path">${icon('link')}</button>${file.download_url?`<a class="icon-button" href="${e(file.download_url)}" download title="Download ${e(file.name)}" aria-label="Download ${e(file.name)}">${icon('arrowRight')}</a>`:''}</div>`).join('')}</div>`}</div>`;
+ return `<div class="page"><div class="page-eyebrow">${icon('folder')}Project artifacts</div><div class="page-heading"><div><h1>${e(p.name)} files</h1><p>Project artifacts and uploaded files. Drop files here, open them, or download them.</p></div><div class="heading-actions"><button class="button" data-action="upload-files"${disabled()}>Upload files…</button><button class="button" data-action="refresh-project-panel">${icon('refresh')}Refresh</button></div></div>${projectTabs('artifacts')}<nav class="artifact-breadcrumb" aria-label="Artifact path"><button data-artifact-path="">${e(data?.root_label||'Project files')}</button>${parts.map((part,i)=>`<span>/</span><button data-artifact-path="${e(parts.slice(0,i+1).join('/'))}">${e(part)}</button>`).join('')}</nav>${entry?.error?`<div class="notice error">${e(entry.error)}</div>`:''}${!entry?'<div class="loading-state"><span class="spinner"></span>Loading files…</div>':!data?.entries?.length?empty('No files here yet','Ask an agent to publish project artifacts. They will appear here.'): `<div class="artifact-list">${data.entries.map(file=>`<div class="artifact-row"><span>${icon(file.kind==='directory'||file.kind==='folder'?'folder':'file')}</span><button ${['directory','folder'].includes(file.kind)?`data-artifact-path="${e(file.path)}"`:`data-artifact-preview="${e(file.path)}"`} title="${e(file.path)}">${e(file.name)}</button><small>${file.size!==undefined?file.size>1048576?(file.size/1048576).toFixed(1)+' MB':Math.ceil(file.size/1024)+' KB':''}</small><button class="icon-button" data-copy-artifact="${e(file.absolute_path||file.path)}" aria-label="Copy path for ${e(file.name)}" title="Copy path">${icon('link')}</button>${file.download_url?`<a class="icon-button" href="${e(file.download_url)}" download title="Download ${e(file.name)}" aria-label="Download ${e(file.name)}">${icon('arrowRight')}</a>`:''}</div>`).join('')}</div>`}</div>`;
 }
 function activityCondition(item){const c=item.condition||{};if(c.kind==='interval'||c.event==='interval')return `Every ${c.minutes||c.interval_minutes||item.interval_minutes||10} minutes`;if(c.kind==='metric'||c.event==='metric')return `${c.metric||c.key||'Metric'} ${{lt:'<',lte:'≤',gt:'>',gte:'≥',eq:'='}[c.operator]||c.operator||''} ${c.value??c.threshold??''}`;if(c.kind==='run_status')return `Run ${(c.statuses||(c.status?[c.status]:[])).join(' / ')}`;return c.kind||item.run_status||'';}
 function activityDetail(item){return `<div class="activity-detail">${item.condition?`<span>Trigger</span><p>${e(activityCondition(item))}</p>`:''}${item.task?`<span>Task</span><p>${e(item.task)}</p>`:''}${item.next_at?`<span>Next</span><p>${e(date(item.next_at))}</p>`:''}${item.attempts!==undefined?`<span>Retries</span><p>${e(item.attempts)} / ${e(item.max_attempts||3)}</p>`:''}${item.permissions?`<span>Permissions</span><p>${e(item.permissions)}</p>`:''}${item.stop_condition?`<span>Stops when</span><p>${e(item.stop_condition)}</p>`:''}${item.logs?`<span>Recent output</span><pre>${e(String(item.logs).slice(-6000))}</pre>`:''}</div>`;}
@@ -423,12 +496,8 @@ function renderProjectActivity(p){
  const key='activity:'+p.id+':',entry=projectPanels.get(key),data=entry?.data||{};if(!entry)loadProjectPanel('activity',p.id);
  return `<div class="page"><div class="page-eyebrow">${icon('activity')}Work while you are away</div><div class="page-heading"><div><h1>${e(p.name)} activity</h1><p>Agents, recurring work, recovery, and recorded workflow actions.</p></div><div class="heading-actions"><button class="button" data-action="export-diagnostics">${icon('file')}Export diagnostics</button><button class="button" data-action="refresh-project-panel">${icon('refresh')}Refresh</button></div></div>${projectTabs('activity')}${entry?.error?`<div class="notice error">${e(entry.error)}</div>`:''}${!entry?'<div class="loading-state"><span class="spinner"></span>Loading project activity…</div>':activityBody(data)}</div>`;
 }
-async function previewArtifact(path){
- const data=projectPanels.get('artifacts:'+state.projectId+':'+(artifactPaths.get(state.projectId)||''))?.data,file=data?.entries?.find(item=>item.path===path);if(!file?.preview_url){toast('No inline preview is available for this file. Download it to open locally.');return;}
- const url=file.preview_url;if(!/^\/(?:api|project-artifact)\//.test(url)&&!safeUrl(url)){toast('The file preview URL is invalid.',true);return;}
- const media=file.mime?.startsWith('image/')?`<img class="artifact-image" src="${e(url)}" alt="${e(file.name)}">`:file.mime?.startsWith('video/')?`<video class="artifact-video" src="${e(url)}" controls></video>`:`<iframe class="artifact-frame" title="${e(file.name)}" src="${e(url)}" sandbox="allow-scripts"></iframe>`;
- openModal(file.name,media+`<div class="modal-footer">${file.download_url?`<a class="button" href="${e(file.download_url)}" download>Download</a>`:''}<button class="button" data-action="close-modal">Close</button></div>`,'artifact');
-}
+async function previewArtifact(path){await openPageCode({path:'artifact:'+path});}
+
 async function exportProjectDiagnostics(){
  const data=await api('diagnostics?project_id='+encodeURIComponent(state.projectId)),blob=new Blob([data.markdown],{type:'text/markdown'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=data.filename||'supersurfer-diagnostics.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Diagnostics exported.');
 }
@@ -449,11 +518,12 @@ function isTilePage(){const page=activePage();return page&&(tileLayout.editing()
 function layoutTabsMarkup(active=state.tab){
  const rows=currentLayout();if(!rows)return '';
  const documents=state.experiment?.pages||[],pages=currentPages();
- const main=pages?.map(page=>({id:page.id,label:page.title}))||rows.filter(row=>row.placement==='main');
+ const main=pages?.map(page=>({id:page.id,label:page.title}))||rows.filter(row=>row.placement==='main');main.push({id:'_todos',label:'To-dos'});if(fileViewerScopes.has(chatLayoutKey())||state.tab==='_files')main.push({id:'_files',label:'File viewer'});
  const hasDocuments=pages?pages.some(page=>page.tiles.some(tile=>tile.kind==='documents')):main.some(row=>row.id==='documents');
- return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}${!state.experimentId?'<button class="tab" data-tab="surfboard">Surfboard</button>':''}<button class="tab add-page-tab" data-action="add-view-page" title="Add a page of tiles"${disabled()}>${icon('plus')}Add page</button><button class="tab layout-tab" data-action="configure-layout" title="Configure pages and tiles">${icon('panel')}Layout</button></div>`;
+ return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}<button class="tab" data-tab="surfboard">${state.experimentId?'Surfboard':'Task defaults'}</button><button class="tab add-page-tab" data-action="add-view-page" title="Add a page of tiles"${disabled()}>${icon('plus')}Add page</button><button class="tab layout-tab" data-action="configure-layout" title="Configure pages and tiles">${icon('panel')}Layout</button></div>`;
 }
 function ensureLayoutTab(){
+ if(['_files','_todos'].includes(state.tab))return;
  if(state.experimentId&&state.experiment?.id!==state.experimentId)return;
  const rows=currentLayout();if(!rows)return;
  const pages=currentPages(),allowed=pages?.map(page=>page.id)||rows.filter(row=>row.placement==='main').map(row=>row.id);
@@ -475,7 +545,7 @@ function dockChat(){
  if(host&&chat.parentElement!==host)host.append(chat);
  chat.hidden=!state.chatVisible||(!pageChat&&place==='hidden'&&chatRevealScope!==chatLayoutKey())||(place==='main'&&!mainChat&&!state.chatMaximized);
  const panels=$('#project-view-panels');
- dock.hidden=(chat.parentElement!==dock||chat.hidden)&&(!panels||panels.hidden)&&!($('#page-right-tiles')&&!$('#page-right-tiles').hidden);
+ dock.hidden=(chat.parentElement!==dock||chat.hidden)&&(!panels||panels.hidden||!panels.querySelector('.project-view-slot:not([data-kind=activity]),.project-view-slot[open]'))&&!($('#page-right-tiles')&&!$('#page-right-tiles').hidden);
  dock.classList.toggle('views-only',chat.hidden||chat.parentElement!==dock);
  $('.app-shell').classList.toggle('main-chat-view',!!mainChat);
  $('#chat-resizer').hidden=dock.hidden||state.chatMaximized;
@@ -487,7 +557,7 @@ async function prepareCodeQuestion(text,notice='Selection context added to your 
  state.chatVisible=true;chatRevealScope=chatLayoutKey();
  if(currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
  applyChatLayout();dockChat();
- panelFocus.close();const input=$('#chat-input');if(typeof text==='object'){if(text.project_id!==state.projectId)return;chatContext.add(text);}else{const previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;}
+ panelFocus.close();const input=$('#chat-input');if(typeof text==='object'){if(text.project_id!==state.projectId)return;if(!chatAcceptsProject(text.project_id))throw new Error('This pinned agent belongs to another project. Unpin it before attaching this selection.');chatContext.add(text);}else{const previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;}
  stashMessageDraft();resizeComposer();input.focus();toast(notice);
 }
 async function showViewLayout({addPage=false}={}){
@@ -548,21 +618,21 @@ function pageTileContainers(){
  return {main:$('#page-tile-grid'),left,right};
 }
 function clearPageTileDocks(){
- for(const id of ['page-left-tiles','page-right-tiles']){const root=$('#'+id);if(root){if(root.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));root.replaceChildren();root.hidden=true;}}
- standalonePdf.unmount();$('.app-shell').classList.remove('has-page-left','arranging-page');$('.app-shell').style.removeProperty('--page-left-width');
+ for(const id of ['page-left-tiles','page-right-tiles']){const root=$('#'+id);if(root){codeEditor.detachWithin(root);if(root.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));root.replaceChildren();root.hidden=true;}}
+ standalonePdf.unmount();$('.app-shell').classList.remove('has-page-left','arranging-page');applySidebarLayout();
 }
 function applyPageTileSizes(page){
  for(const element of $$('[data-live-tile]')){const tile=page.tiles.find(tile=>tile.id===element.dataset.tileId);if(tile){element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');}}
  const shell=$('.app-shell');shell.classList.toggle('has-page-left',page.tiles.some(tile=>tile.placement==='left')||tileLayout.editing());
- shell.style.setProperty('--page-left-width',Math.min(page.left_width||230,Math.max(200,window.innerWidth*.4))+'px');applyChatLayout();
+ applySidebarLayout(page);applyChatLayout();
 }
 function renderTilePage(){
  const page=activePage(),main=$('#main'),key=chatLayoutKey()+':'+page.id;
  main.classList.remove('configured-editor-main','results-full-page');
  if(main.dataset.tilePageKey!==key||!$('#page-tile-grid')){
   if(main.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
-  clearPageTileDocks();codeEditor.unmount();repositoryExplorer.unmount();agentChangesTile.unmount();latexPanel.unmount();
-  main.innerHTML='<div class="tile-page"><header class="tile-page-heading"></header><div class="tile-page-tabs"></div><div id="tile-arrange-controls"></div><div id="page-tile-grid" data-tile-drop="main" class="page-tile-grid"></div></div>';
+  codeEditor.unmount();clearPageTileDocks();repositoryExplorer.unmount();agentChangesTile.unmount();latexPanel.unmount();
+  main.innerHTML='<div class="tile-page"><header class="tile-page-heading"></header><div class="tile-page-tabs"></div><div id="page-tile-grid" data-tile-drop="main" class="page-tile-grid"></div></div>';
   main.dataset.tilePageKey=key;delete main.dataset.viewKey;
  }
  const editing=tileLayout.editing();$('.app-shell').classList.toggle('arranging-page',editing);
@@ -570,10 +640,9 @@ function renderTilePage(){
  const headingMarkup=`<div><span>${e((state.experiment||experiment())?.name||project()?.name)}</span><h1>${e(page.title)}</h1></div><button class="button small-button" data-action="configure-layout">${icon('panel')}Pages & tiles</button>`;
  if(heading.innerHTML!==headingMarkup)heading.innerHTML=headingMarkup;
  const tabs=$('.tile-page-tabs',main),markup=layoutTabsMarkup();if(tabs.innerHTML!==markup)tabs.innerHTML=markup;
- const toolbar=$('#tile-arrange-controls'),tools=tileLayout.toolbar();if(toolbar.innerHTML!==tools)toolbar.innerHTML=tools;
  const containers=pageTileContainers(),catalog=pageTileCatalog(),elements=new Map($$('[data-live-tile]').map(element=>[element.dataset.tileId,element]));
  const ids=new Set(page.tiles.map(tile=>tile.id));
- for(const [id,element] of elements)if(!ids.has(id)){if(element.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));element.remove();}
+ for(const [id,element] of elements)if(!ids.has(id)){codeEditor.detachWithin(element);if(element.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));element.remove();}
  const positions={main:0,left:0,right:0};
  for(const tile of page.tiles){
   const grid=containers[tile.placement||'main'];let element=elements.get(tile.id);
@@ -584,7 +653,7 @@ function renderTilePage(){
   }
   tileLayout.decorate(element,tile,catalog.find(row=>row.kind===tile.kind)?.label||tile.kind.replaceAll('_',' '));
   const body=$('.page-tile-body',element),html=tileBody(tile.kind,tile);
-  const persistent=['editor','file_explorer','agent_changes','chat','pdf'].includes(tile.kind);
+  const persistent=['editor','file_explorer','agent_changes','chat','pdf','todos'].includes(tile.kind);
   const editingContent=body.querySelector('#project-compute-form[data-dirty="true"],#document-editor')||body.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,select');
   const pdfChanged=tile.kind==='pdf'&&(body.dataset.pdfPath!==(tile.path||'')||body.dataset.markup!==html);
   if(!body.hasChildNodes()||pdfChanged||(!persistent&&!editingContent&&body.dataset.markup!==html)){
@@ -621,22 +690,61 @@ const standalonePdf=createPdfPreview({onChooseFile:()=>handleAction('choose-pdf'
  async loadBytes(url,{signal}){const token=sessionStorage.getItem('supersurfer-token');const response=await fetch(url,{signal,headers:token?{Authorization:'Bearer '+token}:{}});if(!response.ok)throw new Error('PDF could not be opened ('+response.status+'). Check its repository path.');return new Uint8Array(await response.arrayBuffer());},
  onSelection:selection=>prepareCodeQuestion({kind:'pdf',project_id:state.projectId,path:selection.source_path,label:selection.source_path.split('/').at(-1)+' · p. '+selection.page,text:'PDF page '+selection.page+' (not a source-line mapping):\n'+selection.text+(selection.truncated?'\n[Selection truncated]':'')})
 });
-async function openPageCode({path,scope,changeId,range}){
+const todosView=createTodos({api,action,readOnly,onOpen:path=>openPageCode({path})});
+function renderTodosPage(){
+ const main=$('#main'),key=chatLayoutKey()+':_todos';main.classList.remove('tiled-page-main','results-full-page','configured-editor-main');
+ if(main.dataset.viewKey!==key){codeEditor.unmount();main.dataset.viewKey=key;main.innerHTML='<div class="page"><div class="todo-page-tabs"></div><div id="todos-root"></div></div>';}
+ main.querySelector('.todo-page-tabs').innerHTML=layoutTabsMarkup();syncConfiguredEditors();bindMain();renderPending=false;
+}
+function showCompareDialog(){
+ const projectId=state.projectId,experimentId=state.experimentId;
+ openModal('Compare revisions','<form id="compare-revisions"><label class="field">Base commit, branch or tag<input name="base" required placeholder="main"></label><label class="field">Compare to<input name="head" required placeholder="HEAD"></label><div class="modal-footer"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button primary">Show diff</button></div></form>','compare');
+ $('#compare-revisions').onsubmit=event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));closeModal();if(projectId===state.projectId&&experimentId===state.experimentId)openPageCode({comparison:values}).catch(error=>toast(error.message,true));};
+}
+const seenCodePresentations=new Set();
+async function showCodePresentation(record){if(!record||record.project_id!==state.projectId)return;seenCodePresentations.add(record.id);await openPageCode(record.mode==='comparison'?{comparison:record}:{path:record.path});}
+function renderCodePresentation(){
+ let node=$('#chat-code-presentation');if(!node){node=document.createElement('div');node.id='chat-code-presentation';node.className='chat-code-presentation';$('#chat-messages').before(node);}
+ const record=state.chat?.editor_presentation;node.hidden=!record;
+ node.innerHTML=record?`<button type="button" class="button small-button" data-action="open-code-presentation">${icon('file')}${e(record.title)} · ${record.mode==='comparison'?'Open diff':'Open file'}</button>`:'';
+ if(record&&!seenCodePresentations.has(record.id)&&!state.edit&&!tileLayout.editing()&&!$('#modal').open){seenCodePresentations.add(record.id);queueMicrotask(()=>{if(state.chat?.editor_presentation?.id===record.id)showCodePresentation(record).catch(error=>toast(error.message,true));});}
+}
+const fileViewerScopes=new Set();
+function renderFileViewer(){
+ const main=$('#main'),key=chatLayoutKey()+':_files';fileViewerScopes.add(chatLayoutKey());
+ main.classList.remove('tiled-page-main','results-full-page');main.classList.add('configured-editor-main');
+ if(main.dataset.viewKey!==key){codeEditor.unmount();main.dataset.viewKey=key;main.innerHTML='<div class="configured-page file-viewer-page"><header class="configured-heading"><strong>File viewer</strong><span></span></header><div class="file-viewer-tabs"></div><div class="configured-view-content"><div id="code-editor-root" class="code-editor-root"></div></div></div>';}
+ const tabs=main.querySelector('.file-viewer-tabs'),markup=layoutTabsMarkup();if(tabs.innerHTML!==markup)tabs.innerHTML=markup;main.querySelector('.configured-heading span').textContent=project()?.repo||'';
+ syncConfiguredEditors();bindMain();renderPending=false;
+}
+async function openPageCode({path,scope,changeId,range,comparison}){
  const projectId=state.projectId,experimentId=state.experimentId;
  if(!$('#code-editor-root')){
-  const destination=currentPages()?.find(page=>page.tiles.some(tile=>tile.kind==='editor'));
-  if(destination){state.tab=destination.id;persistNavigation();renderMain();}
+  const destination=currentPages()?.find(page=>page.tiles.some(tile=>tile.kind==='editor'&&(!tile.placement||tile.placement==='main')));
+  let pageId=destination?.id;
+  if(!pageId&&!readOnly()){
+   const record=await api('view-layout?'+new URLSearchParams({project_id:projectId,...(experimentId?{experiment_id:experimentId}:{})}));
+   if(projectId!==state.projectId||experimentId!==state.experimentId)return;
+   pageId='files';let suffix=2;while(record.pages.some(page=>page.id===pageId))pageId='files-'+suffix++;
+   const files=activePage()?.tiles.find(tile=>tile.kind==='file_explorer');
+   const page={id:pageId,title:'File viewer',tiles:[{id:'source',kind:'editor',span:12,height:Math.min(1200,Math.max(400,innerHeight-220))},...(files?[{...files,placement:'left'}]:[])]};
+   await action('view-layout.save',{project_id:projectId,experiment_id:experimentId,version:record.version,board_version:record.board_version,pages:[...record.pages,page]});
+   if(projectId!==state.projectId||experimentId!==state.experimentId)return;
+   await refreshState(true);
+  }
+  if(projectId!==state.projectId||experimentId!==state.experimentId)return;
+  state.tab=pageId||'_files';persistNavigation();renderMain();
  }
- let root=$('#code-editor-root');
- if(!root){toast('Add a Code editor tile to this page to open files and agent changes.');await showViewLayout();return;}
- await codeEditor.mount(root,{projectId,repo:project()?.repo,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'});
+ const root=$('#code-editor-root');if(!root)return;
+ await codeEditor.mount(root,{projectId,repo:project()?.repo,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')?'editor':'full'});
  if(projectId!==state.projectId||experimentId!==state.experimentId||!root.isConnected)return;
- if(path)await codeEditor.openFile(path,range);else await codeEditor.showAgentChange(scope,changeId);
+ if(comparison)await codeEditor.showComparison(comparison);else if(path)await codeEditor.openFile(path,range);else await codeEditor.showAgentChange(scope,changeId);
 }
 
 function panelLoadError(entry){return entry?.error?`<div class="notice warn">${e(entry.error)} <button class="button small-button" data-action="refresh-project-panel" data-panel-kind="activity">Retry</button></div>`:'';}
 function configuredViewBody(kind,{right=false}={}){
  const p=project(),x=state.experiment||experiment();
+ if(kind==='todos')return '<div id="todos-root"></div>';
  if(kind==='editor')return '<div id="code-editor-root" class="code-editor-root"></div>';
  if(kind==='pdf')return '<div id="latex-panel-root" class="latex-panel-root"></div>';
  if(kind==='chat')return '<div id="main-chat-host"></div>';
@@ -664,11 +772,12 @@ function configuredViewBody(kind,{right=false}={}){
  return '<p class="muted">Choose a view from your layout.</p>';
 }
 function syncConfiguredEditors(){
+ const todosRoot=$('#todos-root');if(todosRoot)todosView.mount(todosRoot,{projectId:state.projectId,experimentId:state.experimentId});else todosView.unmount();
  const root=$('#code-editor-root');
- if(root)codeEditor.mount(root,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')||pageHasTile('pdf')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
+ if(root)codeEditor.mount(root,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
  const context={projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId};
  const pdfTile=activePage()?.tiles.find(tile=>tile.kind==='pdf'),pdfViewer=$('#standalone-pdf-tile');
- if(pdfViewer){if(pdfTile?.path){standalonePdf.mount(pdfViewer,{url:'/api/code/pdf?'+new URLSearchParams({project_id:state.projectId,path:pdfTile.path}),source_path:pdfTile.path,title:(project()?.repo||'').replace(/\/$/,'')+'/'+pdfTile.path});}else{standalonePdf.unmount();pdfViewer.innerHTML='<div class="empty-state"><strong>Choose a PDF</strong><p>Open a PDF from this project’s repository.</p><button type="button" class="button" data-action="choose-pdf">Choose PDF…</button></div>';}}else standalonePdf.unmount();
+ if(pdfViewer){if(pdfTile?.path){standalonePdf.mount(pdfViewer,{url:'/api/code/pdf?'+new URLSearchParams({project_id:state.projectId,path:pdfTile.path}),source_path:pdfTile.path,title:workspacePath(project()?.repo,state.projectId,pdfTile.path)});}else{standalonePdf.unmount();pdfViewer.innerHTML='<div class="empty-state"><strong>Choose a PDF</strong><p>Open a PDF from this project’s repository.</p><button type="button" class="button" data-action="choose-pdf">Choose PDF…</button></div>';}}else standalonePdf.unmount();
  const pdfRoot=$('#latex-panel-root');if(pdfRoot)latexPanel.mount(pdfRoot,context);else latexPanel.unmount();
  const explorer=$('#repository-explorer-tile'),changes=$('#agent-changes-tile');
  if(explorer)repositoryExplorer.mount(explorer,context).catch(error=>toast(error.message,true));else repositoryExplorer.unmount();
@@ -681,7 +790,7 @@ function syncConfiguredEditors(){
  dockChat();
 }
 
-function projectTabs(tab='overview'){if(isSurfboard()&&project()?.surfboard?.pages?.project)return `<div class="sb-project-tabs">${project().surfboard.pages.project.map(page=>`<button data-tab="${e(page.id)}">${e(page.title)}</button>`).join('')}<button data-tab="surfboard" class="active">Surfboard</button></div>`;if(currentLayout())return layoutTabsMarkup(tab);const views=project()?.surfboard?.views,panels=views?views.filter(v=>['artifacts','activity'].includes(v.kind)&&v.placement==='main'):[{kind:'artifacts',label:'Files'},{kind:'activity',label:'Activity'}];const seen=new Set();return `<div class="sb-project-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</button>${projectWorkflow()==='research'?`<button data-tab="compute" class="${tab==='compute'?'active':''}">Compute</button>`:''}<button data-tab="surfboard" class="${tab==='surfboard'?'active':''}">Surfboard</button>${panels.filter(v=>!seen.has(v.kind)&&seen.add(v.kind)).map(v=>`<button data-tab="${e(v.kind)}" class="${tab===v.kind?'active':''}">${e(v.label)}</button>`).join('')}</div>`;}
+function projectTabs(tab='overview'){if(isSurfboard()&&project()?.surfboard?.pages?.project)return `<div class="sb-project-tabs">${(state.experimentId?state.experiment?.view_layout?.pages||[]:project().surfboard.pages.project).map(page=>`<button data-tab="${e(page.id)}">${e(page.title)}</button>`).join('')}<button data-tab="surfboard" class="active">${state.experimentId?'Surfboard':'Task defaults'}</button></div>`;if(currentLayout())return layoutTabsMarkup(tab);const views=project()?.surfboard?.views,panels=views?views.filter(v=>['artifacts','activity'].includes(v.kind)&&v.placement==='main'):[{kind:'artifacts',label:'Files'},{kind:'activity',label:'Activity'}];const seen=new Set();return `<div class="sb-project-tabs"><button data-tab="overview" class="${tab==='overview'?'active':''}">${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</button>${projectWorkflow()==='research'?`<button data-tab="compute" class="${tab==='compute'?'active':''}">Compute</button>`:''}<button data-tab="surfboard" class="${tab==='surfboard'?'active':''}">Task defaults</button>${panels.filter(v=>!seen.has(v.kind)&&seen.add(v.kind)).map(v=>`<button data-tab="${e(v.kind)}" class="${tab===v.kind?'active':''}">${e(v.label)}</button>`).join('')}</div>`;}
 const projectSlotOpen=new Set(),projectSlotSeen=new Set(),rightResultBridges=new Map();
 function renderProjectSlots(){
  let container=$('#project-view-panels');if(!container){container=document.createElement('section');container.id='project-view-panels';ensureViewDock().prepend(container);container.addEventListener('toggle',event=>{if(!event.target.matches('details.project-view-slot'))return;const key=state.projectId+':'+(state.experimentId||'')+':'+event.target.dataset.node;if(!event.target.open){projectSlotOpen.delete(key);return;}if(!projectSlotOpen.has(key)){projectSlotOpen.add(key);const kind=event.target.dataset.kind;if(['artifacts','activity'].includes(kind))loadProjectPanel(kind,state.projectId,kind==='artifacts'?artifactPaths.get(state.projectId)||'':'');if(kind==='document'&&state.experimentId)Promise.all(((state.experiment||experiment())?.pages||[]).map(page=>loadMarkdownPage(state.experimentId,page.id))).then(renderProjectSlots);if(kind==='preview')loadProjectPanel('activity',state.projectId);if(['results','visualizer','preview'].includes(kind)&&state.experimentId)loadResultPages(true).then(renderProjectSlots);}},true);}
@@ -699,7 +808,7 @@ function renderProjectSlots(){
   return '<p class="muted small">Open a work item to view its content.</p>';
  };
  const html=views.map(view=>`<details class="project-view-slot" data-node="${e(view.node_id)}" data-kind="${e(view.kind)}" style="order:${Number(view.order)||0}" ${opened.has(view.node_id)?'open':''}><summary>${icon(view.kind==='activity'?'activity':view.kind==='artifacts'?'folder':'file')}<strong>${e(view.label)}</strong><button type="button" data-panel-fullscreen aria-label="Full screen" title="Full screen">⤢</button></summary><div class="project-view-slot-body">${content(view)}</div></details>`).join('');
- if(container.dataset.signature!==html){container.dataset.signature=html;const template=document.createElement('template');template.innerHTML=html;const next=[...template.content.children];for(const element of next){const existing=[...container.children].find(old=>old.dataset.node===element.dataset.node);if(existing){existing.open=element.open;existing.style.order=element.style.order;const oldSummary=existing.querySelector(':scope>summary'),newSummary=element.querySelector(':scope>summary');if(oldSummary.innerHTML!==newSummary.innerHTML)oldSummary.innerHTML=newSummary.innerHTML;const oldBody=existing.querySelector(':scope>.project-view-slot-body'),newBody=element.querySelector(':scope>.project-view-slot-body');if(!['editor','pdf'].includes(element.dataset.kind)&&oldBody.innerHTML!==newBody.innerHTML)oldBody.innerHTML=newBody.innerHTML;}else container.append(element);}const ids=new Set(next.map(el=>el.dataset.node));for(const el of [...container.children])if(!ids.has(el.dataset.node))el.remove();}
+ if(container.dataset.signature!==html){container.dataset.signature=html;const template=document.createElement('template');template.innerHTML=html;const next=[...template.content.children];for(const element of next){const existing=[...container.children].find(old=>old.dataset.node===element.dataset.node);if(existing){existing.open=element.open;existing.style.order=element.style.order;const oldSummary=existing.querySelector(':scope>summary'),newSummary=element.querySelector(':scope>summary');if(oldSummary.innerHTML!==newSummary.innerHTML)oldSummary.innerHTML=newSummary.innerHTML;const oldBody=existing.querySelector(':scope>.project-view-slot-body'),newBody=element.querySelector(':scope>.project-view-slot-body');if(!['editor','pdf'].includes(element.dataset.kind)&&oldBody.innerHTML!==newBody.innerHTML)oldBody.innerHTML=newBody.innerHTML;}else container.append(element);}const ids=new Set(next.map(el=>el.dataset.node));for(const el of [...container.children])if(!ids.has(el.dataset.node)){codeEditor.detachWithin(el);el.remove();}}
  for(const [frame,bridge] of rightResultBridges){if(!frame.isConnected){bridge.dispose();rightResultBridges.delete(frame);}}
  for(const frame of $$('iframe[data-right-results]',container)){if(rightResultBridges.has(frame))continue;const experimentId=x?.id;rightResultBridges.set(frame,connectLiveResults({api,frame:()=>frame.isConnected?frame:null,selection:()=>state.experimentId===experimentId?{...(resultPages.get(experimentId)?.pages||[]).find(page=>page.id===frame.dataset.rightResults),experimentId}:null}));}
 }
@@ -708,8 +817,8 @@ function renderProject(){const p=project();if(!p)return empty('A home for your r
  if(state.tab==='artifacts')return renderArtifacts(p);
  if(state.tab==='activity')return renderProjectActivity(p);
  if(state.tab==='runs')return runBrowser(projectRuns(p.id));
- const experiments=state.data.experiments.filter(x=>x.project_id===p.id),runs=projectRuns(p.id),running=runs.filter(r=>active.has(r.status)).length;
- return `<div class="page"><div class="page-eyebrow">${icon('folder')}${projectWorkflow()==='research'?'Research':'Project'} workspace</div><div class="page-heading"><div><h1>${e(p.name)}</h1><p>Your ${e(pluralItems())}, conversations, and results. All in one place.</p></div><div class="heading-actions">${projectWorkflow()==='research'?`<button class="button" data-action="project-compute">${icon('server')}Compute</button>`:''}<button class="button" data-tab="surfboard">${icon('branch')}Surfboard</button><button class="button primary" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel())}</button></div></div>${projectTabs('overview')}<div class="metadata-line"><span class="meta-item">${icon('folder')}${e(p.repo||'Repository not configured')}</span><span class="meta-item">${icon('activity')}${running} running</span><span class="meta-item">${icon('file')}${experiments.length} ${e(pluralItems())}</span></div>${p.goal?`<div class="project-summary"><div class="page-eyebrow">Research direction</div>${e(p.goal)}</div>`:''}${!p.initialized?`<div class="notice">Save durable research context alongside your code in <code>.SuperSurfer</code>. <button class="button small-button" data-action="initialize-project"${disabled()}>Initialize project context</button></div>`:''}<div class="section-title"><span>${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</span><span class="muted">Ideas begin here. Runs launch when you’re ready.</span></div>${experiments.length?`<div class="experiment-grid">${experiments.map(x=>`<button class="experiment-card" data-experiment="${e(x.id)}">${status(x.status,x.status_detail)}<h3>${e(x.name)}</h3><p>${e(x.summary||'Open this experiment to read its research context.')}</p><div class="card-footer">${(x.run_ids||[]).length||state.data.runs.filter(r=>r.experiment_id===x.id).length} runs<span>·</span>${e(elapsed(x.updated_at))}${icon('arrowRight')}</div></button>`).join('')}</div>`:empty('Start with a question','Create your first experiment, capture its hypothesis, and ask your lead to help shape a run.',`<button class="button" data-action="add-experiment"${disabled()}>${icon('plus')}Create experiment</button>`)}${runs.some(r=>active.has(r.status))?`<div class="section-title">Running now</div>${runList(runs.filter(r=>active.has(r.status)))}`:''}</div>`;}
+ const experiments=visibleProjectItems(p.id),runs=projectRuns(p.id),running=runs.filter(r=>active.has(r.status)).length;
+ return `<div class="page"><div class="page-eyebrow">${icon('folder')}${projectWorkflow()==='research'?'Research':'Project'} workspace</div><div class="page-heading"><div><h1>${e(p.name)}</h1><p>Your ${e(pluralItems())}, conversations, and results. All in one place.</p></div><div class="heading-actions">${projectWorkflow()==='research'?`<button class="button" data-action="project-compute">${icon('server')}Compute</button>`:''}<button class="button" data-tab="surfboard">${icon('branch')}Task defaults</button><button class="button primary" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel())}</button></div></div>${projectTabs('overview')}<div class="metadata-line"><span class="meta-item">${icon('folder')}${e(p.repo||'Repository not configured')}</span><span class="meta-item">${icon('activity')}${running} running</span><span class="meta-item">${icon('file')}${experiments.length} ${e(pluralItems())}</span></div>${p.goal?`<div class="project-summary"><div class="page-eyebrow">Research direction</div>${e(p.goal)}</div>`:''}${!p.initialized?`<div class="notice">Save durable research context alongside your code in <code>.SuperSurfer</code>. <button class="button small-button" data-action="initialize-project"${disabled()}>Initialize project context</button></div>`:''}<div class="section-title"><span>${e(pluralItems().replace(/^./,c=>c.toUpperCase()))}</span>${archivedItemsToggle(p.id)}<span class="muted">Ideas begin here. Runs launch when you’re ready.</span></div>${experiments.length?`<div class="experiment-grid">${experiments.map(x=>`<button class="experiment-card" data-experiment="${e(x.id)}">${status(x.status,x.status_detail)}<h3>${e(x.name)}${x.archived?' · Archived':''}</h3><p>${e(x.summary||'Open this experiment to read its research context.')}</p><div class="card-footer">${(x.run_ids||[]).length||state.data.runs.filter(r=>r.experiment_id===x.id).length} runs<span>·</span>${e(elapsed(x.updated_at))}${icon('arrowRight')}</div></button>`).join('')}</div>`:empty('Start with a question','Create your first experiment, capture its hypothesis, and ask your lead to help shape a run.',`<button class="button" data-action="add-experiment"${disabled()}>${icon('plus')}Create experiment</button>`)}${runs.some(r=>active.has(r.status))?`<div class="section-title">Running now</div>${runList(runs.filter(r=>active.has(r.status)))}`:''}</div>`;}
 const workerWakeups=new Map(),workerWakeupRequests=new Map(),workerWakeupVersions=new Map(),workerWakeupMutations=new Set();
 function wakeupCondition(rule){
  const condition=rule.condition||{},run=condition.run_id?state.data?.runs.find(item=>item.id===condition.run_id)?.name||condition.run_id:'latest run';
@@ -881,16 +990,16 @@ async function syncClientTimezone(){
  finally{timezoneSyncing=false;}
 }
 
-function renderSettings(){const s=state.data.settings;return `<div class="page"><div class="page-eyebrow">${icon('settings')}Your workspace</div><div class="page-heading"><div><h1>Settings</h1><p>Defaults for this workspace. Projects can override them in their Surfboards.</p></div></div>${renderAppearance()}<section class="settings-block"><h2>Codex account</h2><p>Connect your ChatGPT account on the computer running this workspace.</p><div id="account-status" class="account-card"><div><strong>${e(accountLabel())}</strong><div class="muted">${state.account?.error?e(state.account.error):'Authentication stays with the workspace service.'}</div></div><button class="button small-button" data-action="login"${disabled()}>Connect ChatGPT ${icon('external')}</button></div></section><form id="settings-form">${renderWorkspacePreferences(s)}<section class="settings-block"><h2>Agent models</h2><p>Applied to new turns in SuperSurfer conversations. Existing AutoML workers keep their own model and session.</p><datalist id="model-options">${state.models.map(m=>`<option value="${e(m.id)}">${e(m.displayName||m.id)}</option>`).join('')}</datalist>${modelRoles.map(role=>`<div class="settings-row"><div><strong>${{manager:'Workspace manager',lead:'Project lead',worker:'Worker'}[role]}</strong><div class="description">${{manager:'Coordinate projects and resources.',lead:'Plan requested work within each project’s Surfboard.',worker:'Implement, check, and report assigned work.'}[role]}</div></div><label class="visually-hidden" for="model-${role}">${role} model</label><input class="control" id="model-${role}" name="model_${role}" list="model-options" placeholder="Codex default" value="${e(s.models?.[role]||'')}"><label class="visually-hidden" for="reasoning-${role}">${role} reasoning</label><select class="control" id="reasoning-${role}" name="reasoning_${role}">${[...new Set([...reasoningValues(state.models.find(m=>m.id===s.models?.[role])||state.models.find(m=>m.isDefault)),s.reasoning?.[role]||'medium'])].map(v=>`<option ${s.reasoning?.[role]===v?'selected':''} value="${v}">${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('')}</select></div>`).join('')}</section><section class="settings-block"><h2>Experiment monitoring</h2><p>Checks run status while the workspace computer is on, including when this app is closed. This does not run recurring agent turns or launch experiments.</p><div class="settings-row"><label class="toggle-label"><input type="checkbox" name="monitor_enabled" ${s.monitor_enabled?'checked':''}>Monitor run status</label><label class="field"><span>Check every (minutes)</span><input type="number" name="monitor_interval_minutes" min="1" max="1440" required value="${e(s.monitor_interval_minutes||15)}"></label></div><div class="small muted">Last check: ${e(date(state.data.monitoring.last_check))}${state.data.monitoring.next_check?` · Next: ${e(date(state.data.monitoring.next_check))}`:''}</div>${state.data.monitoring.alerts?.length?`<div class="notice">${state.data.monitoring.alerts.slice(-5).map(a=>e(typeof a==='string'?a:a.message||JSON.stringify(a))).join('<br>')}</div>`:''}</section><div class="settings-footer"><button class="button primary" type="submit">Save settings</button></div></form></div>`;}
+function renderSettings(){const s=state.data.settings;return `<div class="page"><div class="page-eyebrow">${icon('settings')}Your workspace</div><div class="page-heading"><div><h1>Settings</h1><p>Defaults for this workspace. Projects can override them in their Surfboards.</p></div></div>${renderAppearance()}<section class="settings-block" id="editor-settings"></section><section class="settings-block"><h2>Codex account</h2><p>Connect your ChatGPT account on the computer running this workspace.</p><div id="account-status" class="account-card"><div><strong>${e(accountLabel())}</strong><div class="muted">${state.account?.error?e(state.account.error):'Authentication stays with the workspace service.'}</div></div><button class="button small-button" data-action="login"${disabled()}>Connect ChatGPT ${icon('external')}</button></div></section><form id="settings-form">${renderWorkspacePreferences(s)}<section class="settings-block"><h2>Agent models</h2><p>Applied to new turns in SuperSurfer conversations. Existing AutoML workers keep their own model and session.</p><datalist id="model-options">${state.models.map(m=>`<option value="${e(m.id)}">${e(m.displayName||m.id)}</option>`).join('')}</datalist>${modelRoles.map(role=>`<div class="settings-row"><div><strong>${{manager:'Workspace manager',lead:'Project lead',worker:'Worker'}[role]}</strong><div class="description">${{manager:'Coordinate projects and resources.',lead:'Plan requested work within each project’s Surfboard.',worker:'Implement, check, and report assigned work.'}[role]}</div></div><label class="visually-hidden" for="model-${role}">${role} model</label><input class="control" id="model-${role}" name="model_${role}" list="model-options" placeholder="Codex default" value="${e(s.models?.[role]||'')}"><label class="visually-hidden" for="reasoning-${role}">${role} reasoning</label><select class="control" id="reasoning-${role}" name="reasoning_${role}">${[...new Set([...reasoningValues(state.models.find(m=>m.id===s.models?.[role])||state.models.find(m=>m.isDefault)),s.reasoning?.[role]||'medium'])].map(v=>`<option ${s.reasoning?.[role]===v?'selected':''} value="${v}">${v.charAt(0).toUpperCase()+v.slice(1)}</option>`).join('')}</select></div>`).join('')}</section><section class="settings-block"><h2>Experiment monitoring</h2><p>Checks run status while the workspace computer is on, including when this app is closed. This does not run recurring agent turns or launch experiments.</p><div class="settings-row"><label class="toggle-label"><input type="checkbox" name="monitor_enabled" ${s.monitor_enabled?'checked':''}>Monitor run status</label><label class="field"><span>Check every (minutes)</span><input type="number" name="monitor_interval_minutes" min="1" max="1440" required value="${e(s.monitor_interval_minutes||15)}"></label></div><div class="small muted">Last check: ${e(date(state.data.monitoring.last_check))}${state.data.monitoring.next_check?` · Next: ${e(date(state.data.monitoring.next_check))}`:''}</div>${state.data.monitoring.alerts?.length?`<div class="notice">${state.data.monitoring.alerts.slice(-5).map(a=>e(typeof a==='string'?a:a.message||JSON.stringify(a))).join('<br>')}</div>`:''}</section><div class="settings-footer"><button class="button primary" type="submit">Save settings</button></div></form></div>`;}
 function renderAppearance(){
  const themeApi=window.superSurferTheme,selected=themeApi?.preference||'system',themes=themeApi?.themes||[],custom=selected.startsWith('vscode:'),missing=custom&&!themes.some(theme=>theme.id===selected);
  return `<section class="settings-block appearance-block"><h2>Appearance</h2><p>Choose a theme for this app. System follows your device’s appearance.</p><div class="theme-picker" role="group" aria-label="Color theme">${['light','dark','system'].map(theme=>`<button type="button" class="theme-option ${selected===theme?'selected':''}" data-action="theme" data-theme-choice="${theme}" aria-pressed="${selected===theme}"><span class="theme-preview ${theme}" aria-hidden="true"><i></i><b></b><em></em></span><span>${theme.charAt(0).toUpperCase()+theme.slice(1)}</span>${icon('check')}</button>`).join('')}</div><div class="vscode-theme-controls"><label class="field"><span>VS Code color theme</span><select id="vscode-theme" aria-label="VS Code color theme"><option value="" ${!custom?'selected':''}>${themeApi?.loading?'Loading color themes…':'Choose a color theme…'}</option>${missing?`<option value="${e(selected)}" selected>${e(selected)} (unavailable)</option>`:''}${themes.map(theme=>`<option value="${e(theme.id)}" ${selected===theme.id?'selected':''}>${e(theme.name)} · ${theme.type==='light'||theme.type==='hcLight'?'Light':'Dark'}</option>`).join('')}</select><small>${themes.length} available themes${window.superSurferDesktop?.importTheme?' · Includes installed and imported VS Code themes.':'.'}</small></label>${window.superSurferDesktop?.importTheme?`<button type="button" class="button small-button" data-action="import-theme">${icon('plus')}Import theme JSON</button>`:''}</div>${themeApi?.error?`<div class="notice warn">${e(themeApi.error)}</div>`:''}</section>`;
 }
 function accountLabel(){const account=state.account?.account||state.account;if(!account)return 'Checking account…';if(account.error)return 'Codex unavailable';if(account.email)return account.email;if(account.type)return account.type==='chatgpt'?'ChatGPT connected':`${account.type} connected`;return 'Not connected';}
-function bindMain(){const compute=$('#project-compute-form');if(compute){compute.addEventListener('input',readComputeForm);compute.addEventListener('change',readComputeForm);compute.addEventListener('submit',saveProjectCompute);}$('#vscode-theme')?.addEventListener('change',event=>{if(event.target.value)window.superSurferTheme?.setPreference(event.target.value);});const form=$('#settings-form');if(form){form.addEventListener('input',event=>{if(event.target.id!=='workspace-approval-mode')form.dataset.dirty='true';});$('#workspace-approval-mode',form)?.addEventListener('change',saveDefaultPermissions);form.addEventListener('submit',saveSettings);}$('#document-editor')?.addEventListener('input',stashEditor);$('#metric-select')?.addEventListener('change',event=>{selectedMetric=event.target.value;renderMain();});}
+function bindMain(){const editorRoot=$('#editor-settings');if(editorRoot)editorSettings.mount(editorRoot);else editorSettings.unmount();const compute=$('#project-compute-form');if(compute){compute.addEventListener('input',readComputeForm);compute.addEventListener('change',readComputeForm);compute.addEventListener('submit',saveProjectCompute);}$('#vscode-theme')?.addEventListener('change',event=>{if(event.target.value)window.superSurferTheme?.setPreference(event.target.value);});const form=$('#settings-form');if(form){form.addEventListener('input',event=>{if(event.target.id!=='workspace-approval-mode')form.dataset.dirty='true';});$('#workspace-approval-mode',form)?.addEventListener('change',saveDefaultPermissions);form.addEventListener('submit',saveSettings);}$('#document-editor')?.addEventListener('input',stashEditor);$('#metric-select')?.addEventListener('change',event=>{selectedMetric=event.target.value;renderMain();});}
 function syncAgentChooser(){
  if(!state.data)return;const agents=scopedAgents(),previous=state.scope;
- if(!agents.some(agent=>agent.scope===state.scope))state.scope=currentScope();
+ if(state.pinnedAgent)state.scope=state.pinnedAgent.scope;else if(!agents.some(agent=>agent.scope===state.scope))state.scope=currentScope();
  if(previous!==state.scope){state.chat=null;state.chatSignature='';restoreMessageDraft();}
  updateChatHeader();
 }
@@ -898,16 +1007,18 @@ function pendingQuestions(){return (state.chat?.questions||[]).some(item=>item.s
 function pendingApprovals(){return (state.chat?.approvals||[]).some(item=>item.status==='pending');}
 const chatSending = new Set();
 function updateChatHeader(){
+ const pin=$('#chat-pin');pin.hidden=!!state.scope?.startsWith('agent:');pin.disabled=!state.scope;pin.setAttribute('aria-pressed',String(!!state.pinnedAgent));pin.title=state.pinnedAgent?'Unpin agent · follow the current page':'Pin agent · keep this chat while navigating';pin.setAttribute('aria-label',state.pinnedAgent?'Unpin agent':'Pin agent');
  const native=state.scope?.startsWith('agent:'),a=native?state.data?.agents.find(a=>`agent:${a.id}`===state.scope):null,role=state.chat?.preferences?.role||(state.scope==='manager'?'manager':state.scope?.startsWith('project:')?'lead':'worker'),chatAgent=state.chat?.agent;
  const busy=!!state.chat?.busy,question=pendingQuestions(),approval=pendingApprovals(),sending=chatSending.has(state.scope),steerable=busy&&state.chat?.steerable===true&&!question&&!approval;
  $('#chat-name').textContent=selectedAgent()?.name||chatAgent?.name||a?.name||({manager:'Workspace manager',lead:leadLabel(),worker:itemLabel()+' agent'}[role]);
  $('#chat-meta').textContent=`${native?'AutoML-owned session':'SuperSurfer conversation'} · ${native?(chatAgent?.model||a?.model||state.chat?.preferences?.effective?.model||'Native Codex default / not reported'):(chatAgent?.model||state.chat?.preferences?.effective?.model||state.data?.settings.models?.[role]||'Codex default')}`;
  $('#chat-policy').textContent=isSurfboard()?'Describe changes to your workflow. Review the draft before applying.':native?'Message the existing agent in its original session.':role==='manager'?'Coordinate project work and shared resources.':projectWorkflow()==='research'?'Ideas are suggestions. Runs need your request and a verified PR.':'Work follows this project’s surfboard, permissions, and your instructions.';
+ if(state.pinnedAgent){const origin=state.pinnedAgent,p=state.data?.projects.find(p=>p.id===origin.projectId),item=state.data?.experiments.find(x=>x.id===origin.experimentId);$('#chat-meta').textContent='Pinned · '+[p?.name,item?.name].filter(Boolean).join(' / ')+(origin.scope==='manager'?'Workspace manager':'');}
  $('#chat-name').title=$('#chat-name').textContent;$('#chat-meta').title=$('#chat-meta').textContent+' · '+$('#chat-policy').textContent;
  $('#chat-input').placeholder=busy?'Add direction for the current work…':isSurfboard()?'Describe a workflow change…':state.experimentId?`Ask about this ${itemLabel()}…`:'Discuss your next project step…';$('#chat-input').disabled=readOnly()||!accountGate.ready();
- chatContext.setDisabled(readOnly()||native||!state.scope);const send=$('#chat-send');send.disabled=readOnly()||!accountGate.ready()||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
+ chatContext.setDisabled(readOnly()||native||!state.scope||!chatAcceptsProject(state.projectId));const send=$('#chat-send');send.disabled=readOnly()||!accountGate.ready()||fileUploads.pending(state.scope)||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
  $('#chat-stop').hidden=!busy||native;
- $('#chat-hint').textContent=readOnly()?'Read-only connection':!accountGate.ready()?accountGate.hint():question?'Answer the question above to continue':approval?'Review the approval request above':sending?(busy?'Sending direction…':'Sending message…'):steerable?'Steer adds direction to the current work':busy?'Agent is starting or finishing · Direction will be available shortly':'Enter to send · Shift Enter for a new line';
+ $('#chat-hint').textContent=fileUploads.pending(state.scope)?'Uploading attachment…':readOnly()?'Read-only connection':!accountGate.ready()?accountGate.hint():question?'Answer the question above to continue':approval?'Review the approval request above':sending?(busy?'Sending direction…':'Sending message…'):steerable?'Steer adds direction to the current work':busy?'Agent is starting or finishing · Direction will be available shortly':'Enter to send · Shift Enter for a new line';
  renderAgentChooser();renderChatPreferences();renderChatApprovals();renderChatQuestions();renderChatTasks();renderAgentSessionState();
  const archived=state.chat?.archived===true||selectedAgent()?.archived===true,archive=$('#chat-archive'),archiveLabel=archived?'Restore agent chat':'Archive agent chat';archive.setAttribute('aria-label',archiveLabel);archive.title=archived?'Restore chat':'Archive chat · existing work and monitoring continue';archive.disabled=readOnly()||!state.chat||agentMutations.has('archive:'+state.scope);archive.innerHTML=icon(archived?'history':'archive');
  $('#chat-archive').hidden=!!isSurfboard();$('#chat-rename').hidden=native||!!isSurfboard();$('#chat-rename').disabled=readOnly();
@@ -1101,7 +1212,7 @@ async function toggleChatArchive(){
  try{
   await action('chat.archive',{scope,archived});
   for(const [key,directory] of agentDirectories){agentDirectoryVersions.set(key,(agentDirectoryVersions.get(key)||0)+1);for(const agent of directory.agents||[])if(agent.scope===scope)agent.archived=archived;}
-  if(state.scope===scope){state.chat={...state.chat,archived};await loadAgentDirectory();if(archived){const next=scopedAgents().find(agent=>!agent.archived&&!agent.retired);if(next)await selectConversation(next.scope);}if(state.scope===scope)await refreshChat(true);}
+  if(state.scope===scope){state.chat={...state.chat,archived};await loadAgentDirectory();if(archived){state.pinnedAgent=null;persistNavigation();const next=scopedAgents().find(agent=>!agent.archived&&!agent.retired);if(next)await selectConversation(next.scope);}if(state.scope===scope)await refreshChat(true);}
   toast(archived?'Chat archived. Existing work and monitoring continue.':'Chat restored.');
  }catch(error){toast(error.message,true);}
  finally{agentMutations.delete(key);updateChatHeader();}
@@ -1112,22 +1223,22 @@ function showRenameAgent(){
  openModal('Rename agent',`<form id="rename-agent-form"><label>Agent name<input id="agent-name-input" name="name" maxlength="100" required value="${e(name)}"></label><p id="rename-agent-error" class="form-error" role="alert" hidden></p><div class="modal-footer"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button primary">Save name</button></div></form>`,'rename-agent');
  $('#rename-agent-form').addEventListener('submit',async event=>{
   event.preventDefault();const button=event.currentTarget.querySelector('[type=submit]'),name=$('#agent-name-input').value.trim();if(!name)return;button.disabled=true;
-  try{await action('chat.rename',{scope,name});if(state.scope===scope&&state.chat)state.chat.agent.name=name;await loadAgentDirectory();if(state.scope===scope)await refreshChat(true);if(state.modalKind==='rename-agent')closeModal();}
+  try{await action('chat.rename',{scope,name});if(state.pinnedAgent?.scope===scope){state.pinnedAgent.name=name;persistNavigation();}if(state.scope===scope&&state.chat)state.chat.agent.name=name;await loadAgentDirectory();if(state.scope===scope)await refreshChat(true);if(state.modalKind==='rename-agent')closeModal();}
   catch(error){const el=$('#rename-agent-error');if(el){el.hidden=false;el.textContent=error.message;button.disabled=false;}}
  });
  $('#agent-name-input').select();
 }
 const chatCheckExpansion=new Map();
 $('#chat-messages').addEventListener('toggle',event=>{const details=event.target;if(!details.isConnected||!details.matches('details[data-check-key]'))return;let expanded=chatCheckExpansion.get(state.scope);if(!expanded){expanded=new Set();chatCheckExpansion.set(state.scope,expanded);}const key=details.dataset.checkKey;if(expanded.has(key)===details.open)return;if(details.open)expanded.add(key);else expanded.delete(key);renderChat();},true);
-function renderChat(){const c=state.chat||{messages:[]},el=$('#chat-messages'),nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100,old=el.scrollTop;const messages=c.messages||[];const prompts=isSurfboard()?['Explain this workflow and its requirements','Add a shared data source and visualizer','Change agent responsibilities and permissions']:projectWorkflow()!=='research'?['Help me scope the next task','Review progress and blockers','Suggest checks for this project']:state.experimentId?['Explain the hypothesis and current evidence','Suggest the next experiment','Improve this experiment’s explanation']:['What should we focus on next?','Summarize the current experiments','Suggest a promising research direction'];el.innerHTML=messages.length?renderChatTimeline(messages,{renderMessage:m=>`<div class="message ${e(m.role)}"><div class="message-label"><strong>${m.role==='user'?'You':m.role==='system'?(m.agent_sender?e(m.agent_sender.name)+' · Agent':'System'):e(c.agent?.name||'Agent')}</strong><time>${e(date(m.created,true))}</time></div><div class="message-text markdown">${markdown(m.text||'')}</div>${contextMarkup(m.attachments)}${m.status==='steering'?'<div class="message-delivery" role="status">Sending direction to the active turn…</div>':['failed','uncertain'].includes(m.status)?`<div class="message-delivery error" role="status">${m.status==='uncertain'?'Delivery not confirmed':'Message failed'}${m.error?': '+e(m.error):''}</div>`:''}</div>`,escape:e,date,expanded:chatCheckExpansion.get(state.scope)||new Set(),busy:c.busy}):`<div class="chat-empty"><span class="agent-orb">${icon('spark')}</span><h3>${isSurfboard()?'Shape how this project works.':projectWorkflow()!=='research'?'Build with your project agent.':state.experimentId?'Stay close to the experiment.':'A thought partner for your research.'}</h3><p>${isSurfboard()?'Describe a change, or draw an arrow and answer a short question. Review the proposed graph before applying it.':state.scope?.startsWith('agent:')?'Talk to this existing AutoML agent in its original conversation.':'Ask a question, explore an idea, or refine the explanation. Your conversation and project context stay here.'}</p><div class="chat-suggestions">${prompts.map(p=>`<button data-prompt="${e(p)}"${disabled()}>${e(p)}${icon('arrowRight')}</button>`).join('')}</div></div>`;
+function renderChat(){renderCodePresentation();const c=state.chat||{messages:[]},el=$('#chat-messages'),nearBottom=el.scrollHeight-el.scrollTop-el.clientHeight<100,old=el.scrollTop;const messages=c.messages||[];const prompts=isSurfboard()?['Explain this workflow and its requirements','Add a shared data source and visualizer','Change agent responsibilities and permissions']:projectWorkflow()!=='research'?['Help me scope the next task','Review progress and blockers','Suggest checks for this project']:state.experimentId?['Explain the hypothesis and current evidence','Suggest the next experiment','Improve this experiment’s explanation']:['What should we focus on next?','Summarize the current experiments','Suggest a promising research direction'];el.innerHTML=messages.length?renderChatTimeline(messages,{renderMessage:m=>`<div class="message ${e(m.role)}"><div class="message-label"><strong>${m.role==='user'?'You':m.role==='system'?(m.agent_sender?e(m.agent_sender.name)+' · Agent':'System'):e(c.agent?.name||'Agent')}</strong><time>${e(date(m.created,true))}</time></div><div class="message-text markdown">${markdown(m.text||'')}</div>${contextMarkup(m.attachments)}${m.status==='steering'?'<div class="message-delivery" role="status">Sending direction to the active turn…</div>':['failed','uncertain'].includes(m.status)?`<div class="message-delivery error" role="status">${m.status==='uncertain'?'Delivery not confirmed':'Message failed'}${m.error?': '+e(m.error):''}</div>`:''}</div>`,escape:e,date,expanded:chatCheckExpansion.get(state.scope)||new Set(),busy:c.busy}):`<div class="chat-empty"><span class="agent-orb">${icon('spark')}</span><h3>${isSurfboard()?'Shape how this project works.':projectWorkflow()!=='research'?'Build with your project agent.':state.experimentId?'Stay close to the experiment.':'A thought partner for your research.'}</h3><p>${isSurfboard()?'Describe a change, or draw an arrow and answer a short question. Review the proposed graph before applying it.':state.scope?.startsWith('agent:')?'Talk to this existing AutoML agent in its original conversation.':'Ask a question, explore an idea, or refine the explanation. Your conversation and project context stay here.'}</p><div class="chat-suggestions">${prompts.map(p=>`<button data-prompt="${e(p)}"${disabled()}>${e(p)}${icon('arrowRight')}</button>`).join('')}</div></div>`;
  if((c.questions||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('message')}Waiting for your answer</div>`;else if((c.approvals||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('lock')}Waiting for your approval</div>`;else if(c.busy)el.innerHTML+='<div class="chat-status"><span class="spinner"></span>Working in your workspace…</div>';if(c.error)el.innerHTML+=`<div class="chat-error">${e(c.error)}</div>`;if(nearBottom||!messages.length)el.scrollTop=el.scrollHeight;else el.scrollTop=old;}
 async function sendChat(event){
  event?.preventDefault();const scope=state.scope,busy=!!state.chat?.busy;
- if(readOnly()||!accountGate.ready()||selectedAgent()?.retired||state.chat?.retired||state.chat?.archived||chatSending.has(scope)||pendingQuestions()||pendingApprovals()||(busy&&!state.chat?.steerable))return;
+ if(readOnly()||!accountGate.ready()||fileUploads.pending(scope)||selectedAgent()?.retired||state.chat?.retired||state.chat?.archived||chatSending.has(scope)||pendingQuestions()||pendingApprovals()||(busy&&!state.chat?.steerable))return;
  const input=$('#chat-input'),original=input.value,attachments=chatContext.get().slice(),text=original.trim()||(attachments.length?'Please review the attached context.':'');if(!text)return;
  chatSending.add(scope);updateChatHeader();
  try{
-   await action(busy?'chat.steer':'chat.send',{scope,text,...(attachments.length?{attachments}:{}),...(activePage()&&!scope.startsWith('agent:')?{view:{project_id:state.projectId,experiment_id:state.experimentId,page_id:activePage().id}}:{})});conversationDrafts.delete(scope);chatContext.sent(scope,attachments.map(row=>row.id));
+   await action(busy?'chat.steer':'chat.send',{scope,text,...(attachments.length?{attachments}:{}),...(activePage()&&!scope.startsWith('agent:')&&chatAcceptsProject(state.projectId)&&(!chatOrigin().experimentId||chatOrigin().experimentId===state.experimentId)?{view:{project_id:state.projectId,experiment_id:state.experimentId,page_id:activePage().id}}:{})});conversationDrafts.delete(scope);chatContext.sent(scope,attachments.map(row=>row.id));
    if(state.scope===scope){if(input.value===original){input.value='';resizeComposer();}state.chat={...state.chat,busy:true};state.chatSignature='';await refreshChat(true);}
  }catch(error){toast(error.message,true);if(error.status===403)await accountGate.refresh();}
  finally{chatSending.delete(scope);updateChatHeader();}
@@ -1159,7 +1270,7 @@ async function saveDefaultPermissions(event){
 }
 async function saveSettings(event){event.preventDefault();if(workspacePermissionSaving)return;const form=event.currentTarget,fd=new FormData(form),button=$('button[type="submit"]',form);button.disabled=true;try{const models={},reasoning={};for(const role of modelRoles){models[role]=fd.get(`model_${role}`).trim();reasoning[role]=fd.get(`reasoning_${role}`);}const result=await action('settings.save',{models,reasoning,monitor_enabled:fd.get('monitor_enabled')==='on',monitor_interval_minutes:Number(fd.get('monitor_interval_minutes')),approval_mode:fd.get('approval_mode')||state.data.settings.approval_mode||'ask'});form.dataset.dirty='false';const stopped=(result.permission_updates||[]).filter(update=>['interrupted','stopping'].includes(update.applied)).length;toast(stopped?`Settings saved. ${stopped} full-access conversation${stopped===1?' is':'s are'} stopping to apply restricted permissions. Continue when ready.`:'Settings saved for SuperSurfer conversations.');await refreshState(true);await refreshChat(true);}catch(error){toast(error.message,true);button.disabled=false;}}
 function openModal(title,body,kind){state.modalKind=kind;$('#modal-content').innerHTML=`<div class="modal-header"><h2>${e(title)}</h2><button class="icon-button" data-action="close-modal" aria-label="Close dialog">${icon('close')}</button></div><div class="modal-body">${body}</div>`;if(!$('#modal').open)$('#modal').showModal();$('input:not([type="hidden"]),textarea,select,button.primary',$('#modal-content'))?.focus();}
-function closeModal(){const modal=$('#modal');if(modal.open)modal.close();state.modalKind=null;if(renderPending&&!state.edit&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();}
+function closeModal(){const modal=$('#modal');if(modal.open)modal.close();state.modalKind=null;if(renderPending&&!state.edit&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||editorSettings.dirty()||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();}
 function formFooter(label){return `<div class="field-error" id="form-error" role="alert" hidden></div><div class="modal-footer"><button type="button" class="button" data-action="close-modal">Cancel</button><button class="button primary" type="submit">${label}</button></div>`;}
 function field(label,name,opts={}){const {value='',placeholder='',type='text',help='',required=false,full=false,min,max,maxlength,pattern}=opts;return `<label class="field ${full?'full-width':''}"><span>${e(label)}</span><input type="${e(type)}" name="${e(name)}" value="${e(value)}" placeholder="${e(placeholder)}" ${required?'required':''} ${min!==undefined?`min="${e(min)}"`:''} ${max!==undefined?`max="${e(max)}"`:''} ${maxlength!==undefined?`maxlength="${e(maxlength)}"`:''} ${pattern?`pattern="${e(pattern)}" title="${e(help)}"`:''}>${help?`<small>${e(help)}</small>`:''}</label>`;}
 function textarea(label,name,opts={}){return `<label class="field ${opts.full?'full-width':''}"><span>${e(label)}</span><textarea name="${e(name)}" placeholder="${e(opts.placeholder||'')}" ${opts.required?'required':''}>${e(opts.value||'')}</textarea>${opts.help?`<small>${e(opts.help)}</small>`:''}</label>`;}
@@ -1210,8 +1321,8 @@ function bindDirectorySuggestions(){
   list.addEventListener('click',event=>{const option=event.target.closest('[data-directory-index]');if(option)choose(Number(option.dataset.directoryIndex));});
 }
 
-function showAddProject(){openModal('Add a project',`<p class="modal-description">Choose a project folder and its workflow. Project context is saved in <code>.SuperSurfer</code>.</p><form><div class="field-stack">${field('Project name','name',{placeholder:'my-project',required:true,maxlength:64,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*',help:'Lowercase letters, numbers and single hyphens; up to 64 characters.'})}${projectDirectoryField()}<label class="field"><span>Surfboard</span><select name="surfboard_template"><option value="research">Research · experiments, GPUs, W&B</option><option value="software">Software · features, checks, pull requests</option><option value="web">Web design · pages, browser, preview</option><option value="writing">Research writing · LaTeX, PDF, review</option></select></label>${textarea('Project goal','goal',{placeholder:'What would you like to build or discover?'})}<p class="muted small">No project GPU or concurrent-run cap by default. Add optional limits in the Surfboard’s Compute block.</p></div>${formFooter('Add project')}</form>`,'project');bindDirectorySuggestions();bindModalForm(async fd=>{const result=await action('project.add',{name:fd.get('name').trim(),repo:fd.get('repo').trim(),goal:fd.get('goal').trim(),surfboard_template:fd.get('surfboard_template')});closeModal();await refreshState(true);const id=result.id||result.project?.id||state.data.projects.find(p=>p.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:id,tab:fd.get('surfboard_template')==='writing'?'writing':fd.get('surfboard_template')==='research'?'overview':'surfboard'});toast('Project connected.');});}
-function showAddExperiment(){const p=project();if(!p)return showAddProject();openModal('New '+itemLabel(),`<p class="modal-description">Describe the work for ${e(p.name)}. Creating a ${e(itemLabel())} does not start execution.</p><form><div class="field-stack">${field(itemLabel().replace(/^./,c=>c.toUpperCase())+' name','name',{placeholder:'What should be done?',required:true})}${textarea('Brief explanation','summary',{placeholder:'The goal, scope, and how we will know it is complete.',required:true})}</div>${formFooter('Create '+itemLabel())}</form>`,'experiment');bindModalForm(async fd=>{const result=await action('experiment.create',{project_id:p.id,name:fd.get('name').trim(),summary:fd.get('summary').trim()});closeModal();await refreshState(true);const id=result.id||result.experiment?.id||state.data.experiments.find(x=>x.project_id===p.id&&x.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:p.id,experimentId:id});toast(itemLabel().replace(/^./,c=>c.toUpperCase())+' created.');});}
+function showAddProject(){openModal('Add a project',`<p class="modal-description">Choose a shared project folder. Each task can choose its own workflow. Project context is saved in <code>.SuperSurfer</code>.</p><form><div class="field-stack">${field('Project name','name',{placeholder:'my-project',required:true,maxlength:64,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*',help:'Lowercase letters, numbers and single hyphens; up to 64 characters.'})}${projectDirectoryField()}<label class="field"><span>Default surfboard for new tasks</span><select name="surfboard_template"><option value="research">Research · experiments, GPUs, W&B</option><option value="software">Software · features, checks, pull requests</option><option value="web">Web design · pages, browser, preview</option><option value="writing">Research writing · LaTeX, PDF, review</option></select></label>${textarea('Project goal','goal',{placeholder:'What would you like to build or discover?'})}<p class="muted small">No project GPU or concurrent-run cap by default. Add optional limits in the Surfboard’s Compute block.</p></div>${formFooter('Add project')}</form>`,'project');bindDirectorySuggestions();bindModalForm(async fd=>{const result=await action('project.add',{name:fd.get('name').trim(),repo:fd.get('repo').trim(),goal:fd.get('goal').trim(),surfboard_template:fd.get('surfboard_template')});closeModal();await refreshState(true);const id=result.id||result.project?.id||state.data.projects.find(p=>p.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:id,tab:fd.get('surfboard_template')==='writing'?'writing':fd.get('surfboard_template')==='research'?'overview':'surfboard'});toast('Project connected.');});}
+function showAddExperiment(){const p=project();if(!p)return showAddProject();openModal('New '+itemLabel(),`<p class="modal-description">Describe the work for ${e(p.name)}. Creating a ${e(itemLabel())} does not start execution.</p><form><div class="field-stack">${field(itemLabel().replace(/^./,c=>c.toUpperCase())+' name','name',{placeholder:'What should be done?',required:true})}${textarea('Brief explanation','summary',{placeholder:'The goal, scope, and how we will know it is complete.',required:true})}<label class="field"><span>Task surfboard</span><select name="surfboard_template"><option value="">Project default · ${e(p.surfboard?.name||'Research')}</option><option value="research">Research</option><option value="software">Software</option><option value="writing">Writing · LaTeX & PDF</option><option value="web">Web design</option></select></label></div>${formFooter('Create '+itemLabel())}</form>`,'experiment');bindModalForm(async fd=>{const result=await action('experiment.create',{project_id:p.id,name:fd.get('name').trim(),summary:fd.get('summary').trim(),...(fd.get('surfboard_template')?{surfboard_template:fd.get('surfboard_template')}:{})});closeModal();await refreshState(true);const id=result.id||result.experiment?.id||state.data.experiments.find(x=>x.project_id===p.id&&x.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:p.id,experimentId:id});toast(itemLabel().replace(/^./,c=>c.toUpperCase())+' created.');});}
 function showAddHost(){openModal('Register a machine',`<p class="modal-description">Register the GPU indices this workspace can use. Leave the SSH target empty to use the workspace computer itself.</p><form><div class="field-stack"><div class="field-grid">${field('Display name','name',{placeholder:'trinity',required:true,maxlength:64,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*',help:'Lowercase letters, numbers and single hyphens; up to 64 characters.'})}${field('SSH target (optional)','target',{placeholder:'Empty = this workspace computer',help:'For another machine, use an SSH alias or user@hostname.'})}</div>${field('Working directory on this machine','root',{placeholder:'/home/researcher/supersurfer',required:true})}<div class="field-grid">${field('GPU indices','gpus',{placeholder:'0, 1, 2, 3',help:'Leave empty for a CPU-only machine.'})}${field('Runner Python (3.9+)','python',{value:'auto',required:true,help:'Auto finds a compatible interpreter. Separate from project Python; no AML installation is needed on the host.'})}</div></div>${formFooter('Register machine')}</form>`,'host');bindModalForm(async fd=>{const gpuText=fd.get('gpus').trim(),parts=gpuText?gpuText.split(',').map(s=>s.trim()):[];if(parts.some(p=>!/^[0-9]+$/.test(p)))throw new Error('Enter GPU indices separated by commas, such as 0, 1.');await action('host.add',{name:fd.get('name').trim(),target:fd.get('target').trim(),root:fd.get('root').trim(),gpus:[...new Set(parts.map(Number))],python:fd.get('python').trim()});closeModal();await refreshState(true);toast('Machine registered.');});}
 async function openExperimentWorker(scope=experimentWorkerScope()){
  if(!scope)return;await loadAgentDirectory();
@@ -1282,11 +1393,14 @@ function showJump(){openModal('Go to anything',`<input class="jump-input" id="ju
 async function showLogin(){accountGate.open();}
 async function perform(op,params={},success){try{await action(op,params);await refreshState(true);if(success)toast(success);return true;}catch(error){toast(error.message,true);return false;}}
 async function handleAction(name,el){switch(name){
+ case 'pin-agent':toggleAgentPin();break;
  case 'toggle-agent-list':agentsExpanded=!agentsExpanded;try{localStorage.setItem('supersurfer-agents-expanded',String(agentsExpanded));}catch{}renderAgentChooser();break;
  case 'edit-brief':showEditBrief();break;
  case 'refresh-page':await loadMarkdownPage(state.experimentId,el.dataset.pageId||state.tab.slice(5));break;
  case 'select-result':resultSelections.set(state.experimentId,el.dataset.resultId);renderMain();if(el.dataset.resultId==='metrics')await loadMetrics(true);else await liveResults.refresh();break;
  case 'refresh-results':await loadResultPages(true);if(chosenResultPage())await liveResults.refresh();else await loadMetrics(true);break;
+ case 'archive-item':{const id=state.experimentId,archived=!(state.experiment||experiment())?.archived;await action('experiment.archive',{id,archived});await refreshState(true);toast(archived?'Archived. Existing work continues.':'Restored.');break;}
+ case 'toggle-archived-items':{const id=el.dataset.id;if(archivedItemProjects.has(id))archivedItemProjects.delete(id);else archivedItemProjects.add(id);state.sidebarSignature='';syncNavigation();renderMain();break;}
  case 'archive-agent':await toggleChatArchive();break;
  case 'toggle-archived-agents':showArchivedAgents=!showArchivedAgents;renderAgentChooser();break;
  case 'refresh-compute':await refreshComputeAvailability();break;
@@ -1316,6 +1430,8 @@ async function handleAction(name,el){switch(name){
  case 'resume-experiment-agent':await resumeExperimentAgent();break;
  case 'refresh-agents':await loadAgentDirectory();break;
  case 'add-host':showAddHost();break;
+ case 'open-code-presentation':await showCodePresentation(state.chat?.editor_presentation);break;
+ case 'upload-files':fileUploads.pick('editor');break;
  case 'refresh-project-panel':{const kind=el.dataset.panelKind||el.closest('[data-tile-kind]')?.dataset.tileKind||state.tab;await loadProjectPanel(kind,state.projectId,kind==='artifacts'?artifactPaths.get(state.projectId)||'':'');break;}
  case 'export-diagnostics':await exportProjectDiagnostics();break;
  case 'project-compute':closeModal();await navigate({projectId:state.projectId,tab:'compute'});break;
@@ -1351,6 +1467,7 @@ async function handleAction(name,el){switch(name){
  case 'configure-wandb':state.tab='overview';persistNavigation();state.edit=true;renderMain();$('#document-wandb')?.focus();break;
  }}
 document.addEventListener('click',async event=>{const target=event.target.closest('button,a,[data-run]');if(!target)return;if(target.disabled)return;try{
+ if(target.dataset.workspaceFile){event.preventDefault();if(target.dataset.workspaceProject===state.projectId)await openPageCode({path:target.dataset.workspaceFile});return;}
  if(target.hasAttribute('data-artifact-path')){artifactPaths.set(state.projectId,target.dataset.artifactPath);if(target.closest('#project-view-panels')){await loadProjectPanel('artifacts',state.projectId,target.dataset.artifactPath);renderProjectSlots();}else renderMain();return;}
  if(target.dataset.artifactPreview){await previewArtifact(target.dataset.artifactPreview);return;}
  if(target.dataset.copyArtifact){await navigator.clipboard.writeText(target.dataset.copyArtifact);toast('Artifact path copied.');return;}
@@ -1359,22 +1476,40 @@ document.addEventListener('click',async event=>{const target=event.target.closes
  if(target.dataset.view){closeModal();await navigate({view:target.dataset.view});if(target.dataset.view==='settings')refreshAccountModels();return;}
  if(target.dataset.project){closeModal();await navigate({projectId:target.dataset.project});return;}
  if(target.dataset.experiment){const x=state.data.experiments.find(x=>x.id===target.dataset.experiment);if(x){closeModal();await navigate({projectId:x.project_id,experimentId:x.id});}return;}
- if(target.dataset.tab){if(state.edit)stashEditor();state.edit=false;const wasBoard=!!isSurfboard();state.tab=target.dataset.tab;if(isSurfboard()&&!wasBoard){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}else if(wasBoard&&!isSurfboard()&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}persistNavigation();syncAgentChooser();renderAgentChooser();refreshChat(true);renderMain();if(pageHasTile('results')){if(state.experimentId)loadResultPages(true).then(()=>chosenResultPage()?liveResults.refresh():loadMetrics(true));else{for(const item of state.data.experiments.filter(x=>x.project_id===state.projectId))resultPages.delete(item.id);loadProjectResults();}}if(pageHasTile('compute')&&!state.experimentId)loadProjectCompute(state.projectId,{force:true}).catch(()=>{});return;}
+ if(target.dataset.tab){if(state.edit)stashEditor();state.edit=false;const wasBoard=!!isSurfboard();state.tab=target.dataset.tab;if(isSurfboard()&&!wasBoard&&!state.pinnedAgent){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}else if(wasBoard&&!isSurfboard()&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}persistNavigation();syncAgentChooser();renderAgentChooser();refreshChat(true);renderMain();if(pageHasTile('results')){if(state.experimentId)loadResultPages(true).then(()=>chosenResultPage()?liveResults.refresh():loadMetrics(true));else{for(const item of state.data.experiments.filter(x=>x.project_id===state.projectId))resultPages.delete(item.id);loadProjectResults();}}if(pageHasTile('compute')&&!state.experimentId)loadProjectCompute(state.projectId,{force:true}).catch(()=>{});return;}
  if(target.dataset.prompt){$('#chat-input').value=target.dataset.prompt;$('#chat-input').focus();return;}
  if(target.dataset.run){showRun(target.dataset.run);return;}
  }catch(error){toast(error.message,true);}});
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='k'){event.preventDefault();showJump();}if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='s'&&state.edit){event.preventDefault();saveExperiment();}if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-run]')){event.preventDefault();showRun(event.target.dataset.run);}});
 $('#modal').addEventListener('click',event=>{if(event.target===$('#modal')){const rect=$('#modal').getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeModal();}});
-$('#modal').addEventListener('close',()=>{state.modalKind=null;if(renderPending&&!state.edit&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();});
+$('#modal').addEventListener('close',()=>{state.modalKind=null;if(renderPending&&!state.edit&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||editorSettings.dirty()||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();});
 const chatDivider=$('#chat-resizer');
 let resizingChat=false;
 chatDivider.addEventListener('pointerdown',event=>{if(event.button!==0||state.chatMaximized||!state.chatVisible)return;event.preventDefault();resizingChat=true;chatDivider.setPointerCapture(event.pointerId);document.body.classList.add('resizing-chat');});
 chatDivider.addEventListener('pointermove',event=>{if(resizingChat)resizeChat($('.workspace-body').getBoundingClientRect().right-event.clientX);});
-function endChatResize(event){if(!resizingChat)return;resizingChat=false;document.body.classList.remove('resizing-chat');if(chatDivider.hasPointerCapture(event.pointerId))chatDivider.releasePointerCapture(event.pointerId);persistNavigation();}
+function endChatResize(event){if(!resizingChat)return;resizingChat=false;document.body.classList.remove('resizing-chat');if(chatDivider.hasPointerCapture(event.pointerId))chatDivider.releasePointerCapture(event.pointerId);tileLayout.commitResize();persistNavigation();}
 chatDivider.addEventListener('pointerup',endChatResize);chatDivider.addEventListener('pointercancel',endChatResize);
-chatDivider.addEventListener('keydown',event=>{const bounds=chatWidthBounds(),current=Number(chatDivider.getAttribute('aria-valuenow'));if(event.key==='ArrowLeft')resizeChat(current+24);else if(event.key==='ArrowRight')resizeChat(current-24);else if(event.key==='Home')resizeChat(bounds.min);else if(event.key==='End')resizeChat(bounds.max);else return;event.preventDefault();persistNavigation();});
+chatDivider.addEventListener('keydown',event=>{const bounds=chatWidthBounds(),current=Number(chatDivider.getAttribute('aria-valuenow'));if(event.key==='ArrowLeft')resizeChat(current+24);else if(event.key==='ArrowRight')resizeChat(current-24);else if(event.key==='Home')resizeChat(bounds.min);else if(event.key==='End')resizeChat(bounds.max);else return;event.preventDefault();tileLayout.commitResize();persistNavigation();});
 chatDivider.addEventListener('dblclick',()=>{resizeChat(390);persistNavigation();});
-window.addEventListener('resize',()=>{if(!resizingChat)applyChatLayout();});
+function toggleSidebar(){state.sidebarCollapsed=!state.sidebarCollapsed;applyChatLayout();persistNavigation();}
+$('#sidebar-toggle').onclick=toggleSidebar;
+document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&!event.shiftKey&&!event.altKey&&event.key.toLowerCase()==='b'&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();toggleSidebar();}},true);
+const sidebarDivider=$('#sidebar-resizer');let sidebarDrag=null;
+sidebarDivider.addEventListener('pointerdown',event=>{if(event.button!==0||sidebarDivider.getAttribute('aria-disabled')==='true')return;event.preventDefault();sidebarDrag={x:event.clientX,width:$('.sidebar').getBoundingClientRect().width};sidebarDivider.setPointerCapture(event.pointerId);document.body.classList.add('resizing-sidebar');});
+sidebarDivider.addEventListener('pointermove',event=>{if(sidebarDrag)resizeSidebar(sidebarDrag.width+event.clientX-sidebarDrag.x);});
+function endSidebarResize(){if(!sidebarDrag)return;sidebarDrag=null;document.body.classList.remove('resizing-sidebar');tileLayout.commitResize();persistNavigation();}
+sidebarDivider.addEventListener('pointerup',endSidebarResize);sidebarDivider.addEventListener('pointercancel',endSidebarResize);sidebarDivider.addEventListener('lostpointercapture',endSidebarResize);
+sidebarDivider.addEventListener('keydown',event=>{const bounds=sidebarWidthBounds(),width=Number(sidebarDivider.getAttribute('aria-valuenow'));if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();resizeSidebar(event.key==='Home'?bounds.min:event.key==='End'?bounds.max:width+(event.key==='ArrowLeft'?-20:20));tileLayout.commitResize();persistNavigation();});
+sidebarDivider.addEventListener('dblclick',()=>{resizeSidebar(206);persistNavigation();});
+const projectDivider=$('#sidebar-projects-resizer');let projectDrag=null;
+projectDivider.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();projectDrag={y:event.clientY,height:$('#project-tree').getBoundingClientRect().height};projectDivider.setPointerCapture(event.pointerId);document.body.classList.add('resizing-project-tree');});
+function resizeProjectTree(height){const bounds=projectTreeBounds();state.projectTreeHeight=Math.round(Math.max(bounds.min,Math.min(bounds.max,height)));applyProjectTreeHeight();}
+projectDivider.addEventListener('pointermove',event=>{if(projectDrag)resizeProjectTree(projectDrag.height+event.clientY-projectDrag.y);});
+function endProjectResize(){if(!projectDrag)return;projectDrag=null;document.body.classList.remove('resizing-project-tree');persistNavigation();}
+for(const name of ['pointerup','pointercancel','lostpointercapture'])projectDivider.addEventListener(name,endProjectResize);
+projectDivider.addEventListener('keydown',event=>{const bounds=projectTreeBounds(),height=Number(projectDivider.getAttribute('aria-valuenow'));if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();resizeProjectTree(event.key==='Home'?bounds.min:event.key==='End'?bounds.max:height+(event.key==='ArrowUp'?-20:20));persistNavigation();});
+projectDivider.addEventListener('dblclick',()=>{state.projectTreeHeight=null;applyProjectTreeHeight();persistNavigation();});
+window.addEventListener('resize',()=>{if(!resizingChat&&!sidebarDrag)applyChatLayout();});
 $('#chat-questions').addEventListener('input',updateQuestionDraft);
 $('#chat-questions').addEventListener('change',updateQuestionDraft);
 $('#chat-questions').addEventListener('submit',answerQuestion);
@@ -1389,7 +1524,7 @@ document.addEventListener('dragover',event=>{const row=event.target.closest('[dr
 document.addEventListener('dragleave',event=>event.target.closest('.drag-over')?.classList.remove('drag-over'));
 document.addEventListener('drop',async event=>{const row=event.target.closest('[draggable="true"][data-run]');if(row&&draggedRun&&row.dataset.run!==draggedRun){event.preventDefault();const runId=draggedRun;draggedRun=null;const rows=queuedRuns(),index=rows.findIndex(r=>r.id===row.dataset.run),after=event.clientY>row.getBoundingClientRect().top+row.getBoundingClientRect().height/2;const before=after?(rows[index+1]?.id||null):row.dataset.run;if(before!==runId)await perform('run.move',{run_id:runId,before_id:before},'Queue order updated.');}});
 document.addEventListener('dragend',()=>{draggedRun=null;$$('.dragging,.drag-over').forEach(el=>el.classList.remove('dragging','drag-over'));});
-async function refreshAccountModels(){await Promise.allSettled([accountGate.refresh(),fetchModelCatalog()]);renderChatPreferences();if(state.view==='settings'&&$('#settings-form')?.dataset.dirty!=='true'&&!$('#modal').open)renderMain();}
+async function refreshAccountModels(){await Promise.allSettled([accountGate.refresh(),fetchModelCatalog()]);renderChatPreferences();if(state.view==='settings'&&$('#settings-form')?.dataset.dirty!=='true'&&!editorSettings.dirty()&&!$('#modal').open)renderMain();}
 async function chatPoll(){await refreshChat();setTimeout(chatPoll,state.chat?.busy?800:3000);}
 const accountGate=createAccountGate({api,action,readOnly,onAccount:account=>{state.account=account;if(state.data)updateChatHeader();}});
 await readNavigation();

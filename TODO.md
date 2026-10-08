@@ -1,3 +1,20 @@
+## Completed in 0.1.31
+
+- Task-owned Surfboards with mixed research, software, web and writing workflows.
+- Direct panel-edge resizing, persistent file tree, sidebar dividers and topbar Arrange.
+- Large file viewer pages, local uploads, Markdown To-dos, task archive and pinned chat.
+- Frozen revision comparisons and scoped agent `present_code` / `manage_todos` tools.
+- Editor zoom/themes/defaults and optional real Code OSS extension host via Open VSX.
+- Continuous PDFs, save-triggered LaTeX builds across pages, offline prose spelling.
+- Correct autocomplete layout and compact agent coordination updates.
+- Review all eleven agent skills against task ownership and the actual editor tools.
+
+## Editor follow-ups
+
+- Native macOS verification of the cross-built desktop packages.
+- Grammar checking beyond the built-in offline English spelling dictionary.
+- Microsoft-only Marketplace extensions and exact PDF/source synchronization remain unsupported.
+
 ## Completed in 0.1.30
 
 - Resize the editor's file column and remember its width per project.
