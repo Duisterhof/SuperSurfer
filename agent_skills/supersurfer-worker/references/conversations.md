@@ -40,6 +40,9 @@ Agent-to-agent coordination is also shown in collapsed activity cards, with the
 sender and latest outcome visible; expand them for evidence and the original
 exchange. This does not change delivery, priority or authority. Direct user work
 and its response stay separate, and failed/uncertain deliveries remain explicit.
+Application-generated continuation and deliverable-review prompts appear in
+collapsed Activity rows with their full history retained. They resume the saved
+assignment; they are not a new user request, launch grant or completion claim.
 Grouping is application-owned, not a text prefix or metadata an agent should forge.
 Keep a necessary peer answer concise and link the existing evidence instead of
 copying a long status report into every conversation.
@@ -51,6 +54,9 @@ that conversation. A stopped/lost service connection expires it without an
 answer; inspect later messages and reask only if the decision remains essential.
 A desktop disconnect alone does not cancel a still-live remote question.
 
+Entering or reopening a chat starts at its latest message; subsequent polling
+preserves a user's manual scroll position. Earlier messages remain history. This
+view behavior neither sends a message nor resumes, completes or duplicates work.
 Desktop windows restore connection/navigation without replaying instructions.
 Closing, fullscreen, collapsed Deliverables and Archive are presentation changes;
 remote work and monitoring remain active. Chat Stop interrupts the agent turn;

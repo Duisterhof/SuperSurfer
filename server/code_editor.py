@@ -299,6 +299,21 @@ class CodeEditor:
                     pass
                 fcntl.flock(root, fcntl.LOCK_UN)
 
+    def delete(self, project, path, revision):
+        parts = _parts(path)
+        with self.lock, self._parent(project, parts) as (root, parent):
+            fcntl.flock(root, fcntl.LOCK_EX)
+            try:
+                current, info = self._read(parent, parts[-1], path)
+                if not revision or current["revision"] != revision:
+                    raise SurfboardError("File changed before rejection; its newer content was preserved", 409)
+                latest, latest_info = self._read(parent, parts[-1], path)
+                if latest["revision"] != revision or _stamp(info) != _stamp(latest_info):
+                    raise SurfboardError("Another writer changed this file during rejection", 409)
+                os.unlink(parts[-1], dir_fd=parent)
+            finally:
+                fcntl.flock(root, fcntl.LOCK_UN)
+
     def mkdir(self, project, path):
         parts = _parts(path)
         with self.lock, self._parent(project, parts) as (_, parent):

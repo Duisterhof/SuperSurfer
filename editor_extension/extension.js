@@ -29,6 +29,7 @@ function activate(context) {
   async function command(item){
     if(item.kind==='selection')return selection();
     if(item.kind==='extensions')return vscode.commands.executeCommand('workbench.view.extensions');
+    if(item.kind==='settings')return vscode.commands.executeCommand('workbench.action.openSettings','@ext:'+item.extension_id);
     if(item.kind==='theme')return vscode.commands.executeCommand('workbench.action.selectTheme');
     if(item.kind==='file'){
       const doc=await vscode.workspace.openTextDocument(vscode.Uri.file(item.path));const editor=await vscode.window.showTextDocument(doc,{preview:false});

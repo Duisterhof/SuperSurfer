@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.31'
+  supersurfer-version: '0.1.32'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.31. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.32. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -33,7 +33,10 @@ Compiling text does not launch an experiment or save the user's dirty editor buf
    with the exact-source PR; finish that workflow without asking the user to click
    Queue, Verify or Release. Check prior state before retrying. Read
    [run submission](references/run-submission.md) before submitting or recovering
-   a run; it includes identity, telemetry and permission requirements.
+   a run; it includes identity, telemetry and permission requirements. A definitive
+   rejected source-folder error may be corrected under the same request ID with
+   only `repo` changed, after the service freshly confirms absence; uncertain
+   responses keep their original fields and other contract fields stay fixed.
 3. At a concrete placement failure, inspect both project budgets and candidate
    readiness. Use `check_available_node` for the run's exact committed checkout,
    runtime, data and observed capacity. Prefer prepared nodes, then use
@@ -189,7 +192,10 @@ use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
-retains its original authority; archiving an item or chat leaves work running.
+retains its original authority. Task right-click Archive/Restore and the Archived
+folder organize items; project Archive hides its tree under Archived projects.
+These app controls and chat archiving preserve history, running work and monitoring;
+restore is not a new assignment or launch.
 
 ## Tool index
 

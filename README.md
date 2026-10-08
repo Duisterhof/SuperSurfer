@@ -1,3 +1,36 @@
+## 0.1.32 focused workspaces and review
+
+Page titles and navigation share one compact row. Opening or reopening an agent
+conversation starts at its latest message; scrolling back stays stable during
+updates. Settings preserve scroll position, focused fields and unsaved defaults
+while account, monitoring and extension status refresh.
+
+Right-click a task or project to Archive or Restore. Archived tasks live in a
+collapsed folder within their project; archived projects have their own collapsed
+folder. Archiving hides items and retains their history, agents, jobs and monitoring.
+
+Agent changes have **Accept edit** and **Reject edit** controls in both editors and
+Agent changes tiles. Accept keeps the recorded edit. Reject safely reverses a
+complete recorded patch, preserving unrelated later changes. Conflicting,
+ambiguous, incomplete or unattributed edits require manual review. Save your open
+editor drafts before rejection. This is recorded-edit review, not per-hunk review.
+
+Search extensions by name, publisher or language in **Settings → Code editor**.
+Install an exact listed version from Open VSX. **Configure** beside an installed
+extension opens its settings in the VS Code workbench. For Vim, use Configure to
+change Vim settings; native User Settings (JSON) also supports custom bindings.
+The built-in editor does not execute VS Code extensions.
+
+Automatic goal continuations now collapse into **Activity** rows alongside compact
+monitoring and agent coordination, with full evidence available on expansion.
+User messages, questions, approvals and delivery failures remain visible.
+
+A definitively rejected queue request can correct only its source repository under
+the same request ID. The app reconciles the manager first, retaining an existing
+run after a lost reply. Commit, command, data and resources remain fixed; normal
+PR and scheduling checks still apply. Accepted or uncertain submissions cannot be
+silently rewritten. This repairs the E18 wrong-folder dead end without duplicate runs.
+
 ## 0.1.31 task workspaces and editor fixes
 
 Each task owns its Surfboard: workflow, tools, gates and pages. Choose Research,

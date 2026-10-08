@@ -124,3 +124,14 @@
 .chat-check>summary{padding:7px 0;cursor:pointer;color:var(--muted);line-height:1.5}
 .chat-check+.chat-check{border-top:1px solid var(--line)}
 .check-indicator.working{color:var(--green)}
+
+/* Page navigation shares one compact row with the title. */
+.tile-page{padding:8px 12px}
+.tile-page-heading{justify-content:flex-start;gap:10px;margin-bottom:8px;min-width:0}
+.tile-page-title{flex:0 1 auto;min-width:0;max-width:30%}
+.tile-page-heading h1{font-size:14px;line-height:28px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile-page-tabs{flex:1;min-width:0}
+.tile-page-heading .configured-tabs{flex-wrap:nowrap;gap:2px;margin:0;border:0;overflow-x:auto;scrollbar-width:thin}
+.tile-page-heading .configured-tabs .tab{flex:none;font-size:11px;padding:4px 7px;line-height:20px;margin:0}
+.tile-page-heading .configured-tabs .layout-tab{margin-left:0}
+@media(max-width:600px){.tile-page-heading{gap:6px}.tile-page-title{max-width:25%}.tile-page-heading h1{font-size:12px}.tile-page-heading .configured-tabs .tab{font-size:10px;padding:4px 6px}}

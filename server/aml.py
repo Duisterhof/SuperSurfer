@@ -14,7 +14,9 @@ import time
 
 
 class ManagerError(RuntimeError):
-    pass
+    def __init__(self, message, *, definitive=False):
+        super().__init__(message)
+        self.definitive = definitive
 
 
 def decoded(value, fallback):
@@ -52,7 +54,7 @@ class AMLClient:
                     raise ManagerError("AutoML response exceeds 16 MiB")
                 response = json.loads(line)
             if not response.get("ok"):
-                raise ManagerError(response.get("error") or "AutoML request failed")
+                raise ManagerError(response.get("error") or "AutoML request failed", definitive=True)
             return response["result"]
         except (OSError, ValueError, KeyError) as exc:
             raise ManagerError(f"AutoML manager unavailable at {self.home}: {exc}") from exc

@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.31'
+  supersurfer-version: '0.1.32'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.31. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.32. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs

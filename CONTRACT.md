@@ -1,3 +1,27 @@
+## 0.1.32 source recovery, review and organization
+
+- A held submission rejected before run creation may amend only `repo`, under its
+  original durable request ID. Fresh manager reconciliation is mandatory. Legacy
+  receipts retry their original payload to establish rejection; uncertain delivery
+  preserves it. Any existing run is retained and bound, not replaced. Other queued
+  arguments remain immutable. Scheduling and PR gates are unchanged.
+- Agent review acts only on complete, attributable recorded edits. Accept is metadata;
+  Reject uses current content revisions, exact unique hunk context and atomic source
+  save/delete checks. Unrelated changes survive. A durable applying receipt makes
+  lost replies retryable without undoing twice. Native Reject waits for a fresh
+  dirty-buffer observation; unknown or unsaved editor state blocks the write.
+- Task/project archives are independent persistent visibility flags. They never stop
+  agents, jobs, monitoring or recovery grants. Restoring a project does not restore
+  separately archived tasks. Read-only clients cannot change flags or review source.
+- Catalogue search is authenticated and bounded, uses fixed Open VSX endpoints,
+  validates result identities, and exposes exact-version installs. Runtime setup is
+  explicit. Extension configuration uses the native workbench's own settings UI.
+- Task view writes retain their SQLite write transaction across both layout/board
+  version checks. Markdown import cannot release that lock during validation.
+- Agent chat entry follows latest activity; background refresh preserves user scrolling.
+  System continuations collapse by app metadata or exact legacy prefixes, without
+  deleting history or changing instructions or permissions.
+
 ## 0.1.31 task scope, files and extension runtime
 
 - A task snapshots its Surfboard when created. Legacy tasks are frozen before

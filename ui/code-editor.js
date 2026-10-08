@@ -1,3 +1,4 @@
+import {agentReviewControls,decideAgentEdit} from './agent-review.js';
 import {createWorkbenchEditor} from './workbench-editor.js';
 import {createLatexSpelling} from './latex-spelling.js';
 import {workspacePath} from './workspace-files.js';
@@ -79,6 +80,7 @@ function createMonacoEditor(options) {
     if (editor && editorFile) editorFile.viewState = editor.saveViewState();
   }
   function disposeView() {
+    root?.querySelector(".agent-review-actions")?.remove();
     pdf.unmount();rememberView(); editor?.dispose(); editor = null; editorFile = null; selectionEditor=null;diffEditor?.dispose(); diffEditor = null;
     for (const model of diffModels) model.dispose(); diffModels = [];
   }
@@ -128,7 +130,7 @@ function createMonacoEditor(options) {
       if(!agents.some(agent=>agent.scope===state.agentScope))state.agentScope=agents[0]?.scope || '';
       const agent=agents.find(row=>row.scope===state.agentScope);
       list.innerHTML=data?`<label class="code-agent-label">Recorded changes by agent<select class="code-agent-select" aria-label="Agent changes">${agents.map(row=>`<option value="${escapeHTML(row.scope)}"${row.scope===state.agentScope?' selected':''}>${escapeHTML(row.name)}</option>`).join('')}</select></label><p class="code-list-note">${escapeHTML(typeof data.coverage==='string'?data.coverage:'Recorded file edits only. Shell changes may be unattributed.')}</p>`+
-        (agent?.changes || []).map(change=>`<div class="code-change-row"><button type="button" data-code-agent-diff="${escapeHTML(change.id)}" title="${escapeHTML([change.path,recordedTime(change.created),change.turn_id?'Turn '+change.turn_id:''].filter(Boolean).join(' · '))}"><span>${escapeHTML(change.path)}</span><small>${escapeHTML(change.kind || 'recorded edit')}${change.truncated?' · partial':''}${change.created?' · '+escapeHTML(recordedTime(change.created)):''}</small></button><button type="button" data-code-review="${escapeHTML(change.id)}" aria-pressed="${Boolean(change.reviewed)}" title="${change.reviewed?'Mark unreviewed':'Mark reviewed (does not modify code)'}"${readonly()?' disabled':''}>${change.reviewed?'✓':'Review'}</button></div>`).join('')+
+        (agent?.changes || []).map(change=>`<div class="code-change-row"><button type="button" data-code-agent-diff="${escapeHTML(change.id)}" title="${escapeHTML([change.path,recordedTime(change.created),change.turn_id?'Turn '+change.turn_id:''].filter(Boolean).join(' · '))}"><span>${escapeHTML(change.path)}</span><small>${escapeHTML(change.kind || 'recorded edit')}${change.truncated?' · partial':''}${change.created?' · '+escapeHTML(recordedTime(change.created)):''}</small></button><button type="button" data-code-review="${escapeHTML(change.id)}" aria-pressed="${Boolean(change.reviewed)}" title="${change.reviewed?'Mark unreviewed':'Mark reviewed (does not modify code)'}"${readonly()?' disabled':''}>${change.reviewed?'✓':'Review'}</button>${agentReviewControls(change,state.agentScope,{readOnly:readonly()})}</div>`).join('')+
         (!agent?.changes?.length?'<p class="code-list-note">No recorded file edits for this agent.</p>':''):'<p class="code-list-note">Loading agent changes…</p>';
     } else {
       const data = filtered ? state.searchResults : state.tree.get('');
@@ -270,6 +272,7 @@ function createMonacoEditor(options) {
       if(!current(token)||nav!==navigation)return;
       rememberView();selected=data.path;project.selected=selected;view='agent';disposeView();renderTabs();
       const heading=root.querySelector('.code-diff-heading'),host=root.querySelector('.code-monaco');
+      heading.querySelector('.agent-review-actions')?.remove();const review=document.createElement('div');review.className='agent-review-actions';review.innerHTML=agentReviewControls(data,scope,{readOnly:readonly()});heading.append(review);
       heading.hidden=false;heading.querySelector('span').textContent=`Recorded agent edit · ${data.partial||data.truncated?'partial patch':typeof data.original==='string'?'before ↔ after':'patch'} · ${data.agent_name || project.agentChanges?.agents.find(row=>row.scope===scope)?.name || scope}`;
       host.replaceChildren();
       if(typeof data.original==='string'&&typeof data.modified==='string') {
@@ -281,7 +284,7 @@ function createMonacoEditor(options) {
         editor=monaco.editor.create(host,{...editorOptions(),readOnly:true,model:diffModels[0],ariaLabel:'Recorded agent patch'});
         heading.querySelector('span').textContent+=' · recorded patch only';
       } else host.innerHTML='<div class="code-empty">This agent edit has no available patch. Current Git changes are listed separately.</div>';
-      evidence={source:'agent',path:data.path,scope,changeId,agentName:data.agent_name||project.agentChanges?.agents.find(row=>row.scope===scope)?.name||scope,diff:data.diff,original:data.original,modified:data.modified};selectionAction(diffEditor?[diffEditor.getOriginalEditor(),diffEditor.getModifiedEditor()]:editor?[editor]:[]);closeTemporaryList();theme();renderStatus();return true;
+      evidence={source:'agent',path:data.path,scope,changeId,change:data,agentName:data.agent_name||project.agentChanges?.agents.find(row=>row.scope===scope)?.name||scope,diff:data.diff,original:data.original,modified:data.modified};selectionAction(diffEditor?[diffEditor.getOriginalEditor(),diffEditor.getModifiedEditor()]:editor?[editor]:[]);closeTemporaryList();theme();renderStatus();return true;
     }catch(error){if(current(token))tell(error);return false;}
   }
 
@@ -437,6 +440,11 @@ function createMonacoEditor(options) {
   }
   async function click(event) {
     const target=event.target.closest('button');if(!target || !root.contains(target))return;
+    if(target.dataset.agentDecision){
+      const token=epoch,project=state,projectId=context.projectId,scope=target.dataset.agentScope,changeId=target.dataset.agentChange,decision=target.dataset.agentDecision;target.disabled=true;
+      try{await decideAgentEdit({api:options.api,action:options.action,projectId,scope,changeId,decision,change:view==='agent'&&evidence?.changeId===changeId?evidence.change:null,hasUnsaved:()=>[...project.files.values()].some(dirty),isCurrent:()=>current(token)});if(current(token)){await refresh();await agentChanges();if(view==='agent'&&evidence?.changeId===changeId)await showAgentDiff(changeId,scope);message=decision==='accept'?'Agent edit accepted.':'Agent edit rejected; source restored.';renderStatus();}}
+      catch(error){if(current(token))tell(error);}finally{if(target.isConnected)target.disabled=readonly();}return;
+    }
     if(target.hasAttribute('data-code-open'))return openFile(target.dataset.codeOpen);
     if(target.hasAttribute('data-code-close'))return closeFile(target.dataset.codeClose);
     if(target.hasAttribute('data-code-diff'))return showDiff(target.dataset.codeDiff);
