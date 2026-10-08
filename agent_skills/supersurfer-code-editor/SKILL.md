@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.25. The visual Code editor uses Monaco, the editor
+Reviewed for SuperSurfer 0.1.26. The visual Code editor uses Monaco, the editor
 component of VS Code. Its files are the registered repository shared by the user
 and project agents, not an isolated agent checkout. The `editor` surfboard block
 is a view; it adds no shell tool, executable action or launch permission.
@@ -50,3 +50,9 @@ earlier source-bound check evidence. Editor Save does not commit, publish, deplo
 or launch. Research still requires its verified exact-source PR and queue contract;
 ordinary local software/web edits do not acquire those research requirements.
 Project and work-item layout choices change visibility, not authority or ownership.
+
+LaTeX source uses the same saved files and editor buffers. Compiler error links can
+open a verified source path/line; PDF highlights refer to generated build/page
+text and need source lookup. A source selection and a rendered PDF may represent
+different revisions. Preserve the unsaved warning and build identity when helping
+with either; compilation never implicitly saves the editor or publishes the PDF.

@@ -13,6 +13,16 @@ from server import agent_tools
 
 
 class AgentToolsTests(unittest.TestCase):
+    def test_pdf_inspection_delivers_native_images_without_base64_in_text(self):
+        payload = {"build_id": "paper-001", "page_count": 2, "text_pages": [{"page": 2, "text": "Measured evidence"}],
+                   "images": [{"page": 2, "type": "image", "mimeType": "image/png", "data": "aW1hZ2U="}]}
+        with patch.object(agent_tools, "call_tool", return_value=payload):
+            result = self.call("compile_latex", {"operation": "inspect", "build_id": "paper-001", "pages": [2]})
+        self.assertFalse(result["isError"])
+        self.assertNotIn("aW1hZ2U=", result["content"][0]["text"])
+        self.assertEqual([2], json.loads(result["content"][0]["text"])["rendered_pages"])
+        self.assertEqual({"type": "image", "mimeType": "image/png", "data": "aW1hZ2U="}, result["content"][1])
+
     def setUp(self):
         self.env = patch.dict(os.environ, {
             "SUPERSURFER_AGENT_ROLE": "lead",
@@ -34,7 +44,7 @@ class AgentToolsTests(unittest.TestCase):
         ]) + "\n"
         for role, expected in [("lead", ["create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"]), ("worker", ["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"]), ("manager", ["create_experiment", "queue_run", "create_experiment_agent", "handoff_experiment", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "register_compute_gpus", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run"]), ("unknown", [])]:
             if role in {"worker", "lead", "manager"}:
-                expected += ["read_surfboard", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"]
+                expected += ["read_surfboard", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"]
                 if role in {"lead", "manager"}:
                     expected += ["create_work_item", "create_work_item_agent", "handoff_work_item"]
                     if role == "lead": expected += ["update_work_item"]
@@ -104,7 +114,7 @@ class AgentToolsTests(unittest.TestCase):
     def test_legacy_worker_role_remains_worker_only(self):
         with patch.dict(os.environ):
             os.environ.pop("SUPERSURFER_AGENT_ROLE", None)
-            self.assertEqual(["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run", "read_surfboard", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"], [tool["name"] for tool in agent_tools.available_tools()])
+            self.assertEqual(["prepare_run", "queue_run", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_worker_wakeup", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "set_project_limits", "stop_run", "read_surfboard", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"], [tool["name"] for tool in agent_tools.available_tools()])
 
     def test_training_queue_requires_classification_and_logging_before_network(self):
         draft = {"request_id": "training-request-001", "name": "Training", "host_id": "h1", "gpu_count": 1,

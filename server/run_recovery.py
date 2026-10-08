@@ -7,6 +7,78 @@ import time
 from .compute import ComputeError
 
 
+def compact_status(run, recovery, acquisitions):
+    """Keep live decisions visible without repeating full source/probe receipts."""
+    clipped = []
+
+    def fields(row, names, prefix):
+        result = {}
+        for key in names:
+            if key not in row:
+                continue
+            value = row[key]
+            if isinstance(value, str) and len(value) > 4096:
+                value = value[:4096] + '…'; clipped.append(prefix + '.' + key)
+            elif isinstance(value, list):
+                bounded = [item[:1024] + '…' if isinstance(item, str) and len(item) > 1024 else item
+                           for item in value[:32]]
+                if bounded != value:
+                    clipped.append(prefix + '.' + key)
+                value = bounded
+            result[key] = copy.deepcopy(value)
+        return result
+
+    current = fields(run, ('id', 'name', 'project_id', 'experiment_id', 'status', 'ready',
+        'host_id', 'gpu_count', 'allocated_gpus', 'revision', 'pr_url', 'wandb_url',
+        'created', 'started', 'finished', 'exit_code', 'waiting_reason', 'wait_reasons', 'error',
+        'placement_state'), 'run')
+    candidates = run.get('candidate_hosts') or []
+    current['candidate_hosts'] = [fields(row, ('host_id', 'host_name', 'state', 'checked_at',
+        'wait_reason', 'wait_reasons'), 'candidate') for row in candidates[:16]]
+    if len(candidates) > 16:
+        clipped.append('run.candidate_hosts')
+    grant = None
+    if recovery:
+        grant = fields(recovery, ('id', 'scope', 'enabled', 'attempts', 'created_at',
+            'updated_at', 'last_wake', 'task'), 'recovery')
+        grant.update(current_run_id=recovery['runs'][-1], max_attempts=3,
+                     is_latest_attempt=recovery['runs'][-1] == run['id'])
+    recent = sorted(acquisitions, key=lambda row: row.get('updated_at', 0), reverse=True)[:4]
+    summaries = []
+    for row in recent:
+        summary = fields(row, ('id', 'run_id', 'host_id', 'status', 'phase', 'updated_at',
+            'save_for_project', 'error'), 'acquisition')
+        inspection = row.get('inspection') or {}
+        summary['inspection'] = fields(inspection, ('revision', 'ready', 'available',
+            'checked_at', 'free_gpu_indices', 'blockers'), 'inspection')
+        if row.get('reusable_node'):
+            # These validated paths are reusable tool inputs; never truncate them.
+            summary['reusable_node'] = copy.deepcopy(row['reusable_node'])
+        if row.get('project_pool'):
+            summary['project_pool'] = fields(row['project_pool'], ('saved', 'reason',
+                'version', 'note', 'error'), 'project_pool')
+        summaries.append(summary)
+    state = run['status']
+    if state in {'unreachable', 'orphaned', 'lost'}:
+        next_steps = ['Ownership is uncertain. Inspect or refresh the host and confirm the original process; do not retry or launch a replacement.']
+    elif state == 'cancelling':
+        next_steps = ['Cancellation is pending. Wait for a confirmed terminal state before replacing this run.']
+    elif state == 'failed':
+        next_steps = ['Inspect the failure and repair it before recover_run(retry); retry needs the enabled latest recovery attempt, explicit output argv and an exact-source PR.']
+    elif state == 'queued':
+        next_steps = ['Inspect waiting_reason and candidate_hosts. For missing setup, reuse prepared paths or acquire_new_node for this same run_id. Project caps require waiting unless the user authorizes a change.']
+        if any(row.get('status') == 'preparing' for row in acquisitions):
+            next_steps.insert(0, 'Node preparation is still running; inspect its status without starting another transfer.')
+    elif state in {'starting', 'running'}:
+        next_steps = ['The scheduler owns this run. Use its current state for monitoring; do not submit a duplicate.']
+    else:
+        next_steps = ['This run is terminal. No launch or retry is implied.']
+    return {'run':current, 'recovery':grant, 'acquisitions':summaries,
+        'acquisition_count':len(acquisitions), 'acquisitions_omitted':max(0, len(acquisitions) - len(summaries)),
+        'next_steps':next_steps, 'truncated_fields':clipped,
+        'details_hint':'Use include_details=true with action=status for full source, probe and acquisition receipts.'}
+
+
 class RunRecovery:
     def __init__(self, service):
         self.service = service
@@ -46,8 +118,13 @@ class RunRecovery:
     def action(self, scope, run, fields):
         action = fields.get('action', 'status')
         if action == 'status':
-            if set(fields) - {'action','run_id'}: raise ComputeError('Status accepts only run_id')
-            return {'recovery':self.get(run['id']), 'acquisitions':self.service.nodes.status(run['id']), 'run':run}
+            if set(fields) - {'action','run_id','include_details'}: raise ComputeError('Status accepts run_id and optional include_details')
+            if type(fields.get('include_details', False)) is not bool:
+                raise ComputeError('include_details must be a boolean')
+            recovery, acquisitions = self.get(run['id']), self.service.nodes.status(run['id'])
+            if fields.get('include_details'):
+                return {'recovery':recovery, 'acquisitions':acquisitions, 'run':run}
+            return compact_status(run, recovery, acquisitions)
         if action == 'enable':
             if set(fields) - {'action','run_id','task'}: raise ComputeError('Enable accepts run_id and task')
             if self.service.turn_origins.get(scope) != 'user': raise ComputeError('Only user-requested work can enable recovery', 403)

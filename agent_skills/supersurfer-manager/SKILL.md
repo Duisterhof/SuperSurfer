@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.25. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.26. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -78,6 +78,11 @@ perform their own necessary bounded setup. Pool additions do not extend existing
 queued-run candidates by themselves; `acquire_new_node` verifies the exact checkout,
 environment and data, then adds the candidate to the same queued run. It stages
 missing inputs when requested and reports durable status without a manager relay.
+Newly prepared hosts are saved for later project runs by default; workers can
+request run-only use with `save_for_project: false`. Existing paths, enabled state
+and GPU masks are preserved. Read `project_pool`/`reusable_node` before helping
+with a conflicting default; a save warning does not undo current-run admission
+and does not require a duplicate queue request or routine manager review.
 Intervene only for a real shared conflict or capability outside the owner's scope.
 For genuinely missing physical registration,
 manager-only `register_compute_gpus` adds observed authorized indices to an
@@ -101,6 +106,13 @@ review, model turn or new monitoring task. Preserve existing report identities,
 measured gaps and source provenance.
 
 ## Project surfboard
+
+Research writing is a separate supported workflow, with paper tasks and an
+isolated LaTeX compiler. When explicitly assigned paper work and the board exposes
+`compile_latex`, follow [writing guidance](../supersurfer-writing/SKILL.md). Keep
+scientific content and source edits with their owner; compiling or reviewing a
+paper needs no routine manager relay and authorizes no new experiment or submission.
+Missing compiler setup is a workspace-host dependency, not a GPU-node allocation.
 
 Use `read_surfboard` for the applied project graph when configuration affects the
 task. The role policy filters tools and server actions; the graph's requirements

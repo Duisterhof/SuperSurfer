@@ -45,7 +45,7 @@
 @media(max-width:1000px){.configured-page{padding:10px}.configured-heading span{display:none}.configured-tabs .tab{font-size:11px;padding:6px}}
 @media(max-width:760px){#view-dock{position:absolute;right:0;top:0;bottom:0;z-index:5;max-width:100%;background:var(--bg)}.app-shell.chat-maximized #view-dock{position:relative}.configured-heading{padding-right:25px}}
 /* Named pages combine bounded tiles; their contents share the same project. */
-.tile-page{padding:14px 18px;min-width:0}
+.tile-page{padding:14px 18px;min-width:0;container-type:inline-size}
 .tile-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tile-page-heading span{font-size:11px;color:var(--muted)}
 .tile-page-heading h1{font-size:19px;margin:3px 0 8px}
@@ -65,4 +65,11 @@
 .page-dock-settings{margin-top:14px}.page-dock-settings>summary{cursor:pointer;color:var(--muted);font-size:12px;padding:10px 0}
 #modal:has(#item-pages-editor){width:min(1080px,96vw)}
 @media(max-width:900px){.page-tile{grid-column:1/-1}.tile-page{padding:10px}}
+@container(max-width:700px){.page-tile{grid-column:1/-1}}
 #main.tiled-page-main{padding:0}
+/* Allocation is a compact row per project, separate from physical GPU readings. */
+.project-capacities{margin:20px 0}.project-capacities .section-title{display:flex;justify-content:space-between;gap:10px}
+.project-capacity{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding:9px 2px;font-size:12px}.project-capacity>strong{min-width:110px;flex:1;overflow:hidden;text-overflow:ellipsis}.project-capacity>span{color:var(--muted);white-space:nowrap}.project-capacity b{color:var(--text);font-weight:600}.project-capacity .button{font-size:11px;padding:4px 8px}.run-placement{margin:14px 0}.run-placement>h3{margin:0 0 6px}.run-placement details{margin-top:10px;font-size:12px}.run-placement summary{cursor:pointer;color:var(--muted)}.run-candidates>div{display:grid;grid-template-columns:minmax(90px,1fr) 3fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}.run-candidates span{color:var(--muted);overflow-wrap:anywhere}
+@media(max-width:1050px){.project-capacity{gap:8px;flex-wrap:wrap}.project-capacity>strong{min-width:90px}.project-capacity .button{margin-left:auto}}
+.compute-summary .queue-summary-jump{padding:0;color:inherit;font:inherit;text-align:left;border-radius:5px}
+.compute-summary .queue-summary-jump:hover{text-decoration:underline;text-underline-offset:3px}

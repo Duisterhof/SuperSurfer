@@ -24,6 +24,8 @@ TASK_STATES = ("pending", "working", "blocked", "done", "failed", "archived")
 HOST_POLL_TIMEOUT = 4
 HOST_POLL_INTERVAL = 300
 ACTIVE_RUN_POLL_INTERVAL = 10
+TRANSITION_POLL_INTERVAL = 1
+TRANSITION_POLL_WINDOW = 30
 HOST_STALE_AFTER = HOST_POLL_INTERVAL + 30
 ALLOCATION_MAX_AGE = 15
 ALLOCATION_PROBE_INTERVAL = 60
@@ -53,6 +55,8 @@ class Manager:
         self.host_refresh_requested = set()
         self.manual_host_refresh_at = 0
         self.host_probe_attempts = {}
+        self.host_capacity_changed = set()
+        self.host_capacity_probe_attempts = {}
         self.native_deliveries = {}
         self.placement_checks = {}
         self.placement_observations = {}
@@ -60,6 +64,7 @@ class Manager:
         self.tick_lock = asyncio.Lock()
         self.scheduler_wake = asyncio.Event()
         self.run_next_poll = {}
+        self.run_transition_polls = {}
         self.run_host_retry_at = {}
         self.run_inspections = set()
         self.command_lock = asyncio.Lock()
@@ -519,6 +524,8 @@ class Manager:
 
     async def refresh_host(self, host):
         self.host_probe_attempts[host["id"]] = time.time()
+        if host["id"] in self.host_capacity_changed:
+            self.host_capacity_probe_attempts[host["id"]] = self.host_probe_attempts[host["id"]]
         try:
             request = {"op": "probe", "check_gpu": True,
                        "gpu_required": bool(json.loads(host["gpus"]))}
@@ -528,6 +535,13 @@ class Manager:
             self.host_metrics[host["id"]] = snapshot
             self.store.execute("UPDATE hosts SET status='online',error=? WHERE id=?",
                                (snapshot["error"], host["id"]))
+            if self.run_host_retry_at.pop(host["id"], None) is not None:
+                # A new successful connection supersedes the outage backoff.
+                # Verify owned processes now; the probe itself cannot release
+                # reservations or claim that a run has recovered.
+                for run in self.store.rows("SELECT id FROM runs WHERE host_id=? AND status IN (?,?,?,?,?)",
+                                           (host["id"], *ACTIVE_RUNS)):
+                    self.wake_scheduler(run["id"])
         except Exception as exc:
             # Keep the last observation visible, but mark it unusable for allocation.
             previous = self.host_metrics.get(host["id"], {})
@@ -535,12 +549,21 @@ class Manager:
             self.host_metrics[host["id"]] = {**previous, "online": False, "error": error}
             self.store.execute("UPDATE hosts SET status='offline',error=? WHERE id=?", (error, host["id"]))
         finally:
+            self.host_capacity_changed.discard(host["id"])
             self.wake_scheduler()
+
+    def allocation_probe_due(self, host_id, now):
+        # A terminal event deserves a fresh probe even just after startup/manual
+        # telemetry. Coalesce repeated capacity events separately to at most one
+        # probe per 10s; ordinary allocation observations keep their 60s cooldown.
+        if host_id in self.host_capacity_changed:
+            return now - self.host_capacity_probe_attempts.get(host_id, 0) >= ACTIVE_RUN_POLL_INTERVAL
+        return now - self.host_probe_attempts.get(host_id, 0) >= ALLOCATION_PROBE_INTERVAL
 
     def request_host_refresh(self, host_ids=None):
         now = time.time()
         host_ids = host_ids if host_ids is not None else [row["id"] for row in self.store.rows("SELECT id FROM hosts")]
-        self.host_refresh_requested.update(host_id for host_id in host_ids if now - self.host_probe_attempts.get(host_id, 0) >= ALLOCATION_PROBE_INTERVAL)
+        self.host_refresh_requested.update(host_id for host_id in host_ids if self.allocation_probe_due(host_id, now))
         if self.host_refresh_requested and (not self.host_refresh_task or self.host_refresh_task.done()):
             self.host_refresh_task = asyncio.create_task(self.refresh_requested_hosts())
 
@@ -550,7 +573,7 @@ class Manager:
                 host_ids = sorted(self.host_refresh_requested)
                 self.host_refresh_requested.clear()
                 for host_id in host_ids:
-                    if time.time() - self.host_probe_attempts.get(host_id, 0) >= ALLOCATION_PROBE_INTERVAL:
+                    if self.allocation_probe_due(host_id, time.time()):
                         await self.refresh_host(self.store.get("hosts", host_id))
 
     def host_observation(self, host):
@@ -728,7 +751,7 @@ class Manager:
         if row["status"] == "queued":
             reasons, _ = self.run_wait(row)
             row["wait_reasons"] = [code for code, _ in reasons]
-            row["wait_reason"] = "; ".join(text for _, text in reasons) or "Ready for scheduler"
+            row["wait_reason"] = "; ".join(dict.fromkeys(text for _, text in reasons)) or "Ready for scheduler"
         else:
             row["wait_reasons"] = []
             row["wait_reason"] = ""
@@ -901,8 +924,7 @@ class Manager:
             raise ValueError("A run supports at most 64 candidates")
         previous = config["host_contracts"].get(node["id"])
         if previous == contract:
-            self.placement_observations.pop(key, None)
-            self.wake_scheduler(row["id"])
+            self.candidate_changed(row, node)
             return {"run_id": row["id"], "host_id": node["id"], "status": row["status"], "unchanged": True}
         candidate_config = placement.normalize_contract(self.store, node, contract.get("command"),
             {"host_contracts": {node["id"]: contract}}, [node["id"]])
@@ -927,9 +949,18 @@ class Manager:
                                (json.dumps(config), time.time(), row["id"]))
             self.store.event("run.candidate", {"id": row["id"], "host_id": node["id"],
                                                "revision": expected_revision}, row["project_id"])
-        self.placement_observations.pop(key, None)
-        self.wake_scheduler(row["id"])
+        self.candidate_changed(row, node)
         return {"run_id": row["id"], "host_id": node["id"], "status": "queued", "unchanged": False}
+
+    def candidate_changed(self, run, host):
+        self.placement_observations.pop((run["id"], host["id"]), None)
+        _, age, _, known = self.host_observation(host)
+        if run["gpu_count"] and (not known or age > ALLOCATION_MAX_AGE):
+            # Newly prepared capacity should not wait out an unrelated 60s
+            # observation cooldown. The scheduler still probes occupancy and
+            # checks caps/readiness before using this candidate.
+            self.host_capacity_changed.add(host["id"])
+        self.wake_scheduler(run["id"])
 
     async def run_cancel(self, run):
         row = self.store.get("runs", run)
@@ -960,6 +991,8 @@ class Manager:
             self.store.execute("UPDATE runs SET status=?,exit_code=?,error=?,updated=? WHERE id=?",
                                (state["state"], state.get("exit_code"), state.get("error", ""), time.time(), run["id"]))
             self.store.execute("DELETE FROM reservations WHERE run_id=?", (run["id"],))
+            if current["status"] in ACTIVE_RUNS and current["gpu_count"]:
+                self.host_capacity_changed.add(current["host_id"])
             self.store.event("run." + state["state"], {"id": run["id"], "name": run["name"], **state}, run["project_id"])
             text = f"Experiment {run['name']} ({run['id']}) {state['state']}; exit={state.get('exit_code')}. "
             text += f"Artifacts: {run['job_dir'] or 'none'}. {state.get('error', '')}"
@@ -969,11 +1002,30 @@ class Manager:
                 if worker:
                     self.store.message(worker["id"], "manager", text)
         self.run_next_poll.pop(run["id"], None)
+        self.run_transition_polls.pop(run["id"], None)
         self.wake_scheduler()
+
+    def run_poll_interval(self, run, now, interval):
+        if run["status"] not in {"starting", "cancelling"}:
+            self.run_transition_polls.pop(run["id"], None)
+            return min(interval, ACTIVE_RUN_POLL_INTERVAL)
+        transition = self.run_transition_polls.get(run["id"])
+        if not transition or transition[0] != run["status"]:
+            transition = (run["status"], now + TRANSITION_POLL_WINDOW)
+            self.run_transition_polls[run["id"]] = transition
+        # A stuck launch/cancel falls back to ordinary polling. Connection errors
+        # retain the existing per-host five-minute backoff and all reservations.
+        return min(interval, TRANSITION_POLL_INTERVAL if now < transition[1] else ACTIVE_RUN_POLL_INTERVAL)
 
     async def reconcile_runs(self, due_only=False, interval=ACTIVE_RUN_POLL_INTERVAL):
         runs = self.store.rows("SELECT * FROM runs WHERE status IN (?,?,?,?,?)", ACTIVE_RUNS)
         async def reconcile(run):
+            # Earlier requests on this host yield. A cancel can arrive while we
+            # inspect its predecessor; use the current intent before deciding
+            # both the operation and its next polling deadline.
+            run = self.store.get("runs", run["id"])
+            if run["status"] not in ACTIVE_RUNS:
+                return
             host = self.store.get("hosts", run["host_id"])
             now = time.monotonic()
             if run["id"] in self.run_inspections:
@@ -982,7 +1034,7 @@ class Manager:
                              or now < self.run_host_retry_at.get(host["id"], 0)):
                 return
             self.run_inspections.add(run["id"])
-            self.run_next_poll[run["id"]] = now + min(interval, ACTIVE_RUN_POLL_INTERVAL)
+            self.run_next_poll[run["id"]] = now + self.run_poll_interval(run, now, interval)
             try:
                 state = await self.transport.request(host, {
                     "op": "cancel" if run["status"] == "cancelling" else "status", "directory": run["job_dir"]})
@@ -1053,7 +1105,7 @@ class Manager:
             reasons.append(("host_unknown", "Host has no successful observation"))
         elif not snapshot.get("online") or (run["gpu_count"] and snapshot.get("error")):
             reasons.append(("host_unavailable", "Host observation unavailable: " + snapshot.get("error", "offline")))
-        elif age is None or age > ALLOCATION_MAX_AGE:
+        elif age is None or age > ALLOCATION_MAX_AGE or host_id in self.host_capacity_changed:
             reasons.append(("host_stale", "A fresh GPU observation is required before allocation"))
         available = []
         if known:

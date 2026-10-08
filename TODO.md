@@ -1,3 +1,23 @@
+## Completed in 0.1.26
+
+- Writing Surfboard with configurable source/PDF tiles, scoped compiler tools and a writing skill.
+- Contained real pdfLaTeX/BibTeX builds, last-good PDF, source diagnostics, scoped inspection and explicit artifact publication.
+- Select source or PDF text for an agent; optional visible-view compilation after saved changes.
+- Reachable compact Files/Git/Agents controls, patch-aware questions, TeX highlighting and narrow-container stacking.
+- Fix lost compile reply retries, delayed scope responses, stale page navigation and redundant preset pages.
+- Bind gated PDF builds to admitted source, preserve small-layout controls and isolate paper-switch Auto timers.
+- Keep shared-repository PDF freshness consistent while separating project histories and published files.
+- Show project capacity and queued node blockers with a direct Surfboard limits shortcut.
+- Prompt starting/cancel confirmation and fresh-reading queue refill without excessive idle probes.
+- Remember successfully prepared new nodes while preserving existing pool settings and GPU subsets.
+- Review all eleven role/block skills and exercise Research, Coding and Writing with real isolated workflows.
+
+## Follow-up writing support
+
+- Direct compilation on a Mac workspace; currently use a connected Linux workspace.
+- XeLaTeX/LuaLaTeX/Biber and dependency setup through a supported environment strategy.
+- Exact PDF-to-source synchronization (selection currently preserves build/page/text, without guessing lines).
+
 ## Completed in 0.1.25
 
 - Monaco editor block, local language workers, file browser/search, tabs and revision-checked saves.

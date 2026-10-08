@@ -88,6 +88,11 @@ def activity(service, project_id):
             "stop_condition": "Disables on success, cancellation or Chat Stop/Pause recovery. Does not retry uncertain/lost runs or after three retries; those need new direction.",
             "permissions": "Repair this saved run task, acquire prepared nodes and retry within the original resources and protocol. No budget increases or unrelated runs."})
     actions = [service.board_runtime._public(row) for row in service.board_runtime._records() if row["project_id"] == project_id]
+    compiler = service.latex.activity(project_id)
+    builds = [{**row, "stop_condition": f"Ends on success, compile error, Stop, service restart, or after {row['timeout_seconds']} seconds. "
+               + ("Chat Stop also stops this agent's build." if row["requested_by"] == "agent" else "Started directly in the PDF view; Chat Stop does not cancel it."),
+               "permissions": "Compiles a saved source snapshot without network or shell escape. Publishing is a separate explicit action."}
+              for row in compiler["builds"]]
     agents = [{"scope": chat["scope"], "name": chat.get("agent", {}).get("name", "Agent"), "busy": bool(chat.get("busy")),
                "status": chat.get("status"), "tasks": chat.get("tasks", []),
                "model": chat.get("agent", {}).get("model"), "approval_mode": chat.get("agent", {}).get("approval_mode"),
@@ -97,6 +102,7 @@ def activity(service, project_id):
               for chat in chats.values()]
     board = service.boards.get(project_id)
     return {"project_id": project_id, "read_only": read_only, "rules": rules, "recoveries": recoveries, "actions": actions, "agents": agents,
+            "builds": builds, "builds_truncated": compiler["truncated"],
             "configured_timers": board["compiled"].get("timers", []),
             "note": "Configured board triggers are templates. Only enabled rules and recovery grants listed here can wake agents. Archiving a chat does not stop its work."}
 
@@ -127,6 +133,7 @@ def export(service, project_id):
             "rules": [{k: row.get(k) for k in ("id", "scope", "source", "enabled", "configured_enabled", "condition", "status", "next_at", "last_at", "error", "stop_condition", "paused_reason")} for row in live["rules"]],
             "recovery": [{k: row.get(k) for k in ("id", "scope", "enabled", "configured_enabled", "status", "paused_reason", "attempts", "runs", "last_problem", "stop_condition")} for row in live["recoveries"]]}),
         ("Board command logs", [{k: row.get(k) for k in ("id", "scope", "node_id", "status", "started", "finished", "returncode", "error", "logs")} for row in live["actions"][-30:]]),
+        ("Paper build lifecycle", {"builds": live["builds"], "truncated": live["builds_truncated"]}),
         ("Agent lifecycle and tool activity", events),
     ]
     sections = ["# SuperSurfer diagnostic report", "Review this file before sharing. Credentials are redacted on a best-effort basis. Full chat messages, source files, environment variables and account records are not read for this export. Bounded tool activity and command logs can contain private excerpts. Includes up to 50 recent activity entries per project chat and 30 board-command logs; each section is limited to 128 KiB."]

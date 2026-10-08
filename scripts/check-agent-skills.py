@@ -15,6 +15,7 @@ CAPABILITY_GUIDANCE = {
     "wandb-data": ("read_surfboard", "inspect_board_data", "propose_surfboard"),
     "experiment-visualizer": ("inspect_board_data", "publish_training_results", "publish_result", "publish_markdown_tab"),
     "code-editor": (),  # Visual collaboration guidance; this block grants no MCP tool.
+    "writing": ("compile_latex", "read_surfboard", "update_task", "publish_artifact"),
 }
 
 

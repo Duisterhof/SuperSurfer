@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.25. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.26. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -88,6 +88,10 @@ over temporary restoration.
 Both accept a number or `unlimited`; new projects have no default cap for either.
 Preserve existing caps unless explicitly changed. Read live limits through
 `inspect_project_compute` or `read_surfboard`; unavailable readings remain unknown.
+New hosts prepared with `acquire_new_node` are remembered for later project runs
+by default. Existing paths, enabled state and GPU masks remain unchanged; inspect
+the returned `project_pool` warning before proposing a deliberate pool update.
+Do not duplicate an admitted run because saving future defaults failed.
 
 Use [the Results skill](../supersurfer-results/SKILL.md) for reports. Prefer
 `publish_training_results` for live training comparisons, requested held-out/EEF
@@ -96,6 +100,13 @@ without another handoff or wakeup. Preserve IDs, measured gaps, protocol and sou
 identity when revising a report; do not treat a comparison request as launch intent.
 
 ## Project surfboard
+
+For a requested paper, hand off the writing outcome, evidence and section ownership
+without requiring new experiments to fill every gap. A connected `compile_latex`
+block can compile saved source and expose diagnostics/PDFs; use the
+[writing skill](../supersurfer-writing/SKILL.md). A passing compile is not proof
+of a finished argument, correct citation or completed writing task. Keep paper
+review separate from the Research run-launch requirements.
 
 Use `read_surfboard` for the applied project graph when configuration affects the
 task. The role policy filters tools and server actions; the graph's requirements

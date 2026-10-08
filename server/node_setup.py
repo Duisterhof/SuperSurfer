@@ -69,7 +69,8 @@ class NodeSetup:
         existing = next((row for row in pool['nodes'] if row['host_id'] == host_id), None)
         if existing is None:
             existing = next((row['node'] for row in reversed(self.prepared_nodes(run['project_id'])) if row['host_id'] == host_id), {})
-        node = dict(node or existing)
+        # A setup's new paths must not discard the project's narrower GPU mask.
+        node = {**existing, **(node or {})}
         if node.get('host_id', host_id) != host_id:
             raise ComputeError('Node host_id differs from host_id')
         node.update(host_id=host_id, enabled=True)
@@ -146,8 +147,11 @@ class NodeSetup:
             'contract':contract, 'note':'Prepared source/environment/data are distinct from current capacity. Scheduler rechecks before launch.'}
 
     def acquire(self, scope, run, fields):
-        if set(fields) - {'run_id', 'host_id', 'node', 'setup'}:
-            raise ComputeError('Acquisition accepts run_id, host_id, node and setup')
+        if set(fields) - {'run_id', 'host_id', 'node', 'setup', 'save_for_project'}:
+            raise ComputeError('Acquisition accepts run_id, host_id, node, setup and save_for_project')
+        save_for_project = fields.get('save_for_project', True)
+        if type(save_for_project) is not bool:
+            raise ComputeError('save_for_project must be a boolean')
         if run['status'] != 'queued':
             raise ComputeError('Only queued runs can acquire candidates; inspect the current run first', 409)
         host_id = fields.get('host_id')
@@ -164,7 +168,8 @@ class NodeSetup:
             path = PurePosixPath(setup['requirements_file'])
             if path.is_absolute() or '..' in path.parts or not str(path) or not setup.get('python'):
                 raise ComputeError('requirements_file must be relative to the committed checkout and requires a base python')
-        identity = hashlib.sha256(json.dumps([run['id'], run['revision'], fields], sort_keys=True).encode()).hexdigest()[:32]
+        preparation = {key: value for key, value in fields.items() if key != 'save_for_project'}
+        identity = hashlib.sha256(json.dumps([run['id'], run['revision'], preparation], sort_keys=True).encode()).hexdigest()[:32]
         root = _path(host['root'], 'Host root')
         workspace = root + '/.supersurfer-nodes/' + identity
         node = dict(fields.get('node') or {})
@@ -174,7 +179,7 @@ class NodeSetup:
             elif setup.get('python'): node['python'] = setup['python']
             if setup.get('data_source'): node['data_path'] = workspace + '/data'
         _, node, contract, request = self.plan(run, host_id, node or None)
-        record = {'id':identity, 'scope':scope, 'run_id':run['id'], 'project_id':run['project_id'], 'node':node, 'host_id':host_id, 'status':'preparing', 'phase':'source', 'updated_at':time.time()}
+        record = {'id':identity, 'scope':scope, 'run_id':run['id'], 'project_id':run['project_id'], 'node':node, 'host_id':host_id, 'status':'preparing', 'phase':'source', 'updated_at':time.time(), 'save_for_project':save_for_project}
         with self.lock:
             previous = self.service.store.get('node_setup:' + identity)
             if identity in self.active:
@@ -240,6 +245,13 @@ class NodeSetup:
                         'expected_revision':run['revision'], 'contract':result['contract']})
                     self.service.aml.invalidate()
                     record.update(status='ready', inspection=result)
+                    contract = result['contract']
+                    reusable = {'host_id':host['id'], 'enabled':True, 'repo_path':contract['repo'],
+                        'python':contract['environment']['python'], 'data_path':contract['env']['SUPERSURFER_DATA_PATH'],
+                        'storage_path':contract['storage']['directory'],
+                        'gpu_indices':[int(gpu) for gpu in contract['allowed_gpu_indices']]}
+                    record['reusable_node'] = reusable
+                    record['project_pool'] = self.remember_node(record, reusable)
         except Exception as exc:
             record.update(status='interrupted' if cancelled() else 'blocked', error=str(exc))
         finally:
@@ -247,6 +259,37 @@ class NodeSetup:
             with self.lock:
                 self.service.store.put('node_setup:' + identity, record)
                 self.active.pop(identity, None)
+
+    def remember_node(self, record, node):
+        """Remember a verified new node without replacing anyone's saved choices.
+
+        Candidate admission is already durable. A future-pool write failure is
+        reported separately and must not turn successful current work into failure.
+        """
+        result = {'saved':False, 'node':dict(node)}
+        if not record['save_for_project']:
+            return {**result, 'reason':'run_only', 'note':'Prepared for this run only; save_for_project is false.'}
+        try:
+            pool = self.service.compute.get(record['project_id'])
+            result['version'] = pool['version']
+            existing = next((row for row in pool['nodes'] if row['host_id'] == node['host_id']), None)
+            if existing is not None:
+                resolved = {**existing, **{key:existing.get(key) or pool['defaults'].get(key) for key in DEFAULTS}}
+                same = (resolved.get('enabled', True) and resolved.get('repo_path') == node['repo_path']
+                        and all(resolved.get(key) == node.get(key) for key in DEFAULTS)
+                        and set(map(str, resolved.get('gpu_indices', node['gpu_indices']))) == set(map(str, node['gpu_indices'])))
+                if same:
+                    return {**result, 'saved':True, 'reason':'already_configured', 'note':'This node is already configured for future runs.'}
+                return {**result, 'reason':'existing_configuration', 'note':
+                    'The run uses the prepared node. Existing project paths, enabled state and GPU selection were preserved. '
+                    'To use these paths for future runs, call configure_project_compute with reusable_node and the latest pool version.'}
+            saved = self.service.compute.save(record['project_id'], {'version':pool['version'], 'nodes':[*pool['nodes'], node]})
+            return {**result, 'saved':True, 'reason':'added', 'version':saved['version'],
+                    'note':'Prepared node saved for future project runs. Existing queued run contracts are unchanged.'}
+        except Exception as exc:
+            return {**result, 'reason':'save_failed', 'error':str(exc), 'note':
+                'The run candidate was admitted, but saving this node for future runs failed. '
+                'Inspect the current project pool before retrying with reusable_node; do not queue a duplicate run.'}
 
     def copy(self, source_host, source, destination_host, destination, cancelled):
         def endpoint(host, path):

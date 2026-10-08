@@ -9,10 +9,10 @@ const file=(pid,name)=>({path:name,exists:true,language:name.endsWith('.py')?'py
 const json=(res,data,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
 const html=`<!doctype html><html><head><link rel="stylesheet" href="/vendor/monaco/editor.css"><link rel="stylesheet" href="/code-editor.css"><style>:root{--bg:#fff;--text:#242424;--muted:#777;--line:#ddd;--green:#0078d4;--soft:#f5f5f5}html,body{margin:0;height:100%}#editor{height:calc(100% - 2px)}body.dark{--bg:#171b24;--text:#f4f5f6;--muted:#9ba5b2;--line:#313946;--soft:#202733}</style></head><body><main id="editor"></main><script type="module">
 import {createCodeEditor} from '/code-editor.js';
-window.asked=[];window.readonly=false;
+window.asked=[];window.saved=[];window.readonly=false;
 const api=async path=>{const response=await fetch('/api/'+path);const data=await response.json();if(!response.ok){const error=new Error(data.error);error.status=response.status;throw error;}return data;};
 const action=async(op,params)=>{const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,params})});const data=await response.json();if(!response.ok){const error=new Error(data.error);error.status=response.status;throw error;}return data;};
-window.code=createCodeEditor({api,action,readOnly:()=>window.readonly,onAskAgent:text=>window.asked.push(text)});
+window.code=createCodeEditor({api,action,readOnly:()=>window.readonly,onAskAgent:text=>window.asked.push(text),onSave:event=>window.saved.push(event)});
 window.mount=projectId=>code.mount(document.querySelector('#editor'),{projectId,experimentId:'e1'});
 await mount('p1');window.monaco=await import('/vendor/monaco/editor.js');window.ready=true;
 </script></body></html>`;
@@ -65,12 +65,12 @@ const server=http.createServer(async(req,res)=>{
  await page.locator('.monaco-editor').click({position:{x:150,y:30}});await page.keyboard.press('Control+End');await page.keyboard.type('# typed in Monaco');
  assert.ok(await page.evaluate(()=>code.hasUnsaved()));await page.keyboard.press('Control+s');
  await page.waitForFunction(()=>!code.hasUnsaved());assert.ok(files.get('p1/main.py').content.includes('# typed in Monaco'));assert.equal(calls.at(-1).op,'code.save');
- console.log('PASS actual Monaco edit, dirty indicator and keyboard save with revision');
+ assert.equal(await page.evaluate(()=>saved.length),1);assert.deepEqual(await page.evaluate(()=>({projectId:saved[0].projectId,path:saved[0].path})),{projectId:'p1',path:'main.py'});console.log('PASS actual Monaco edit, dirty indicator, successful scoped onSave callback and keyboard save with revision');
 
  await model('setValue','unsaved draft\n');await page.evaluate(()=>{code.unmount();});await page.evaluate(()=>mount('p2'));
  await page.locator('.code-tree-entry[data-code-open="main.py"]').click();await page.waitForFunction(()=>monaco.editor.getModels().some(row=>row.uri.path.endsWith('/p2/main.py')));
  assert.ok(await page.evaluate(()=>code.hasUnsaved()));await page.evaluate(()=>mount('p1'));assert.equal(await model('getValue'),'unsaved draft\n');
- console.log('PASS navigation preserves unsaved models and separates projects');
+ assert.equal(await page.evaluate(()=>code.hasUnsaved('p1')),true);assert.equal(await page.evaluate(()=>code.hasUnsaved('p2')),false);console.log('PASS navigation preserves unsaved models and separates projects');
 
  files.set('p1/main.py',{content:'external agent edit\n',revision:'external1'});await page.evaluate(()=>code.refresh());
  await page.locator('.code-conflict').waitFor({state:'visible'});assert.equal(await model('getValue'),'unsaved draft\n');assert.ok(await page.locator('[data-code="save"]').isDisabled());
@@ -81,7 +81,7 @@ const server=http.createServer(async(req,res)=>{
  console.log('PASS external clean reload; dirty conflict compare and explicit discard, cancel preserves draft');
 
  await model('setValue','my latest\n');files.set('p1/main.py',{content:'save race\n',revision:'external3'});await page.locator('[data-code="save"]').click();
- await page.locator('.code-conflict').waitFor({state:'visible'});assert.equal(files.get('p1/main.py').content,'save race\n');
+ await page.locator('.code-conflict').waitFor({state:'visible'});assert.equal(files.get('p1/main.py').content,'save race\n');assert.equal(await page.evaluate(()=>saved.length),1,'Conflict must not invoke the successful-save callback');
  page.once('dialog',dialog=>dialog.accept());await page.locator('[data-code="keep-mine"]').click();await page.locator('[data-code="save"]').click();await page.waitForFunction(()=>!code.hasUnsaved());
  assert.equal(files.get('p1/main.py').content,'my latest\n');
  delaySave=true;await model('setValue','saved snapshot\n');await page.locator('[data-code="save"]').click();await model('setValue','typed while saving\n');await page.waitForTimeout(220);delaySave=false;
@@ -94,15 +94,16 @@ const server=http.createServer(async(req,res)=>{
 
  await page.evaluate(()=>{const ed=monaco.editor.getEditors().find(ed=>ed.getModel()?.uri.path.endsWith('/p1/main.py'));ed.setSelection(new monaco.Selection(1,1,1,6));});
  await page.evaluate(()=>mount('p1'));assert.equal(await page.evaluate(()=>monaco.editor.getEditors().find(ed=>ed.getModel()?.uri.path.endsWith('/p1/main.py')).getSelection().endColumn),6);
- await page.locator('[data-code="ask"]').click();assert.match(await page.evaluate(()=>asked.at(-1)),/lines 1–1/);assert.match(await page.evaluate(()=>asked.at(-1)),/unsaved editor changes/);assert.ok(!calls.some(call=>call.op==='chat.send'));
+ await page.locator('.code-selection-action').click();assert.match(await page.evaluate(()=>asked.at(-1)),/lines 1–1/);assert.match(await page.evaluate(()=>asked.at(-1)),/unsaved editor changes/);assert.ok(!calls.some(call=>call.op==='chat.send'));
  await page.locator('[data-code="changes"]').click();await page.locator('[data-code-diff="main.py"]').click();await page.locator('.monaco-diff-editor').waitFor();assert.match(await page.locator('.code-diff-heading').innerText(),/HEAD ↔ Working/);
  await page.locator('[data-code="split"]').click();await page.locator('[data-code-staged="main.py"]').click();await page.locator('.code-diff-heading>span').filter({hasText:'HEAD ↔ Index'}).waitFor();
  await page.locator('[data-code="agents"]').click();await page.locator('[data-code-agent-diff="edit1"]').click();await page.locator('.code-diff-heading>span').filter({hasText:'Implementer'}).waitFor();assert.match(await page.locator('.code-diff-heading').innerText(),/Recorded agent edit.*Implementer/);
  assert.match(await page.locator('[data-code-agent-diff="edit1"]').getAttribute('title'),/Turn turn-1/);await page.locator('[data-code-review="edit1"]').click();await page.locator('[data-code-review="edit1"][aria-pressed="true"]').waitFor();assert.ok(reviewed.has('edit1'));
  await page.locator('.code-agent-select').selectOption('conversation:two');await page.locator('[data-code-agent-diff="edit2"]').click();await page.locator('.code-diff-heading>span').filter({hasText:'Reviewer'}).waitFor();assert.match(await page.locator('.code-diff-heading').innerText(),/partial patch.*Reviewer/);
  await page.evaluate(()=>mount('p1'));assert.equal(await page.locator('.code-agent-select').inputValue(),'conversation:two');assert.match(await page.locator('.code-diff-heading').innerText(),/partial patch.*Reviewer/);
- assert.equal(await model('getValue'),'typed while saving\n# unsaved selection');console.log('PASS Git/staged and named-agent patches remain separate, partial provenance and composer-only handoff');
+ await page.locator('[data-code="ask"]').click();assert.match(await page.evaluate(()=>asked.at(-1)),/recorded change.*Reviewer/);assert.match(await page.evaluate(()=>asked.at(-1)),/Recorded patch:/);assert.match(await page.evaluate(()=>asked.at(-1)),/return \"reviewed\"/);await page.evaluate(()=>{const patch=monaco.editor.getEditors().find(ed=>ed.getModel()?.getValue().startsWith('@@'));patch.setSelection(new monaco.Selection(3,1,3,25));patch.focus();});await page.keyboard.press('Control+i');assert.match(await page.evaluate(()=>asked.at(-1)),/Selected text from the recorded change/);assert.equal(await page.locator('[data-code="save"]').isDisabled(),true);assert.equal(await model('getValue'),'typed while saving\n# unsaved selection');console.log('PASS Git/staged and named-agent patches remain separate, partial provenance and composer-only handoff');
 
+ await page.evaluate(()=>code.openFile('main.py',{line:2,column:3,endLine:999,endColumn:999}));const selectedRange=await page.evaluate(()=>monaco.editor.getEditors().find(ed=>ed.getModel()?.uri.path.endsWith('/p1/main.py')).getSelection());assert.equal(selectedRange.startLineNumber,2);assert.equal(selectedRange.endLineNumber,2);assert.equal(await model('getValue'),'typed while saving\n# unsaved selection');
  await page.locator('[data-code="files"]').click();await page.getByLabel('Find file by name').fill('util');await page.locator('.code-tree-entry[data-code-open="src/util.js"]').click();await page.waitForFunction(()=>monaco.editor.getModels().some(row=>row.uri.path.endsWith('/src/util.js')));
  await page.getByLabel('Find file by name').fill('');await page.locator('.code-tree-entry[data-code-open="image.bin"]').click();await page.getByText('This binary file cannot be edited as text.').waitFor();assert.ok(await page.locator('[data-code="save"]').isDisabled());
  await page.locator('[data-code="new-file"]').click();await page.locator('.code-create input').fill('empty.txt');await page.locator('.code-create button[type="submit"]').click();await page.locator('.code-tab.selected[data-code-tab="empty.txt"]').waitFor();assert.ok(await page.evaluate(()=>code.hasUnsaved()));await page.locator('[data-code="save"]').click();await page.waitForTimeout(100);assert.equal(files.get('p1/empty.txt').content,'');

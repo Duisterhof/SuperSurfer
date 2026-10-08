@@ -358,17 +358,18 @@ NODE_CHECK_TOOL = {
         "node":POOL_NODE}}}
 ACQUIRE_NODE_TOOL = {
     "name":"acquire_new_node",
-    "description":"Prepare a registered node for this existing queued pooled run and add it to the SAME run after calling check_available_node. Prefer reuse: node supplies prepared paths. For fresh setup provide setup.python (existing base interpreter), optional committed requirements_file to create an isolated venv, and data_source (directory on workspace, or on registered data_host_id) to copy with resumable checksum rsync. Source is bundled from the exact commit into an isolated directory under the host root; shared repositories/environments/data are preserved. Returns a durable acquisition id immediately. Read progress with recover_run(action=status); repeat identical fields to resume a blocked/interrupted setup without duplicate jobs. Advanced environments can be prepared with authorized shell tools and passed as node paths. GPU allocation and launch remain with the scheduler. Requires user work or this run's saved recovery grant.",
+    "description":"Prepare a registered node for this existing queued pooled run and add it to the SAME run after calling check_available_node. Prefer reuse: node supplies prepared paths. For fresh setup provide setup.python (existing base interpreter), optional committed requirements_file to create an isolated venv, and data_source (directory on workspace, or on registered data_host_id) to copy with resumable checksum rsync. Source is bundled from the exact commit into an isolated directory under the host root; shared repositories/environments/data are preserved. Returns a durable acquisition id immediately. Newly prepared hosts are remembered in the project pool by default for later runs; existing host settings and GPU masks are preserved. Set save_for_project=false for run-only use. Inspect project_pool warnings and reusable_node rather than assuming a conflicting configuration was replaced. Read progress with recover_run(action=status); repeat identical fields to resume a blocked/interrupted setup without duplicate jobs. Advanced environments can be prepared with authorized shell tools and passed as node paths. GPU allocation and launch remain with the scheduler. Requires user work or this run's saved recovery grant.",
     "inputSchema":{"type":"object","additionalProperties":False,"required":["run_id","host_id"],"properties":{
         "run_id":{"type":"string","minLength":1,"maxLength":150}, "host_id":{"type":"string","minLength":1,"maxLength":150},
-        "node":POOL_NODE,"setup":{"type":"object","additionalProperties":False,"properties":{
+        "save_for_project":{"type":"boolean","default":True,"description":"Remember a newly added prepared node for later project runs; never overwrite an existing host configuration. False keeps this admission run-only."},"node":POOL_NODE,"setup":{"type":"object","additionalProperties":False,"properties":{
             "python":{"type":"string","maxLength":4096},"requirements_file":{"type":"string","maxLength":4096},
             "data_source":{"type":"string","maxLength":4096},"data_host_id":{"type":"string","maxLength":150}}}}}}
 RECOVER_RUN_TOOL = {
     "name":"recover_run",
-    "description":"Inspect durable node acquisition and recovery status for this run. enable saves its existing user task and grants this conversation bounded wakeups for queue blockers/failures; new worker queue_run requests enable this automatically. Recovery can check/acquire nodes, register necessary hosts and retry the same failed task without manager relays. pause revokes future recovery and stops setup transfers, leaving the research run untouched. retry requires a confirmed failed latest attempt, diagnosed repair reason, explicit argv with fresh outputs or verified resume, and an exact-source PR; it preserves resources and creates a linked attempt with new W&B identity. At most three retries; cancelled/lost/uncertain jobs cannot retry. Preserve protocol and the user's scope. Ordinary monitoring wakeups get no mutation grant. Chat Stop and run cancellation pause recovery.",
+    "description":"Inspect durable node acquisition and recovery status for this run. Status returns compact current state, blockers, recent setup results and reusable node paths; include_details=true returns full source/probe receipts when needed. enable saves its existing user task and grants this conversation bounded wakeups for queue blockers/failures; new worker queue_run requests enable this automatically. Recovery can check/acquire nodes, register necessary hosts and retry the same failed task without manager relays. pause revokes future recovery and stops setup transfers, leaving the research run untouched. retry requires a confirmed failed latest attempt, diagnosed repair reason, explicit argv with fresh outputs or verified resume, and an exact-source PR; it preserves resources and creates a linked attempt with new W&B identity. At most three retries; cancelled/lost/uncertain jobs cannot retry. Preserve protocol and the user's scope. Ordinary monitoring wakeups get no mutation grant. Chat Stop and run cancellation pause recovery.",
     "inputSchema":{"type":"object","additionalProperties":False,"required":["run_id","action"],"properties":{
         "run_id":{"type":"string","minLength":1,"maxLength":150},"action":{"type":"string","enum":["status","enable","pause","retry"]},
+        "include_details":{"type":"boolean","description":"Only for status: include full source, probe and acquisition receipts instead of the compact default."},
         "task":{"type":"string","minLength":1,"maxLength":20000},"revision":{"type":"string","pattern":"^[a-f0-9]{40}$"},
         "pr_url":{"type":"string","maxLength":2048},"command":{"type":"array","minItems":1,"items":{"type":"string"}},
         "reason":{"type":"string","minLength":1,"maxLength":4000}}}}
@@ -400,6 +401,19 @@ ACTION_BOARD_TOOL = _board_tool("run_board_action", "Start, inspect or stop an a
     "operation": {"type": "string", "enum": ["start", "status", "stop"]},
     "request_id": {"type": "string", "minLength": 16, "maxLength": 100},
     "pr_url": {"type": "string", "maxLength": 2048}, "execution_id": {"type": "string", "maxLength": 150}, "experiment_id": {"type": "string", "maxLength": 180}}, ["node_id", "operation"])
+LATEX_TOOL = _board_tool("compile_latex", "Compile saved LaTeX source, inspect or stop a build, or explicitly publish its successful PDF. Uses the connected LaTeX block and an isolated compiler on this workspace; never saves editor buffers or publishes automatically. Start returns a build ID: read status until terminal, repair actual errors, then inspect the exact build to receive PDF page images and extracted text. Never search private service folders to find PDFs. Distinguish the last good PDF from current failed or changed source. Reuse request_id after a lost reply. Selected PDF text carries a build ID and page, not a guessed source line.", {
+    **_PROJECT, "operation": {"type": "string", "enum": ["start", "status", "inspect", "stop", "publish"]},
+    "node_id": {"type": "string", "maxLength": 100},
+    "main_file": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "source_dir": {"type": "string", "maxLength": 1024},
+    "engine": {"type": "string", "enum": ["pdflatex"]},
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
+    "request_id": {"type": "string", "minLength": 16, "maxLength": 100},
+    "build_id": {"type": "string", "maxLength": 150},
+    "pages": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 1, "maxItems": 3},
+    "artifact_path": {"type": "string", "maxLength": 4096},
+    "pr_url": {"type": "string", "maxLength": 2048},
+    "experiment_id": {"type": "string", "maxLength": 180}}, ["operation"])
 ARTIFACT_LIST_TOOL = _board_tool("list_project_artifacts", "Browse the project's isolated artifact folder. Returns preview/download links and paths; no files from other projects.", {**_PROJECT, "path": {"type": "string", "maxLength": 4096}})
 ARTIFACT_PUBLISH_TOOL = _board_tool("publish_artifact", "Copy an existing project output into this project's artifact library. Project libraries stay separate even when repositories are shared. Never copy credentials, private service state or a symlink.", {
     **_PROJECT, "source_path": {"type": "string", "maxLength": 4096}, "path": {"type": "string", "maxLength": 4096},
@@ -407,7 +421,7 @@ ARTIFACT_PUBLISH_TOOL = _board_tool("publish_artifact", "Copy an existing projec
 ACTIVITY_TOOL = _board_tool("inspect_project_activity", "Show what agents will do while the user is away: actual wakeups, saved tasks, recovery grants, stop conditions and running board commands.", _PROJECT)
 DIAGNOSTICS_TOOL = _board_tool("export_diagnostics", "Export a bounded, redacted Markdown diagnostic report for this project. Excludes credentials, source files and chat contents. The user reviews and downloads it before sharing.", _PROJECT)
 for _role, _tools in ROLE_TOOLS.items():
-    _tools.extend([READ_BOARD_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
+    _tools.extend([READ_BOARD_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, LATEX_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
     if _role in {"lead", "manager"}:
         for _old, _new in [("create_experiment", "create_work_item"), ("create_experiment_agent", "create_work_item_agent"), ("handoff_experiment", "handoff_work_item"), ("update_experiment", "update_work_item")]:
             _original = next((tool for tool in _tools if tool["name"] == _old), None)
@@ -605,7 +619,13 @@ def handle(request):
             if not isinstance(params, dict):
                 raise ValueError("Invalid tool parameters.")
             result = call_tool(params.get("name"), params.get("arguments"))
-            response["result"] = {"content": [{"type": "text", "text": json.dumps(result)}], "isError": False}
+            images = []
+            if params.get("name") == "compile_latex" and params.get("arguments", {}).get("operation") == "inspect" and isinstance(result, dict):
+                result = dict(result)
+                previews = result.pop("images", [])
+                result["rendered_pages"] = [preview["page"] for preview in previews]
+                images = [{"type": "image", "mimeType": "image/png", "data": preview["data"]} for preview in previews]
+            response["result"] = {"content": [{"type": "text", "text": json.dumps(result)}, *images], "isError": False}
         except Exception as error:
             response["result"] = {"content": [{"type": "text", "text": str(error)}], "isError": True}
     else:

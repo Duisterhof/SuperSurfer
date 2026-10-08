@@ -101,6 +101,21 @@ class BoardRuntimeTests(unittest.TestCase):
             self.start()
         self.assertEqual(1, len(self.service.store.get("board_action_ids")))
 
+    def test_first_python_check_keeps_receipt_when_it_only_creates_bytecode(self):
+        (self.repo / "module.py").write_text("VALUE = 7\n")
+        self.board["compiled"]["actions"]["check"]["argv"] = [sys.executable, "-c", "import module; assert module.VALUE == 7"]
+        result = self.finished(self.start())
+        self.assertEqual("succeeded", result["status"])
+        self.assertTrue(list((self.repo / "__pycache__").glob("*.pyc")))
+        self.assertTrue(result["source_unchanged"])
+        self.assertTrue(self.passed())
+        (self.repo / "__pycache__" / "actual_source.py").write_text("source must count\n")
+        self.assertFalse(self.passed())
+        subprocess.run(["git", "-C", str(self.repo), "add", "__pycache__"], check=True)
+        before = source_fingerprint(self.repo)
+        next((self.repo / "__pycache__").glob("*.pyc")).write_bytes(b"tracked bytecode changed")
+        self.assertNotEqual(before, source_fingerprint(self.repo))
+
     def test_failed_check_and_mutating_check_cannot_satisfy_requirement(self):
         self.board["compiled"]["actions"]["check"]["argv"] = [sys.executable, "-c", "raise SystemExit(7)"]
         self.assertEqual("failed", self.finished(self.start())["status"])

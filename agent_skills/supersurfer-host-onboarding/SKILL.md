@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.25. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.26. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -54,6 +54,11 @@ This reads existing state rather than probing or reserving GPUs.
   claiming success; do not cancel/requeue or create a duplicate merely to relocate.
 
 Use `recover_run` status for the durable acquisition record and current lineage.
+Its default is a compact live summary: run identity/status, placement blockers,
+recovery attempts, recent setup readiness/errors, reusable node paths, pool-save
+warnings and next steps. Request `include_details: true` only when investigating
+the full source, command, probe or contract receipts; ordinary monitoring should
+not repeatedly pull those larger records.
 Read [run acquisition, recovery and authority](references/run-recovery.md) before
 starting setup or retrying a failed attempt. `ready` means setup passed; `available`
 also considers observed GPU capacity, which the scheduler rechecks. Neither
@@ -73,6 +78,13 @@ per ten seconds, and returns before every host answers. Routine idle probes rema
 five minutes apart. Check timestamps/errors; a reservation is not fresh telemetry.
 
 ## Apply the user's actual budget decision
+
+LaTeX compilation runs on the connected workspace host, not the GPU scheduler.
+Its capability report checks pdfLaTeX, optional BibTeX, bubblewrap/prlimit and
+working Linux namespaces. Do not recruit a GPU node, change project budgets or
+silently bypass containment to fix missing paper-compilation setup. Follow the
+[writing skill](../supersurfer-writing/SKILL.md) for the actual supported pipeline;
+installing host packages is separate from a request to edit a paper.
 
 All owned roles have `set_project_limits`. Workers/leads omit `project_id`; managers
 supply it. Set only the fields the user decided: `gpu_limit` is an integer 0–1024
@@ -137,6 +149,22 @@ reconcile version conflicts. These tools do not themselves install dependencies,
 copy data or launch jobs.
 
 ## Finish the authorized task
+
+Successful `acquire_new_node` now remembers a newly prepared host in the project
+pool by default, after the exact-source/runtime/data check and admission to the
+current run. Later runs can reuse it without repeating node setup. Set
+`save_for_project: false` only for intended run-only use. Read `reusable_node` and
+`project_pool`: `added` or `already_configured` confirms future reuse. An existing
+conflicting path, disabled host or GPU mask is preserved (`existing_configuration`),
+not silently replaced or widened. A requested default change uses the current
+pool version through `configure_project_compute` when that tool is available.
+
+`project_pool.reason: save_failed` concerns remembering the node; a `ready`
+acquisition has still admitted the current run's candidate. Inspect the current
+pool and reusable node before retrying that configuration. Do not queue another
+run or claim the current admission failed because the optional save failed.
+Omitting `save_for_project` and explicitly setting it true use the same setup
+identity. Preserve the run and preparation IDs on retry.
 
 Prefer prepared nodes before new submission, then continue through the role's
 scoped queue workflow and exact-source PR. For an existing queued run, acquisition

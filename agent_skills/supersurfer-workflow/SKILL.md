@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.25'
+  supersurfer-version: '0.1.26'
 ---
 
 # Work from the project's surfboard
 
-Reviewed for SuperSurfer 0.1.25. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.26. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
@@ -19,6 +19,10 @@ requested interface, use the configured preview, and inspect its real rendering
 and interactions at useful sizes. Keep browser evidence attached to the change.
 Do not require GPUs, W&B, research experiments or a launch PR for ordinary local
 work unless this project's board explicitly requires the relevant capability.
+Research writing has its own [writing skill](../supersurfer-writing/SKILL.md).
+If this project adds a LaTeX compiler/PDF view, `compile_latex` uses fixed isolated
+document commands; do not repurpose a generic preview shell command to bypass
+compiler containment or treat a successful build as a completed writing assignment.
 
 Use `update_task` for the requested outcome and keep its ID. Leads assign bounded
 work to an existing owner through `handoff_work_item`, or use `create_work_item`

@@ -55,7 +55,7 @@ class GraphTests(unittest.TestCase):
         first[0]["ports"]["inputs"].clear()
         self.assertTrue(catalog()[0]["ports"]["inputs"])
         graphs = templates()
-        self.assertEqual(["research", "software", "web"], [graph["workflow"] for graph in graphs])
+        self.assertEqual(["research", "software", "web", "writing"], [graph["workflow"] for graph in graphs])
         graphs[0]["defaults"]["models"]["lead"] = "custom"
         self.assertEqual({}, template()["defaults"]["models"])
         self.assertEqual(graphs, json.loads(json.dumps(graphs)))

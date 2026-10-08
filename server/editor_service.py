@@ -105,7 +105,10 @@ class EditorService:
         if operation == "code.save":
             if set(fields) != {"project_id", "path", "content", "revision"}:
                 raise SurfboardError("Saving requires path, content and the revision read from this file")
-            return self.code.save(project, fields["path"], fields["content"], fields["revision"])
+            result = self.code.save(project, fields["path"], fields["content"], fields["revision"])
+            if hasattr(self, "latex"):
+                self.latex.invalidate(project["id"], repo=project["repo"])
+            return result
         if operation == "code.mkdir":
             if set(fields) != {"project_id", "path"}:
                 raise SurfboardError("Creating a folder requires project_id and path")
@@ -180,4 +183,5 @@ class EditorService:
             raise SurfboardError("The change is outside this project repository", 403)
         # A patch is exact evidence of this agent's edit. We do not fabricate a
         # full before/after file from today's potentially overlapping worktree.
-        return {**row, "path": path, "source": "recorded_patch", "partial": bool(row.get("truncated"))}
+        return {**row, "path": path, "agent_name": self.store.get("chat_name:" + scope) or row.get("agent_name") or scope,
+                "source": "recorded_patch", "partial": bool(row.get("truncated"))}
