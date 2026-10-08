@@ -21,7 +21,7 @@ class SurfboardError(ValueError):
 
 ROLES = ("lead", "worker", "manager")
 WORKFLOWS = ("research", "software", "web", "writing")
-COMMON_TOOLS = {"ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "read_view_layout", "update_view_layout", "inspect_board_data", "export_diagnostics"}
+COMMON_TOOLS = {"ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "export_diagnostics"}
 ITEM_TOOLS = {"create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item"}
 EXPERIMENT_TOOLS = {"create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment"}
 COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node",
@@ -448,7 +448,7 @@ _LAYOUT_DEFINITIONS = (
     ("editor", "Code editor", ("editor",)),
     ("chat", "Agent chat", ("agent",)),
     ("preview", "Preview", ("preview",)),
-    ("pdf", "PDF preview", ("latex",)),
+    ("pdf", "LaTeX output", ("latex",)),
 )
 
 
@@ -556,6 +556,7 @@ def tile_catalog(board, level="item"):
         result.append({**editor, "id": kind, "kind": kind, "label": title, "title": title})
     if not any(row["kind"] == "pdf" for row in result):
         result.append({"id": "pdf", "kind": "pdf", "label": "PDF viewer", "title": "PDF viewer", "min_height": 400})
+    result.append({"id": "todos", "kind": "todos", "label": "To-dos", "title": "To-dos"})
     return result
 
 
@@ -600,7 +601,7 @@ def validate_pages(pages, board, level="item"):
             tile_ids.add(tile_id)
             tile_kinds.add(kind)
             normalized.append({"id": tile_id, "kind": kind,
-                               "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12, True),
+                               "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12),
                                "height": _number(tile.get("height", 400), tile_at + ".height" + (" (PDF preview)" if kind == "pdf" else ""),
                                                  400 if kind == "pdf" else 160, 1200, True)})
             if "placement" in tile:
@@ -616,7 +617,7 @@ def validate_pages(pages, board, level="item"):
                     _fail(tile_at + ".path", "choose a PDF file")
                 normalized[-1]["path"] = tile["path"]
         result.append({"id": page_id, "title": title, "tiles": normalized})
-        for field, minimum, maximum in (("left_width", 200, 600), ("right_width", 280, 760)):
+        for field, minimum, maximum in (("left_width", 160, 600), ("right_width", 280, 760)):
             if field in page:
                 result[-1][field] = _number(page[field], at + "." + field, minimum, maximum, True)
     return result
@@ -837,7 +838,7 @@ def diff_summary(before, after):
 
 
 class Surfboards:
-    """One atomic KV record per project; drafts never change active policy."""
+    """Versioned workflows. Projects provide defaults; tasks own snapshots."""
     def __init__(self, store):
         self.store = store
 
@@ -855,6 +856,35 @@ class Surfboards:
 
     def get(self, project_id):
         return self._public(project_id, self._record(project_id))
+
+    def task_key(self, project_id, experiment_id, *, workflow=None, read_only=False):
+        item = self.store.experiment(experiment_id)
+        if item["project_id"] != project_id:
+            raise SurfboardError("This task belongs to another project", 403)
+        identity = "task:" + experiment_id
+        key = self._key(identity)
+        with self.store.lock:
+            if self.store.get(key) is None and not read_only:
+                self.store.put(key, self.task_seed(project_id, workflow))
+        return identity
+
+    def task_seed(self, project_id, workflow=None):
+        source = self._record(project_id)
+        board = template(workflow) if workflow else deepcopy(source["board"])
+        for node in board["nodes"]:
+            if node["kind"] == "compute":
+                for field in ("gpu_limit", "run_limit"):
+                    node["config"].pop(field, None)
+        # A project's in-progress proposal is not an applied task workflow.
+        return {"version": 1, "board": board, "draft": None,
+                "next_draft_version": 0, "history": [],
+                "inherited_from": {"project_id": project_id, "version": source["version"]}}
+
+    def task(self, project_id, experiment_id, *, read_only=False):
+        identity = self.task_key(project_id, experiment_id, read_only=read_only)
+        record = self.store.get(self._key(identity)) or self.task_seed(project_id)
+        return {**self._public(project_id, record), "experiment_id": experiment_id,
+                "inherited_from": record.get("inherited_from")}
 
     def _mutate(self, project_id, expected_version, change):
         _number(expected_version, "expected_version", 0, 2**53 - 1, True)

@@ -1,3 +1,51 @@
+# SuperSurfer 0.1.31 task workspaces and editors — October 8, 2026
+
+The final backend suite passes **623 Python tests**. All **23 Node/SSH checks**
+pass with disposable localhost SSH enabled. All **38 browser suites** pass:
+37 use the system Chromium against isolated services/fixtures, and the optional
+VS Code workbench uses Chromium 153 with the real Code OSS extension host.
+The Linux Electron native window test passes: cancelled settings navigation and
+window close retain the dirty editor buffer, reconnect continues, and explicit
+Discard closes only that window without saving files or stopping remote work.
+All eleven release skills were reviewed and revised; their checker passes.
+Scheduler/engine source is unchanged.
+
+The real workbench test installs and removes Vim through Open VSX, opens source,
+sends a selected-code chip using Ctrl+I, retains the same iframe and dirty file
+through project navigation, and rejects an invalid editor capability URL. Testing
+found and fixed extension registration after third-party installs, obsolete
+extensions in Settings, implicit native auto-save, and old-browser iframe reloads.
+The optional workbench now requires state-preserving DOM moves; the desktop app
+provides them. Older browsers retain access to the built-in editor.
+
+Actual Monaco tests cover persistent Files navigation, internal and external panel
+dividers, paired fractional widths, sidebar height, fullscreen, font/theme defaults,
+LaTeX-only offline spelling and bounded correctly positioned autocomplete. Real
+PDF.js tests cover continuous multi-page display, selection, zoom and stale/error
+states. Real LaTeX builds compile saved source, retain the last good PDF after
+failure, and survive narrow layouts. Delayed-response tests bind pending builds to
+the original paper, cancel obsolete paper-choice timers, coalesce saved changes,
+and preserve compilation when leaving the PDF view.
+
+A real-service drop uploads bytes into a project-specific artifact and opens it
+beside the persistent file tree. Checklist tests exercise Markdown checkboxes and
+concurrent edits: a conflict/reload keeps the draft attached to its original item
+after another client inserts a line. Backend tests check atomic/idempotent uploads,
+path confinement, scope restrictions, settings persistence, archive-without-stop,
+frozen commit comparisons and mixed task Surfboards surviving restart/default edits.
+Pinned chats retain their original scope and typed draft across project navigation.
+
+Monitoring and manager/lead messages compact with lazy expansion; direct user
+steering and replies remain visible. The browser test includes a long connectivity
+report and verifies that its complete evidence is available after expansion.
+No real GPU jobs or node setup were launched for these tests.
+
+Desktop packages are cross-built on Linux. Native macOS execution and macOS
+workspace installation of the optional extension runtime are not verified here.
+Offline English spelling is not Grammarly/grammar integration; extensions are
+from Open VSX, not the Microsoft-only Marketplace. Compilers remain subject to
+the configured workflow gates and supported Linux toolchain.
+
 # SuperSurfer 0.1.30 editor workflow — October 8, 2026
 
 The final backend suite passes **615 Python tests** and the **20 Node/SSH checks**

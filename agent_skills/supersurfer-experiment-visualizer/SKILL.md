@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.30. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.31. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -27,6 +27,9 @@ versioned publication path for a requested content change.
 Use fullscreen/restore to inspect a visualization without recreating its report
 or iframe. Preserve interaction state and source identities; an attached PDF or
 source selection is review context, not a new measured sample or automatic update.
+Uploaded media or data can support a requested visualization after inspecting the
+actual project artifact. Reuse its identity and label snapshot provenance; do not
+claim automatic live refresh or create a tracking run simply because it was added.
 
 A custom page can combine this visualization with Markdown, source and chat tiles.
 Keep comparison meaning and source identities intact at each size. A narrow tile

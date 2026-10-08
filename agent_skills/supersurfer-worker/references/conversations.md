@@ -36,7 +36,13 @@ for every poll. The app groups its own background checks in a collapsed activity
 card with the latest outcome visible and history expandable. That presentation
 does not complete or pause the saved monitoring rule. Direct user messages and
 steering remain separate instructions; answer them normally and preserve priority.
+Agent-to-agent coordination is also shown in collapsed activity cards, with the
+sender and latest outcome visible; expand them for evidence and the original
+exchange. This does not change delivery, priority or authority. Direct user work
+and its response stay separate, and failed/uncertain deliveries remain explicit.
 Grouping is application-owned, not a text prefix or metadata an agent should forge.
+Keep a necessary peer answer concise and link the existing evidence instead of
+copying a long status report into every conversation.
 
 `ask_user` gathers one to three essential decisions, not credentials or permission
 grants. Await its result; keep waiting if an execution wrapper yields a running
@@ -58,6 +64,12 @@ Editor/PDF context chips stay with the selected conversation while navigating in
 the current window. Attaching context only prepares that chat; it neither sends
 a message nor resumes work until the user explicitly sends. Fullscreen/restore
 is also presentation only, preserving existing work and unsaved editor buffers.
+A local upload is saved to the project chosen when it began. Its chat attachment
+stays with the original conversation while the user navigates; it is still a
+draft until explicit Send. Use the returned artifact identity and workspace path,
+not a guessed desktop or repository path. Removing the chip does not delete the
+artifact, and importing a file does not execute its contents or grant new tools.
+
 
 Workspace Settings supplies the persistent default permission unless a chat
 explicitly overrides it. YOLO resolves eligible permission requests immediately,

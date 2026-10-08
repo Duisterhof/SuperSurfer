@@ -76,6 +76,7 @@ CREATE_EXPERIMENT_TOOL = {
         "request_id": {"type": "string", "minLength": 16, "maxLength": 100, "pattern": "^[a-zA-Z0-9_-]{16,100}$"},
         "name": {"type": "string", "minLength": 1, "maxLength": 160},
         "summary": {"type": "string", "minLength": 1, "maxLength": 20000},
+        "surfboard_template": {"type": "string", "enum": ["research", "software", "writing", "web"], "description": "Task workflow. Omit to copy the project default. Tasks in one project may use different workflows."},
     }, "required": ["request_id", "name", "summary"]},
 }
 MANAGER_CREATE_EXPERIMENT_TOOL = {
@@ -390,13 +391,15 @@ def _board_tool(name, description, properties, required=()):
             "properties": properties, "required": list(required)}}
 
 _PROJECT = {"project_id": {"type": "string", "maxLength": 150, "description": "Manager only; other scopes already select their project."}}
-READ_BOARD_TOOL = _board_tool("read_surfboard", "Read the current project graph, draft, versions, block catalog and compiled capabilities.", _PROJECT)
+READ_BOARD_TOOL = _board_tool("read_surfboard", "Read the task graph, draft, versions and capabilities. Workers read their own task. Leads/managers select experiment_id, or omit it for the project default used by new tasks. Project compute resources remain shared.", {**_PROJECT, "experiment_id": {"type":"string", "maxLength":180}})
 _LAYOUT_SCOPE = {**_PROJECT, "experiment_id": {"type": "string", "maxLength": 180, "description": "Lead/manager: select one work item, or omit for the project page. Workers are fixed to their own item."}}
 READ_LAYOUT_TOOL = _board_tool("read_view_layout", "Read pages, tile catalog, side panels and both layout versions. Use before arranging a page. Manager supplies project_id; workers read their own item. This is presentation only.", _LAYOUT_SCOPE)
-UPDATE_LAYOUT_TOOL = _board_tool("update_view_layout", "Apply the user's requested page layout directly. Read first, preserve unrelated pages, and reread on conflict. Pages contain id, title, tiles and optional sidebar widths left_width 200–600, right_width 280–760; each tile has id, kind, span 1–12, height 160–1200 (PDF min 400), optional placement main/left/right and optional repository-relative PDF path. Left is the navigation sidebar. All owned roles can arrange their scope without a manager handoff. Does not change workflow rules, grant tools, compile, save source or launch work.", {
+UPDATE_LAYOUT_TOOL = _board_tool("update_view_layout", "Apply the user's requested page layout directly. Read first, preserve unrelated pages, and reread on conflict. Pages contain id, title, tiles and optional sidebar widths left_width 160–600, right_width 280–760; each tile has id, kind, span 1–12, height 160–1200 (PDF min 400), optional placement main/left/right and optional repository-relative or returned artifact: PDF path. Left is the navigation sidebar. All owned roles can arrange their scope without a manager handoff. Does not change workflow rules, grant tools, compile, save source or launch work.", {
     **_LAYOUT_SCOPE, "version": {"type": "integer", "minimum": 0}, "board_version": {"type": "integer", "minimum": 0},
     "pages": {"type": "array", "maxItems": 24, "items": {"type": "object", "additionalProperties": True}}},
     ["version", "board_version", "pages"])
+TODOS_TOOL = _board_tool("manage_todos", "Read or save this scope's plain Markdown checklist. Read first and pass the returned revision (null for a new file). Preserve unrelated text; reread on conflict. Save requires an active user task. Workers edit their own work item's list, leads the project or selected own item. Checking a box records evidence of completion; it never launches work or completes an agent goal automatically.", {**_LAYOUT_SCOPE, "operation":{"type":"string","enum":["read","save"]}, "markdown":{"type":"string","maxLength":131072}, "revision":{"type":["string","null"]}}, ["operation"])
+PRESENT_CODE_TOOL = _board_tool("present_code", "Show a repository file or real side-by-side Git revision comparison in this conversation's editor. For a comparison pass base and head commit hashes/branches/tags; they are frozen to full commit IDs. Optional path selects one changed file. Use this for the user's request to show a diff, not a patch-file substitute. No checkout, source edit or execution. Requires an active user task; only this role's project.", {**_PROJECT, "path":{"type":"string","maxLength":4096}, "base":{"type":"string","maxLength":200}, "head":{"type":"string","maxLength":200}, "title":{"type":"string","maxLength":160}})
 PROPOSE_BOARD_TOOL = _board_tool("propose_surfboard", "Save a proposed graph for user review. Never applies or starts work. Read current versions first; ask_user must clarify any ambiguous arrow. Concurrent edits are rejected.", {
     "board": {"type": "object", "additionalProperties": True}, "expected_version": {"type": "integer", "minimum": 0},
     "expected_draft_version": {"type": "integer", "minimum": 0}}, ["board", "expected_version", "expected_draft_version"])
@@ -427,13 +430,13 @@ ARTIFACT_PUBLISH_TOOL = _board_tool("publish_artifact", "Copy an existing projec
 ACTIVITY_TOOL = _board_tool("inspect_project_activity", "Show what agents will do while the user is away: actual wakeups, saved tasks, recovery grants, stop conditions and running board commands.", _PROJECT)
 DIAGNOSTICS_TOOL = _board_tool("export_diagnostics", "Export a bounded, redacted Markdown diagnostic report for this project. Excludes credentials, source files and chat contents. The user reviews and downloads it before sharing.", _PROJECT)
 for _role, _tools in ROLE_TOOLS.items():
-    _tools.extend([READ_BOARD_TOOL, READ_LAYOUT_TOOL, UPDATE_LAYOUT_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, LATEX_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
+    _tools.extend([READ_BOARD_TOOL, READ_LAYOUT_TOOL, UPDATE_LAYOUT_TOOL, PRESENT_CODE_TOOL, TODOS_TOOL, DATA_BOARD_TOOL, ACTION_BOARD_TOOL, LATEX_TOOL, ARTIFACT_LIST_TOOL, ARTIFACT_PUBLISH_TOOL, ACTIVITY_TOOL, DIAGNOSTICS_TOOL])
     if _role in {"lead", "manager"}:
         for _old, _new in [("create_experiment", "create_work_item"), ("create_experiment_agent", "create_work_item_agent"), ("handoff_experiment", "handoff_work_item"), ("update_experiment", "update_work_item")]:
             _original = next((tool for tool in _tools if tool["name"] == _old), None)
             if _original:
                 _tools.append({**_original, "name": _new, "description": _original["description"].replace("research question", "acceptance criteria").replace("research", "project").replace("experiment", "work item").replace("W&B setup status", "saved document")})
-ROLE_TOOLS["configurator"] = [READ_BOARD_TOOL, PROPOSE_BOARD_TOOL, READ_LAYOUT_TOOL, UPDATE_LAYOUT_TOOL, QUESTION_TOOL]
+ROLE_TOOLS["configurator"] = [READ_BOARD_TOOL, PROPOSE_BOARD_TOOL, READ_LAYOUT_TOOL, UPDATE_LAYOUT_TOOL, PRESENT_CODE_TOOL, TODOS_TOOL, QUESTION_TOOL]
 
 def validate_questions(arguments):
     if not isinstance(arguments, dict) or set(arguments) != {"questions"}:

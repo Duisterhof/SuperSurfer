@@ -16,11 +16,12 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
    const {EventEmitter}=require('node:events'),{dialog}=require('electron');
    global.__fixture={choice:0,dialogs:[],killed:0,connects:0,child:null};
    dialog.showMessageBoxSync=(_window,options)=>{__fixture.dialogs.push(options);return __fixture.choice;};
+   require('electron').app.setPath('userData',${JSON.stringify(path.join(profile,'userdata'))});
    const connection=require(${JSON.stringify(root+'/desktop/connection.cjs')});
    connection.connect=async(raw)=>{const config=connection.validateConfig(raw),child=new EventEmitter();__fixture.child=child;__fixture.connects++;child.exitCode=null;child.kill=()=>{if(child.exitCode===null){child.exitCode=0;__fixture.killed++;}};return {config,origin:${JSON.stringify(origin)},token:${JSON.stringify(token)},child};};
    require(${JSON.stringify(root+'/desktop/main.cjs')});
   `);
-  app=await electron.launch({executablePath:path.join(runtime,path.basename(executable)),chromiumSandbox:true,colorScheme:null,args:['--disable-dev-shm-usage'],env:{...process.env,HOME:profile,XDG_CONFIG_HOME:path.join(profile,'config'),XDG_CACHE_HOME:path.join(profile,'cache')}});
+  app=await electron.launch({executablePath:path.join(runtime,path.basename(executable)),chromiumSandbox:true,colorScheme:null,args:['--disable-dev-shm-usage'],env:{...process.env,XDG_CONFIG_HOME:path.join(profile,'config'),XDG_CACHE_HOME:path.join(profile,'cache')}});
   const page=await app.firstWindow();page.setDefaultTimeout(15000);const errors=[],actions=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',()=>{});page.on('request',req=>{if(req.url().endsWith('/api/action'))actions.push(req.postDataJSON());});
   await page.waitForFunction(()=>!document.querySelector('#connect-button')?.disabled);
   await page.evaluate(projectId=>superSurferDesktop.setWorkspace({view:'workspace',projectId,tab:'editor',chatVisible:true}),service.projects.software);

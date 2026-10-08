@@ -1,15 +1,19 @@
 ---
 name: supersurfer-workflow
-description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
+description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
-# Work from the project's surfboard
+# Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.30. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.31. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
-configuration. Your advertised tools and server scope determine what you can do;
+configuration. Each task snapshots the project default or an explicitly selected
+`surfboard_template`; later default edits do not rewrite existing tasks. Read the
+task's board even when the project's default workflow differs. Repository files,
+artifacts, data, compute and caps remain shared within that project. Follow
+[task scope](../supersurfer-surfboard/references/task-scope.md). Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
 reconnects. A normal final message ends a turn, not an unfinished deliverable.
 
@@ -18,7 +22,7 @@ configured check, and report the change with evidence. For Web design, build the
 requested interface, use the configured preview, and inspect its real rendering
 and interactions at useful sizes. Keep browser evidence attached to the change.
 Do not require GPUs, W&B, research experiments or a launch PR for ordinary local
-work unless this project's board explicitly requires the relevant capability.
+work unless this task's board explicitly requires the relevant capability.
 Research writing has its own [writing skill](../supersurfer-writing/SKILL.md).
 If this project adds a LaTeX compiler/PDF view, `compile_latex` uses fixed isolated
 document commands; do not repurpose a generic preview shell command to bypass
@@ -27,7 +31,9 @@ compiler containment or treat a successful build as a completed writing assignme
 Use `update_task` for the requested outcome and keep its ID. Leads assign bounded
 work to an existing owner through `handoff_work_item`, or use `create_work_item`
 and its initial worker for a new requested work item. `create_work_item_agent`
-adds a distinct conversation; `update_work_item` changes authorized scope or planning
+adds a distinct conversation. Creation may select `surfboard_template` for a
+requested different workflow; otherwise it snapshots project defaults. Preserve
+that field with the same creation ID on retry; `update_work_item` changes authorized scope or planning
 with the current document version. These names retain the established project/item
 ownership rules without introducing research metadata. Workers finish
 their own task; a handoff acknowledgment or passing check is not the whole delivery.
@@ -54,7 +60,19 @@ moving a pane does not create a new task or duplicate its owner.
 Editor attachment chips preserve source/diff/PDF context for the existing chat;
 adding one does not send work. After the user sends, follow the actual request and
 its unsaved/provenance warnings. Monaco navigation and shared-file editing do not
-provide a VS Code extension host or a separate inline-edit execution engine.
+supply an extension host. The separately installed and selected Code OSS workbench
+can run compatible extensions; follow the editor skill for its Open VSX limits.
+Editor or extension changes do not widen the agent's managed-tool authority.
+Local file imports are saved in this project's artifact library. Inspect them
+through their returned paths; uploading code does not run it or make it checked
+source. Incorporate an imported file into the repository only as needed for the
+requested task, preserving the original artifact and normal source checks.
+
+Use `present_code` to show an actual file or frozen Git revision comparison, and
+`manage_todos` to read/save the requested Markdown checklist with its revision.
+Follow [review and checklist guidance](../supersurfer-code-editor/references/review-and-todos.md).
+Neither marks an agent deliverable complete or runs a check. Archiving a task/chat
+only hides it; a pinned chat keeps its original scope while the user navigates.
 
 Custom project/work-item pages can combine separate explorer, editor, agent-change,
 chat and artifact tiles. Reuse the shared source and existing report/agent identity
@@ -103,8 +121,8 @@ credentials or private service state into them. `inspect_project_activity` shows
 actual background work. `export_diagnostics` prepares a redacted report for user
 review; creating that local artifact does not authorize sending it elsewhere.
 
-For a requested workflow policy or capability change, prepare the concrete change for the project
-configurator and its [skill](../supersurfer-surfboard/SKILL.md). Only that conversation
+For a requested workflow policy or capability change, prepare the concrete change for the task
+configurator, or the project configurator for future-task defaults, and its [skill](../supersurfer-surfboard/SKILL.md). Only that conversation
 has `propose_surfboard`; it creates a reviewable draft that the user applies. Never expand your own tools or requirements
 by altering a board as a workaround for an action denial.
 

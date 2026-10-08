@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.30. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.31. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -31,8 +31,9 @@ does not establish a queued run or measured results.
 
 ## Respect the board's data input
 
-Use `read_surfboard` and `inspect_board_data` when a W&B/data block feeds this
-report. The Research default makes project experiments available for comparison;
+Use the task's `read_surfboard` and `inspect_board_data` when a W&B/data block
+feeds this report. Its applied data selection remains independent of later
+project-default edits. The Research default makes project experiments available for comparison;
 current-experiment or explicitly selected experiments narrow that set. Honor the
 applied selection, avoid cross-project sources, and preserve each run's experiment
 and attempt. Choose scientifically compatible methods from the available inputs;
@@ -60,6 +61,13 @@ Fullscreen and restore change the view, not its report identity or evidence. Kee
 existing interactive chart/media state instead of republishing to enlarge it.
 A source/diff/PDF attachment can describe a requested revision; preserve its
 selection provenance and check the actual measured writers before changing claims.
+A narrower navigation sidebar changes available chart space, not the comparison
+cohort or report identity. Preserve responsive legends and held-out curves; do not
+republish or recreate sources merely to make room for Repository files.
+An uploaded PDF, image, video or data file is already a project artifact. Inspect
+that exact file, preserve its source and measurement provenance, and distinguish
+a fixed uploaded snapshot from live W&B history. An upload alone does not add a
+measured writer, refresh curves or require another publication.
 
 Results can also be a tile on a custom page beside notes, source or agent changes.
 Reuse the existing live report instead of republishing it for each tile. Honor the

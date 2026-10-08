@@ -1,3 +1,45 @@
+## 0.1.31 task workspaces and editor fixes
+
+Each task owns its Surfboard: workflow, tools, gates and pages. Choose Research,
+Software, Web or Writing when creating it. Project **Task defaults** seed new tasks;
+existing task configurations are preserved. Repositories, data and compute budgets
+remain project resources, so a workshop can contain both writing and coding tasks.
+
+Resize panels by dragging their edges, without entering Arrange. Adjacent panels
+share a divider; the left sidebar and its Projects/file-browser sections resize
+independently. Arrange controls live in the top bar. Files stay visible while you
+open documents; opening a file creates a large File viewer page when needed. Close
+the agent pane to use the available width, or pin an agent to keep its conversation
+while navigating. Archive tasks to hide them without stopping their work.
+
+**To-dos** are checkboxes backed by Markdown in the project's `.SuperSurfer` folder.
+Agents can read/edit them with `manage_todos`. Drag individual local files into a
+viewer or chat (up to eight files, 32 MiB each). Uploads are stored in
+`.SuperSurfer/projects/<project-id>/artifacts/uploads/`; original source files are
+not overwritten. Chat attachments stay with the original conversation and are sent
+only with your message. Folder drops are not supported.
+
+The built-in editor has text zoom, quick theme controls and persistent defaults in
+**Settings → Code editor**. PDFs scroll through all pages. LaTeX saves compile when
+Auto is enabled, including when the PDF is on another page; existing compiler gates
+still apply. Offline English spelling checks apply to LaTeX prose, excluding code,
+math and command identifiers. This is spelling support, not Grammarly integration.
+The oversized autocomplete popup is fixed. Agents can use `present_code` to open a
+file or a frozen commit comparison without changing the repository checkout.
+
+For the full VS Code extension host, install the optional **VS Code workbench** in
+Settings (about 240 MB), then select it as your editor. It uses Code OSS/code-server
+on the workspace computer; Vim, Python, LaTeX and themes install from Open VSX.
+Microsoft-only Marketplace extensions may be unavailable. Cmd/Ctrl+L or I adds
+selected source to a chat chip. The editor starts with explicit saves; users can
+change native VS Code settings. The built-in PDF and compiler tiles remain available.
+Extensions execute on the connected workspace under that user's account. Use the
+current desktop app or a browser with state-preserving DOM moves (Chrome 133+).
+
+Long agent-to-agent updates now collapse into **Agents** activity rows, just like
+monitoring checks. Expand them for full evidence. Replies to your own turns,
+questions, approvals and failures remain visible.
+
 ## 0.1.30 editor workflow
 
 Drag the divider inside the editor to resize its Files/Git/Agents column; the

@@ -1,4 +1,4 @@
-"""Project workflow integration; the graph compiler remains the single policy source."""
+"""Task workflows and project defaults; the graph compiler is the policy source."""
 from __future__ import annotations
 
 import json
@@ -24,7 +24,11 @@ needed. Recurring work needs a saved wakeup, scope and stopping condition. Respe
 stops, permission decisions and the selected sandbox. Export diagnostics when requested;
 review the redacted report before sharing it outside this workspace.
 """
-CONFIGURATOR_INSTRUCTIONS = """You configure this project's SuperSurfer surfboard with the user.
+CONFIGURATOR_INSTRUCTIONS = """You configure the selected SuperSurfer surfboard with the user.
+Each task has its own graph, gates, capabilities and views. A project board provides
+defaults for new tasks; changing it does not rewrite existing task boards. Respect
+this conversation's task scope. Project compute budgets remain shared, and a task
+board cannot change them. Use task-level workflows for mixed writing/coding/research.
 Read read_surfboard for the active graph, editable draft and current version numbers.
 It also reads live scheduler GPU and concurrent-run limits, active usage and the observation
 time. Treat unavailable live readings as unknown. Compute blocks hold gpu_limit and
@@ -61,6 +65,32 @@ ALIASES = {"create_work_item": "create_experiment", "create_work_item_agent": "c
 
 
 class SurfboardService:
+    def board_record(self, project_id, experiment_id=None):
+        if experiment_id:
+            return self.boards.task(project_id, experiment_id, read_only=self.read_only)
+        return self.boards.get(project_id)
+
+    def board_item(self, scope, arguments=None):
+        info = self._chat_scope(scope)
+        requested = (arguments or {}).get("experiment_id")
+        owned = info.get("experiment_id")
+        if owned:
+            if requested and requested != owned:
+                raise SurfboardError("This conversation's task is fixed", 403)
+            return owned
+        if requested:
+            item = self.store.experiment(requested)
+            if scope != "manager" and item["project_id"] != info.get("project_id"):
+                raise SurfboardError("This task belongs to another project", 403)
+        return requested
+
+    def preserve_task_boards(self, project_id):
+        # Freeze legacy tasks before a project default is edited. This also
+        # covers tasks not opened in the current desktop window.
+        for (item_id,) in self.store.db.execute("SELECT id FROM experiments").fetchall():
+            if self.store.experiment(item_id)["project_id"] == project_id:
+                self.boards.task_key(project_id, item_id)
+
     def project_activity(self, project_id):
         from .diagnostics import activity
         return activity(self, project_id)
@@ -99,12 +129,20 @@ class SurfboardService:
                 raise
             return self.lookup("projects", project_id, fresh=True)
 
-    def surfboard(self, project_id):
+    def surfboard(self, project_id, experiment_id=None):
         # Fresh GETs may update the observed policy version, so serialize them
         # with an apply's scheduler write and final board commit.
         with self.action_lock:
             self.lookup("projects", project_id)
             live = self.project_limits.read(project_id)
+            if experiment_id:
+                blocks = catalog()
+                for block in blocks:
+                    if block["kind"] == "compute":
+                        for field in ("gpu_limit", "run_limit"):
+                            block["config_fields"].pop(field, None)
+                return {**self.board_record(project_id, experiment_id), "live_limits": live,
+                        "catalog": blocks, "templates": templates(), "limits_scope": "project"}
             result = self._board_with_live(self._observe_board_limits(project_id, live), live)
             recovery = self.store.get("surfboard_limit_recovery:" + project_id)
             if recovery:
@@ -136,9 +174,13 @@ class SurfboardService:
             result["compiled"] = compile_board(result["board"])
         return {**result, "live_limits": live, "catalog": catalog(), "templates": templates()}
 
-    def _save_board_draft(self, project_id, fields):
+    def _save_board_draft(self, project_id, fields, experiment_id=None):
         if set(fields) - {"board", "expected_version", "expected_draft_version"}:
             raise SurfboardError("Unexpected surfboard draft fields.")
+        if experiment_id:
+            key = self.boards.task_key(project_id, experiment_id)
+            self.boards.save_draft(key, **fields)
+            return self.surfboard(project_id, experiment_id)
         live = self.project_limits.read(project_id)
         state = self._observe_board_limits(project_id, live)
         draft = state.get("draft") or {}
@@ -148,9 +190,20 @@ class SurfboardService:
         result = self.boards.save_draft(project_id, **fields, limits_baseline=baseline or live)
         return self._board_with_live(result, live)
 
-    def _apply_board(self, project_id, fields):
+    def _apply_board(self, project_id, fields, experiment_id=None):
         if set(fields) != {"expected_version", "expected_draft_version"}:
             raise SurfboardError("Applying requires the current board and draft versions.")
+        if experiment_id:
+            key = self.boards.task_key(project_id, experiment_id)
+            current = self.boards.get(key)
+            draft = current.get("draft")
+            # Capacity is shared. A task workflow must never silently change
+            # the budget of every other task in its project.
+            if draft and configured_limits(draft["board"]):
+                raise SurfboardError("GPU and concurrent-run limits are shared project resources. Change them in Project compute; preserve them in this task's workflow.", 409)
+            self.boards.apply(key, **fields)
+            return self.surfboard(project_id, experiment_id)
+        self.preserve_task_boards(project_id)
         state = self.boards.get(project_id)
         if type(fields["expected_version"]) is not int or fields["expected_version"] != state["version"]:
             raise SurfboardError("The surfboard changed. Reload it before applying.", 409)
@@ -219,7 +272,7 @@ class SurfboardService:
         result = {"model": settings["models"][role], "reasoning": settings["reasoning"][role],
                   "approval_mode": settings["approval_mode"], "fast_mode": False}
         if info.get("project_id"):
-            defaults = self.boards.get(info["project_id"])["compiled"]["defaults"]
+            defaults = self.board_record(info["project_id"], info.get("experiment_id"))["compiled"]["defaults"]
             for key in ("model", "reasoning"):
                 values = defaults.get("models" if key == "model" else key, {})
                 if role in values:
@@ -243,7 +296,7 @@ class SurfboardService:
             return None
         project = self.lookup("projects", info["project_id"])
         configurator = scope.startswith("surfboard:")
-        board = self.surfboard(project["id"]) if configurator else self.boards.get(project["id"])
+        board = self.surfboard(project["id"], info.get("experiment_id")) if configurator else self.board_record(project["id"], info.get("experiment_id"))
         if not configurator and board["compiled"]["workflow"] == "research":
             return None
         cwd = Path(project["repo"]).expanduser().resolve()
@@ -280,9 +333,14 @@ class SurfboardService:
         if configurator:
             allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
         elif info.get("project_id"):
-            state = self.boards.get(info["project_id"])
+            state = self.board_record(info["project_id"], info.get("experiment_id"))
             compiled = state["compiled"]
             allowed = compiled["tools_by_role"][role]
+            if role == "lead":
+                # A project lead coordinates heterogeneous task boards. Each
+                # call still checks the selected task's capabilities and gates.
+                allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
+                context["instructions"] += "\nEach task owns its surfboard. Read read_surfboard(experiment_id) before task-specific work. The project graph is a default for new tasks, not permission to bypass a task's requirements."
             context["instructions"] += "\n" + compiled["instructions"][role]
             context["instructions"] += "\nCurrent managed tools (the service rechecks on every call): " + json.dumps(allowed)
             context["instructions"] += "\nConnected data sources and visualization scope: " + json.dumps({k: compiled.get(k, []) for k in ("data_sources", "visualizers", "views", "timers", "recovery")})
@@ -362,7 +420,7 @@ class SurfboardService:
         project = self.board_project(scope, arguments)
         if not project or role == "configurator":
             return
-        state = self.boards.get(project["id"])
+        state = self.board_record(project["id"], self.board_item(scope, arguments))
         # Cancelling owned work remains possible after configuration changes.
         stopping = tool == "stop_run" or (tool in {"run_board_action", "recover_run", "compile_latex"} and (arguments.get("operation") == "stop" or arguments.get("action") == "pause"))
         if not stopping and tool not in state["compiled"]["tools_by_role"][role]:
@@ -385,18 +443,31 @@ class SurfboardService:
         project = self.board_project(scope, arguments)
         if not project:
             raise SurfboardError("Select project_id for this operation.")
-        state = self.boards.get(project["id"])
+        state = self.board_record(project["id"], self.board_item(scope, arguments))
         fields = {k: v for k, v in arguments.items() if k != "project_id"}
+        if tool == "manage_todos":
+            from . import todos
+            item_id = self.board_item(scope, arguments)
+            operation = fields.get("operation")
+            if operation == "read" and set(fields) <= {"operation", "experiment_id"}:
+                return todos.read(self, project["id"], item_id)
+            if operation == "save" and set(fields) <= {"operation", "experiment_id", "markdown", "revision"} and {"markdown","revision"} <= set(fields):
+                if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+                    raise SurfboardError("Checklist editing requires an active user task", 403)
+                return todos.save(self, {"project_id":project["id"], "experiment_id":item_id, "markdown":fields["markdown"], "revision":fields["revision"]})
+            raise SurfboardError("Read or save a checklist with its current revision")
+        if tool == "present_code":
+            return self.present_code(scope, arguments)
         if tool in {"read_view_layout", "update_view_layout"}:
             return self.agent_view_layout(scope, tool, arguments)
         if tool == "read_surfboard":
-            if fields:
-                raise SurfboardError("read_surfboard accepts only the manager's project_id.")
-            return self.surfboard(project["id"])
+            if set(fields) - {"experiment_id"}:
+                raise SurfboardError("Choose a project and optional task.")
+            return self.surfboard(project["id"], self.board_item(scope, arguments))
         if tool == "propose_surfboard":
             if not scope.startswith("surfboard:") or set(fields) != {"board", "expected_version", "expected_draft_version"}:
                 raise SurfboardError("Only the surfboard configurator can propose a versioned board.", 403)
-            return self._save_board_draft(project["id"], fields)
+            return self._save_board_draft(project["id"], fields, self.board_item(scope))
         if tool == "inspect_board_data":
             return self.board_runtime.data(scope, project, state, fields)
         if tool == "compile_latex":
@@ -429,13 +500,16 @@ class SurfboardService:
             raise SurfboardError("Read-only preview: surfboards cannot be changed.", 403)
         project_id = params.get("project_id")
         project = self.lookup("projects", project_id)
-        fields = {k: v for k, v in params.items() if k != "project_id"}
+        experiment_id = params.get("experiment_id")
+        key = self.boards.task_key(project_id, experiment_id) if experiment_id else project_id
+        fields = {k: v for k, v in params.items() if k not in {"project_id", "experiment_id"}}
         if op == "surfboard.draft":
-            return self._save_board_draft(project_id, fields)
+            return self._save_board_draft(project_id, fields, experiment_id)
         if op == "surfboard.discard":
-            return self.boards.discard(project_id, **fields)
+            self.boards.discard(key, **fields)
+            return self.surfboard(project_id, experiment_id)
         if op == "surfboard.apply":
-            draft = self.boards.get(project_id).get("draft")
+            draft = self.board_record(project_id, experiment_id).get("draft")
             if draft:
                 defaults = draft["board"]["defaults"]
                 changes = {key: defaults[key] for key in ("models", "reasoning") if defaults.get(key)}
@@ -443,10 +517,12 @@ class SurfboardService:
                 for key, values in changes.items():
                     settings[key] = {**settings[key], **values}
                 self._validate_role_settings(settings, changes)
-            result = self._apply_board(project_id, fields)
+            result = self._apply_board(project_id, fields, experiment_id)
             # A project ID separates boards sharing the same Git repository.
             try:
                 root = self.artifacts.root(project, create=True).parent
+                if experiment_id:
+                    root = root / "tasks" / experiment_id
                 if any(p.is_symlink() for p in [root, *root.parents]):
                     raise ValueError("Surfboard export path cannot contain symlinks")
                 root.mkdir(parents=True, exist_ok=True)
@@ -459,7 +535,8 @@ class SurfboardService:
                 if not chat.get("busy") or self.store.chat_settings(scope)["approval_mode"] is not None:
                     continue
                 try:
-                    if self._chat_scope(scope).get("project_id") == project_id:
+                    info = self._chat_scope(scope)
+                    if info.get("project_id") == project_id and (info.get("experiment_id") == experiment_id):
                         updates.append(self.codex.set_approval_mode(scope, self.board_defaults(scope)["approval_mode"]))
                 except Exception as exc:
                     updates.append({"scope": scope, "error": str(exc), "applied": False})
@@ -473,8 +550,8 @@ class SurfboardService:
             text = fields.get("text")
             if not isinstance(text, str) or not text.strip() or len(text) > 20000:
                 raise SurfboardError("Describe the workflow edit in up to 20,000 characters.")
-            state = self._save_board_draft(project_id, {key: fields[key] for key in ("board", "expected_version", "expected_draft_version") if key in fields})
-            scope = "surfboard:" + project_id
+            state = self._save_board_draft(project_id, {key: fields[key] for key in ("board", "expected_version", "expected_draft_version") if key in fields}, experiment_id)
+            scope = "surfboard:" + ("experiment:" + experiment_id if experiment_id else project_id)
             message = "Requested surfboard edit: " + text + "\nDraft version: " + str(state["draft"]["draft_version"])
             if fields.get("pending_edge"):
                 message += "\nClarify this pending connection with ask_user before resolving it: " + json.dumps(fields["pending_edge"])

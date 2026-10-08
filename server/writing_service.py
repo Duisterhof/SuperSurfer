@@ -9,7 +9,7 @@ class WritingService:
             raise SurfboardError("Choose a project for the PDF preview.")
         project = self.lookup("projects", fields.get("project_id"))
         result = self.latex.status(project, {key: value for key, value in fields.items() if key != "project_id"})
-        result["blocks"] = self.boards.get(project["id"])["compiled"].get("latex", [])
+        result["blocks"] = self.board_record(project["id"], fields.get("experiment_id"))["compiled"].get("latex", [])
         return result
 
     def latex_action(self, params, scope=None):
@@ -20,7 +20,6 @@ class WritingService:
         project = self.lookup("projects", params.get("project_id"))
         fields = {key: value for key, value in params.items() if key != "project_id"}
         operation = fields.get("operation", "start")
-        board = self.boards.get(project["id"])
         agent_scope = scope
         if scope:
             info = self._chat_scope(scope)
@@ -37,6 +36,7 @@ class WritingService:
             # The authenticated desktop user may operate their own project or
             # item builds; the module validates item ownership again.
             scope = "experiment:" + fields["experiment_id"] if fields.get("experiment_id") else "project:" + project["id"]
+        board = self.board_record(project["id"], fields.get("experiment_id"))
         node_id = fields.pop("node_id", None)
         expected_source = None
         if operation == "start":

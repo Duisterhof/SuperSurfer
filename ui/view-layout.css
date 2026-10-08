@@ -49,8 +49,8 @@
 .tile-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tile-page-heading span{font-size:11px;color:var(--muted)}
 .tile-page-heading h1{font-size:19px;margin:3px 0 8px}
-.page-tile-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:12px;align-items:start}
-.page-tile{grid-column:span var(--tile-span,12);height:var(--tile-height,400px);min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid var(--panel-edge,var(--line));border-radius:12px;background:var(--floating-glass,var(--bg));box-shadow:var(--panel-shadow)}
+.page-tile-grid{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}.page-tile-grid>.page-tile{flex:0 0 calc((100% + 12px) * var(--tile-span,12) / 12 - 12px)}
+.page-tile{position:relative;grid-column:span var(--tile-span,12);height:var(--tile-height,400px);min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column;border:1px solid var(--panel-edge,var(--line));border-radius:12px;background:var(--floating-glass,var(--bg));box-shadow:var(--panel-shadow)}
 .page-tile-heading{font-size:11px;font-weight:600;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
 .page-tile-body{flex:1;min-width:0;min-height:0;overflow:auto;padding:12px}
 .page-tile[data-tile-kind=editor]>.page-tile-body,.page-tile[data-tile-kind=file_explorer]>.page-tile-body,.page-tile[data-tile-kind=agent_changes]>.page-tile-body,.page-tile[data-tile-kind=chat]>.page-tile-body,.page-tile[data-tile-kind=results]>.page-tile-body,.page-tile[data-tile-kind=preview]>.page-tile-body{padding:0}
@@ -64,8 +64,8 @@
 .page-tile-grid>.empty-state{grid-column:1/-1}
 .page-dock-settings{margin-top:14px}.page-dock-settings>summary{cursor:pointer;color:var(--muted);font-size:12px;padding:10px 0}
 #modal:has(#item-pages-editor){width:min(1080px,96vw)}
-@media(max-width:900px){.page-tile{grid-column:1/-1}.tile-page{padding:10px}}
-@container(max-width:700px){.page-tile{grid-column:1/-1}}
+@media(max-width:900px){.page-tile{position:relative;grid-column:1/-1}.tile-page{padding:10px}}
+@container(max-width:700px){.page-tile-grid>.page-tile{flex-basis:100%}.tile-edge-x{display:none}}
 #main.tiled-page-main{padding:0}
 /* Allocation is a compact row per project, separate from physical GPU readings. */
 .project-capacities{margin:20px 0}.project-capacities .section-title{display:flex;justify-content:space-between;gap:10px}
@@ -118,8 +118,8 @@
 .chat-checks>summary>strong{font-size:11px;font-weight:500;color:var(--text)}
 .chat-checks time{font-size:10px;white-space:nowrap;color:var(--muted)}
 .chat-checks .check-latest{grid-column:2/-1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
-.chat-checks>summary::marker{content:''}.chat-checks>summary::after{content:'Expand checks';grid-column:2/-1;font-size:10px;opacity:.7}
-.chat-checks[open]>summary::after{content:'Collapse checks'}
+.chat-checks>summary::marker{content:''}.chat-checks>summary::after{content:'Show details';grid-column:2/-1;font-size:10px;opacity:.7}
+.chat-checks[open]>summary::after{content:'Hide details'}
 .chat-check-history{border-top:1px solid var(--line);padding:4px 10px;max-height:460px;overflow:auto}
 .chat-check>summary{padding:7px 0;cursor:pointer;color:var(--muted);line-height:1.5}
 .chat-check+.chat-check{border-top:1px solid var(--line)}

@@ -183,11 +183,11 @@ class EditorServiceTests(unittest.TestCase):
     def test_board_revision_invalidates_item_layout_draft(self):
         item = self.work_item()
         initial = self.service.view_layout(self.pid, item["id"])
-        board = self.service.boards.get(self.pid)
+        board = self.service.board_record(self.pid, item["id"])
         changed = board["board"]
         changed["name"] = "New board revision"
-        draft = self.service.boards.save_draft(self.pid, changed, board["version"], 0)
-        self.service.boards.apply(self.pid, board["version"], draft["draft"]["draft_version"])
+        draft = self.service.boards.save_draft(self.service.boards.task_key(self.pid, item["id"]), changed, board["version"], 0)
+        self.service.boards.apply(self.service.boards.task_key(self.pid, item["id"]), board["version"], draft["draft"]["draft_version"])
         status, _ = self.action("view-layout.save", project_id=self.pid, experiment_id=item["id"], version=initial["version"], board_version=initial["board_version"], rows=[])
         self.assertEqual(409, status)
         self.assertFalse(self.service.view_layout(self.pid, item["id"])["overridden"])
@@ -272,13 +272,13 @@ class EditorServiceTests(unittest.TestCase):
         pages = [{"id": "review", "title": "Review", "tiles": [{"id": kind, "kind": kind} for kind in ("preview", "chat")]},
                  {"id": "preview-only", "title": "Preview only", "tiles": [{"id": "preview", "kind": "preview"}]}]
         _, saved = self.action("view-layout.save", **params, pages=pages, rows=[{"id": "preview", "placement": "right"}])
-        record = self.service.boards.get(self.pid)
+        record = self.service.board_record(self.pid, item["id"])
         board = record["board"]
         preview_ids = {node["id"] for node in board["nodes"] if node["kind"] == "preview"}
         board["nodes"] = [node for node in board["nodes"] if node["id"] not in preview_ids]
         board["edges"] = [edge for edge in board["edges"] if not preview_ids.intersection((edge["source"], edge["target"]))]
-        draft = self.service.boards.save_draft(self.pid, board, record["version"], 0)
-        self.service.boards.apply(self.pid, record["version"], draft["draft"]["draft_version"])
+        draft = self.service.boards.save_draft(self.service.boards.task_key(self.pid, item["id"]), board, record["version"], 0)
+        self.service.boards.apply(self.service.boards.task_key(self.pid, item["id"]), record["version"], draft["draft"]["draft_version"])
         current = self.service.view_layout(self.pid, item["id"])
         self.assertEqual(["chat"], [tile["kind"] for tile in current["pages"][0]["tiles"]])
         self.assertEqual({"id": "preview-only", "title": "Preview only", "tiles": []}, current["pages"][1])

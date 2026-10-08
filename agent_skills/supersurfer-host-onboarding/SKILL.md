@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.30'
+  supersurfer-version: '0.1.31'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.30. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.31. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -16,8 +16,10 @@ Run-specific tools infer scope from `run_id`. Suggestions and ordinary scheduled
 checks do not authorize setup, budget changes or launches; a saved recovery grant
 separately permits bounded repair for its owner and latest run only.
 
-The active surfboard must expose compute capabilities for this task. These are
-Research execution tools, not prerequisites for a software check or web preview.
+The task's applied surfboard must expose its compute capabilities; a research
+project's default does not grant them to a separate writing/software task. Compute
+pools, GPU budgets and concurrent-run limits remain shared project resources.
+These are Research execution tools, not prerequisites for a software check or web preview.
 A disabled tool is not permission to use an unscoped shell replacement. Resolve
 a requested board change through the configurator. Existing queued/running
 contracts retain their source, resource and review evidence; a later graph edit
@@ -32,7 +34,10 @@ layout changes presentation only, not readiness, reservations or setup authority
 The editor's visible absolute path belongs to the connected workspace host. An
 attached file or PDF does not establish that the same path exists on a compute
 node; continue to resolve that node's own repository, environment and data paths
-against the saved run contract.
+against the saved run contract. Local uploads initially live in the selected
+project's artifact library, not on each compute node. An uploaded dataset or
+checkpoint is not node-readiness evidence; only stage it when needed for the
+authorized task and verify node paths through existing checks.
 
 The same compute/run view can appear on a custom page beside source or agent-change
 tiles. Its presence, absence or dimensions do not register a host, acquire a node
@@ -41,7 +46,10 @@ records; never interpret a page rearrangement as permission to move source or da
 Requested Compute tile resize/reorder or sidebar placement uses the scoped
 `read_view_layout` / `update_view_layout` presentation tools when enabled. Keep the
 existing run and candidate identities; a layout edit neither registers a node nor
-changes its readiness. See [layout editing](../supersurfer-surfboard/references/view-layout.md).
+changes its readiness. The main navigation divider is independent of compute
+registration and the editor's internal file column. Do not onboard another host
+because a narrow sidebar hides a path; inspect the existing node's saved contract.
+See [layout editing](../supersurfer-surfboard/references/view-layout.md).
 
 ## Separate the causes of a queue wait
 

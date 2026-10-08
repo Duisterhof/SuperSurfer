@@ -1,0 +1,34 @@
+'use strict';
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
+(async()=>{const root=path.resolve(__dirname,'..'),binary=process.env.SUPERSURFER_CODE_SERVER||path.resolve(root,'../../work/code-server-4.141.0/code-server-4.141.0-linux-amd64/bin/code-server');assert.ok(fs.existsSync(binary),'Set SUPERSURFER_CODE_SERVER to a verified runtime');
+const child=spawn('python3',['tests/layout_runtime_fixture.py'],{cwd:root,env:{...process.env,SUPERSURFER_CODE_SERVER:binary},stdio:['pipe','pipe','pipe']});let browser,stderr='';child.stderr.on('data',v=>stderr+=v);
+try{const service=await new Promise((resolve,reject)=>{let s='';child.stdout.on('data',v=>{s+=v;if(s.includes('\n'))resolve(JSON.parse(s.split('\n')[0]))});child.on('exit',code=>reject(new Error(code+' '+stderr)))}),base='http://127.0.0.1:'+service.port,token=fs.readFileSync(path.join(service.directory,'token'),'utf8').trim(),pid=service.projects.software;
+const request=async(route,body)=>{const response=await fetch(base+'/api/'+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();assert.ok(response.ok,JSON.stringify(data));return data;};
+const layout=await request('view-layout?project_id='+pid);await request('action',{op:'view-layout.save',params:{project_id:pid,experiment_id:null,version:layout.version,board_version:layout.board_version,pages:[{id:'desk',title:'Code',tiles:[{id:'code',kind:'editor',span:12,height:650}]}]}});
+if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
+ await request('action',{op:'editor.extension',params:{operation:'install',extension_id:'vscodevim.vim'}});
+ let runtime;for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
+ assert.equal(runtime.job.status,'succeeded',JSON.stringify(runtime.job));assert.ok(runtime.extensions.some(row=>row.id.toLowerCase()==='vscodevim.vim'));
+ await request('action',{op:'editor.extension',params:{operation:'uninstall',extension_id:'vscodevim.vim'}});
+ for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
+ assert.equal(runtime.job.status,'succeeded');assert.ok(!runtime.extensions.some(row=>row.id.toLowerCase()==='vscodevim.vim'));console.log('PASS real Open VSX extension install and removal');
+}
+await request('action',{op:'editor.settings',params:{engine:'vscode'}});
+browser=await chromium.launch({...(process.env.SUPERSURFER_CHROMIUM?{executablePath:process.env.SUPERSURFER_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1650,height:1100}});page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.addInitScript(({token,pid})=>{if(window===window.top){sessionStorage.setItem('supersurfer-token',token);localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:pid,tab:'desk',chatVisible:true}));}},{token,pid});
+console.log("opening page");await page.goto(base,{waitUntil:"domcontentloaded"});console.log("page loaded");await page.locator('.workbench-frame iframe').waitFor();console.log('iframe ready');const frame=page.frameLocator('.workbench-frame iframe');
+try{await frame.locator('.monaco-workbench').waitFor();console.log('workbench DOM');}catch(error){console.error(fs.readFileSync(path.join(service.directory,'editor/server.log'),'utf8').slice(-7000));await page.screenshot({path:path.resolve(root,'../../work/release031-workbench-failed.png')});throw error;}
+await frame.getByRole('button',{name:/trust.*authors|Yes, I trust/i}).click({timeout:5000}).catch(()=>{});
+console.log('trust handled');await page.waitForFunction(()=>document.querySelector('.workbench-status')?.hidden===true,{},{timeout:60000});
+console.log('bridge ready');await frame.getByRole('treeitem').filter({hasText:'main.py'}).first().dblclick();await frame.locator('.monaco-editor').first().waitFor();
+await page.screenshot({path:path.resolve(root,'../../work/release031-workbench.png')});
+const session=JSON.parse(fs.readFileSync(fs.readdirSync(path.join(service.directory,'editor/workspaces')).map(name=>path.join(service.directory,'editor/workspaces',name))[0],'utf8')).settings['supersurfer.session'];
+await request('action',{op:'editor.command',params:{id:session,kind:'file',path:'main.py'}});await page.waitForTimeout(1100);await frame.locator('.view-lines').first().click();await page.keyboard.press('Control+a');await page.keyboard.press('Control+i');await page.locator('.chat-context-chip').waitFor({timeout:10000});assert.match(await page.locator('.chat-context-chip').textContent(),/main.py/);
+await frame.locator('.view-lines').first().click();await page.keyboard.press('Control+End');await page.keyboard.type('# unsaved workspace edit');
+await page.waitForTimeout(2500);assert.equal((await request('editor/session?id='+session)).dirty,true);
+const identity=await page.locator('.workbench-frame iframe').getAttribute('src');const originalFrame=page.frames().find(row=>row.url().includes('/workbench/'));await originalFrame.evaluate(()=>window.__paneIdentity='keep-me');
+await page.locator('#project-tree [data-project="'+service.projects.research+'"]').click();await page.locator('#project-tree [data-project="'+pid+'"]').click();await page.locator('#main [data-tab="desk"]').click();await page.locator('.workbench-frame iframe').waitFor();
+assert.equal(await page.locator('.workbench-frame iframe').getAttribute('src'),identity);assert.equal(await originalFrame.evaluate(()=>window.__paneIdentity),'keep-me');assert.equal((await request('editor/session?id='+session)).dirty,true);console.log('PASS extension editor retains its iframe, unsaved file and session across page navigation');
+
+assert.ok(!(await fetch(base+'/workbench/invalid/')).ok);assert.equal((await request('editor/session?id='+session)).connected,true);console.log('PASS real Code OSS HTTP/WebSocket, extension host, file opening, selected code to agent chip and capability rejection');
+}catch(error){console.error('TEST ERROR',error);if(browser){const p=browser.contexts()[0]?.pages()[0];if(p)await p.screenshot({path:path.resolve(root,'../../work/release031-workbench-failed.png')}).catch(()=>{});}throw error;}finally{child.stdin.end();await browser?.close();}})().catch(e=>{console.error(e);process.exitCode=1});

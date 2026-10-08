@@ -41,6 +41,27 @@ class EditorTests(unittest.TestCase):
         self.git("add", "--all")
         self.git("commit", "-qm", "Fixture")
 
+    def test_revision_comparison_freezes_commits_without_touching_dirty_worktree(self):
+        path = self.write("main.py", "first\n")
+        self.commit()
+        base = self.git("rev-parse", "HEAD").decode().strip()
+        self.write("main.py", "second\n")
+        self.write("added.py", "added\n")
+        self.commit()
+        head = self.git("rev-parse", "HEAD").decode().strip()
+        self.write("main.py", "unsaved external work\n")
+        before = self.git("status", "--porcelain")
+        comparison = self.editor.comparison(self.project, base[:10], "HEAD", "main.py")
+        self.assertEqual((base, head), (comparison["base"], comparison["head"]))
+        self.assertEqual(("first\n", "second\n"), (comparison["original"], comparison["modified"]))
+        added = self.editor.comparison(self.project, base, head, "added.py")
+        self.assertEqual("", added["original"])
+        self.assertEqual("unsaved external work\n", path.read_text())
+        self.assertEqual(before, self.git("status", "--porcelain"))
+        for bad in ("--help", "HEAD;echo unsafe", "missing-ref"):
+            with self.assertRaises(SurfboardError): self.editor.comparison(self.project, bad, head)
+        with self.assertRaises(SurfboardError): self.editor.comparison(self.project, base, head, "../outside")
+
     def test_nested_listing_hides_internal_state_and_read_tracks_text_revision(self):
         self.write("src/main.py", "print('hello')\r\n")
         self.write(".SuperSurfer/private.txt", "private")

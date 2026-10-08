@@ -6,6 +6,7 @@ const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
 export function createPdfPreview(options={}) {
  let root=null,record=null,document=null,loadingTask=null,renderTask=null,textLayer=null,observer=null,abort=null;
+ let pageObserver=null,scrollFrame=null,sheets=new Map(),pageTasks=new Map();
  let epoch=0,renderEpoch=0,page=1,scale='fit',error='',loading=false,selection=null,width=0,height=0,resizeTimer=null;
  const key=value=>value?.build_id||value?.pdf_url||value?.url||'';
  const current=token=>root&&token===epoch;
@@ -28,31 +29,65 @@ export function createPdfPreview(options={}) {
   diagnostics.innerHTML=items.slice(0,30).map(item=>`<button type="button" data-pdf-diagnostic="${items.indexOf(item)}" ${!item.path||!options.onSource?'disabled':''}><span>${escape(item.path||item.severity||'Build')}${item.line?':'+Number(item.line):''}</span>${escape(item.message||'')}</button>`).join('');
  }
  function clearSelection(removeRange=false){if(removeRange&&root?.contains(window.getSelection()?.anchorNode))window.getSelection()?.removeAllRanges();selection=null;root?.querySelector('.pdf-selection')?.setAttribute('hidden','');}
- function updateSelection(){if(!root||!document)return;const selected=window.getSelection(),layer=root.querySelector('.textLayer');
-  if(!selected?.rangeCount||selected.isCollapsed||!layer?.contains(selected.anchorNode)||!layer.contains(selected.focusNode)){clearSelection();return;}
+ function updateSelection(){if(!root||!document)return;const selected=window.getSelection(),anchor=selected?.anchorNode,layer=(anchor?.nodeType===1?anchor:anchor?.parentElement)?.closest('.textLayer');
+  if(!selected?.rangeCount||selected.isCollapsed||!layer||!root.contains(layer)||!layer.contains(selected.anchorNode)||!layer.contains(selected.focusNode)){clearSelection();return;}
   const text=selected.toString().trim();if(!text){clearSelection();return;}
-  selection={source:'pdf',build_id:record.build_id,source_path:record.source_path||record.main_file,page,text:text.slice(0,16000),...(text.length>16000?{truncated:true}:{})};
-  const button=root.querySelector('.pdf-selection');button.hidden=!options.onSelection;button.title=`Add selected PDF text from page ${page} to your agent message (⌘/Ctrl L)`;
+  selection={source:'pdf',build_id:record.build_id,source_path:record.source_path||record.main_file,page:Number(layer.closest('.pdf-sheet').dataset.page),text:text.slice(0,16000),...(text.length>16000?{truncated:true}:{})};
+  const button=root.querySelector('.pdf-selection');button.hidden=!options.onSelection;button.title=`Add selected PDF text from page ${selection.page} to your agent message (⌘/Ctrl L)`;
  }
  function askSelection(){if(selection&&options.onSelection)Promise.resolve(options.onSelection({...selection})).catch(failure=>{error=failure.message||String(failure);showStatus();});}
- async function draw(){if(!document||!root)return;const mounted=epoch,request=++renderEpoch;renderTask?.cancel();textLayer?.cancel();renderTask=null;textLayer=null;clearSelection(true);
-  try{const pdfPage=await document.getPage(page);if(!current(mounted)||request!==renderEpoch)return;
-   const viewport=root.querySelector('.pdf-viewport'),natural=pdfPage.getViewport({scale:1}),factor=scale==='fit'?clamp((viewport.clientWidth-36)/natural.width,.2,3):scale==='page'?clamp(Math.min((viewport.clientWidth-36)/natural.width,(viewport.clientHeight-30)/natural.height),.2,3):Number(scale),view=pdfPage.getViewport({scale:factor});
-   const stage=root.querySelector('.pdf-sheet');stage.style.width=view.width+'px';stage.style.height=view.height+'px';stage.style.setProperty('--total-scale-factor',view.scale);stage.dataset.page=page;
-   const canvas=window.document.createElement('canvas'),layer=window.document.createElement('div');layer.className='textLayer';stage.replaceChildren(canvas,layer);stage.hidden=false;
+ function cancelPages(){pageObserver?.disconnect();pageObserver=null;for(const work of pageTasks.values()){work.render?.cancel();work.text?.cancel();}pageTasks.clear();sheets.clear();}
+ async function drawPage(number){
+  const stage=sheets.get(number);if(!stage||pageTasks.has(number))return;
+  const token=epoch,request=renderEpoch,work={};pageTasks.set(number,work);
+  try{
+   const pdfPage=await document.getPage(number);if(!current(token)||request!==renderEpoch||pageTasks.get(number)!==work)return;
+   const viewport=root.querySelector('.pdf-viewport'),natural=pdfPage.getViewport({scale:1});
+   const factor=scale==='fit'?clamp((viewport.clientWidth-36)/natural.width,.2,3):scale==='page'?clamp(Math.min((viewport.clientWidth-36)/natural.width,(viewport.clientHeight-30)/natural.height),.2,3):Number(scale),view=pdfPage.getViewport({scale:factor});
+   stage.style.width=view.width+'px';stage.style.height=view.height+'px';stage.style.setProperty('--total-scale-factor',view.scale);
+   const canvas=window.document.createElement('canvas'),layer=window.document.createElement('div');layer.className='textLayer';stage.replaceChildren(canvas,layer);
    const density=Math.min(devicePixelRatio||1,2),ratio=Math.min(density,Math.sqrt(16_000_000/(view.width*view.height)));canvas.width=Math.floor(view.width*ratio);canvas.height=Math.floor(view.height*ratio);canvas.style.width=view.width+'px';canvas.style.height=view.height+'px';
-   const lib=await library();if(!current(mounted)||request!==renderEpoch)return;
-   renderTask=pdfPage.render({canvas,viewport:view,transform:ratio!==1?[ratio,0,0,ratio,0,0]:null,annotationMode:lib.AnnotationMode.DISABLE});
-   textLayer=new lib.TextLayer({textContentSource:pdfPage.streamTextContent(),container:layer,viewport:view});
-   await Promise.all([renderTask.promise,textLayer.render()]);if(!current(mounted)||request!==renderEpoch)return;renderTask=null;error='';showStatus();
-  }catch(failure){if(current(mounted)&&request===renderEpoch&&!['RenderingCancelledException','AbortException'].includes(failure.name)){error=failure.message||String(failure);showStatus();}}
+   const lib=await library();if(!current(token)||request!==renderEpoch||pageTasks.get(number)!==work)return;
+   work.render=pdfPage.render({canvas,viewport:view,transform:ratio!==1?[ratio,0,0,ratio,0,0]:null,annotationMode:lib.AnnotationMode.DISABLE});
+   work.text=new lib.TextLayer({textContentSource:pdfPage.streamTextContent(),container:layer,viewport:view});
+   await Promise.all([work.render.promise,work.text.render()]);
+   if(current(token)&&request===renderEpoch){error='';showStatus();}
+  }catch(failure){if(current(token)&&request===renderEpoch&&!['RenderingCancelledException','AbortException'].includes(failure.name)){pageTasks.delete(number);error=failure.message||String(failure);showStatus();}}
+ }
+ function scrollPage(){
+  if(scrollFrame)return;scrollFrame=requestAnimationFrame(()=>{scrollFrame=null;if(!root||!document)return;
+   const viewport=root.querySelector('.pdf-viewport'),top=viewport.scrollTop,center=top+Math.min(viewport.clientHeight/2,200);
+   let nearest=1;for(const [number,sheet] of sheets){if(sheet.offsetTop<=center)nearest=number;else break;}
+   if(page!==nearest){page=nearest;showStatus();}
+   // Keep distant canvases out of memory. Empty page-sized sheets preserve
+   // continuous scrolling; revisiting a page lazily paints it again.
+   for(const [number,work] of pageTasks){const sheet=sheets.get(number);if(Math.abs(number-page)>3&&!sheet.contains(window.getSelection()?.anchorNode)){
+    work.render?.cancel();work.text?.cancel();pageTasks.delete(number);sheet.replaceChildren();
+   }}
+  });
+ }
+ async function draw(){if(!document||!root)return;const mounted=epoch,request=++renderEpoch;cancelPages();clearSelection(true);
+  try{
+   const first=await document.getPage(1);if(!current(mounted)||request!==renderEpoch)return;
+   const viewport=root.querySelector('.pdf-viewport'),natural=first.getViewport({scale:1});
+   const factor=scale==='fit'?clamp((viewport.clientWidth-36)/natural.width,.2,3):scale==='page'?clamp(Math.min((viewport.clientWidth-36)/natural.width,(viewport.clientHeight-30)/natural.height),.2,3):Number(scale);
+   viewport.querySelectorAll('.pdf-sheet').forEach(el=>el.remove());
+   const fragment=window.document.createDocumentFragment();
+   for(let number=1;number<=document.numPages;number++){
+    const sheet=window.document.createElement('div');sheet.className='pdf-sheet';sheet.dataset.page=number;sheet.setAttribute('aria-label','PDF page '+number);sheet.style.width=natural.width*factor+'px';sheet.style.height=natural.height*factor+'px';sheet.style.setProperty('--total-scale-factor',factor);fragment.append(sheet);sheets.set(number,sheet);
+   }
+   viewport.append(fragment);viewport.scrollTop=Math.max(0,(sheets.get(page)?.offsetTop||0)-16);
+   pageObserver=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting)void drawPage(Number(entry.target.dataset.page));},{root:viewport,rootMargin:'500px 0px'});
+   for(const sheet of sheets.values())pageObserver.observe(sheet);
+   await drawPage(page);
+  }catch(failure){if(current(mounted)&&request===renderEpoch){error=failure.message||String(failure);showStatus();}}
  }
  async function load(next,{force=false}={}) {
   if(!root)return false;
   if(!force&&record&&key(next)===key(record)&&(document||loading)){record={...next};showStatus();return !!document;}
-  const previousSource=record?.source_path||record?.main_file;record={...next};const token=++epoch;++renderEpoch;abort?.abort();renderTask?.cancel();textLayer?.cancel();disposeTask(loadingTask);disposeTask(document?.loadingTask);document=null;renderTask=textLayer=loadingTask=null;clearSelection(true);
+  const previousSource=record?.source_path||record?.main_file;record={...next};const token=++epoch;++renderEpoch;cancelPages();abort?.abort();renderTask?.cancel();textLayer?.cancel();disposeTask(loadingTask);disposeTask(document?.loadingTask);document=null;renderTask=textLayer=loadingTask=null;clearSelection(true);
   if(previousSource!==(record.source_path||record.main_file))page=1;
-  root.querySelector('.pdf-sheet').hidden=true;root.querySelector('.pdf-sheet').replaceChildren();error='';loading=false;
+  root.querySelectorAll('.pdf-sheet').forEach(el=>el.remove());error='';loading=false;
   const url=record.pdf_url||record.url;if(!url){showStatus();return false;}
   loading=true;showStatus();abort=new AbortController();
   try{const safeURL=sameOriginURL(url),lib=await library();if(!current(token))return false;
@@ -63,12 +98,12 @@ export function createPdfPreview(options={}) {
    const pdf=await loadingTask.promise;if(!current(token)){disposeTask(pdf.loadingTask);return false;}document=pdf;loadingTask=null;page=clamp(page,1,pdf.numPages);loading=false;showStatus();await draw();return !error;
   }catch(failure){if(current(token)&&failure.name!=='AbortError'){loading=false;error=failure.message||String(failure);showStatus();}return false;}
  }
- function changePage(value){if(!document)return;page=clamp(Math.round(Number(value)||1),1,document.numPages);root.querySelector('.pdf-viewport').scrollTop=0;showStatus();draw();}
+ function changePage(value){clearSelection(true);if(!document)return;page=clamp(Math.round(Number(value)||1),1,document.numPages);const sheet=sheets.get(page);if(sheet)root.querySelector('.pdf-viewport').scrollTop=Math.max(0,sheet.offsetTop-16);showStatus();void drawPage(page);}
  function click(event){const download=event.target.closest('.pdf-download');if(download&&options.loadBytes){event.preventDefault();const saved={...record};options.loadBytes(sameOriginURL(saved.download_url||saved.pdf_url||saved.url),{}).then(bytes=>{const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),link=window.document.createElement('a');link.href=url;link.download=download.download;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}).catch(failure=>{error=failure.message;showStatus();});return;}const button=event.target.closest('[data-pdf],[data-pdf-diagnostic]');if(!button)return;
   if(button.dataset.pdfDiagnostic!==undefined){const item=record?.diagnostics?.[Number(button.dataset.pdfDiagnostic)];if(item?.path)options.onSource?.({path:item.path,line:item.line||1,column:item.column||1});return;}
-  switch(button.dataset.pdf){case'choose':options.onChooseFile?.();break;case'previous':changePage(page-1);break;case'next':changePage(page+1);break;case'ask':askSelection();break;case'retry':load(record,{force:true});break;case'zoom-out':case'zoom-in':{const sheet=root.querySelector('.pdf-sheet'),base=Number(sheet.style.getPropertyValue('--total-scale-factor'))||1;scale=String(clamp(base*(button.dataset.pdf==='zoom-in'?1.2:1/1.2),.2,3));const select=root.querySelector('[data-pdf-zoom]');if(![...select.options].some(o=>o.value===scale))select.add(new Option(Math.round(Number(scale)*100)+'%',scale));showStatus();draw();break;}}
+  switch(button.dataset.pdf){case'choose':options.onChooseFile?.();break;case'previous':changePage(page-1);break;case'next':changePage(page+1);break;case'ask':askSelection();break;case'retry':load(record,{force:true});break;case'zoom-out':case'zoom-in':{const sheet=sheets.get(page)||root.querySelector('.pdf-sheet'),base=Number(sheet.style.getPropertyValue('--total-scale-factor'))||1;scale=String(clamp(base*(button.dataset.pdf==='zoom-in'?1.2:1/1.2),.2,3));const select=root.querySelector('[data-pdf-zoom]');if(![...select.options].some(o=>o.value===scale))select.add(new Option(Math.round(Number(scale)*100)+'%',scale));showStatus();draw();break;}}
  }
  function keydown(event){const active=window.document.activeElement;if(active&&!root?.contains(active)&&active.matches('input,textarea,[contenteditable=true]'))return;if(event.key==='Escape'&&selection){clearSelection();window.getSelection()?.removeAllRanges();}if((event.ctrlKey||event.metaKey)&&['i','l'].includes(event.key.toLowerCase())&&selection){event.preventDefault();askSelection();}}
- function unmount(){++epoch;++renderEpoch;clearTimeout(resizeTimer);abort?.abort();renderTask?.cancel();textLayer?.cancel();disposeTask(loadingTask);disposeTask(document?.loadingTask);observer?.disconnect();observer=null;window.document.removeEventListener('selectionchange',updateSelection);window.document.removeEventListener('keydown',keydown);if(root){root.onclick=null;root.onchange=null;root.replaceChildren();root.classList.remove('pdf-preview');}root=null;record=null;document=loadingTask=renderTask=textLayer=null;selection=null;}
- return {async mount(element,next={}){if(root===element&&root.querySelector('.pdf-viewport'))return load(next);unmount();root=element;page=1;scale='fit';root.classList.add('pdf-preview');root.innerHTML=`<header class="pdf-controls">${options.onChooseFile?'<button type="button" data-pdf="choose" title="Choose another repository PDF">Open…</button>':''}<span class="pdf-source">PDF preview</span><div class="pdf-navigation"><button type="button" data-pdf="previous" aria-label="Previous PDF page">‹</button><input type="number" min="1" value="1" data-pdf-page aria-label="PDF page"><span class="pdf-page-count">/ —</span><button type="button" data-pdf="next" aria-label="Next PDF page">›</button></div><div class="pdf-zoom"><button type="button" data-pdf="zoom-out" aria-label="Zoom PDF out">−</button><select data-pdf-zoom aria-label="PDF zoom"><option value="fit">Fit width</option><option value="page">Fit page</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select><button type="button" data-pdf="zoom-in" aria-label="Zoom PDF in">+</button></div><a class="pdf-download" download hidden title="Download compiled PDF">↓</a></header><div class="pdf-status" role="status" hidden></div><div class="pdf-diagnostics" hidden></div><div class="pdf-viewport" tabindex="0" aria-label="PDF document"><div class="pdf-empty"></div><div class="pdf-sheet" hidden></div></div><button type="button" class="pdf-selection" data-pdf="ask" hidden>Ask about selection ↗</button>`;root.onclick=click;root.onchange=event=>{if(event.target.hasAttribute('data-pdf-page'))changePage(event.target.value);if(event.target.hasAttribute('data-pdf-zoom')){scale=event.target.value;draw();}};root.querySelector('.pdf-selection').onpointerdown=event=>event.preventDefault();window.document.addEventListener('selectionchange',updateSelection);window.document.addEventListener('keydown',keydown);width=root.clientWidth;height=root.clientHeight;observer=new ResizeObserver(()=>{if(!root)return;const changed=Math.abs(root.clientWidth-width)>=2||(scale==='page'&&Math.abs(root.clientHeight-height)>=2);width=root.clientWidth;height=root.clientHeight;if(!changed)return;clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(document&&['fit','page'].includes(scale))draw();},120);});observer.observe(root);return load(next);},setDocument:load,unmount,dispose:unmount,page(){return page;}};
+ function unmount(){++epoch;++renderEpoch;cancelPages();cancelAnimationFrame(scrollFrame);scrollFrame=null;clearTimeout(resizeTimer);abort?.abort();renderTask?.cancel();textLayer?.cancel();disposeTask(loadingTask);disposeTask(document?.loadingTask);observer?.disconnect();observer=null;window.document.removeEventListener('selectionchange',updateSelection);window.document.removeEventListener('keydown',keydown);if(root){root.onclick=null;root.onchange=null;root.replaceChildren();root.classList.remove('pdf-preview');}root=null;record=null;document=loadingTask=renderTask=textLayer=null;selection=null;}
+ return {async mount(element,next={}){if(root===element&&root.querySelector('.pdf-viewport'))return load(next);unmount();root=element;page=1;scale='fit';root.classList.add('pdf-preview');root.innerHTML=`<header class="pdf-controls">${options.onChooseFile?'<button type="button" data-pdf="choose" title="Choose another repository PDF">Open…</button>':''}<span class="pdf-source">PDF preview</span><div class="pdf-navigation"><button type="button" data-pdf="previous" aria-label="Previous PDF page">‹</button><input type="number" min="1" value="1" data-pdf-page aria-label="PDF page"><span class="pdf-page-count">/ —</span><button type="button" data-pdf="next" aria-label="Next PDF page">›</button></div><div class="pdf-zoom"><button type="button" data-pdf="zoom-out" aria-label="Zoom PDF out">−</button><select data-pdf-zoom aria-label="PDF zoom"><option value="fit">Fit width</option><option value="page">Fit page</option><option value="0.75">75%</option><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select><button type="button" data-pdf="zoom-in" aria-label="Zoom PDF in">+</button></div><a class="pdf-download" download hidden title="Download compiled PDF">↓</a></header><div class="pdf-status" role="status" hidden></div><div class="pdf-diagnostics" hidden></div><div class="pdf-viewport" tabindex="0" aria-label="PDF document"><div class="pdf-empty"></div><div class="pdf-sheet" hidden></div></div><button type="button" class="pdf-selection" data-pdf="ask" hidden>Ask about selection ↗</button>`;root.onclick=click;root.querySelector('.pdf-viewport').onscroll=scrollPage;root.onchange=event=>{if(event.target.hasAttribute('data-pdf-page'))changePage(event.target.value);if(event.target.hasAttribute('data-pdf-zoom')){scale=event.target.value;draw();}};root.querySelector('.pdf-selection').onpointerdown=event=>event.preventDefault();window.document.addEventListener('selectionchange',updateSelection);window.document.addEventListener('keydown',keydown);width=root.clientWidth;height=root.clientHeight;observer=new ResizeObserver(()=>{if(!root)return;const changed=Math.abs(root.clientWidth-width)>=2||(scale==='page'&&Math.abs(root.clientHeight-height)>=2);width=root.clientWidth;height=root.clientHeight;if(!changed)return;clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(document&&['fit','page'].includes(scale))draw();},120);});observer.observe(root);return load(next);},setDocument:load,unmount,dispose:unmount,page(){return page;}};
 }

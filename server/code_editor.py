@@ -31,7 +31,7 @@ GIT_TIMEOUT = 15
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 FILE_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
 FORBIDDEN = {".git", ".supersurfer"}
-LANGUAGES = {".py": "python", ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".jsx": "javascript",
+LANGUAGES = {".diff": "diff", ".patch": "diff", ".py": "python", ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript", ".jsx": "javascript",
              ".ts": "typescript", ".tsx": "typescript", ".json": "json", ".jsonc": "json", ".md": "markdown",
              ".markdown": "markdown", ".html": "html", ".htm": "html", ".css": "css", ".scss": "scss", ".less": "less",
              ".yml": "yaml", ".yaml": "yaml", ".toml": "ini", ".ini": "ini", ".sh": "shell", ".bash": "shell",
@@ -123,7 +123,7 @@ class CodeEditor:
     def _parent(self, project, parts):
         root = parent = None
         try:
-            root = os.open(self._repo(project), DIRECTORY_FLAGS)
+            root = project["_open_root"]() if "_open_root" in project else os.open(self._repo(project), DIRECTORY_FLAGS)
             parent = _directory(root, parts[:-1])
             yield root, parent
         except FileNotFoundError as error:
@@ -430,6 +430,36 @@ class CodeEditor:
         except UnicodeDecodeError:
             return None, "binary"
         return (None, "binary") if "\0" in text else (text, None)
+
+    def comparison(self, project, base, head, path=None):
+        def revision(value):
+            if not isinstance(value, str) or len(value) > 200 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./-]*", value) or ".." in value:
+                raise SurfboardError("Choose a commit hash, branch or tag in this repository")
+            resolved, _ = self._git(project, "rev-parse", "--verify", value + "^{commit}", limit=1024)
+            result = resolved.decode().strip()
+            if not re.fullmatch(r"[a-f0-9]{40,64}", result):
+                raise SurfboardError("Git did not resolve this revision")
+            return result
+        base, head = revision(base), revision(head)
+        raw, _ = self._git(project, "diff", "--no-ext-diff", "--name-status", "--no-renames", "-z", base, head, "--")
+        parts = raw.split(b"\0"); files = []
+        for index in range(0, len(parts) - 1, 2):
+            if not parts[index]: continue
+            candidate = os.fsdecode(parts[index + 1])
+            try: _parts(candidate)
+            except SurfboardError: continue
+            files.append({"path": candidate, "status": {"A":"added", "D":"deleted", "M":"modified", "T":"type changed"}.get(parts[index].decode(), "changed")})
+        result = {"base": base, "head": head, "files": files[:MAX_ENTRIES], "truncated": len(files) > MAX_ENTRIES}
+        if path is not None:
+            _parts(path)
+            if path not in {row["path"] for row in files}:
+                raise SurfboardError("That file is not part of this comparison", 404)
+            original, old_problem = self._blob(project, path, base)
+            modified, new_problem = self._blob(project, path, head)
+            result.update(path=path, original=original, modified=modified, language=_language(path),
+                          binary=old_problem in {"binary","unsupported"} or new_problem in {"binary","unsupported"},
+                          too_large=old_problem == "too_large" or new_problem == "too_large")
+        return result
 
     def diff(self, project, path, staged=False):
         _parts(path)
