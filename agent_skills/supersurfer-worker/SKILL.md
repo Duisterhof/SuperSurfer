@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.26'
+  supersurfer-version: '0.1.27'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.26. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.27. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -127,6 +127,10 @@ carry an unsaved warning; do not assume it is committed or deploy it as if it we
 Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
 agent patches versus repository Git changes. A local review marker does not satisfy
 the exact-source PR requirement, and editing a file never launches a run by itself.
+
+When a compact Compute view is unclear, inspect the existing run and its node
+readiness through your scoped tools. A layout issue does not justify duplicate
+submission, a budget increase or reporting the requested work as complete.
 
 Explorer, editor, recorded changes, chat and Results may be separate tiles on a
 custom experiment page. They still refer to this experiment and its shared source.

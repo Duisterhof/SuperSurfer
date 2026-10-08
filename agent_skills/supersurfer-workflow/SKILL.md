@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the project's active surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.26'
+  supersurfer-version: '0.1.27'
 ---
 
 # Work from the project's surfboard
 
-Reviewed for SuperSurfer 0.1.26. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.27. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
@@ -57,6 +57,11 @@ chat and artifact tiles. Reuse the shared source and existing report/agent ident
 across pages. A requested tile or page is configured by the surfboard; do not
 implement a second source browser or launch an agent just to populate the layout.
 Configure checks/previews only when execution behavior is part of the request.
+
+When verifying a UI change, exercise the actual controls at a narrow pane width
+as well as the main view. A reachable preview alone does not establish usable
+layout; clipped actions need a presentation fix, without new tool permissions or
+duplicate background work. Preserve dirty buffers and active action records.
 
 Use `run_board_action` for an action configured on the current board, such as a
 check or preview. Inspect the durable record after uncertainty before starting it

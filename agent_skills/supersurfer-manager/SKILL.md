@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.26'
+  supersurfer-version: '0.1.27'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.26. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.27. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -121,6 +121,11 @@ The guidance above describes the built-in Research board. For a Software
 engineering or Web design project, use the generic workflow skill selected by the
 service; do not impose Research's GPU/W&B workflow on ordinary checks or previews.
 A workspace manager must resolve the board of the project it is acting on.
+
+Compact Compute layouts retain the same refresh, registration and queue controls.
+A clipped control is a UI defect, not evidence that an agent lost a capability or
+that a project needs another manager. Use the existing scoped tools for requested
+actions and preserve current budgets and reservations.
 
 Project and experiment layouts can differ without changing tools or ownership.
 Moving an editor, chat or Results pane is a configurator/layout task, not a reason

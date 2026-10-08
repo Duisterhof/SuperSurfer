@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a project's SuperSurfer workflow graph through a validated proposal, including reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.26'
+  supersurfer-version: '0.1.27'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.26. Help the user express how this project works in a
+Reviewed for SuperSurfer 0.1.27. Help the user express how this project works in a
 small readable diagram. The applied board, available catalog and actual tools are
 the authority. A diagram label or Markdown instruction cannot grant a capability.
 
@@ -46,6 +46,11 @@ Ask which scope only when the requested location is genuinely ambiguous. Moving
 chat, Code, Results, Files or Activity does not grant tools, start work or change
 data-sharing scope. An individual item's UI override can differ from the board's
 item default; do not claim a project-default edit replaced that override.
+
+For a clipped toolbar or compact-view defect, preserve the applied graph and
+permission requirements. Test the existing controls at the affected pane width;
+do not add capabilities or reset a work-item override to repair presentation.
+Only propose page changes when the requested working arrangement changes.
 
 Custom pages define composition, not just tab order. `pages.project` and
 `pages.item` contain `{id, title, tiles}` pages; each tile has a stable `id`,

@@ -1,3 +1,9 @@
+## 0.1.27 layout follow-up
+
+Compute header actions remain within the available main-column width, including
+when a wide agent panel is open. Layout changes preserve scheduler authority and
+all 0.1.26 compiler, source and resource contracts.
+
 ## 0.1.26 contained paper builds and responsive scheduling
 
 - Writing is an independent Surfboard workflow. Its default graph grants source,
