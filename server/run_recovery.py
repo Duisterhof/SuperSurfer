@@ -2,9 +2,48 @@
 import copy
 import hashlib
 import json
+import re
 import time
 
+from .aml import ManagerError
 from .compute import ComputeError
+
+RETRY_FIELDS = {'name','gpu_count','command','repo','storage_gib','min_free_mib','use_project_pool','revision',
+                'python','data_path','required_paths','python_packages','job_type','training_metrics'}
+
+
+def retry_name(original, attempt):
+    """The bundled scheduler accepts only kebab-case names up to 64 chars."""
+    suffix = '-recovery-' + str(attempt)
+    base = re.sub(r'[^a-z0-9]+', '-', original.lower()).strip('-') or 'run'
+    return (base[:64-len(suffix)].rstrip('-') or 'run') + suffix
+
+
+def request_fingerprint(request, experiment_id):
+    return json.dumps({'experiment_id': experiment_id, 'arguments': {
+        key:value for key,value in request.items() if key not in {'request_id','pr_url'}}}, sort_keys=True)
+
+
+def recovery_request_id(record, run):
+    return 'recovery_' + hashlib.sha256(json.dumps([record['id'],run['id']]).encode()).hexdigest()[:40]
+
+
+def receipt_identity(scope, experiment_id, request_id):
+    return 'agent-request:' + hashlib.sha256(json.dumps([scope, experiment_id, request_id]).encode()).hexdigest()
+
+
+def matching_legacy_receipt(prior, request, identity, experiment):
+    payload = prior.get('payload') or {}
+    config = payload.get('config') or {}
+    expected = request_fingerprint(request, experiment['id'])
+    return (prior.get('fingerprint') == expected
+        and payload.get('name_') == request['name'].strip()
+        and payload.get('project') == experiment['project_id']
+        and payload.get('gpu_count') == request.get('gpu_count')
+        and payload.get('command') == request.get('command')
+        and config.get('supersurfer_experiment_id') == experiment['id']
+        and config.get('supersurfer_request_id') == identity
+        and config.get('supersurfer_request_fingerprint') == hashlib.sha256(expected.encode()).hexdigest())
 
 
 def compact_status(run, recovery, acquisitions):
@@ -115,6 +154,76 @@ class RunRecovery:
                 row.update(enabled=False, updated_at=time.time()); self.save(row)
         self.service.nodes.stop(scope=scope, run_id=run_id)
 
+    def _queue_retry(self, scope, request, legacy_name, experiment):
+        """Repair only this release's rejected legacy name, retaining its receipt.
+
+        Never discard an uncertain submission. Existing legacy receipts first
+        go through normal reconciliation with their exact original arguments.
+        Only a fresh definitive name rejection and confirmed absent scheduler
+        row permit changing the frozen name/fingerprint, under the same key.
+        """
+        service = self.service
+        identity = receipt_identity(scope, experiment['id'], request['request_id'])
+        key = 'queue_request:' + identity
+        prior = service.store.get(key)
+        current_fingerprint = request_fingerprint(request, experiment['id'])
+        if not prior or prior.get('fingerprint') == current_fingerprint:
+            return service.queue_agent_run(scope, request, experiment)
+        legacy = {**request, 'name': legacy_name}
+        if not matching_legacy_receipt(prior, legacy, identity, experiment):
+            raise ComputeError('Saved recovery request differs from this retry. Inspect its original fields before retrying; no receipt or run was changed.', 409)
+        try:
+            return service.queue_agent_run(scope, legacy, experiment)
+        except Exception as error:
+            cause = error
+            rejected_name = False
+            while cause is not None:
+                if isinstance(cause, (ManagerError, ValueError)) and str(cause) == 'Names must be kebab-case, at most 64 characters':
+                    rejected_name = True
+                cause = cause.__cause__
+            if not rejected_name:
+                raise
+            snapshot = service.state(force=True)
+            if not snapshot.get('manager_connected', snapshot.get('connected')):
+                raise ComputeError('Cannot confirm the rejected recovery request while the manager is unavailable. Its receipt was preserved; retry after reconnecting.', 503) from error
+            matches = [row for row in snapshot['runs'] if row.get('config', {}).get('supersurfer_request_id') == identity]
+            if matches:
+                # Another confirmed receipt takes precedence over the name
+                # repair. The normal path validates scope/duplicates and binds it.
+                return service.queue_agent_run(scope, legacy, experiment)
+            with service.store.lock:
+                if prior.get('run_id') or service.store.get(key) != prior:
+                    raise ComputeError('Recovery receipt changed while its rejection was checked. Inspect the saved request; no name was changed.', 409) from error
+                repaired = copy.deepcopy(prior)
+                repaired['fingerprint'] = current_fingerprint
+                repaired['payload']['name_'] = request['name']
+                repaired_config = repaired['payload']['config']
+                repaired_config['supersurfer_request_fingerprint'] = hashlib.sha256(current_fingerprint.encode()).hexdigest()
+                if isinstance(repaired_config.get('supersurfer_run_request'), dict):
+                    repaired_config['supersurfer_run_request']['name'] = request['name']
+                service.store.put(key, repaired)
+        return service.queue_agent_run(scope, request, experiment)
+
+    def _legacy_retry_hint(self, scope, run, record):
+        """An eligible old receipt can wake its existing recovery owner once."""
+        request_id = recovery_request_id(record, run)
+        identity = receipt_identity(scope, run['experiment_id'], request_id)
+        prior = self.service.store.get('queue_request:' + identity)
+        if not prior or prior.get('run_id'):
+            return None
+        try:
+            args = json.loads(prior['fingerprint'])['arguments']
+            request = {key:value for key,value in self.service.nodes.intent(run).items() if key in RETRY_FIELDS}
+            original_name = request.get('name') or run['name']
+            request.update(name=original_name[:75] + ' · recovery ' + str(record['attempts']+1),
+                           command=args['command'], revision=args['revision'], request_id=request_id)
+            if not matching_legacy_receipt(prior, request, identity, {'id':run['experiment_id'],'project_id':run['project_id']}):
+                return None
+            return {'receipt': hashlib.sha256(prior['fingerprint'].encode()).hexdigest(),
+                    'command': args['command'], 'revision': args['revision']}
+        except (KeyError, TypeError, ValueError):
+            return None
+
     def action(self, scope, run, fields):
         action = fields.get('action', 'status')
         if action == 'status':
@@ -147,17 +256,17 @@ class RunRecovery:
         # New attempt = new source review, W&B identity and scheduler run. Resources
         # and original experimental scope cannot be widened through this endpoint.
         request = self.service.nodes.intent(run)
-        allowed = {'name','gpu_count','command','repo','storage_gib','min_free_mib','use_project_pool','revision',
-                   'python','data_path','required_paths','python_packages','job_type','training_metrics'}
-        request = {key:value for key,value in request.items() if key in allowed}
+        request = {key:value for key,value in request.items() if key in RETRY_FIELDS}
         if not fields.get('command'): raise ComputeError('Retry requires explicit argv with a fresh output destination or a verified resume command')
         request.update(command=fields['command'], revision=fields.get('revision', run['revision']), pr_url=fields.get('pr_url') or run.get('pr_url'))
-        request['name'] = (request.get('name') or run['name'])[:75] + ' · recovery ' + str(record['attempts']+1)
-        request['request_id'] = 'recovery_' + hashlib.sha256(json.dumps([record['id'],run['id']]).encode()).hexdigest()[:40]
+        original_name = request.get('name') or run['name']
+        legacy_name = original_name[:75] + ' · recovery ' + str(record['attempts']+1)
+        request['name'] = retry_name(original_name, record['attempts']+1)
+        request['request_id'] = recovery_request_id(record, run)
         experiment = self.service.store.experiment(run['experiment_id'])
         self.submitting.add(scope)
         try:
-            result = self.service.queue_agent_run(scope, request, experiment)
+            result = self._queue_retry(scope, request, legacy_name, experiment)
         finally:
             self.submitting.discard(scope)
         if result['run_id'] not in record['runs']:
@@ -186,11 +295,16 @@ class RunRecovery:
                 acquisitions = service.nodes.status(run['id'])
                 if any(row['status']=='preparing' for row in acquisitions): continue
                 problem.append([(row['id'],row['status'],row.get('error')) for row in acquisitions])
+                legacy_retry = self._legacy_retry_hint(scope, run, record) if run['status']=='failed' else None
+                if legacy_retry:
+                    problem.append({'retry_name_repair':1,'receipt':legacy_retry['receipt']})
                 problem = json.dumps(problem, sort_keys=True)
                 if problem == record.get('last_problem') or time.time() - record.get('last_wake', 0) < 60: continue
                 if service.codex.chat(scope).get('busy') or service.store.get('agent_messages_paused:' + scope, False): continue
                 preferences = service.chat_preferences(scope, strict=True)['effective']
-                record.update(last_problem=problem, last_wake=time.time()); self.save(record)
+                record.update(last_wake=time.time()); self.save(record)
+                previous_origin = service.turn_origins.get(scope)
+                previous_active = self.active.get(scope)
                 service.turn_origins[scope] = 'recovery'; self.active[scope] = record['id']
                 prompt = ('Continue the existing authorized task below. This is a run-specific recovery wakeup. '
                     'Use recover_run(status), check_available_node and acquire_new_node directly. Reuse prepared nodes first; '
@@ -199,6 +313,22 @@ class RunRecovery:
                     'Do not raise budgets, stop other work, change the experimental protocol, or launch unrelated experiments. '
                     'Keep pursuing the deliverable; report an external blocker only after checking alternatives. '
                     'No manager relay is needed for these tools.\nTask: ' + record['task'] + '\nRun: ' + json.dumps(run) + '\nAcquisitions: ' + json.dumps(acquisitions))
-                response = service.codex.send(scope, prompt, **{key:preferences[key] for key in ('model','reasoning','fast_mode','approval_mode')})
-                if not response.get('accepted'): raise ComputeError('Recovery wakeup was not accepted; inspect the owner before resuming.', 409)
+                if legacy_retry:
+                    prompt += ('\nThe saved retry previously encountered a service-generated invalid name. '
+                        'That name repair is now available. Continue recover_run(retry) for this same failed run, '
+                        'with the original repair PR/reason and the saved argv/revision below. The service first '
+                        'reconciles any existing submission; do not use a fresh queue request or delete the receipt. '
+                        'This changes no resource, protocol, approval or retry limit. Saved retry fields: ' +
+                        json.dumps({'run_id':run['id'],'command':legacy_retry['command'],'revision':legacy_retry['revision']}))
+                try:
+                    response = service.codex.send(scope, prompt, **{key:preferences[key] for key in ('model','reasoning','fast_mode','approval_mode')})
+                    if not response.get('accepted'):
+                        raise ComputeError('Recovery wakeup was not accepted; delivery will be retried after the backoff.', 409)
+                except Exception:
+                    if previous_origin is None: service.turn_origins.pop(scope, None)
+                    else: service.turn_origins[scope] = previous_origin
+                    if previous_active is None: self.active.pop(scope, None)
+                    else: self.active[scope] = previous_active
+                    raise
+                record.update(last_problem=problem); self.save(record)
         finally: service.action_lock.release()

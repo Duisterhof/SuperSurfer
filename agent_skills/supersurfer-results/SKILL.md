@@ -23,6 +23,9 @@ creates a linked attempt with a new run/W&B identity; keep both attempts' proven
 and identify the repaired revision or resume point. Do not silently select the
 newest run, splice restarted steps into one uninterrupted curve, or count a retry
 as an independent seed. Update live bindings only from the verified recovery record.
+Retrying a rejected submission for that same child preserves its reserved writer;
+it is not another scientific attempt. A retained receipt without a child run ID
+does not establish a queued run or measured results.
 
 ## Respect the board's data input
 

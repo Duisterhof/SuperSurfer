@@ -69,9 +69,11 @@ run. With prepared paths it checks and adds that node. For missing setup, supply
 
 Setup bundles the exact Git revision into an isolated directory beneath the host
 root, stages requested data/environment, calls the **same** readiness check, and
-adds the resulting contract to the same queued run. It does not implicitly update
-the project's pool defaults or future node configuration. Register a genuinely
-missing host first; never duplicate a registration. Conda, containers and other
+adds the resulting contract to the same queued run. By default, successful
+acquisition also remembers an absent host for this project; shared defaults and
+existing host configurations remain unchanged. Set `save_for_project: false` for
+run-only acquisition, and inspect the returned `project_pool` result. Register a
+genuinely missing host first; never duplicate a registration. Conda, containers and other
 advanced environments are not synthesized automatically: prepare them with
 permitted bounded shell work and pass verified paths for reuse.
 
@@ -100,6 +102,19 @@ The tool creates a linked attempt and new W&B identity, up to three retries;
 retain both parent and child IDs. Read status after an uncertain result instead
 of inventing a queue ID or bypassing the lineage. Cancelled, lost, uncertain or
 still-active attempts cannot be retried. Exhausted retries require new direction.
+
+If a recovery submission fails before returning a child `run_id`, inspect status
+and resume `recover_run(action: "retry")` in the **same owning conversation**,
+using the same failed parent `run_id`, repair command, revision and PR. The service
+retains its deterministic submission identity and reserved W&B writer; agents do
+not supply a replacement request ID. A supported repair of a rejected legacy
+scheduler name reconciles that saved receipt before retrying. An uncertain or
+conflicting receipt stays preserved rather than being guessed absent. Do not
+submit a fresh `queue_run`, rename/delete service records or create another W&B
+run to bypass this framework error. The same authorized repair needs no new
+user approval or manager relay. If reconciliation still fails, keep the task
+unresolved with the exact error while continuing independent work; do not loop
+unchanged requests or claim that a replacement is queued without its run ID.
 
 `action: "pause"` revokes recovery and stops its setup transfers without cancelling
 the research run. Chat Stop and run cancellation also pause recovery. Do not

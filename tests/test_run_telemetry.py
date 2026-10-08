@@ -122,7 +122,7 @@ class TrainingSubmissionTests(unittest.TestCase):
     open_service = fixtures.ConversationTests.open_service
 
     def test_training_launch_contract_is_required_before_submission_and_kept_with_run(self):
-        params = {'project_id': 'p1', 'experiment_id': self.exp['id'], 'name': 'Training', 'host_id': 'h1',
+        params = {'project_id': 'p1', 'experiment_id': self.exp['id'], 'name': 'training', 'host_id': 'h1',
                   'gpu_count': 1, 'repo': str(self.repo), 'storage_gib': 1, 'command': ['python', 'train.py'], 'job_type': 'training'}
         with self.assertRaisesRegex(ValueError, 'Training jobs require'):
             self.service.action('run.submit', params)

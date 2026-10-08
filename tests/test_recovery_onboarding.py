@@ -223,17 +223,17 @@ class WorkerComputeTests(unittest.TestCase):
 
     def test_two_requested_arms_use_distinct_durable_run_ids_and_retry_after_restart(self):
         scope=self.active()
-        params={'host_id':'h1','name':'Arm A','gpu_count':1,'repo':str(self.repo),'storage_gib':0,
+        params={'host_id':'h1','name':'arm-a','gpu_count':1,'repo':str(self.repo),'storage_gib':0,
                 'command':['python','train.py'],'pr_url':'https://github.com/example/research/pull/8','request_id':'e14-arm-a-request-001'}
         first=self.service.agent_action(scope,'supersurfer_queue_run',params)
-        second=self.service.agent_action(scope,'supersurfer_queue_run',{**params,'name':'Arm B','request_id':'e14-arm-b-request-001'})
+        second=self.service.agent_action(scope,'supersurfer_queue_run',{**params,'name':'arm-b','request_id':'e14-arm-b-request-001'})
         self.assertNotEqual(first['run_id'],second['run_id'])
         self.assertEqual(sum(op=='run.submit' for op,_ in self.manager.calls),2)
         self.service.close();self.open_service();self.active()
         again=self.service.agent_action(scope,'supersurfer_queue_run',params)
         self.assertEqual(first['run_id'],again['run_id'])
         self.assertEqual(sum(op=='run.submit' for op,_ in self.manager.calls),2)
-        with self.assertRaises(APIError):self.service.agent_action(scope,'supersurfer_queue_run',{**params,'name':'Changed intent'})
+        with self.assertRaises(APIError):self.service.agent_action(scope,'supersurfer_queue_run',{**params,'name':'changed-intent'})
         self.assertTrue(all(len(p['config']['supersurfer_request_id'])<100 for op,p in self.manager.calls if op=='run.submit'))
 
 

@@ -210,7 +210,7 @@ class WakeupIntegrationTests(unittest.TestCase):
 
     def test_local_pool_validation_failure_can_be_corrected_without_ambiguous_creation(self):
         self.active_user()
-        params = {'name': 'pool run', 'use_project_pool': True, 'command': ['python', 'train.py'],
+        params = {'name': 'pool-run', 'use_project_pool': True, 'command': ['python', 'train.py'],
                   'gpu_count': 1, 'storage_gib': 1, 'revision': 'a'*40, 'pr_url': 'https://github.com/example/research/pull/8'}
         with patch.object(self.service.compute, 'resolve_run', side_effect=ComputeError('Choose a project compute pool')):
             with self.assertRaises(ComputeError): self.service.agent_action(self.scope, 'supersurfer_queue_run', params)

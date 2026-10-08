@@ -10,6 +10,10 @@ training processes, scheduler/state edits or arbitrary AML commands.
 
 ## Prepare the exact contract
 
+Run `name` must use lowercase letters/numbers separated by single hyphens, up to
+64 characters. A name rejected in preflight creates no frozen request or tracking
+writer; correct it and reuse the same `request_id`.
+
 Prefer the configured project pool: `use_project_pool: true`, exact committed
 `revision`, argv `command`, `gpu_count`, `storage_gib`, actual `job_type` and any
 required free VRAM (`min_free_mib`); omit `host_id`. The clean source checkout
@@ -78,7 +82,11 @@ confirmed execution failures use `recover_run` with the latest failed run ID and
 its diagnosed repair, rather than inventing another initial submission identity.
 Follow [the recovery contract](../../supersurfer-host-onboarding/references/run-recovery.md)
 for the three-retry limit, exact-source review, fresh/resume outputs and new linked
-run/W&B identities. This is distinct from reconciling an uncertain first submission.
+run/W&B identities. If that recovery submission itself fails without a new run
+ID, resume the same `recover_run` request in its owning conversation after
+inspecting status. Its retained request/W&B identity belongs to the same attempted
+child; do not replace it with a fresh `queue_run` or another owner. This is distinct
+from reconciling an uncertain first submission.
 A dedicated recovery wakeup has only that grant; ordinary monitoring remains
 observation-only and never acquires broad user-origin permissions.
 
