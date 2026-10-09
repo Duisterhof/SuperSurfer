@@ -1,3 +1,9 @@
+# Native Mac packaging follow-ups
+
+- [x] Seal native Mac builds with an ad-hoc signature and test original/ZIP launches.
+- [ ] Developer ID signing and notarization for downloads without a quarantine workaround.
+- [ ] Make node-onboarding tests portable to macOS rsync (`--protect-args` is unavailable).
+
 # Completed in 0.1.39
 
 - Fix Settings rendering: workspace defaults do not reference chat-local capabilities.
