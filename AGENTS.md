@@ -1,3 +1,8 @@
+# Contributing
+
+For repository changes, read [.agents/README.md](.agents/README.md) and follow
+[the fix, local build and PR workflow](.agents/contributing.md).
+
 # Release work
 
 Every SuperSurfer release must include a review and revision of the manager,

@@ -1,3 +1,15 @@
+# Native Mac development packaging
+
+On macOS, `package:mac` re-signs the completed Electron bundle with an ad-hoc
+identity before archiving. Signing and strict verification failures stop the
+build. Ad-hoc signing uses non-hardened runtime settings because it has no Team ID
+for hardened library validation; Electron renderer sandboxing remains enabled.
+Cross-built Mac archives do not get this native signing step. This provides local
+bundle integrity, not Developer ID trust or notarization. Download quarantine may
+still require the app-specific recovery command documented in README.
+The packaged-app regression checks the original and extracted ZIP using isolated
+profiles without connecting to a workspace.
+
 # SuperSurfer 0.1.39 — workspace settings versus chat capabilities
 
 The workspace permission selector uses the workspace's three supported defaults;
