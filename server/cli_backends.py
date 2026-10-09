@@ -450,7 +450,10 @@ class CliBridge(ConversationBridge):
                     if not allow or not deny:
                         connection.respond(value["id"], {"outcome": {"outcome": "cancelled"}})
                         return
-                    self._permission(scope, connection, {"command": params.get("toolCall", {}).get("title", "Tool action"), "cwd": chat["agent"]["cwd"]},
+                    tool = params.get("toolCall", {})
+                    inputs = safe_detail(tool.get("rawInput"))
+                    preview = tool.get("title", "Tool action") + ("\n" + json.dumps(inputs, indent=2) if inputs is not None else "")
+                    self._permission(scope, connection, {"command": preview, "cwd": chat["agent"]["cwd"]},
                         lambda allowed: connection.respond(value["id"], {"outcome": {"outcome": "selected", "optionId": allow if allowed else deny}}))
                 elif method == "cursor/ask_question":
                     self._cursor_question(scope, connection, value)
@@ -463,7 +466,8 @@ class CliBridge(ConversationBridge):
                     request = value.get("request", {})
                     if request.get("subtype") == "can_use_tool":
                         original = request.get("input", {})
-                        self._permission(scope, connection, {"command": request.get("tool_name", "Tool action"), "cwd": chat["agent"]["cwd"], "input": original, "request_id": value["request_id"]},
+                        preview = request.get("tool_name", "Tool action") + "\n" + json.dumps(safe_detail(original), indent=2)
+                        self._permission(scope, connection, {"command": preview, "cwd": chat["agent"]["cwd"], "input": original, "request_id": value["request_id"]},
                             lambda allowed: connection.respond(value["request_id"], {"behavior": "allow", "updatedInput": original} if allowed else {"behavior": "deny", "message": "The user denied this action."}))
                     else:
                         connection.respond(value["request_id"], "Unsupported request. Use the SuperSurfer MCP tools for questions.", error=True)

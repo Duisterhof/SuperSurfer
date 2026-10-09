@@ -1082,7 +1082,7 @@ function updateChatHeader(){
  if(state.pinnedAgent){const origin=state.pinnedAgent,p=state.data?.projects.find(p=>p.id===origin.projectId),item=state.data?.experiments.find(x=>x.id===origin.experimentId);$('#chat-meta').textContent='Pinned · '+[p?.name,item?.name].filter(Boolean).join(' / ')+(origin.scope==='manager'?'Workspace manager':'');}
  $('#chat-name').title=$('#chat-name').textContent;$('#chat-meta').title=$('#chat-meta').textContent+' · '+$('#chat-policy').textContent;
  $('#chat-input').placeholder=busy?'Add direction for the current work…':isSurfboard()?'Describe a workflow change…':state.experimentId?`Ask about this ${itemLabel()}…`:'Discuss your next project step…';$('#chat-input').disabled=readOnly()||!accountGate.ready();
- chatContext.setDisabled(readOnly()||native||!state.scope||!chatAcceptsProject(state.projectId));const send=$('#chat-send');send.disabled=readOnly()||!accountGate.ready()||fileUploads.pending(state.scope)||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
+ chatContext.setDisabled(readOnly()||native||!state.scope||!chatAcceptsProject(state.projectId));const send=$('#chat-send');send.disabled=readOnly()||chatPreferenceSaveScope===state.scope||!accountGate.ready()||fileUploads.pending(state.scope)||sending||question||approval||(busy&&!steerable);send.hidden=false;send.classList.toggle('steer-button',busy);send.setAttribute('aria-label',busy?'Steer current work':'Send message');send.title=busy?'Add direction without stopping the current turn':'Send message';send.innerHTML=sending?'<span class="spinner"></span>':icon('arrowUp');
  $('#chat-stop').hidden=!busy||native;
  $('#chat-hint').textContent=fileUploads.pending(state.scope)?'Uploading attachment…':readOnly()?'Read-only connection':!accountGate.ready()?accountGate.hint():question?'Answer the question above to continue':approval?'Review the approval request above':sending?(busy?'Sending direction…':'Sending message…'):steerable?'Steer adds direction to the current work':busy?'Agent is starting or finishing · Direction will be available shortly':'Enter to send · Shift Enter for a new line';
  renderAgentChooser();renderChatPreferences();renderChatApprovals();renderChatQuestions();renderChatTasks();renderAgentSessionState();
@@ -1142,7 +1142,7 @@ async function saveChatPreferences(changes) {
   const preferences=state.chat?.preferences,scope=state.scope;
   if(!preferences?.editable||readOnly()||chatPreferenceSaveScope)return;
   const params={scope,...changes};
-  chatPreferenceSaveScope=scope;chatPreferenceRevisions.set(scope,(chatPreferenceRevisions.get(scope)||0)+1);renderChatPreferences();
+  chatPreferenceSaveScope=scope;chatPreferenceRevisions.set(scope,(chatPreferenceRevisions.get(scope)||0)+1);renderChatPreferences();updateChatHeader();
   try {
     const result=await action('chat.settings',params);
     if(state.scope===scope){
@@ -1304,7 +1304,7 @@ function renderChat(){renderCodePresentation();const c=state.chat||{messages:[]}
  if((c.questions||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('message')}Waiting for your answer</div>`;else if((c.approvals||[]).some(item=>item.status==='pending'))el.innerHTML+=`<div class="chat-status">${icon('lock')}Waiting for your approval</div>`;else if(c.busy)el.innerHTML+='<div class="chat-status"><span class="spinner"></span>Working in your workspace…</div>';if(c.error)el.innerHTML+=`<div class="chat-error">${e(c.error)}</div>`;const entering=chatOpenPending||chatRenderedScope!==state.scope;chatRenderedScope=state.scope;chatOpenPending=false;if(entering||nearBottom||!messages.length){el.scrollTop=el.scrollHeight;if(entering){const scope=state.scope;requestAnimationFrame(()=>{if(state.scope===scope)el.scrollTop=el.scrollHeight;});}}else el.scrollTop=old;}
 async function sendChat(event){
  event?.preventDefault();const scope=state.scope,busy=!!state.chat?.busy;
- if(readOnly()||!accountGate.ready()||fileUploads.pending(scope)||selectedAgent()?.retired||state.chat?.retired||state.chat?.archived||chatSending.has(scope)||pendingQuestions()||pendingApprovals()||(busy&&!state.chat?.steerable))return;
+ if(readOnly()||chatPreferenceSaveScope===scope||!accountGate.ready()||fileUploads.pending(scope)||selectedAgent()?.retired||state.chat?.retired||state.chat?.archived||chatSending.has(scope)||pendingQuestions()||pendingApprovals()||(busy&&!state.chat?.steerable))return;
  const input=$('#chat-input'),original=input.value,attachments=chatContext.get().slice(),text=original.trim()||(attachments.length?'Please review the attached context.':'');if(!text)return;
  chatSending.add(scope);updateChatHeader();
  try{

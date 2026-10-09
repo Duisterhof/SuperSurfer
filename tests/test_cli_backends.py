@@ -42,7 +42,7 @@ for line in sys.stdin:
    current=key;text=p['prompt'][0]['text'].split('User request:\n')[-1]
    if text=='crash':os._exit(2)
    if text=='approval':
-    emit({'jsonrpc':'2.0','id':'permission-1','method':'session/request_permission','params':{'sessionId':session,'toolCall':{'title':'Write file'},'options':[{'optionId':'allow','kind':'allow_once'},{'optionId':'deny','kind':'reject_once'}]}});continue
+    emit({'jsonrpc':'2.0','id':'permission-1','method':'session/request_permission','params':{'sessionId':session,'toolCall':{'title':'Write file','rawInput':{'command':'touch result.txt'}},'options':[{'optionId':'allow','kind':'allow_once'},{'optionId':'deny','kind':'reject_once'}]}});continue
    if text=='question':
     emit({'jsonrpc':'2.0','id':'question-1','method':'cursor/ask_question','params':{'questions':[{'id':'data','prompt':'Which split?','options':[{'id':'train','label':'Train'},{'id':'val','label':'Validation'}]}]}});continue
    if text=='hold':continue
@@ -108,7 +108,7 @@ class CliBackendTests(unittest.TestCase):
     def test_permission_is_once_scoped_and_redacts_sensitive_fields(self):
         for backend in ('cursor','claude'):
             b=self.bridge(backend);b.send('manager','approval');self.wait(lambda:bool(b.chat('manager')['approvals']));chat=b.chat('manager');approval=chat['approvals'][0]
-            self.assertEqual('pending',approval['status']);self.assertNotIn('NEVER_PERSIST',json.dumps(chat))
+            self.assertEqual('pending',approval['status']);self.assertNotIn('NEVER_PERSIST',json.dumps(chat));self.assertIn('touch result.txt',approval['params']['command'])
             with self.assertRaises(BridgeError):b.approve('project:other',approval['id'],'approve')
             b.approve('manager',approval['id'],'deny');self.wait(lambda:not b.chat('manager')['busy'])
             with self.assertRaises(BridgeError):b.approve('manager',approval['id'],'approve')
