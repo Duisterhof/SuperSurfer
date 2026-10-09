@@ -14,6 +14,7 @@ function activate(context) {
       response.on('end',()=>{try{const result=JSON.parse(data);if(response.statusCode!==200)throw new Error(result.error||'Editor bridge failed');resolve(result);}catch(error){reject(error);}});
     });req.setTimeout(10000,()=>req.destroy(new Error('Editor bridge timed out')));req.on('error',reject);req.end(bytes);
   });
+  const drafts=require('./draft-review.js').activateDraftReview(vscode,context,{request,getFolder:()=>registeredFolder});
   function virtual(name,text){const uri=vscode.Uri.parse('supersurfer-diff:/'+(++sequence)+'/'+encodeURIComponent(name));documents.set(uri.toString(),text);return uri;}
   context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('supersurfer-diff',{onDidChange:documentChanges.event,provideTextDocumentContent:uri=>documents.get(uri.toString())||''}));
   const notifyState=()=>request({operation:'state',trusted:vscode.workspace.isTrusted,dirty:vscode.workspace.textDocuments.some(doc=>doc.isDirty)}).catch(()=>{});
@@ -52,7 +53,7 @@ function activate(context) {
     if(item.kind==='changes')return vscode.commands.executeCommand('workbench.action.closeSidebar');
     if(item.kind==='files')return vscode.commands.executeCommand('workbench.view.explorer');
     if(item.kind==='selection')return selection();
-    if(item.kind==='save')return vscode.commands.executeCommand('workbench.action.files.save');
+    if(item.kind==='save')return drafts.save();
     if(item.kind==='trust')return vscode.commands.executeCommand('workbench.trust.manage');
     if(item.kind==='terminal'){
       const terminal=vscode.window.activeTerminal||vscode.window.createTerminal({name:'Terminal',cwd:vscode.workspace.workspaceFolders?.[0]?.uri});

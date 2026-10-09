@@ -131,6 +131,8 @@ def catalog():
             row["skills"] = ["supersurfer-code-editor"]
         if kind == "latex":
             fields.update(main_file={"type": "string", "maxLength": 1024, "default": "main.tex"},
+                          source_dir={"type": "string", "maxLength": 1024, "default": ""},
+                          extra_source_files={"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 1024}},
                           timeout_seconds={"type": "integer", "minimum": 1, "maximum": 300, "default": 120})
             row["skills"] = ["supersurfer-writing"]
         answer.append(row)
@@ -321,6 +323,8 @@ def validate(board, *, allow_pending=False):
                     _fail(field_path, "must be an argument list with at most 1000 items")
                 for j, arg in enumerate(value):
                     _text(arg, f"{field_path}[{j}]", 8192, 1 if j == 0 else 0, False)
+            elif field == "extra_source_files":
+                _strings(value, field_path, 64, 1024)
             else:
                 _strings(value, field_path, 200, 200, spec.get("items", {}).get("enum"))
         if kind == "agent":
@@ -344,6 +348,15 @@ def validate(board, *, allow_pending=False):
                     any(part in ("", ".", "..") for part in main_file.split("/")) or
                     "\\" in main_file or any(ord(c) < 32 for c in main_file)):
                 _fail(path + ".config.main_file", "choose a repository-relative .tex file without traversal")
+            folder = config.get("source_dir", "")
+            extras = config.get("extra_source_files", [])
+            if len(extras) > 64:
+                _fail(path + ".config.extra_source_files", "choose at most 64 build files")
+            for field, value in [("source_dir", folder), *[("extra_source_files", name) for name in extras]]:
+                if not value and field == "source_dir":
+                    continue
+                if value.startswith("/") or "\\" in value or any(part in ("", ".", "..") for part in value.split("/")):
+                    _fail(path + ".config." + field, "choose project-relative paths without traversal")
         elif kind == "timer":
             config.setdefault("event", "interval")
             config.setdefault("interval_minutes", 10)

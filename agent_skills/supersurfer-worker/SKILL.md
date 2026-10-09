@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.36. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.37. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -289,3 +289,11 @@ closes the workspace. Existing command/board-action authorization still governs
 starting a server. Do not use code-server proxy routes, broaden app CORS or relay
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
+
+Desktop tabs and Activity remain below the native drag area; sidebar edge arrows restore hidden navigation or chats, including a maximized conversation. Hiding your pane does not stop the task, clear deliverables or grant another turn. Preserve the same task and run identities when the user changes views.
+
+Both Monaco and the optional native editor use source-buffer Accept/Reject for
+external edits merged into an
+unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
+a draft choice as a durable agent-patch receipt or saved source. A successful
+explicit Save is still separate from checks, commits and launch authorization.

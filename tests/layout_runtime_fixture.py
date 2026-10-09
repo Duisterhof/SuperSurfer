@@ -3,11 +3,20 @@ from pathlib import Path
 import sys
 import subprocess
 import threading
+import time
 sys.path[:0]=[str(Path.cwd()),str(Path.cwd()/'tests')]
 from test_conversations import ConversationTests
 from server.app import create_server
 fixture=ConversationTests();fixture.setUp()
 fixture.service.codex.account=lambda:{'account':{'type':'chatgpt'},'login_required':False}
+if '--slow-buffer-save' in sys.argv:
+    original_bridge=fixture.service.workbench.bridge
+    def delayed_bridge(fields):
+        result=original_bridge(fields)
+        if fields.get('operation')=='buffer_save' and '# slow captured' in fields.get('content',''):
+            time.sleep(1.2)
+        return result
+    fixture.service.workbench.bridge=delayed_bridge
 projects={'research':'p1'}
 for workflow in ('software','web'):
     row=fixture.service.action('project.add',{'name':workflow+'-studio','repo':str(fixture.root/workflow),'surfboard_template':workflow})

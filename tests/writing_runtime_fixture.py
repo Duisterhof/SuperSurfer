@@ -36,6 +36,9 @@ Claims remain provisional until supported by measurements.
 We compare methods under the same evaluation protocol and label held-out splits explicitly.
 Training and validation curves should be overlaid by method, with units and clear legends.
 ''')
+if '--ignored-source' in sys.argv:
+    (repo/'.gitignore').write_text('main.tex\nsections/\nignored-data/\n')
+    (repo/'ignored-data').mkdir();(repo/'ignored-data/unused.bin').write_text('Not selected for compilation')
 item=fixture.service.action('experiment.create',{'project_id':project['id'],'name':'Revise methods section','summary':'Clarify the method without changing unsupported claims.'})
 server=create_server(fixture.service,port=0)
 print(json.dumps({'port':server.server_port,'directory':str(fixture.service.directory),'project':project['id'],'item':item['id'],'repo':str(repo),'compiler':fixture.service.latex.capabilities()}),flush=True)

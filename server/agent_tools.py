@@ -415,6 +415,7 @@ LATEX_TOOL = _board_tool("compile_latex", "Compile saved LaTeX source, inspect o
     "node_id": {"type": "string", "maxLength": 100},
     "main_file": {"type": "string", "minLength": 1, "maxLength": 1024},
     "source_dir": {"type": "string", "maxLength": 1024},
+    "extra_source_files": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 1024}},
     "engine": {"type": "string", "enum": ["pdflatex"]},
     "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 300},
     "request_id": {"type": "string", "minLength": 16, "maxLength": 100},

@@ -97,10 +97,25 @@ def _read(fd, limit, cancel=None, deadline=None):
     return b''.join(blocks)
 
 
-def source_snapshot(project, source_dir='', destination=None, *, cancel=None, deadline=None):
-    """Copy and hash nonignored Git inputs without following any path symlink."""
+def extra_sources(value, source_dir=''):
+    if not isinstance(value, (list, tuple)) or len(value) > 64:
+        raise SurfboardError('Additional build files must be a list of at most 64 project-relative paths')
+    prefix = _path(source_dir, empty=True)
+    result = []
+    for name in value:
+        parts = _path(name)
+        if parts[:len(prefix)] != prefix:
+            raise SurfboardError('Additional build files must be within the selected source folder')
+        if name not in result:
+            result.append(name)
+    return sorted(result)
+
+
+def source_snapshot(project, source_dir='', destination=None, *, extra_source_files=(), cancel=None, deadline=None):
+    """Copy Git-visible inputs plus explicitly selected files; never follow links."""
     root = Path(project['repo']).expanduser().resolve()
     prefix = _path(source_dir, empty=True)
+    extras = extra_sources(extra_source_files, source_dir)
     if prefix:
         fd = os.open(root, DIR_FLAGS)
         try:
@@ -153,7 +168,7 @@ def source_snapshot(project, source_dir='', destination=None, *, cancel=None, de
         raise SurfboardError('Cannot list this project’s Git source for LaTeX compilation', 409)
     if len(listing) > 4 * 1024 * 1024:
         raise SurfboardError('Too many LaTeX source paths; choose a smaller source_dir', 413)
-    paths = sorted(set(filter(None, bytes(listing).split(b'\0'))))
+    paths = sorted(set(filter(None, bytes(listing).split(b'\0'))) | {os.fsencode(name) for name in extras})
     if len(paths) > MAX_SOURCE_FILES:
         raise SurfboardError('LaTeX source exceeds 10,000 files; choose a smaller source_dir', 413)
     digest, inputs, total = hashlib.sha256(), {}, 0
@@ -314,16 +329,16 @@ class LatexCompiler:
         rows = [self.store.get('latex_build:' + key) for key in self.store.get('latex_build_ids', [])]
         return [row for row in rows if row and row['project_id'] == project['id'] and row['experiment_id'] == item]
 
-    def _current_fingerprint(self, project, source_dir, *, cancel=None, deadline=None):
+    def _current_fingerprint(self, project, source_dir, *, extra_source_files=(), cancel=None, deadline=None):
         if cancel is not None and cancel.is_set():
             raise InterruptedError('Source snapshot cancelled')
-        key = (project['id'], str(Path(project['repo']).resolve()), source_dir)
+        key = (project['id'], str(Path(project['repo']).resolve()), source_dir, tuple(extra_source_files))
         with self.lock:
             cached = self.fingerprints.get(key)
             if cached and time.monotonic() - cached[0] < 10:
                 return cached[1]
         try:
-            value = source_snapshot(project, source_dir, cancel=cancel, deadline=deadline)['fingerprint']
+            value = source_snapshot(project, source_dir, extra_source_files=extra_source_files, cancel=cancel, deadline=deadline)['fingerprint']
         except InterruptedError:
             raise
         except Exception:
@@ -384,8 +399,9 @@ class LatexCompiler:
         main_file = args.get('main_file') or (chosen['main_file'] if chosen else 'main.tex')
         history = [row for row in rows if row['main_file'] == main_file]
         good = next((row for row in reversed(history) if row['status'] == 'succeeded' and self._pdf_exists(row)), None)
-        cache = {row['source_dir']: self._current_fingerprint(project, row['source_dir']) for row in (chosen, good) if row}
-        public = lambda row: self._public(row, project, cache.get(row['source_dir'])) if row else None
+        cache_key = lambda row: (row['source_dir'], tuple(row.get('extra_source_files', [])))
+        cache = {cache_key(row): self._current_fingerprint(project, row['source_dir'], extra_source_files=row.get('extra_source_files', [])) for row in (chosen, good) if row}
+        public = lambda row: self._public(row, project, cache.get(cache_key(row))) if row else None
         return {'project_id': project['id'], 'experiment_id': item, 'main_file': main_file, 'capabilities': self.capabilities(), 'build': public(chosen), 'last_successful': public(good), 'builds': [{key: row.get(key) for key in ('build_id', 'request_id', 'main_file', 'source_dir', 'engine', 'status', 'created', 'started', 'finished', 'error', 'scope')} for row in reversed(history[-20:])]}
 
     def _pdf_exists(self, row):
@@ -400,7 +416,7 @@ class LatexCompiler:
         # actually copied, even when a concurrent editor changes the checkout.
         if expected_source_fingerprint is not None and (not isinstance(expected_source_fingerprint, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_source_fingerprint)):
             raise SurfboardError('Invalid verified source fingerprint')
-        allowed = {'operation', 'project_id', 'experiment_id', 'node_id', 'request_id', 'build_id', 'main_file', 'source_dir', 'engine', 'timeout_seconds', 'artifact_path', 'pages'}
+        allowed = {'operation', 'project_id', 'experiment_id', 'node_id', 'request_id', 'build_id', 'main_file', 'source_dir', 'extra_source_files', 'engine', 'timeout_seconds', 'artifact_path', 'pages'}
         if not isinstance(args, dict) or set(args) - allowed:
             raise SurfboardError('Unknown LaTeX action field')
         operation = args.get('operation', 'start')
@@ -435,6 +451,7 @@ class LatexCompiler:
                 raise SurfboardError('Workspace is shutting down', 503)
             main_file, source_dir, engine = args.get('main_file', 'main.tex'), args.get('source_dir', ''), args.get('engine', 'pdflatex')
             main_parts, source_parts = _path(main_file), _path(source_dir, empty=True)
+            extras = extra_sources(args.get('extra_source_files', []), source_dir)
             if main_parts[:len(source_parts)] != source_parts or not main_file.lower().endswith('.tex'):
                 raise SurfboardError('main_file must be a .tex file within source_dir')
             if '"' in main_file:
@@ -447,6 +464,8 @@ class LatexCompiler:
             if not isinstance(request_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,100}', request_id):
                 raise SurfboardError('Start needs a stable request_id of 16–100 letters, digits, underscores or hyphens')
             identity = {'project_id': project['id'], 'repo': str(Path(project['repo']).resolve()), 'experiment_id': item, 'scope': scope, 'requested_by': 'user' if user else 'agent', 'main_file': main_file, 'source_dir': source_dir, 'engine': engine, 'timeout_seconds': timeout, 'node_id': args.get('node_id')}
+            if extras:
+                identity['extra_source_files'] = extras
             signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
             request_key = self._request_key(scope, request_id)
             receipt = self.store.get(request_key)
@@ -578,7 +597,7 @@ class LatexCompiler:
                     finally:
                         (target / 'page.png').unlink(missing_ok=True)
             try:
-                fingerprint = self._current_fingerprint(project, row['source_dir'], cancel=active['stop'], deadline=deadline)
+                fingerprint = self._current_fingerprint(project, row['source_dir'], extra_source_files=row.get('extra_source_files', []), cancel=active['stop'], deadline=deadline)
             except InterruptedError as error:
                 raise SurfboardError('PDF inspection was stopped', 409) from error
             if self.closed or active['stop'].is_set():
@@ -671,10 +690,10 @@ class LatexCompiler:
         directory = self.directory / key; source = directory / 'source'; output = directory / 'output'
         try:
             source.mkdir(parents=True, mode=0o700); output.mkdir(mode=0o700)
-            snapshot = source_snapshot(project, row['source_dir'], source, cancel=active['stop'])
+            snapshot = source_snapshot(project, row['source_dir'], source, extra_source_files=row.get('extra_source_files', []), cancel=active['stop'])
             relative = row['main_file'][len(row['source_dir']) + 1:] if row['source_dir'] else row['main_file']
             if relative not in snapshot['inputs']:
-                raise SurfboardError('Main TeX file is missing or ignored by Git; save it and include it in the project source before compiling', 404)
+                raise SurfboardError('Main TeX file is missing or ignored by Git. Open Build options to choose the correct main file, save it, or add its path to Additional build files. You do not need to change Git ignore rules.', 404)
             if row.get('expected_source_fingerprint') and snapshot['fingerprint'] != row['expected_source_fingerprint']:
                 raise SurfboardError('Source changed after the required workflow checks. Check the current saved source and start a new build; no compiler was launched.', 409)
             row.update(inputs=snapshot['inputs'], source_fingerprint=snapshot['fingerprint'], source_bytes=snapshot['bytes'], status='running', started=time.time())

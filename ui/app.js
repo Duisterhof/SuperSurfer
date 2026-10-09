@@ -22,7 +22,7 @@ import {createAccountGate} from './account-gate.js';
 if (window.superSurferDesktop) document.body.classList.add('desktop-app');
 document.querySelector('#new-workspace-window').hidden=!window.superSurferDesktop?.newWindow;
 const $ = (selector, root = document) => root.querySelector(selector);
-window.superSurferDesktop?.onWorkspaceCommand?.(command=>$('#'+({rearrange:'arrange-page',sidebar:'sidebar-toggle',chat:'chat-toggle'}[command]))?.click());
+window.superSurferDesktop?.onWorkspaceCommand?.(command=>$('#'+({rearrange:'arrange-page',sidebar:'sidebar-toggle',chat:'right-sidebar-toggle'}[command]))?.click());
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const e = escapeHtml;
@@ -116,7 +116,7 @@ function applySidebarLayout(page=activePage()){
  shell.style.setProperty('--sidebar-width',width+'px');shell.classList.toggle('narrow-sidebar',width<200);shell.classList.toggle('sidebar-collapsed',state.sidebarCollapsed);const toggle=$('#sidebar-toggle');toggle.setAttribute('aria-expanded',String(!state.sidebarCollapsed));toggle.setAttribute('aria-label',state.sidebarCollapsed?'Show workspace sidebar':'Hide workspace sidebar');toggle.title=(state.sidebarCollapsed?'Show':'Hide')+' workspace sidebar (⌘/Ctrl B)';
  const divider=$('#sidebar-resizer');divider.hidden=state.sidebarCollapsed||state.chatVisible&&state.chatMaximized;
  divider.setAttribute('aria-valuemin',bounds.min);divider.setAttribute('aria-valuemax',bounds.max);divider.setAttribute('aria-valuenow',width);divider.setAttribute('aria-valuetext',width+' pixels wide');
- divider.setAttribute('aria-disabled',String(readOnly()&&Boolean(page?.left_width||tileLayout.editing())));applyProjectTreeHeight();
+ divider.setAttribute('aria-disabled',String(readOnly()&&Boolean(page?.left_width||tileLayout.editing())));const edge=$('#left-sidebar-toggle');edge.hidden=state.chatVisible&&state.chatMaximized;edge.textContent=state.sidebarCollapsed?'›':'‹';edge.title=edge.ariaLabel=state.sidebarCollapsed?'Open workspace sidebar':'Collapse workspace sidebar';applyProjectTreeHeight();
 }
 function resizeSidebar(width){
  const bounds=sidebarWidthBounds();width=Math.round(Math.max(bounds.min,Math.min(bounds.max,width)));
@@ -128,9 +128,9 @@ function chatWidthBounds(){
  return {min:280,max:Math.max(280,Math.min(760,bodyWidth-(window.innerWidth>760?336:0)))};
 }
 function applyChatLayout(){
- const shell=$('.app-shell'),maximized=state.chatVisible&&state.chatMaximized;
+ const shell=$('.app-shell'),maximized=state.chatVisible&&state.chatMaximized&&!rightSidebarCollapsed;
  shell.classList.toggle('chat-maximized',maximized);document.body.classList.toggle('detached-chat',panelWindows.detached&&state.chatVisible);applySidebarLayout();
- $('#chat-panel').hidden=!state.chatVisible;
+ $('#chat-panel').hidden=!state.chatVisible||rightSidebarCollapsed;
  const bounds=chatWidthBounds(),width=Math.round(Math.min(bounds.max,Math.max(bounds.min,activePage()?.right_width||state.chatWidth||390)));
  shell.style.setProperty('--chat-panel-width',width+'px');
  const divider=$('#chat-resizer');
@@ -234,7 +234,15 @@ const latexPanel=createLatexPanel({api,action,editorSettings,onError:error=>toas
  onSetup:()=>prepareCodeQuestion('Set up the supported LaTeX compiler on this connected workspace. Check system pdfLaTeX, BibTeX, bubblewrap, prlimit and Poppler (pdfinfo, pdftotext, pdftoppm), then verify compile_latex can compile and inspect a small paper. Preserve project source and existing host environments. If administrator access is needed, explain the exact missing dependency and ask for that access. Do not use an external compiler service or search private service state.', 'Compiler setup message prepared. Send when ready.'),
  onSelection:record=>prepareCodeQuestion({kind:'pdf',project_id:state.projectId,path:record.source_path,label:record.source_path.split('/').at(-1)+' · p. '+record.page,text:'Compiled PDF · Source: '+record.source_path+' · PDF page '+record.page+' · Build '+record.build_id+'\nThis is PDF text, not a source-line mapping.\n'+record.text+(record.truncated?'\n[Selection truncated]':'')})});
 const workspaceFiles=createRepositoryExplorer({api,onOpenFile:path=>openPageCode({path})});
-let rightSidebarCollapsed=false;document.querySelector('#right-sidebar-toggle').onclick=()=>{rightSidebarCollapsed=!rightSidebarCollapsed;document.body.classList.toggle('right-sidebar-collapsed',rightSidebarCollapsed);const button=$('#right-sidebar-toggle');button.textContent=rightSidebarCollapsed?'‹':'›';button.title=button.ariaLabel=rightSidebarCollapsed?'Open right agent sidebar':'Collapse right agent sidebar';};
+let rightSidebarCollapsed=false;
+function setRightSidebarCollapsed(value){
+ rightSidebarCollapsed=value;document.body.classList.toggle('right-sidebar-collapsed',value);
+ if(value){state.chatMaximized=false;panelFocus.closeContaining($('#chat-panel'));}
+ else{state.chatVisible=true;chatRevealScope=chatLayoutKey();}
+ const button=$('#right-sidebar-toggle');button.textContent=value?'‹':'›';button.title=button.ariaLabel=value?'Open right agent sidebar (⌘/Ctrl ⇧ B)':'Collapse right agent sidebar (⌘/Ctrl ⇧ B)';button.setAttribute('aria-expanded',String(!value));
+ applyChatLayout();persistNavigation();
+}
+$('#right-sidebar-toggle').onclick=()=>setRightSidebarCollapsed(!rightSidebarCollapsed);
 const portsPanel=createPorts();
 const extraEditors=Object.fromEntries(['vscode','terminal'].map(kind=>[kind,createWorkbenchEditor({api,action,readOnly:()=>readOnly(),loadBytes:loadWorkspacePdf,onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onSave:record=>latexPanel.sourceSaved(record),onExtensions:()=>{state.view='settings';renderMain();}})]));
 const repositoryExplorer=createRepositoryExplorer({api,onOpenFile:path=>openPageCode({path})});
@@ -304,7 +312,7 @@ function renderAgentChooser(){
  const container=$('#chat-agent-list');if(!container||!state.data)return;
  const directory=currentAgentDirectory(),agents=scopedAgents(),current=agents.filter(agent=>!agent.retired&&!agent.archived),previous=agents.filter(agent=>agent.retired&&!agent.archived),archived=agents.filter(agent=>agent.archived),creating=agentMutations.has('create:'+state.experimentId);
  const rows=items=>items.map(agent=>`<button class="agent-list-row ${state.scope===agent.scope?'selected':''}" data-conversation="${e(agent.scope)}" title="${e(agent.name)} · ${e(agentLabel(agent))}" aria-current="${state.scope===agent.scope?'true':'false'}"><span class="status-dot ${e(agent.retired?'unknown':agent.busy?'running':agent.status||'idle')}"></span><span class="agent-list-copy"><strong>${e(agent.name||'Agent')}</strong><small>${e(agentLabel(agent))}${agent.owner==='AutoML'?' · AutoML':''}${!state.experimentId&&agent.experiment_id?' · '+e(state.data.experiments.find(x=>x.id===agent.experiment_id)?.name||'Experiment'):''}</small></span>${icon('message')}</button>`).join('');
- const html=`<div class="agents-list-heading"><button type="button" class="agents-expand-button" data-action="toggle-agent-list" aria-expanded="${agentsExpanded}" aria-label="${agentsExpanded?'Collapse':'Expand'} agents section">${icon(agentsExpanded?'chevronDown':'chevron')}<span>Agents · ${current.length}</span></button>${state.experimentId?`<button id="chat-new-agent" type="button" class="new-agent-button" data-action="new-experiment-agent" aria-label="New experiment agent" title="New agent" ${creating?'disabled':''}${disabled()}>${creating?'<span class="spinner"></span>':icon('plus')}<span>New agent</span></button>`:''}</div><div class="agent-list" ${agentsExpanded?'':'hidden'}>${rows(current)}${previous.length?`<div class="previous-agents-label">Previous agents</div>${rows(previous)}`:''}${archived.length?`<button type="button" class="archived-agents-toggle" data-action="toggle-archived-agents" aria-expanded="${showArchivedAgents}">${icon(showArchivedAgents?'chevronDown':'chevron')}Archived · ${archived.length}</button>${showArchivedAgents?rows(archived):''}`:''}</div>${directory?.error?`<div class="agent-list-error">${e(directory.error)} <button type="button" data-action="refresh-agents">Retry</button></div>`:directoryKey()&&!directory&&!isSurfboard()?'<div class="agent-list-loading">Loading conversations…</div>':''}`;
+ const html=`<div class="agents-list-heading"><button type="button" class="agents-expand-button" data-action="toggle-agent-list" aria-expanded="${agentsExpanded}" aria-label="${agentsExpanded?'Collapse':'Expand'} agents section">${icon(agentsExpanded?'chevronDown':'chevron')}<span>Agents · ${current.length}</span></button><button type="button" class="icon-button" data-action="toggle-right-sidebar" aria-label="Hide right sidebar" title="Hide right sidebar">${icon('panel')}</button>${state.experimentId?`<button id="chat-new-agent" type="button" class="new-agent-button" data-action="new-experiment-agent" aria-label="New experiment agent" title="New agent" ${creating?'disabled':''}${disabled()}>${creating?'<span class="spinner"></span>':icon('plus')}<span>New agent</span></button>`:''}</div><div class="agent-list" ${agentsExpanded?'':'hidden'}>${rows(current)}${previous.length?`<div class="previous-agents-label">Previous agents</div>${rows(previous)}`:''}${archived.length?`<button type="button" class="archived-agents-toggle" data-action="toggle-archived-agents" aria-expanded="${showArchivedAgents}">${icon(showArchivedAgents?'chevronDown':'chevron')}Archived · ${archived.length}</button>${showArchivedAgents?rows(archived):''}`:''}</div>${directory?.error?`<div class="agent-list-error">${e(directory.error)} <button type="button" data-action="refresh-agents">Retry</button></div>`:directoryKey()&&!directory&&!isSurfboard()?'<div class="agent-list-loading">Loading conversations…</div>':''}`;
  if(container.dataset.signature===html)return;
  const scroll=container.querySelector('.agent-list')?.scrollTop||0,focused=container.contains(document.activeElement)?document.activeElement:null,focusedScope=focused?.dataset.conversation,focusedAction=focused?.dataset.action;
  container.dataset.signature=html;container.innerHTML=html;container.setAttribute('aria-label',`${state.experimentId?'Experiment':state.projectId&&state.view==='workspace'?'Project':'Workspace'} agents`);
@@ -564,14 +572,14 @@ function ensureViewDock(){
 }
 function dockChat(){
  const dock=ensureViewDock(),chat=$('#chat-panel'),rows=currentLayout();
- if(panelWindows.detached&&!panelWindows.page(activePage())?.tiles.some(tile=>tile.kind==='chat')){if(chat.parentElement!==dock)dock.append(chat);chat.hidden=!state.chatVisible;dock.hidden=!state.chatVisible;dock.classList.remove('views-only');$('.app-shell').classList.remove('main-chat-view');$('#chat-resizer').hidden=!state.chatVisible||state.chatMaximized;return;}
+ if(panelWindows.detached&&!panelWindows.page(activePage())?.tiles.some(tile=>tile.kind==='chat')){if(chat.parentElement!==dock)dock.append(chat);chat.hidden=!state.chatVisible||rightSidebarCollapsed;dock.hidden=!state.chatVisible||rightSidebarCollapsed;dock.classList.remove('views-only');$('.app-shell').classList.remove('main-chat-view');$('#chat-resizer').hidden=!state.chatVisible||state.chatMaximized;return;}
  const chatView=rows?.find(row=>row.id==='chat');const place=chatView?.placement||'right';
  chat.style.order=String(chatView?.order??1000);
  const pageChat=pageHasTile('chat');
  const mainChat=pageChat&&!state.chatMaximized;
  const host=mainChat?$('#main-chat-host'):dock;
  if(host&&chat.parentElement!==host)host.append(chat);
- chat.hidden=!state.chatVisible||(!pageChat&&place==='hidden'&&chatRevealScope!==chatLayoutKey())||(place==='main'&&!mainChat&&!state.chatMaximized);
+ chat.hidden=!state.chatVisible||rightSidebarCollapsed||(!pageChat&&place==='hidden'&&chatRevealScope!==chatLayoutKey())||(place==='main'&&!mainChat&&!state.chatMaximized);
  const panels=$('#project-view-panels');
  dock.hidden=(chat.parentElement!==dock||chat.hidden)&&(!panels||panels.hidden||!panels.querySelector('.project-view-slot:not([data-kind=activity]),.project-view-slot[open]'))&&!($('#page-right-tiles')&&!$('#page-right-tiles').hidden);
  dock.classList.toggle('views-only',chat.hidden||chat.parentElement!==dock);
@@ -582,7 +590,7 @@ async function prepareCodeQuestion(text,notice='Selection context added to your 
  const projectId=state.projectId,experimentId=state.experimentId,requestedScope=state.scope;
  if(!currentAgentDirectory())await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId||requestedScope&&requestedScope!==state.scope)return;
  if(!state.scope||state.scope.startsWith('surfboard:'))syncAgentChooser();
- state.chatVisible=true;chatRevealScope=chatLayoutKey();
+ state.chatVisible=true;setRightSidebarCollapsed(false);chatRevealScope=chatLayoutKey();
  if(!panelWindows.detached&&currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
  applyChatLayout();dockChat();if(panelWindows.detached)startChatPolling();
  panelFocus.close();const input=$('#chat-input');if(typeof text==='object'){if(text.project_id!==state.projectId)return;if(!chatAcceptsProject(text.project_id))throw new Error('This pinned agent belongs to another project. Unpin it before attaching this selection.');chatContext.add(text);}else{const previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;}
@@ -1477,6 +1485,7 @@ async function handleAction(name,el){switch(name){
  case 'new-window':if(window.superSurferDesktop?.newWindow)await window.superSurferDesktop.newWindow();break;
  case 'configure-layout':await showViewLayout();break;
  case 'add-view-page':await showViewLayout({addPage:true});break;
+ case 'toggle-right-sidebar':$('#right-sidebar-toggle').click();break;
  case 'toggle-chat':state.chatVisible=$('#chat-panel').hidden;if(state.chatVisible)chatOpenPending=true;chatRevealScope=state.chatVisible?chatLayoutKey():null;if(state.chatVisible&&currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}applyChatLayout();dockChat();persistNavigation();if(state.chatVisible)refreshChat(true);break;
  case 'maximize-chat':state.chatVisible=true;state.chatMaximized=!state.chatMaximized;applyChatLayout();dockChat();persistNavigation();break;
  case 'close-modal':closeModal();break;
@@ -1548,8 +1557,9 @@ chatDivider.addEventListener('pointerup',endChatResize);chatDivider.addEventList
 chatDivider.addEventListener('keydown',event=>{const bounds=chatWidthBounds(),current=Number(chatDivider.getAttribute('aria-valuenow'));if(event.key==='ArrowLeft')resizeChat(current+24);else if(event.key==='ArrowRight')resizeChat(current-24);else if(event.key==='Home')resizeChat(bounds.min);else if(event.key==='End')resizeChat(bounds.max);else return;event.preventDefault();tileLayout.commitResize();persistNavigation();});
 chatDivider.addEventListener('dblclick',()=>{resizeChat(390);persistNavigation();});
 function toggleSidebar(){state.sidebarCollapsed=!state.sidebarCollapsed;applyChatLayout();persistNavigation();}
-$('#sidebar-toggle').onclick=toggleSidebar;
+$('#sidebar-toggle').onclick=toggleSidebar;$('#left-sidebar-toggle').onclick=toggleSidebar;
 document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&!event.shiftKey&&!event.altKey&&event.key.toLowerCase()==='b'&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();toggleSidebar();}},true);
+document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.shiftKey&&!event.altKey&&event.key.toLowerCase()==='b'&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();setRightSidebarCollapsed(!rightSidebarCollapsed);}},true);
 const sidebarDivider=$('#sidebar-resizer');let sidebarDrag=null;
 sidebarDivider.addEventListener('pointerdown',event=>{if(event.button!==0||sidebarDivider.getAttribute('aria-disabled')==='true')return;event.preventDefault();sidebarDrag={x:event.clientX,width:$('.sidebar').getBoundingClientRect().width};sidebarDivider.setPointerCapture(event.pointerId);document.body.classList.add('resizing-sidebar');});
 sidebarDivider.addEventListener('pointermove',event=>{if(sidebarDrag)resizeSidebar(sidebarDrag.width+event.clientX-sidebarDrag.x);});

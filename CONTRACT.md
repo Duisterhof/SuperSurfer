@@ -1,3 +1,33 @@
+# SuperSurfer 0.1.37 — collaborative source drafts
+
+The scoped draft planner compares a known baseline, the current editor draft and
+the current disk revision. Disjoint incoming edits enter the existing buffer as
+reviewable chunks; overlapping text preserves the user's version until an explicit
+choice. Review decisions change the draft only. Saving a rebased draft uses the
+current disk revision; a newer write blocks that save rather than overwriting it.
+Unknown baselines and unplannable updates retain explicit conflict handling. Native
+ordinary saves retain their standard extension hooks; rebased saves run the active
+formatter when configured and use the revision-checked service writer. Typing
+while a save is in flight stays dirty; a repeated Save request is queued. Draft
+review does not invent agent attribution or replace recorded patch receipts.
+
+Only registered project source paths can use draft read/merge/save. Read-only
+workspaces cannot save. Bounds on file size, lines and changes keep planning
+bounded; invalid paths, sensitive source and stale revisions preserve the draft.
+
+Desktop content starts below a 44-pixel safe inset. Only the empty 38-pixel
+window strip is draggable; buttons, links, inputs, selectors and summaries remain
+interactive. Cmd/Ctrl+Shift+B and the right chevron use the same sidebar toggle,
+including maximized/focused chats; restoring it also opens a previously closed
+chat. Neither toggle interrupts agents, changes permissions or writes source.
+
+LaTeX's extra_source_files is an explicit bounded list of safe project-relative
+files within the selected source folder. It never includes all ignored files.
+The normal credential/path/link exclusions and compiler sandbox remain enforced.
+A Surfboard source gate still rejects an extra file absent from its required Git
+source. Additional files participate in freshness, build identity and cache keys.
+Per-task client choices and shared block defaults do not edit Git ignore rules.
+
 ## 0.1.36 clean views and reusable blocks
 
 - Native desktop menus own Rearrange; panel handles own secondary actions. Default

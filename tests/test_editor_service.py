@@ -169,6 +169,34 @@ class EditorServiceTests(unittest.TestCase):
         for value in (-1,26,'invalid'):
             with self.assertRaises(Exception):self.service.workbench.poll(opened['id'],0,value)
 
+    def test_native_draft_bridge_is_project_scoped_and_revision_checked(self):
+        from unittest.mock import patch
+        from server.surfboards import SurfboardError
+        workbench=self.service.workbench;workbench.root.mkdir(parents=True,exist_ok=True)
+        source=self.repository/'draft.py';source.write_text('one\ntwo\nthree\n')
+        with patch.object(workbench,'start'):
+            opened=workbench.open({'project_id':self.pid,'client_id':'draft-review-window'})
+        fields={'session':opened['id'],'path':str(source)}
+        original=workbench.bridge({**fields,'operation':'buffer_read'})
+        source.write_text('one\nagent two\nthree\n')
+        disk=workbench.bridge({**fields,'operation':'buffer_read'})
+        plan=workbench.bridge({**fields,'operation':'buffer_merge','base':original['content'],'content':'my one\ntwo\nthree\n','revision':disk['revision']})
+        self.assertFalse(plan['chunks'][0]['conflict']);self.assertEqual(source.read_text(),disk['content'])
+        with self.assertRaises(SurfboardError):workbench.bridge({**fields,'operation':'buffer_save','content':'stale draft','revision':original['revision']})
+        self.assertEqual(source.read_text(),disk['content'])
+        with self.assertRaises(SurfboardError):workbench.bridge({**fields,'path':str(self.root/'outside.py'),'operation':'buffer_read'})
+        self.service.read_only=True
+        with self.assertRaises(SurfboardError):workbench.bridge({**fields,'operation':'buffer_save','content':'forbidden write','revision':disk['revision']})
+        self.assertEqual(source.read_text(),disk['content']);self.service.read_only=False
+        saved=workbench.bridge({**fields,'operation':'buffer_save','content':'my one\nagent two\nthree\n','revision':disk['revision']})
+        self.assertEqual(source.read_text(),saved['content'])
+
+    def test_builtin_draft_merge_does_not_write_source(self):
+        source=self.repository/'draft.py';base='one\ntwo\nthree\n';source.write_text('one\nagent two\nthree\n')
+        disk=self.service.code.read(self.project,'draft.py')
+        status,data=self.request('/api/action',{'op':'code.merge-draft','params':{'project_id':self.pid,'path':'draft.py','base':base,'content':'my one\ntwo\nthree\n','revision':disk['revision']}})
+        self.assertEqual(status,200,data);self.assertFalse(data['chunks'][0]['conflict']);self.assertEqual(source.read_text(),disk['content'])
+
     def test_native_project_trust_is_scoped_and_revocable(self):
         from unittest.mock import patch
         workbench = self.service.workbench

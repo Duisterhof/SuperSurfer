@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.36. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.37. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -283,3 +283,11 @@ closes the workspace. Existing command/board-action authorization still governs
 starting a server. Do not use code-server proxy routes, broaden app CORS or relay
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
+
+On the Mac desktop, page tabs and Activity sit below a thin native-safe drag strip; the in-app toolbar stays hidden. Sidebar edge arrows hide or restore navigation and agents without stopping their work. A missing pane is a view state, not a reason to reassign workers or repeat a launch.
+
+Both Monaco and the optional native editor use source-buffer Accept/Reject for
+external edits merged into an
+unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
+a draft choice as a durable agent-patch receipt or saved source. A successful
+explicit Save is still separate from checks, commits and launch authorization.

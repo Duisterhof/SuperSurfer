@@ -325,7 +325,7 @@ class Workbench:
             token = secrets.token_urlsafe(32)
             workspace = self.root / "workspaces" / (identity + ".code-workspace")
             workspace.parent.mkdir(exist_ok=True, mode=0o700)
-            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": view_kind!="vscode", "workbench.activityBar.location":"default" if view_kind=="vscode" else "hidden", "workbench.statusBar.visible":view_kind=="vscode", "workbench.panel.opensMaximized":"always" if view_kind in {"terminal","ports"} else "preserve", "window.title": project["name"] + " · SuperSurfer"}}))
+            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": view_kind!="vscode", "files.autoSave":"off", "workbench.activityBar.location":"default" if view_kind=="vscode" else "hidden", "workbench.statusBar.visible":view_kind=="vscode", "workbench.panel.opensMaximized":"always" if view_kind in {"terminal","ports"} else "preserve", "window.title": project["name"] + " · SuperSurfer"}}))
             row = {"id": identity, "client_id": client, "token": token, "project_id": project["id"],
                    "experiment_id": fields.get("experiment_id"), "view_kind":view_kind, "repo": str(Path(project["repo"]).resolve()), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
             self.sessions[identity] = row
@@ -410,6 +410,29 @@ class Workbench:
             row = self.session(fields.get("session"))
             previous_state=(row["dirty"],row.get("trusted"),row["connected_at"] is not None)
             row["connected_at"] = time.time()
+            if fields.get("operation") in {"buffer_read", "buffer_merge", "buffer_save"}:
+                project = self.service.lookup("projects", row["project_id"])
+                path = Path(fields.get("path", "")).resolve()
+                try:
+                    relative = path.relative_to(Path(row["repo"]).resolve()).as_posix()
+                except ValueError as error:
+                    raise SurfboardError("This draft belongs outside the selected project", 403) from error
+                target, relative = self.service.code_file_target(project, relative)
+                if fields["operation"] == "buffer_save":
+                    if self.service.read_only:
+                        raise SurfboardError("Read-only workspace", 403)
+                    result = self.service.code.save(target, relative, fields.get("content"), fields.get("revision"))
+                    self.service.latex.invalidate(project["id"], repo=project["repo"])
+                    return result
+                result = self.service.code.read(target, relative)
+                if result.get("read_only") or "content" not in result:
+                    raise SurfboardError("This file cannot be reviewed as editable text", 409)
+                if fields["operation"] == "buffer_merge":
+                    from .draft_merge import plan
+                    if fields.get("revision") != result["revision"]:
+                        raise SurfboardError("Disk source changed during draft review; retry from the current file", 409)
+                    result.update(plan(fields.get("base"), fields.get("content"), result["content"]))
+                return result
             if fields.get("operation") == "comparison":
                 project = self.service.lookup("projects", row["project_id"])
                 return self.service.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path"))

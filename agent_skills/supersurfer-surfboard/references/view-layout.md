@@ -155,3 +155,8 @@ and their order unless requested. The shortcut itself does not save, copy files
 or start an agent. An agent may perform an authorized equivalent directly through
 `update_view_layout` with both versions and the full preserved pages list; no
 manager relay or extra manual Save request is needed.
+
+The desktop keeps a thin native drag strip above all page tabs and Activity
+controls; it does not restore the in-app toolbar. Edge arrows collapse and restore
+the left navigation or right agent sidebar, including a maximized conversation.
+These client controls do not delete tiles, stop agents or change board policy.

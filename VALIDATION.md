@@ -1,3 +1,36 @@
+# SuperSurfer 0.1.37 — October 9, 2026
+
+Full backend regression: **679 Python tests** pass. All **28 enabled Node
+checks** pass; five optional SSH checks are skipped in this run. The native
+Electron lifecycle verifies the agent-menu accelerator and workspace command,
+multi-host restores, detached-panel lifetime, isolated port previews and denied
+untrusted IPC. Draft-planner tests exercise
+separate edits, overlapping edits, shifted insertions/deletions, already-applied
+clean refreshes, UTF-16 offsets and bounded input. Service tests exercise exact
+project scope, read-only saving, stale revisions and a merge that never writes
+source. Compiler tests cover individually selected ignored files, freshness and
+receipt conflicts, safe-path exclusions and retained Surfboard source gates.
+
+Real native Code OSS and built-in Monaco fixtures edit unsaved source while a
+second writer changes two other chunks. Mixed Accept/Reject preserves typing,
+leaves disk unchanged during review, and writes only the reviewed draft on Save.
+The native regression also requires a choice on overlapping lines, preserves
+typing during a delayed save, queues a repeated Save for the latest requested
+draft, and exercises ordinary native saving. Existing
+built-in save-conflict, stale response, scope and recorded-patch regressions pass.
+Advanced third-party save hooks on rebased native drafts are not exhaustively
+exercised; ordinary native saves use their standard path.
+
+Desktop-mode browser checks exercise repeated page switching, Activity refresh,
+both chevrons, expanded-chat collapse, restored closed chats and the agent-panel
+shortcut. A real LaTeX browser fixture repairs ignored main/dependency files,
+retains client choices after reload and recompiles on save without editing ignore
+rules. All twelve release skills match the final capabilities.
+
+The native editor and compiler are exercised on Linux. Mac packages are
+cross-built here; actual macOS launch and native titlebar hit testing remain
+untested on this host.
+
 # SuperSurfer 0.1.36 — October 9, 2026
 
 Controlled fixture tests exercise framed upload deadlines, reconnect lock

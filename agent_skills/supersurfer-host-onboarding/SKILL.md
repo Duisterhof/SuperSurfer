@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.36. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.37. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -274,3 +274,5 @@ closes the workspace. Existing command/board-action authorization still governs
 starting a server. Do not use code-server proxy routes, broaden app CORS or relay
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
+
+Desktop tabs and Activity are below the native drag strip. Restore a hidden sidebar with its edge arrow before diagnosing missing compute UI; view collapse does not disconnect a host, stop an installer or change node readiness. Inspect the actual node receipt separately.

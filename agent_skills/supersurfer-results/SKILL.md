@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.36. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.37. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -244,3 +244,5 @@ Reusable HTML blocks can request only their own declared copied local assets,
 including modules or 3D models; external live fetches are unavailable. Their local
 asset access is separate from Results' declared live-data bridge, and does not
 make an exported fixed visualization update with W&B.
+
+On desktop, page tabs and Activity remain below the native drag area. Collapsing either sidebar leaves more space for the report and can be reversed with its edge arrow. This changes presentation only: retain live source identities, measurement ages and errors rather than republishing results to restore a hidden view.

@@ -55,6 +55,32 @@ class LatexSourceTests(unittest.TestCase):
         self.assertNotIn('.env',first['inputs']);self.assertNotIn('build/output.pdf',first['inputs'])
         self.service.write('sections/body.tex','New text')
         second=source_snapshot(self.service.project);self.assertNotEqual(first['fingerprint'],second['fingerprint'])
+    def test_explicit_ignored_inputs_include_only_selected_files_without_git_changes(self):
+        self.service.write('.gitignore', 'draft/\n')
+        self.service.write('draft/main.tex', 'Selected source')
+        self.service.write('draft/body.tex', 'Selected dependency')
+        self.service.write('draft/large.bin', 'Excluded data')
+        before = subprocess.check_output(['git', '-C', str(self.service.repo), 'status', '--porcelain'])
+        self.assertNotIn('draft/main.tex', source_snapshot(self.service.project)['inputs'])
+        snapshot = source_snapshot(self.service.project, 'draft', extra_source_files=['draft/main.tex', 'draft/body.tex'])
+        self.assertEqual(set(snapshot['inputs']), {'main.tex', 'body.tex'})
+        self.service.write('draft/body.tex', 'Changed selected dependency')
+        self.assertNotEqual(snapshot['fingerprint'], source_snapshot(self.service.project, 'draft', extra_source_files=['draft/main.tex', 'draft/body.tex'])['fingerprint'])
+        self.assertEqual(before, subprocess.check_output(['git', '-C', str(self.service.repo), 'status', '--porcelain']))
+
+    def test_additional_build_inputs_preserve_path_and_link_boundaries(self):
+        self.service.write('.gitignore', 'draft/\n')
+        for path in ('../outside.tex', '/tmp/private.tex', '.env', '.SuperSurfer/secrets.tex', 'a//b.tex'):
+            with self.subTest(path=path), self.assertRaises(SurfboardError):
+                source_snapshot(self.service.project, extra_source_files=[path])
+        with self.assertRaisesRegex(SurfboardError, 'within'):
+            source_snapshot(self.service.project, 'sections', extra_source_files=['main.tex'])
+        outside = self.directory/'outside'; outside.write_text('Excluded source')
+        link = self.service.repo/'draft/link.tex';link.parent.mkdir();link.symlink_to(outside)
+        with self.assertRaises(SurfboardError):source_snapshot(self.service.project, extra_source_files=['draft/link.tex'])
+        link.unlink();os.link(outside, link)
+        with self.assertRaises(SurfboardError):source_snapshot(self.service.project, extra_source_files=['draft/link.tex'])
+
     def test_symlink_parent_file_hardlink_and_size_are_rejected(self):
         outside=self.directory/'outside';outside.write_text('outside fixture')
         link=self.service.repo/'linked.tex';link.symlink_to(outside)
@@ -122,6 +148,23 @@ class LatexCompilationTests(unittest.TestCase):
                 if row['status'] in TERMINAL and build_id not in self.compiler.active:return row
             time.sleep(.01)
         self.fail('Build did not finish within test deadline')
+    def test_ignored_main_can_be_repaired_and_extra_inputs_bind_receipts_and_freshness(self):
+        self.service.write('.gitignore', 'draft/\n')
+        self.service.write('draft/main.tex', r'\documentclass{article}\begin{document}\input{body.tex}\end{document}')
+        self.service.write('draft/body.tex', 'Selected ignored dependency.')
+        args = {'main_file': 'draft/main.tex', 'source_dir': 'draft'}
+        failed = self.done(self.start(**args)['build_id'])
+        self.assertEqual(failed['status'], 'failed');self.assertIn('Additional build files', failed['error'])
+        selected = ['draft/main.tex', 'draft/body.tex']
+        fixed = self.done(self.start(**args, extra_source_files=selected)['build_id'])
+        self.assertEqual(fixed['status'], 'succeeded', fixed.get('error'))
+        state = self.compiler.status(self.service.project, {'main_file': args['main_file']})
+        self.assertFalse(state['build']['stale'])
+        self.service.write('draft/body.tex', 'Changed ignored dependency.');self.compiler.invalidate(self.service.project['id'])
+        self.assertTrue(self.compiler.status(self.service.project, {'main_file': args['main_file']})['build']['stale'])
+        with self.assertRaisesRegex(SurfboardError, 'different LaTeX build'):
+            self.compiler.action('project:paper-project', self.service.project, {**args, 'request_id': fixed['request_id'], 'extra_source_files': ['draft/main.tex']})
+
     def test_actual_math_includes_pdf_capability_and_artifact(self):
         before=(self.service.repo/'main.tex').read_bytes();build=self.start();row=self.done(build['build_id'])
         self.assertEqual('succeeded',row['status'],row.get('error',row['logs']))

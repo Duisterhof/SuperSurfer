@@ -7,5 +7,5 @@ export function createPanelFocus(){
  document.addEventListener('click',event=>{const button=event.target.closest('[data-panel-fullscreen]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();toggle(button.dataset.panelFullscreen?document.querySelector(button.dataset.panelFullscreen):button.closest('.page-tile,.project-view-slot'));},true);
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&active&&!document.querySelector('dialog[open]')){event.preventDefault();event.stopImmediatePropagation();close();}},true);
  new MutationObserver(()=>{if(active&&!active.isConnected)close();else if(active)update();}).observe(document.body,{childList:true,subtree:true});
- return {close,toggle,refresh:update};
+ return {close,toggle,refresh:update,closeContaining(element){if(active?.contains(element))close();}};
 }
