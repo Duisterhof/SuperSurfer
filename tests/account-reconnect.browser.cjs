@@ -21,7 +21,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   broken=false;await page.evaluate(()=>gate.refresh());await gate.waitFor({state:'hidden'});
   // Expired or missing authentication gets its own fresh 15-second grace.
   account={account:null,login_required:true};await page.evaluate(()=>gate.refresh());assert.equal(await gate.isVisible(),false);await page.clock.fastForward(10000);await page.evaluate(()=>gate.refresh());assert.equal(await gate.isVisible(),false);await page.clock.fastForward(6000);await page.evaluate(()=>gate.refresh());await page.getByRole('heading',{name:'Connect ChatGPT'}).waitFor();assert.equal(await page.locator('#account-sign-in').isEnabled(),true);
-  await page.keyboard.press('Escape');assert.equal(await gate.isVisible(),true);
+  await page.keyboard.press('Escape');assert.equal(await gate.isVisible(),false);assert.equal(await page.evaluate(()=>gate.ready()),false);
   // Explicit Settings sign-in remains immediate, including during startup grace.
   await page.reload();await page.waitForFunction(()=>window.gate);await page.evaluate(()=>gate.open());await page.getByText('TEST',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>loginCalls),1);
   account={account:{type:'chatgpt'},login_required:false,login:{loginId:'one',status:'completed'}};await page.evaluate(()=>gate.refresh());await gate.waitFor({state:'hidden'});

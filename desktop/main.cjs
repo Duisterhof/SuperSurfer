@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 const { connect, validateConfig } = require('./connection.cjs');
 const { knownHosts } = require('./hosts.cjs');
+const { openProviderLogin } = require('./provider-login.cjs');
 const themes = require('./themes.cjs');
 const { workspacePreference } = require('./preferences.cjs');
 const { WindowStore, configKey, windowLabel } = require('./windows.cjs');
@@ -197,6 +198,7 @@ else {
   app.on('second-instance', () => { const context=focused();if (context) focus(context);else if (store) store.restore().forEach(makeWindow); });
   app.whenReady().then(() => {
     store=new WindowStore(app.getPath('userData'));nativeTheme.themeSource=themeSource(loadTheme());
+    ipcMain.handle('provider:login',(event,backend)=>{const context=ownWindow(event);if(!context.connection)throw new Error('Connect a workspace first.');return openProviderLogin(context.connection.config,backend);});
     ipcMain.handle('port:open',(event,fields)=>openPort(ownWindow(event),fields));
     ipcMain.handle('panel:open',(event,fields)=>openPanel(ownWindow(event),fields));
     ipcMain.handle('window:new',event => { ownWindow(event);makeWindow();return {opened:true}; });

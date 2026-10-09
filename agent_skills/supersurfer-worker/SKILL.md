@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.37. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.38. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -20,6 +20,18 @@ errors; use its retry flow rather than launching a replacement run or treating
 lost desktop access as completed work. Inspect existing receipts after reconnect
 before repeating an uncertain action. Remote work and account sign-in are
 separate from the client's SSH transport.
+
+The worker's Codex, Cursor or Claude Code conversation retains its provider-owned
+native session. A backend default change cannot transfer that session; creating
+another chat does not transfer an uncertain queue request or recovery owner.
+All providers use the same scoped MCP tools and preserve preparation-only work,
+explicit queue requests and autonomous suggestions as distinct intents. Ask/YOLO
+controls are available for Cursor/Claude, with their native permission/sandbox
+behavior; Codex auto-review, effort, Fast and active-turn steering are unavailable.
+Answer pending questions/approvals, wait, or stop before sending new work. Follow
+[conversation guidance](references/conversations.md) for authentication: the user
+signs in through the official CLI in a trusted workspace-host terminal. Never
+request passwords, login codes or tokens in agent chat or `ask_user`.
 
 ## Complete the work
 

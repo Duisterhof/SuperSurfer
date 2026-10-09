@@ -5,6 +5,14 @@ input/approval is needed, and Idle means no active model turn. There is no Finis
 agent state. Experiment planning, run status and deliverables are independent;
 one failed run or idle chat does not make the experiment failed or complete.
 
+Each owned SuperSurfer conversation uses Codex, Cursor or Claude Code and retains
+that provider's native session. A role default selects the backend for new work;
+it does not transfer an existing session. Start a new conversation to use another
+provider, carrying only the explicitly intended task/context. Never recreate an
+owner to recover an uncertain submission. All three providers use the same
+server-enforced scoped MCP tools: changing backend changes neither project/task
+boundaries nor preparation, queue, recovery or delegation authority.
+
 `update_task` creates with `title` and retains the returned `task_id` for updates.
 Use `working` for unfinished/recoverable work, `completed` with verified evidence,
 or `blocked` with `blocker_kind` decision/permission/external and the real blocker.
@@ -49,9 +57,11 @@ copying a long status report into every conversation.
 
 `ask_user` gathers one to three essential decisions, not credentials or permission
 grants. Await its result; keep waiting if an execution wrapper yields a running
-cell. A normally ended turn retains a pending question and its answer resumes
-that conversation. A stopped/lost service connection expires it without an
-answer; inspect later messages and reask only if the decision remains essential.
+cell. A normally ended Codex turn retains a pending question and its answer resumes
+that conversation. Cursor/Claude require the live turn to await its answer; if their
+provider ends while a question is pending, the question becomes unavailable and
+the turn fails without replay. A stopped/lost service connection also expires it
+without an answer; inspect later messages and reask only if the decision remains essential.
 A desktop disconnect alone does not cancel a still-live remote question.
 
 Entering or reopening a chat starts at its latest message; subsequent polling
@@ -78,11 +88,18 @@ artifact, and importing a file does not execute its contents or grant new tools.
 
 
 Workspace Settings supplies the persistent default permission unless a chat
-explicitly overrides it. YOLO resolves eligible permission requests immediately,
-but the active turn keeps its captured sandbox; full access begins next turn.
-Reducing permissions can interrupt a broader turn. Read the actual active state,
-honor denials and never infer research/launch authorization from permissions.
-Model/effort/Fast changes apply next turn; steering updates the current task.
+explicitly overrides it. Cursor and Claude Code support Ask and YOLO; Codex
+automatic approval review, reasoning-effort and Fast controls are unavailable
+on those adapters. Ask uses the provider's native permissions/sandbox, which
+differs from Codex containment; it is not a promise of identical OS isolation.
+The managed MCP scope is enforced separately from native shell/file access.
+YOLO and model changes take full effect on the next turn; read the actual runtime
+state rather than assuming a broader active turn gained a new sandbox. Reducing
+a broad CLI turn to Ask stops it. Honor denials and never infer research/launch
+authorization from permissions. Codex can steer its active turn; Cursor and Claude
+Code cannot. Answer live questions/approvals, await completion, or stop before a
+new instruction. Codex effort and Fast changes also apply on the next turn.
+Do not replay a message or approval after uncertain delivery.
 
 Desktop SSH setup shows upload, installation and service-start stages instead of
 one indefinite connecting message. Its framed bundle upload has a 30-second remote
@@ -94,12 +111,18 @@ process only. Connection recovery is not evidence of sign-in, compiler success,
 completed tasks or fresh GPU/W&B observations. Re-read actual records after
 reconnect and preserve uncertainty around commands whose replies were lost.
 
-A workspace host needs its own ChatGPT sign-in; a compute-only node does not.
-On connecting, the app gives account discovery 15 seconds with automatic retries
-before prompting. An unavailable connection is not confirmed sign-out: use the
-connection retry flow rather than requesting a fresh login or copying tokens.
-Direct confirmed missing/expired account access to the app sign-in flow. Never
-inspect account files. Sign-in does not prove an uncertain action succeeded.
+A workspace host needs the selected provider's official CLI and its own account
+sign-in; a compute-only node does not. Codex uses the app's ChatGPT sign-in flow.
+Cursor and Claude Code use the user's trusted terminal on that workspace host:
+`agent login` or `claude auth login`, followed by the provider's official browser
+flow and the app's account recheck. Login output and credential storage belong
+to the CLI, not the agent conversation. Never ask for pasted passwords, login
+codes, API keys or tokens in chat/ask_user, inspect account files, capture the
+authentication terminal, or copy credentials between hosts. If the official CLI
+requires a code, the user enters it directly in that terminal. An unavailable
+connection is not confirmed sign-out; recover transport before asking for login.
+Account access is independent of GitHub/W&B access and proves nothing about an
+uncertain action's outcome.
 
 Use the application's fresh IANA timezone for dates/schedules, setting `TZ`
 explicitly in time-sensitive remote commands. Render equations in chat/Markdown

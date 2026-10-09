@@ -1,3 +1,55 @@
+# SuperSurfer 0.1.38 — Cursor and Claude Code backends
+
+## Cursor and Claude Code backends (0.1.38)
+
+Settings now offers Codex, Cursor and Claude Code defaults for manager, lead and
+worker roles. An empty conversation can choose its backend above the composer.
+The first accepted turn pins that conversation to its provider; existing Codex
+sessions remain Codex sessions. Create another conversation to use a different
+provider. Model overrides belong to that conversation. Workspace model/effort
+fields continue to configure Codex defaults; Cursor and Claude start with their
+provider defaults and can choose another model in chat.
+
+Each provider uses its official CLI on the selected workspace host. Codex keeps
+its existing ChatGPT device-code flow. Cursor and Claude sign-in buttons open the
+Mac's trusted Terminal, connect to that host with SSH when needed, and run
+`agent login` or `claude auth login`. On other desktop platforms or in a browser,
+the app displays the command to run on that host. Complete all provider codes in
+your terminal or on the official provider page, never in agent chat. SuperSurfer
+accepts no provider passwords, keys, codes or tokens, implements no provider OAuth,
+and does not read or copy CLI credential files. It reads only allowlisted account
+status metadata; the CLI manages credentials. Existing API-key or subscription
+configuration is reported as the CLI's actual auth method, where available.
+Provider CLI installation is a prerequisite; `SUPERSURFER_CURSOR` and
+`SUPERSURFER_CLAUDE` can identify an official executable outside the normal PATH.
+
+Cursor runs ACP v1 with scoped MCP servers supplied separately to each session.
+Claude runs the official binary's bidirectional JSON stream and per-turn private
+MCP configuration. The same service-enforced tools, role scopes, PR verification,
+queue intent, task state, questions and wakeups are shared across providers. The
+new adapters use one process per active conversation, resume provider-native
+sessions, and never replay a message after uncertain delivery or a service restart.
+Claude MCP configuration is private (0600), removed after its turn, and never
+placed in a repository or persisted transcript. Login terminal output is never
+captured. These are application boundaries; running agents under the same OS user
+is not isolation from that user's files or credentials.
+
+Cursor and Claude currently support Ask and YOLO. They use provider-native
+permissions/sandboxing, rather than Codex's sandbox policy. Inherited Codex
+automatic review falls back to Ask; explicit unsupported choices are rejected.
+Fast mode, Codex effort controls and exact-turn steering are unavailable on these
+adapters. Answer pending questions/approvals, wait, or stop before sending another
+message. Narrowing an active YOLO turn stops it; other mode changes take effect on
+the next turn. Unknown blocking protocol requests receive a rejection, not silent
+approval. Tool activity is shown; Codex patch attribution remains richer than the
+new providers' current Changes history. An empty Changes panel is not evidence
+that no file changed.
+
+Official integration references: [Cursor ACP](https://cursor.com/docs/cli/acp),
+[Cursor login](https://cursor.com/docs/cli/reference/authentication),
+[Claude CLI](https://code.claude.com/docs/en/cli-reference), and
+[Claude product authentication conditions](https://code.claude.com/docs/en/legal-and-compliance).
+
 # SuperSurfer 0.1.37 — edit together without losing your draft
 
 Incoming agent or external edits appear as reviewable chunks in the file you are

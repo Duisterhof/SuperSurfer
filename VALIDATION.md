@@ -733,3 +733,18 @@ The live workspace was upgraded from 0.1.6 to 0.1.7 with idle conversations and 
 Release updates back up local state, wait for idle owned conversations and preserve chat history. The explicit Linux engine updater briefly pauses admission and verifies manager PID ownership before a graceful restart; independent GPU supervisors, reservations and the current database are retained. A failed engine startup rolls back code without replacing current job state with an older backup. A service-owned or unverifiable manager is not silently replaced.
 
 The desktop installer continues to reuse an existing healthy service. Updating an already-running workspace is a separate release operation; simply replacing the desktop does not silently interrupt active work. YOLO intentionally removes Codex's filesystem/network sandbox but does not authorize unsolicited research launches.
+
+## 0.1.38 backend validation
+
+New synthetic CLI tests exercise both documented wire formats, authenticated status
+redaction, no credential login API, one-time scoped approvals, pending MCP/native
+questions, stopping, concurrent conversations, session resume, replay suppression,
+private transient MCP files and persistent backend ownership. Service tests use
+real authenticated local HTTP and the scoped MCP helper with fake inference.
+Desktop tests validate a fixed sign-in command, verified SSH host binding and
+trusted Terminal execution without capturing authentication output.
+
+Installed Cursor 2026.10.01-e373342 and Claude Code 2.1.259 on Tulip passed protocol
+initialization probes without a model prompt. Both accounts were signed out during
+those probes. Real account/model/MCP smoke tests require the user to complete each
+provider's official sign-in. This release does not claim those live tests passed.

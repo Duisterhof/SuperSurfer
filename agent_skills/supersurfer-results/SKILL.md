@@ -2,16 +2,29 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.37. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.38. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
 or extra research to fill gaps.
+
+Results tools and declared live-data refresh work independently of whether the
+owning conversation uses Codex, Cursor or Claude Code. All providers receive the
+same scoped MCP publishing tools; preserve the existing report, run and owner
+identities when backend defaults change. Native sessions remain provider-owned
+and cannot be transferred. Provider sign-in does not authenticate W&B/Rerun or
+add reporting/launch authority. Use official CLI-owned login in the user's trusted
+workspace-host terminal; never request or embed passwords, login codes or tokens
+in chat, reports or diagnostic artifacts. Follow
+[conversation guidance](../supersurfer-worker/references/conversations.md) for
+Ask/YOLO and provider-native sandbox differences. Cursor/Claude have no active-turn
+steering, Codex auto-review, effort or Fast controls; rendering and source refresh
+do not need those controls or another model turn.
 
 Cancellation does not erase a run's measured evidence or establish experiment
 failure. Cancelling an obsolete admission check after a candidate replacement is

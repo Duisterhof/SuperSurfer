@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.37. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.38. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
 to be installed and selected. The default Code block is a clean editing surface:
@@ -236,6 +236,16 @@ named conversation, time and turn provenance; Git comparisons remain separate.
 Never attribute all repository changes to the selected agent. Recorded patches
 can be partial or truncated and are not reconstructed full before/after files;
 shell-only edits and historical changes may be unattributed.
+
+Codex, Cursor and Claude Code conversations can edit the same registered source
+through their own native tools while sharing scoped SuperSurfer MCP capabilities.
+Cursor/Claude native activity may omit structured file patches: an empty Changes
+view is not proof that the repository stayed unchanged. Inspect actual saved
+source/Git differences before claiming attribution or completion. Backend defaults
+do not transfer an existing native session, and editor trust does not authenticate
+a provider. Follow [conversation guidance](../supersurfer-worker/references/conversations.md)
+for official CLI-owned login in the user's trusted workspace-host terminal; never
+ask for passwords, codes or tokens in an agent or editor chat.
 
 Both Monaco and the optional native editor review incoming source edits against
 their captured saved baseline. Monaco uses tracked decorations and inline zones;

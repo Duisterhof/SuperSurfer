@@ -1,0 +1,20 @@
+'use strict';
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
+(async()=>{
+ const root=path.resolve(__dirname,'..'),fixture=spawn(process.env.PYTHON||'python3',['tests/backend_runtime_fixture.py'],{cwd:root,stdio:['pipe','pipe','pipe']});let browser,stderr='';fixture.stderr.on('data',v=>stderr+=v);
+ try{
+  const meta=await new Promise((resolve,reject)=>{let text='';fixture.stdout.on('data',v=>{text+=v;if(text.includes('\n'))resolve(JSON.parse(text.split('\n')[0]));});fixture.on('exit',code=>reject(new Error(code+' '+stderr)));}),base='http://127.0.0.1:'+meta.port,token=fs.readFileSync(path.join(meta.directory,'token'),'utf8').trim();
+  browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/opt/google/chrome/chrome',headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.addInitScript(({token,id})=>{sessionStorage.setItem('supersurfer-token',token);localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:'p1',experimentId:id,tab:'overview',chatVisible:true}));},{token,id:meta.experiment});
+  await page.goto(base);const backend=page.getByLabel('Conversation backend');await backend.waitFor();await backend.selectOption('claude');await page.waitForFunction(()=>document.querySelector('#chat-backend')?.value==='claude'&&!document.querySelector('#chat-send').disabled);
+  assert.equal(await page.getByLabel('Conversation reasoning effort').isDisabled(),true);assert.equal(await page.locator('[data-action="toggle-fast"]').isDisabled(),true);assert.equal(await page.getByLabel('Approval handling').locator('option[value="auto_review"]').count(),0);
+  await page.locator('#chat-input').fill('hello');await page.locator('#chat-send').click();await page.getByText('Hello world',{exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('#chat-backend')?.disabled);assert.equal(await backend.isDisabled(),true);
+  await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);await page.locator('#chat-input').fill('approval');await page.locator('#chat-send').click();await page.locator('[data-action="deny-approval"]').waitFor();await page.locator('[data-action="deny-approval"]').click();await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
+  // A second independent provider session in the project's previously empty lead chat.
+  await page.locator('[data-project="p1"]').first().click();await page.getByLabel('Conversation backend').waitFor();await page.getByLabel('Conversation backend').selectOption('cursor');await page.waitForFunction(()=>document.querySelector('#chat-backend')?.value==='cursor'&&!document.querySelector('#chat-send').disabled);
+  await page.locator('#chat-input').fill('hello');await page.locator('#chat-send').click();await page.getByText('Hello world',{exact:true}).waitFor();
+  // Composer controls must not overlap across narrow and wide layouts.
+  for(const width of [1440,980]){await page.setViewportSize({width,height:1000});const boxes=await page.locator('#chat-backend,#chat-model,#chat-approval-mode,#chat-send').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {id:n.id,x:r.x,y:r.y,w:r.width,h:r.height};}));for(let a=0;a<boxes.length;a++)for(let b=a+1;b<boxes.length;b++){const x=boxes[a],y=boxes[b];assert.ok(x.x+x.w<=y.x||y.x+y.w<=x.x||x.y+x.h<=y.y||y.y+y.h<=x.y,'Overlapping controls: '+x.id+' '+y.id);}}
+  assert.deepEqual(errors,[]);console.log('PASS Claude/Cursor selection, real Service chat, approvals, session pinning, unavailable controls and composer layout');
+ }finally{if(browser)await browser.close();fixture.stdin.end();await new Promise(resolve=>fixture.once('exit',resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

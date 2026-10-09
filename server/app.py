@@ -209,8 +209,8 @@ class Service(SurfboardService, EditorService, WritingService):
             raise ValueError("Existing token is invalid; remove it to generate a new token")
         token_path.chmod(0o600)
         if codex is None:
-            from .codex import CodexBridge
-            codex = CodexBridge(self.directory / "codex", self.context_provider, action_handler=self.agent_action)
+            from .backends import BackendRouter
+            codex = BackendRouter(self.directory, self.store, self.context_provider, self._chat_scope, action_handler=self.agent_action)
         self.codex = codex
         self.shutdown = threading.Event()
         self.board_runtime = BoardRuntime(self)
@@ -1313,7 +1313,21 @@ class Service(SurfboardService, EditorService, WritingService):
     def run_context(runs):
         return [{**{key: run.get(key) for key in ("id", "project_id", "experiment_id", "name", "status", "ready", "gpu_count", "allocated_gpus", "host_id", "host_name", "revision", "pr_url", "wandb_url", "waiting_reason", "error", "updated")}, "progress": run.get("config", {}).get("progress"), "purpose": run.get("config", {}).get("purpose")} for run in runs]
 
-    def models(self, refresh=False):
+    def backend_for(self, scope):
+        return self.codex.backend_for(scope) if hasattr(self.codex, "backend_for") else "codex"
+
+    def models(self, refresh=False, backend="codex"):
+        if backend != "codex":
+            from .cli_backends import provider_name
+            provider_name(backend)
+            key = "catalog:" + backend
+            with self.model_lock:
+                cached = self._model_defaults_cache.get(key)
+                if refresh or not cached or time.monotonic() - cached[0] > 60:
+                    cached = (time.monotonic(), self.codex.models(backend=backend))
+                    self._model_defaults_cache[key] = cached
+                return cached[1]
+
         """Share a bounded catalog cache between chat polling and the settings screen."""
         with self.model_lock:
             lifetime = 5 if self._models_error else 60
@@ -1331,7 +1345,9 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Model catalog unavailable: " + self._models_error, 503)
             return self._models_cache
 
-    def _remote_model_defaults(self, cwd, refresh=False):
+    def _remote_model_defaults(self, cwd, refresh=False, backend="codex"):
+        if backend != "codex":
+            return self.codex.model_defaults(cwd, backend=backend)
         with self.model_lock:
             cached = self._model_defaults_cache.get(cwd)
             if refresh or not cached or time.monotonic() - cached[0] >= 60:
@@ -1349,11 +1365,11 @@ class Service(SurfboardService, EditorService, WritingService):
                 options.append(value)
         return options
 
-    def _model_choice(self, model, reasoning, explicit_reasoning=False, cwd=None, refresh=False):
-        models = self.models(refresh)["models"]
+    def _model_choice(self, model, reasoning, explicit_reasoning=False, cwd=None, refresh=False, backend="codex"):
+        models = self.models(refresh, backend=backend)["models"]
         chosen = model
         if not chosen:
-            defaults = self._remote_model_defaults(cwd, refresh)
+            defaults = self._remote_model_defaults(cwd, refresh, backend=backend)
             chosen = defaults.get("model")
             if not chosen:
                 default_model = next((entry for entry in models if entry.get("isDefault")), None)
@@ -1361,8 +1377,8 @@ class Service(SurfboardService, EditorService, WritingService):
         entry = next((entry for entry in models if chosen and chosen in {entry.get("id"), entry.get("model")}), None)
         if not entry:
             if chosen:
-                raise APIError(f"Model {chosen!r} is not available in this Codex account. Choose an available model.")
-            raise APIError("Codex did not provide an available default model. Choose a model for this chat or its role.", 503)
+                raise APIError(f"Model {chosen!r} is not available in this {backend} account. Choose an available model.")
+            raise APIError("The backend did not provide an available default model. Choose a model for this chat or its role.", 503)
         supported = self._reasoning_options(entry)
         effort = reasoning
         note = None
@@ -1406,13 +1422,26 @@ class Service(SurfboardService, EditorService, WritingService):
         settings = self.store.settings()
         defaults = self.board_defaults(scope)
         overrides = self.store.chat_settings(scope) if overrides is None else overrides
+        backend = self.backend_for(scope)
+        if overrides.get("backend") is not None:
+            backend = overrides["backend"]
+        from .cli_backends import PROVIDERS, provider_name
+        provider_name(backend)
+        defaults["backend"] = settings["backends"].get(role, "codex")
+        capabilities = PROVIDERS[backend]
+        if backend != "codex":
+            defaults.update(model=None, reasoning=None, fast_mode=False,
+                            approval_mode="ask" if defaults["approval_mode"] == "auto_review" else defaults["approval_mode"])
+
         effective = {key: overrides[key] if overrides[key] is not None else defaults[key] for key in ("model", "reasoning")}
         effective["fast_mode"] = overrides.get("fast_mode") if overrides.get("fast_mode") is not None else defaults["fast_mode"]
         effective["approval_mode"] = overrides.get("approval_mode") or defaults["approval_mode"]
-        preferences = {"role": role, "defaults": defaults, "overrides": overrides, "effective": effective,
+        preferences = {"backend": backend, "capabilities": capabilities, "role": role, "defaults": defaults, "overrides": overrides, "effective": effective,
                        "editable": not self.read_only, "available": False, "owner": "SuperSurfer", "supported_reasoning": [], "note": None, "error": None}
         try:
-            resolved, supported, note = self._model_choice(effective["model"], effective["reasoning"], overrides["reasoning"] is not None, information["cwd"], refresh)
+            resolved, supported, note = self._model_choice(effective["model"], effective["reasoning"], overrides["reasoning"] is not None, information["cwd"], refresh, backend=backend)
+            if backend != "codex" and (effective["fast_mode"] or effective["approval_mode"] == "auto_review"):
+                raise APIError("Fast mode and Codex automatic approval review are unavailable for this backend. Choose Ask or YOLO.")
             resolved["fast_mode"] = effective["fast_mode"]
             resolved["approval_mode"] = effective["approval_mode"]
             preferences.update(effective=resolved, supported_reasoning=supported, note=note, available=True)
@@ -1421,7 +1450,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise
             preferences["error"] = str(exc)
         try:
-            role_effective, _, _ = self._model_choice(defaults["model"], defaults["reasoning"], cwd=information["cwd"])
+            role_effective, _, _ = self._model_choice(defaults["model"], defaults["reasoning"], cwd=information["cwd"], backend=backend)
             defaults.update(resolved_model=role_effective["model"], resolved_reasoning=role_effective["reasoning"])
         except Exception as exc:
             defaults["error"] = str(exc)
@@ -1430,11 +1459,9 @@ class Service(SurfboardService, EditorService, WritingService):
         return preferences
 
     def _validate_role_settings(self, settings, changes):
-        roles = set(changes.get("models", {})) | set(changes.get("reasoning", {}))
-        if roles:
-            self.models(refresh=True)
+        roles = set(changes.get("models", {})) | set(changes.get("reasoning", {})) | set(changes.get("backends", {}))
         for role in roles:
-            self._model_choice(settings["models"][role], settings["reasoning"][role], explicit_reasoning=True)
+            self._model_choice(settings["models"][role] if settings["backends"][role] == "codex" else None, settings["reasoning"][role] if settings["backends"][role] == "codex" else None, explicit_reasoning=settings["backends"][role] == "codex", backend=settings["backends"][role])
 
     def chat(self, scope):
         if scope.startswith("agent:"):
@@ -1626,7 +1653,12 @@ class Service(SurfboardService, EditorService, WritingService):
             self.store.select_conversation(experiment_id, scope)
             return self.experiment_agents(experiment_id)
         if op == "account.login":
-            return self.codex.login()
+            if set(params) - {"backend"}:
+                raise APIError("Login accepts only the backend name; never send credentials or codes.")
+            backend = params.get("backend", "codex")
+            from .cli_backends import provider_name
+            provider_name(backend)
+            return self.codex.login(backend=backend) if hasattr(self.codex, "backend_for") else self.codex.login()
         if op in {"experiment.result.publish", "experiment.page.publish"}:
             experiment_id = text_field(params, "experiment_id", 180)
             fields = {key: value for key, value in params.items() if key != "experiment_id"}
@@ -1688,21 +1720,25 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.codex.approve(scope, text_field(params, "approval_id", 256), decision)
         if op == "chat.settings":
             scope = text_field(params, "scope", 256)
-            if set(params) - {"scope", "model", "reasoning", "fast_mode", "approval_mode"}:
+            if set(params) - {"scope", "backend", "model", "reasoning", "fast_mode", "approval_mode"}:
                 raise APIError("Chat settings accept only scope, model, reasoning, fast_mode and approval_mode")
             information = self._chat_scope(scope)
             if "agent" in information:
                 raise APIError(self.chat_preferences(scope)["note"], 409)
-            changes = {key: params[key] for key in ("model", "reasoning", "fast_mode", "approval_mode") if key in params}
+            changes = {key: params[key] for key in ("backend", "model", "reasoning", "fast_mode", "approval_mode") if key in params}
             permission_update = None
             def validate_and_apply(values):
                 nonlocal permission_update
                 # Permission changes must work independently of model catalog
                 # availability, and only explicit permission writes affect a turn.
-                if {"model", "reasoning"} & set(changes):
+                if "backend" in changes:
+                    selected = values.get("backend") or self.store.settings()["backends"][information["role"]]
+                    if hasattr(self.codex, "validate_selection"):
+                        self.codex.validate_selection(scope, selected)
+                if ({"backend", "model", "reasoning"} & set(changes) or self.backend_for(scope) != "codex" and {"fast_mode", "approval_mode"} & set(changes)):
                     self.chat_preferences(scope, values, strict=True, refresh=True)
                 if "approval_mode" in changes:
-                    mode = values["approval_mode"] or self.board_defaults(scope)["approval_mode"]
+                    mode = values["approval_mode"] or self.chat_preferences(scope, values)["effective"]["approval_mode"]
                     permission_update = self.codex.set_approval_mode(scope, mode)
             self.store.save_chat_settings(scope, changes, validate=validate_and_apply)
             preferences = self.chat_preferences(scope)
@@ -2067,9 +2103,12 @@ class Handler(BaseHTTPRequestHandler):
                         raise APIError("Run not found", 404)
                     result = telemetry.run_metrics(self.server.service.wandb, run, snapshot)
                 elif path == "/api/account":
-                    result = self.server.service.codex.account()
+                    backend = query.get("backend", ["codex"])[0]
+                    from .cli_backends import provider_name
+                    provider_name(backend)
+                    result = self.server.service.codex.account(backend=backend) if hasattr(self.server.service.codex, "backend_for") else self.server.service.codex.account()
                 elif path == "/api/models":
-                    result = self.server.service.models()
+                    result = self.server.service.models(backend=query.get("backend", ["codex"])[0])
                 elif path == "/api/directories":
                     result = directory_suggestions(query.get("path", [""])[0])
                 else:

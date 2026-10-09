@@ -759,3 +759,34 @@ An explicit `handoff_experiment.agent_scope` validates membership and checks onl
 ## Workspace GPU registration
 
 Manager-only `register_compute_gpus {host_id,gpus}` adds a nonempty list of observed physical indices to the current host registration via AutoML `host.update`. It rejects extra fields and invalid indices, preserves existing indices, and delegates observation/reservation validation to the manager. Retries are idempotent. It changes no runner, SSH target, paths, project pools, immutable run contracts, utilization thresholds or running processes. Scheduled/idle/native/lead/worker calls cannot mutate this workspace registry through the new tool. Manager `register_compute_host` and `inspect_compute_host` accept an optional project_id, so fresh workspaces can onboard hosts; project-pool operations still require one.
+
+## 0.1.38 provider-owned CLI backends
+
+The workspace service routes owned conversations to Codex, Cursor ACP or the
+Claude Code stream protocol. The legacy Codex database and session IDs retain
+ownership. First accepted turns pin provider selection; switching a provider on
+an existing conversation is rejected. Role defaults select providers only for
+unstarted conversations. Codex catalogs/effort remain compatible with existing
+settings; alternate provider models are selected per conversation.
+
+Account and model requests accept a validated backend name. Login actions reject
+all credential/code fields. Cursor/Claude return only a fixed terminal-login
+instruction; a trusted desktop IPC handler derives the host from that window's
+connection, validates it and launches the published login command in Terminal.
+No renderer command, credential or authentication output enters that handler.
+Provider credential files and refresh tokens are not read, exported or copied.
+Status responses expose only provider, authenticated state, optional email and
+an allowlisted auth method. Session MCP capabilities remain service-generated,
+role-scoped and separate for simultaneous workers. They never enter chat state,
+command-line argument values or shared project configuration.
+
+Ask/YOLO are the alternate adapters' supported permission choices. Inherited
+Codex auto-review resolves to Ask across chat, workspace and surfboard application;
+explicit auto-review/Fast/effort is rejected. Native permission requests are tied
+to their exact scope, process and turn and permit only one-time decisions. Unknown
+request types are rejected. Active YOLO restriction stops the owned process.
+Questions wait for explicit answers without blocking the protocol reader and are
+cancelled when their provider process/turn ends. CLI stdout is parsed as bounded
+recognized events; raw stdout/stderr and auth output are not logged. Restart and
+unknown delivery never replay prompts. Exact-turn steering and complete patch
+attribution are not advertised for Cursor/Claude.

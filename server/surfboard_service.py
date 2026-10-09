@@ -280,6 +280,9 @@ class SurfboardService:
             for key in ("approval_mode", "fast_mode"):
                 if key in defaults:
                     result[key] = defaults[key]
+        if self.backend_for(scope) != "codex":
+            result.update(model=None, reasoning=None, fast_mode=False,
+                          approval_mode="ask" if result["approval_mode"] == "auto_review" else result["approval_mode"])
         return result
 
     def default_lead_name(self, project):
