@@ -736,15 +736,45 @@ The desktop installer continues to reuse an existing healthy service. Updating a
 
 ## 0.1.38 backend validation
 
-New synthetic CLI tests exercise both documented wire formats, authenticated status
-redaction, no credential login API, one-time scoped approvals, pending MCP/native
-questions, stopping, concurrent conversations, session resume, replay suppression,
-private transient MCP files and persistent backend ownership. Service tests use
-real authenticated local HTTP and the scoped MCP helper with fake inference.
-Desktop tests validate a fixed sign-in command, verified SSH host binding and
-trusted Terminal execution without capturing authentication output.
+Checked October 9, 2026, against Cursor 2026.10.01-e373342 and Claude Code
+2.1.259 on Tulip. All 699 Python tests pass. Desktop checks pass 31 tests with
+5 platform skips. Browser checks pass backend selection/chat/approvals/native
+question answers/pinning/layout, account reconnect, composer layout and the
+0.1.37 desktop navigation checks. All role skills and release markers pass the
+release validator. The bounded delegated skill review was completed for this release.
 
-Installed Cursor 2026.10.01-e373342 and Claude Code 2.1.259 on Tulip passed protocol
-initialization probes without a model prompt. Both accounts were signed out during
-those probes. Real account/model/MCP smoke tests require the user to complete each
-provider's official sign-in. This release does not claim those live tests passed.
+Authenticated live tests used disposable repositories and isolated service state
+with fake compute. Cursor Auto and Claude Haiku passed short chat, remembered
+session resume, scoped SuperSurfer MCP questions and answers, real native file
+write/read, pending-question stop and cleanup, cross-scope rejection and a denied
+shell write outside the workspace. Claude also passed its built-in AskUserQuestion
+and denied native Write checks. Cursor's native question envelope is verified
+against the official ACP contract, fake processes and the browser; its live model
+chose the MCP question tool instead. No live compute run, peer message or schedule
+was launched. No active workspace/research process was restarted.
+
+Live testing found and fixed Claude native questions being treated as permissions,
+Cursor's native question response envelope, provider cancellation crossing scopes
+when request IDs collide, and a teardown race that briefly reported idle before
+private MCP files were removed. Native questions now wait for an actual user
+answer even under YOLO. Stop, provider cancellation, timeout, unsupported formats,
+repeat/stale answers and uncertain delivery have local regressions. Multi-select
+native questions are rejected with instructions to use SuperSurfer ask_user.
+
+Cursor Ask uses its own permissions and sandbox: native edits inside the workspace
+were allowed without an approval callback, while the outside-workspace shell
+write triggered a callback and was denied. Ask does not promise a prompt for every
+edit. One catalogued Cursor model (gpt-5.4-mini-none) returned a plan restriction;
+Auto worked. The app cannot guarantee account entitlement to every listed model.
+
+Prompts were short, Claude used Haiku with a four-turn test ceiling and a 256-token
+per-response limit. Completed Claude workflow receipts total approximately $0.20
+at CLI-reported API-equivalent rates (subscription billing may differ), excluding
+short basic probes and interrupted work without a final receipt. Cursor ACP did
+not return usage/cost receipts. Most coverage used fake processes with no inference.
+No passwords, codes or credential files were read, copied or recorded.
+
+The unsigned Mac arm64 0.1.38 archive was rebuilt after these fixes and inspected
+for version, backend modules and exclusion of state/credential directories. Native
+macOS launch/Gatekeeper remains untested. Installing the desktop does not restart
+or upgrade a currently running workspace service automatically.

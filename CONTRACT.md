@@ -786,7 +786,11 @@ explicit auto-review/Fast/effort is rejected. Native permission requests are tie
 to their exact scope, process and turn and permit only one-time decisions. Unknown
 request types are rejected. Active YOLO restriction stops the owned process.
 Questions wait for explicit answers without blocking the protocol reader and are
-cancelled when their provider process/turn ends. CLI stdout is parsed as bounded
+cancelled when their provider process/turn ends. Claude native AskUserQuestion and
+Cursor native single-choice questions share this lifecycle, including under YOLO;
+unsupported multi-select formats are rejected with guidance to use scoped ask_user.
+Provider cancellations can retire only that scope's original request. Ask follows
+provider-native rules; permitted workspace edits may run without a callback. CLI stdout is parsed as bounded
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.

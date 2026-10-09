@@ -406,6 +406,14 @@ class CliBridge(ConversationBridge):
         except Exception as exc:
             outcome.update(status="failed", error=str(exc) if isinstance(exc, BridgeError) else "The provider could not complete this turn. Check its CLI version and sign-in; the message was not replayed.")
         finally:
+            # Busy remains true until owned processes and private MCP files are
+            # gone, so the next turn cannot race the preceding teardown.
+            try:
+                if connection:
+                    connection.close()
+            finally:
+                if temporary:
+                    temporary.cleanup()
             with self._lock:
                 if self._connections.get(scope) is connection:
                     self._connections.pop(scope, None)
@@ -416,10 +424,6 @@ class CliBridge(ConversationBridge):
                         outcome.update(status="failed", error="The provider ended while awaiting an answer. The question is no longer available and was not replayed.")
                     self._finish(chat, "interrupted" if stopped else outcome["status"], None if stopped else outcome["error"])
                 self._workers.discard(threading.current_thread())
-            if connection:
-                connection.close()
-            if temporary:
-                temporary.cleanup()
 
     def _provider_event(self, scope, connection, value, done, outcome):
         with self._lock:
@@ -466,6 +470,9 @@ class CliBridge(ConversationBridge):
                     request = value.get("request", {})
                     if request.get("subtype") == "can_use_tool":
                         original = request.get("input", {})
+                        if request.get("tool_name") == "AskUserQuestion":
+                            self._claude_question(scope, connection, value)
+                            return
                         preview = request.get("tool_name", "Tool action") + "\n" + json.dumps(safe_detail(original), indent=2)
                         self._permission(scope, connection, {"command": preview, "cwd": chat["agent"]["cwd"], "input": original, "request_id": value["request_id"]},
                             lambda allowed: connection.respond(value["request_id"], {"behavior": "allow", "updatedInput": original} if allowed else {"behavior": "deny", "message": "The user denied this action."}))
@@ -473,10 +480,15 @@ class CliBridge(ConversationBridge):
                         connection.respond(value["request_id"], "Unsupported request. Use the SuperSurfer MCP tools for questions.", error=True)
                 elif kind == "control_cancel_request":
                     # No response may be sent to a cancelled provider request.
+                    for key, pending in list(self._question_requests.items()):
+                        if pending.get("scope") == scope and pending.get("request_id") == value.get("request_id"):
+                            question = next(q for q in chat["questions"] if q["id"] == key)
+                            self._retire_question(chat, question, "cancelled", "The provider cancelled this question; its answer was not replayed.")
                     for key, pending in list(self._approval_requests.items()):
-                        if pending.get("request_id") == value.get("request_id"):
+                        if pending.get("scope") == scope and pending.get("connection") is connection and pending.get("request_id") == value.get("request_id"):
                             self._approval_requests.pop(key)
                             next(a for a in chat["approvals"] if a["id"] == key).update(status="unavailable", updated=time.time())
+                    chat["status"] = self._waiting_status(chat)
                 elif kind == "system" and value.get("subtype") == "init":
                     session = value.get("session_id")
                     if isinstance(session, str) and session and len(session) < 256 and not session.startswith("-"):
@@ -508,24 +520,66 @@ class CliBridge(ConversationBridge):
                     done.set()
             self._save(chat)
 
+    def _native_question(self, scope, connection, request_id, questions, respond):
+        """Queue on the reader thread, but wait/answer without blocking it."""
+        questions = self._validate_questions(questions, maximum=3)
+        chat = self._chats[scope]
+        question = self._queue_question(chat, questions, {"proc": connection.proc, "event": threading.Event(), "request_id": request_id})
+        pending = self._question_requests[question["id"]]
+        def wait_for_answer():
+            ready = pending["event"].wait(self.QUESTION_TIMEOUT)
+            with self._lock:
+                if not ready and question["status"] == "pending":
+                    self._retire_question(chat, question, "cancelled", "This question timed out; its answer was not replayed.")
+                    chat["status"] = self._waiting_status(chat)
+                    self._save(chat)
+                if connection is not self._connections.get(scope) or not chat["busy"] or chat.get("cancel_requested"):
+                    return
+                if ready and pending.get("error"):
+                    return  # Provider cancellation has already retired the request.
+                try:
+                    respond(pending["result"]["answers"] if ready else None)
+                except BridgeError:
+                    question.update(status="unavailable", can_answer=False, resolution="Answer delivery is uncertain; it will not be replayed.")
+                    self._save(chat)
+        threading.Thread(target=wait_for_answer, daemon=True, name="supersurfer-native-question").start()
+
+    def _claude_question(self, scope, connection, value):
+        original = value["request"].get("input", {})
+        try:
+            native = original.get("questions", [])
+            if len({q["question"] for q in native}) != len(native) or any(q.get("multiSelect") for q in native):
+                raise ValueError("Multiple selections are unsupported")
+            questions = [{"id": str(i), "header": q.get("header", "Question"), "question": q["question"],
+                          "options": [{"label": o["label"], "description": o.get("description", "")} for o in q.get("options", [])], "isOther": True}
+                         for i, q in enumerate(native)]
+            def respond(answers):
+                if answers is None:
+                    connection.respond(value["request_id"], {"behavior": "deny", "message": "The question timed out."})
+                    return
+                updated = {**original, "answers": {q["question"]: answers[str(i)]["answers"][0] for i, q in enumerate(native)}}
+                connection.respond(value["request_id"], {"behavior": "allow", "updatedInput": updated})
+            self._native_question(scope, connection, value["request_id"], questions, respond)
+        except (BridgeError, ValueError, KeyError, TypeError, AttributeError):
+            connection.respond(value["request_id"], {"behavior": "deny", "message": "This question format is unsupported. Use the SuperSurfer ask_user tool instead."})
+
     def _cursor_question(self, scope, connection, value):
         params = value.get("params", {})
-        questions = []
-        for question in params.get("questions", [])[:3]:
-            if question.get("allowMultiple") or not question.get("options"):
-                connection.respond(value["id"], {"outcome": "skipped", "reason": "Use ask_user for this question."})
-                return
-            options = question.get("options", [])
-            questions.append({"id": question["id"], "header": "Question", "question": question["prompt"], "options": [{"label": x["label"]} for x in options], "isOther": not bool(options)})
-        def ask():
-            try:
-                answers = self.ask_user(scope, questions)["answers"]
-                selected = [{"questionId": q["id"], "selectedOptionIds": [x["id"] for x in q.get("options", []) if x["label"] in answers[q["id"]]["answers"]]} for q in params.get("questions", [])]
-                connection.respond(value["id"], {"outcome": "answered", "answers": selected})
-            except (BridgeError, ValueError, KeyError):
-                if connection is self._connections.get(scope):
-                    connection.respond(value["id"], {"outcome": "cancelled"})
-        threading.Thread(target=ask, daemon=True).start()
+        try:
+            native = params.get("questions", [])
+            if any(q.get("allowMultiple") or not q.get("options") for q in native):
+                raise ValueError("Unsupported Cursor question")
+            questions = [{"id": q["id"], "header": "Question", "question": q["prompt"],
+                          "options": [{"label": o["label"]} for o in q["options"]]} for q in native]
+            def respond(answers):
+                if answers is None:
+                    connection.respond(value["id"], {"outcome": {"outcome": "cancelled"}})
+                    return
+                selected = [{"questionId": q["id"], "selectedOptionIds": [o["id"] for o in q["options"] if o["label"] in answers[q["id"]]["answers"]]} for q in native]
+                connection.respond(value["id"], {"outcome": {"outcome": "answered", "answers": selected}})
+            self._native_question(scope, connection, value["id"], questions, respond)
+        except (BridgeError, ValueError, KeyError, TypeError, AttributeError):
+            connection.respond(value["id"], {"outcome": {"outcome": "skipped", "reason": "Use SuperSurfer ask_user for this question."}})
 
     def stop(self, scope, *, expected_turn_id=None):
         self._validate_scope(scope)

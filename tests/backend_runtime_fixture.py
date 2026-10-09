@@ -13,7 +13,7 @@ from server.app import create_server
 fixture=ConversationTests();fixture.setUp();root=fixture.root
 os.environ['SS_TEST_WIRE']=str(root/'cli-wire.jsonl');os.environ['SS_FAKE_LOG']=str(root/'codex-wire.jsonl');os.environ['SS_FAKE_DOC']=str(root/'document.md')
 for name in ('codex','cursor','claude'):
- binary=root/name;body=CODEX_FAKE if name=='codex' else CLI_FAKE.replace("text=='approval'","text.startswith('approval')").replace("backend=os.environ['SS_TEST_PROVIDER'];",f"backend={name!r};")
+ binary=root/name;body=CODEX_FAKE if name=='codex' else CLI_FAKE.replace("text=='approval'","text.startswith('approval')").replace("text=='question'","text.startswith('question')").replace("text=v['message']['content'];","text=v['message']['content'].splitlines()[0];").replace("backend=os.environ['SS_TEST_PROVIDER'];",f"backend={name!r};")
  binary.write_text('#!'+sys.executable+'\n'+body);binary.chmod(0o700);os.environ['SUPERSURFER_'+name.upper()]=str(binary)
 service=fixture.service;service.codex=BackendRouter(service.directory,service.store,service.context_provider,service._chat_scope,service.agent_action)
 server=create_server(service,port=0);threading.Thread(target=server.serve_forever,daemon=True).start()

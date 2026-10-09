@@ -56,6 +56,12 @@ for line in sys.stdin:
    text=v['message']['content'];emit({'type':'system','subtype':'init','session_id':session})
    if text=='crash':os._exit(2)
    if text=='approval':emit({'type':'control_request','request_id':'permission-1','request':{'subtype':'can_use_tool','tool_name':'Bash','input':{'command':'touch result.txt','api_key':'NEVER_PERSIST_TOOL_SECRET'}}});continue
+   if text in ('question','cancel-question','multi-question','malformed-question'):
+    questions=[{'question':'Which split?','header':'Split','options':[{'label':'Train','description':'Training'},{'label':'Validation','description':'Validation'}],'multiSelect':text=='multi-question'}]
+    emit({'type':'control_request','request_id':'question-1','request':{'subtype':'can_use_tool','tool_name':'AskUserQuestion','input':{'questions':'bad' if text=='malformed-question' else questions}}})
+    if text=='cancel-question':
+     time.sleep(.15);emit({'type':'control_cancel_request','request_id':'question-1'})
+    continue
    if text=='hold':continue
    emit({'type':'stream_event','event':{'type':'message_start','message':{'id':'message-1'}}})
    for text in ('Hello ','world'):emit({'type':'stream_event','event':{'type':'content_block_delta','delta':{'type':'text_delta','text':text}}})
@@ -126,7 +132,53 @@ class CliBackendTests(unittest.TestCase):
         t=threading.Thread(target=ask);t.start();self.wait(lambda:any(q['status']=='pending' for q in b.chat('manager')['questions']));b.stop('manager');t.join(1);self.assertTrue(results['cancelled']);self.wait(lambda:not b.chat('manager')['busy'])
     def test_cursor_native_question_receives_exact_answer(self):
         b=self.bridge('cursor');b.send('manager','question');self.wait(lambda:bool(b.chat('manager')['questions']));q=b.chat('manager')['questions'][0];b.answer('manager',q['id'],{'data':['Validation']});self.wait(lambda:not b.chat('manager')['busy'])
-        result=next(x['result'] for x in self.records() if x.get('id')=='question-1');self.assertEqual([{'questionId':'data','selectedOptionIds':['val']}],result['answers'])
+        result=next(x['result'] for x in self.records() if x.get('id')=='question-1');self.assertEqual({'outcome':'answered','answers':[{'questionId':'data','selectedOptionIds':['val']}]},result['outcome'])
+    def test_claude_native_question_waits_for_actual_answer_even_in_yolo(self):
+        for mode in ('ask','yolo'):
+            b=self.bridge();b.send('manager','question',approval_mode=mode)
+            self.wait(lambda:any(q['status']=='pending' for q in b.chat('manager')['questions']));chat=b.chat('manager');q=next(q for q in chat['questions'] if q['status']=='pending')
+            self.assertEqual([],chat['approvals']);self.assertEqual('claude',q['source']);self.assertEqual('awaiting_input',chat['status'])
+            with self.assertRaises(BridgeError):b.answer('project:other',q['id'],{'0':['Custom split']})
+            b.answer('manager',q['id'],{'0':['Custom split']});self.wait(lambda:not b.chat('manager')['busy'])
+            response=[r['response']['response'] for r in self.records() if r.get('type')=='control_response' and r['response'].get('request_id')=='question-1'][-1]
+            self.assertEqual('allow',response['behavior']);self.assertEqual({'Which split?':'Custom split'},response['updatedInput']['answers'])
+            with self.assertRaises(BridgeError):b.answer('manager',q['id'],{'0':['Train']})
+            b.close();self.bridges.remove(b)
+    def test_native_question_stop_and_provider_cancellation_do_not_replay(self):
+        for prompt in ('question','cancel-question'):
+            b=self.bridge();b.send('manager',prompt);self.wait(lambda:any(q['status']=='pending' for q in b.chat('manager')['questions']));q=next(q for q in b.chat('manager')['questions'] if q['status']=='pending')
+            if prompt=='question':b.stop('manager')
+            self.wait(lambda:next(item for item in b.chat('manager')['questions'] if item['id']==q['id'])['status']=='cancelled')
+            with self.assertRaises(BridgeError):b.answer('manager',q['id'],{'0':['Train']})
+            self.assertFalse(any(r.get('type')=='control_response' and r['response'].get('request_id')=='question-1' for r in self.records()))
+            b.stop('manager');self.wait(lambda:not b.chat('manager')['busy']);b.close();self.bridges.remove(b)
+    def test_unsupported_native_question_formats_are_rejected_without_hanging(self):
+        for prompt in ('multi-question','malformed-question'):
+            b=self.bridge();b.send('manager',prompt);self.wait(lambda:not b.chat('manager')['busy'])
+            self.assertEqual([],b.chat('manager')['questions']);self.assertEqual([],b.chat('manager')['approvals'])
+            response=[r['response']['response'] for r in self.records() if r.get('type')=='control_response' and r['response'].get('request_id')=='question-1'][-1]
+            self.assertEqual('deny',response['behavior']);b.close();self.bridges.remove(b)
+    def test_native_question_timeout_releases_provider(self):
+        b=self.bridge();b.QUESTION_TIMEOUT=.05;b.send('manager','question');self.wait(lambda:not b.chat('manager')['busy'])
+        self.assertEqual('cancelled',b.chat('manager')['questions'][0]['status'])
+        response=next(r['response']['response'] for r in self.records() if r.get('type')=='control_response' and r['response'].get('request_id')=='question-1')
+        self.assertEqual('deny',response['behavior'])
+    def test_provider_cancellation_cannot_cancel_another_scopes_approval(self):
+        b=self.bridge();b.send('manager','approval');b.send('project:other','approval')
+        self.wait(lambda:all(b.chat(scope)['approvals'] for scope in ('manager','project:other')))
+        with b._lock:
+            b._provider_event('manager',b._connections['manager'],{'type':'control_cancel_request','request_id':'permission-1'},threading.Event(),{})
+        self.assertEqual('unavailable',b.chat('manager')['approvals'][0]['status'])
+        self.assertEqual('pending',b.chat('project:other')['approvals'][0]['status'])
+        b.approve('project:other',b.chat('project:other')['approvals'][0]['id'],'deny');b.stop('manager')
+    def test_provider_cancellation_cannot_cancel_another_scopes_question(self):
+        b=self.bridge();b.send('manager','question');b.send('project:other','question')
+        self.wait(lambda:all(b.chat(scope)['questions'] for scope in ('manager','project:other')))
+        with b._lock:
+            b._provider_event('manager',b._connections['manager'],{'type':'control_cancel_request','request_id':'question-1'},threading.Event(),{})
+        self.assertEqual('cancelled',b.chat('manager')['questions'][0]['status'])
+        other=b.chat('project:other')['questions'][0];self.assertEqual('pending',other['status'])
+        b.answer('project:other',other['id'],{'0':['Train']});b.stop('manager')
     def test_disconnect_no_replay_and_sessions_survive_restart(self):
         b=self.bridge();b.send('manager','crash');self.wait(lambda:not b.chat('manager')['busy']);self.assertEqual('failed',b.chat('manager')['status']);before=len([x for x in self.records() if x.get('type')=='user']);b.close();self.bridges.remove(b)
         replacement=self.bridge();self.assertEqual(before,len([x for x in self.records() if x.get('type')=='user']));self.assertEqual('session-claude',replacement.chat('manager')['thread_id'])

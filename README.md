@@ -754,3 +754,9 @@ The glass treatment follows [Apple's materials guidance](https://developer.apple
 Run the ordinary suite with `npm test`. `python3 scripts/qa-shuffle.py --seed 20261007` randomizes the Python test order and the durable-state/concurrent-retry scenarios. Browser tests use installed Playwright and Chrome at `CHROME_PATH` (new suites) or `/opt/google/chrome/chrome` (existing suites). Build the login preview before its browser test. The native Electron smoke uses an isolated user profile and a Linux package runtime at `ELECTRON_PATH` or `dist/SuperSurfer-linux-x64/SuperSurfer`, under `xvfb-run` when headless. Chromium sandboxing remains enabled in that native check.
 
 A bounded campaign is `python3 scripts/qa-campaign.py --hours 6 --output /absolute/path/to/qa-report`. It changes the seed and test order every cycle, runs the loopback SSH cases, saves JSON/HTML reports after each command and stops on the first failure. Optional `--engine-tests` and `--engine-source` point to matching isolated AML test/source directories. Development Node/Python must be on PATH. It exercises temporary fixtures, never research jobs; logs include the exact source commit and seed. Running the campaign in a process supervisor preserves it across client disconnects. A running report is not a completed overnight result.
+
+Authenticated backend checks (0.1.38): Cursor Auto and Claude Haiku passed chat,
+resume, scoped questions, file work, cancellation and denied shell approvals in
+isolated QA repositories. Ask follows each CLI's native policy; permitted workspace
+edits may not prompt. Cursor model availability still depends on account entitlement.
+See VALIDATION.md for coverage, measured test usage and remaining platform limits.
