@@ -1,3 +1,4 @@
+import {createMediaPreview,isMediaPath} from './media-preview.js';
 import {agentReviewControls,decideAgentEdit,addAgentChunkZones} from './agent-review.js';
 import {createWorkbenchEditor} from './workbench-editor.js';
 import {createLatexSpelling} from './latex-spelling.js';
@@ -42,6 +43,7 @@ function createMonacoEditor(options) {
   const unsubscribe=options.editorSettings?.subscribe(settings=>{fontSize=settings.font_size;theme();editor?.updateOptions(editorOptions());diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});spelling?.refresh();const select=root?.querySelector('.code-theme');if(select)select.value=settings.theme;const zoom=root?.querySelector('[data-code="zoom-reset"]');if(zoom)zoom.textContent=fontSize+'px';});
 
 
+  const media=createMediaPreview({api:options.api});
   const pdf=createPdfPreview({loadBytes:options.loadBytes,onSelection:record=>options.onAskAgent?.({kind:'pdf',project_id:context.projectId,path:record.source_path,label:basename(record.source_path)+' · p. '+record.page,text:'PDF page '+record.page+' (not a source-line mapping):\n'+record.text+(record.truncated?'\n[Selection truncated]':'')})});
   const fullPath=path=>workspacePath(context?.repo,context?.projectId,path);
   let view = 'file', sidebar = 'files', sidebarOpen = true, evidence = null, selected = '', message = '', refreshError = false, searching = 0, busy = false;
@@ -80,6 +82,7 @@ function createMonacoEditor(options) {
     if (editor && editorFile) editorFile.viewState = editor.saveViewState();
   }
   function disposeView() {
+    media.unmount();
     root?.querySelector(".agent-review-actions")?.remove();
     pdf.unmount();rememberView(); editor?.dispose(); editor = null; editorFile = null; selectionEditor=null;diffEditor?.dispose(); diffEditor = null;
     for (const model of diffModels) model.dispose(); diffModels = [];
@@ -471,7 +474,7 @@ function createMonacoEditor(options) {
       case 'next-diff':diffEditor?.goToDiff('next');break;
       case 'previous-diff':diffEditor?.goToDiff('previous');break;
       case 'zoom-in':setFontSize(fontSize+1);break;case 'zoom-out':setFontSize(fontSize-1);break;case 'zoom-reset':setFontSize(13);break;
-      case 'files':sidebarOpen=sidebar!=='files'||!sidebarOpen;sidebar='files';state.sidebarOpen=sidebarOpen;renderTree();break;
+      case 'files':if(context.mode==='editor'&&options.onToggleFiles){options.onToggleFiles();break;}sidebarOpen=sidebar!=='files'||!sidebarOpen;sidebar='files';state.sidebarOpen=sidebarOpen;renderTree();break;
       case 'changes':sidebarOpen=sidebar!=='changes'||!sidebarOpen;sidebar='changes';state.sidebarOpen=sidebarOpen;renderTree();if(sidebarOpen)await changes();break;
       case 'agents':sidebarOpen=sidebar!=='agents'||!sidebarOpen;sidebar='agents';state.sidebarOpen=sidebarOpen;renderTree();if(sidebarOpen)await agentChanges();break;
       case 'refresh':await refresh();break;
@@ -513,7 +516,7 @@ function createMonacoEditor(options) {
     unmount();root=element;context={...nextContext};const token=++epoch;
     if(!context.projectId)throw new Error('Source editor needs a project.');
     if(!projects.has(context.projectId))projects.set(context.projectId,{projectId:context.projectId,files:new Map(),tree:new Map(),expanded:new Set(),selected:'',search:'',searchResults:null,changes:null,sideBySide:true});
-    state=projects.get(context.projectId);selected=state.selected;sidebar='files';sidebarOpen=state.sidebarOpen??context.mode!=='editor';view='file';evidence=null;message='';
+    state=projects.get(context.projectId);selected=state.selected;sidebar='files';sidebarOpen=context.mode==='editor'?false:(state.sidebarOpen??true);view='file';evidence=null;message='';
     root.classList.add('code-editor');
     root.dataset.codeMode=context.mode==='editor'?'editor':'full';
     root.innerHTML=`<div class="code-toolbar"><div>${button('files','Files')}${button('changes','Git','Repository Git changes')}${button('agents','Changes','Recorded edits by agent')}${button('compare-revisions','Compare…','Compare two commits, branches or tags')}</div><div>${button('open','Open…','Open file (⌘/Ctrl P)')}${button('upload','Upload…','Upload from this computer',readonly())}${button('new-file','+ File','Create a file',readonly())}${button('new-folder','+ Folder','Create a folder',readonly())}${button('refresh','↻','Refresh source and Git changes')}</div><div class="code-toolbar-end"><select class="code-theme" aria-label="Editor theme">${[['match','App theme'],['light','Light'],['dark','Dark'],['contrast','Contrast']].map(([value,label])=>`<option value="${value}"${defaults().theme===value?' selected':''}>${label}</option>`).join('')}</select>${button('zoom-out','A−','Smaller text (⌘/Ctrl −)')}${button('zoom-reset',fontSize+'px','Reset text size (⌘/Ctrl 0)')}${button('zoom-in','A+','Larger text (⌘/Ctrl +)')}${button('ask','Ask agent','Add selected code or file reference to the agent composer')}${button('save','Save','Save file (⌘/Ctrl S)',true)}</div></div>
@@ -545,15 +548,15 @@ function createMonacoEditor(options) {
     unmount();unsubscribe?.();spelling?.dispose();for(const project of projects.values())for(const file of project.files.values()){file.listener?.dispose();file.model?.dispose();}
     projects.clear();window.removeEventListener('beforeunload',beforeUnload);window.removeEventListener('focus',onFocus);
   }
-  return {mount,unmount,hasUnsaved,refresh,dispose,showComparison,presentation:()=>({path:active()?.path}),
-    async openFile(path,range){const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path,range);},
+  return {command(kind){if(kind==='extensions'){if(!options.onExtensions)return false;options.onExtensions();return true;}if(kind==='theme'){const select=root?.querySelector('.code-theme');if(!select)return false;select.value=select.value==='light'?'dark':'light';select.dispatchEvent(new Event('change',{bubbles:true}));return true;}const mapped={changes:'agents',selection:'ask'}[kind]||kind,button=root?.querySelector('[data-code="'+mapped+'"]');if(!button||button.disabled)return false;button.click();return true;},mount,unmount,hasUnsaved,refresh,dispose,showComparison,presentation:()=>({path:active()?.path}),
+    async openFile(path,range){if(isMediaPath(path)){const host=root?.querySelector('.code-monaco');if(!host)return false;disposeView();view='media';selected=path;evidence=null;await media.mount(host,{projectId:context.projectId,repo:context.repo,path});return true;}const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path,range);},
     async showAgentChange(scope,changeId){const token=epoch;if(!await ensureReady()||!current(token))return false;return showAgentDiff(changeId,scope);}};
 }
 
 export function createCodeEditor(options){
  const builtin=createMonacoEditor(options),workbench=createWorkbenchEditor(options);let current=builtin,mounted=null,ctx=null;
  const hasUnsaved=id=>builtin.hasUnsaved(id)||workbench.hasUnsaved(id);
- return {hasUnsaved,presentation:()=>current.presentation?.(),async prepareDetach(){if(current===workbench)await workbench.prepareDetach();if(hasUnsaved())throw new Error('Save editor changes before opening a separate editor window.');},prepareScope(context){if(ctx&&(ctx.projectId!==context.projectId||ctx.experimentId!==context.experimentId)){current.unmount();mounted=null;ctx=null;}},detachWithin(element){if(mounted&&element?.contains(mounted)){current.unmount();mounted=null;ctx=null;}},async mount(element,context){
+ return {command:kind=>current.command?.(kind),hasUnsaved,presentation:()=>current.presentation?.(),async prepareDetach(){if(current===workbench)await workbench.prepareDetach();if(hasUnsaved())throw new Error('Save editor changes before opening a separate editor window.');},prepareScope(context){if(ctx&&(ctx.projectId!==context.projectId||ctx.experimentId!==context.experimentId)){current.unmount();mounted=null;ctx=null;}},detachWithin(element){if(mounted&&element?.contains(mounted)){current.unmount();mounted=null;ctx=null;}},async mount(element,context){
   let next=options.editorSettings?.get().engine==='vscode'&&!options.readOnly?.()?workbench:builtin;
   // A preference changed in another window must never discard this window's drafts.
   if(current!==next&&hasUnsaved())next=current;

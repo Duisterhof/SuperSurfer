@@ -47,6 +47,7 @@ from .code_editor import CodeEditor
 from .editor_service import EditorService
 from .writing_service import WritingService
 from .latex import LatexCompiler
+from .view_blocks import ViewBlocks
 
 
 
@@ -172,6 +173,9 @@ class Service(SurfboardService, EditorService, WritingService):
         self.wandb = WandBReader()
         self.result_data = ResultData(self.wandb)
         self.results = Results(self.store)
+        from .file_previews import FilePreviews
+        self.file_previews = FilePreviews(self)
+        self.view_blocks = ViewBlocks(self)
         self.aml = aml or AMLClient(aml_home)
         self.compute = ComputePools(self.store, self.aml)
         self.action_lock = threading.RLock()
@@ -680,6 +684,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 "At most three agents may be created per user turn. New owned workers have scoped prepare_run and queue_run tools. "
                 "Default handoff chooses a SuperSurfer worker; previous AutoML histories are not a route around missing tools. "
                 "Do not spawn workers or new research work for unsolicited ideas.")
+        context["instructions"] += "\nFor reusable custom HTML views, read " + str(Path(__file__).resolve().parents[1]/"agent_skills/supersurfer-blocks/SKILL.md") + ". Use list_view_blocks and publish_view_block, then update_view_layout with kind=html and block_id. These views grant no execution tools."
         context["agent_skill"] = {"name": "supersurfer-" + role, "path": str(Path(__file__).resolve().parents[1] / "agent_skills" / ("supersurfer-" + role) / "SKILL.md")}
         return self.finish_board_context(scope, context)
 
@@ -726,7 +731,7 @@ class Service(SurfboardService, EditorService, WritingService):
             self.guard_board_tool(scope, name, arguments)
             if self.read_only:
                 raise APIError("Read-only preview: agent tools are disabled", 403)
-            if name.removeprefix("supersurfer_") in {"read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+            if name.removeprefix("supersurfer_") in {"list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                 return self.board_tool(scope, name, arguments)
             alias = ALIASES.get(name.removeprefix("supersurfer_"))
             if alias:
@@ -1516,6 +1521,8 @@ class Service(SurfboardService, EditorService, WritingService):
                 return result
             if op == "editor.install": return self.workbench.install()
             if op == "editor.extension": return self.workbench.extension(params.get("operation"), params.get("extension_id"))
+            if op == "editor.trust": return self.workbench.trust(params)
+            if op == "editor.port.check": return self.workbench.check_port(params)
             if op == "editor.open": return self.workbench.open(params)
             if op == "editor.command": return self.workbench.command(params)
             raise APIError("Unknown editor action", 404)
@@ -1557,6 +1564,9 @@ class Service(SurfboardService, EditorService, WritingService):
             self.aml.call("gpu.status", {"refresh": True})
             self.aml.invalidate()
             return {"requested": True, "requested_at": time.time()}
+        if op == "view-block.publish":
+            project = self.lookup("projects", text_field(params,"project_id",150))
+            return self.view_blocks.publish(project,{key:value for key,value in params.items() if key!="project_id"})
         if op == "todos.save":
             return todos.save(self, params)
         if op == "project.archive":
@@ -1886,11 +1896,12 @@ class Handler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self.do_GET()
 
-    def artifact_response(self, path, query, latex=False):
-        token, separator, filename = path.removeprefix("/latex-output/" if latex else "/project-artifact/").partition("/")
+    def artifact_response(self, path, query, latex=False, media=False, block=False):
+        if block and not re.fullmatch(r"(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]{1,5})?",self.headers.get("Host","")):raise APIError("Loopback block preview Host required",403)
+        token, separator, filename = path.removeprefix("/view-block/" if block else "/file-preview/" if media else "/latex-output/" if latex else "/project-artifact/").partition("/")
         if not separator:
             raise APIError("Artifact not found", 404)
-        payload = (self.server.service.latex if latex else self.server.service.artifacts).payload(token, filename)
+        payload = (self.server.service.view_blocks if block else self.server.service.file_previews if media else self.server.service.latex if latex else self.server.service.artifacts).payload(token, filename)
         with payload["stream"] as stream:
             size, start, end = payload["size"], 0, payload["size"] - 1
             status = 200
@@ -1918,7 +1929,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("Content-Security-Policy", payload["csp"])
+            csp=payload["csp"]
+            if block:
+                host=self.headers.get("Host","")
+                if not re.fullmatch(r"(?:127\.0\.0\.1|localhost|\[::1\])(?::[0-9]{1,5})?",host):raise APIError("Loopback block preview Host required",403)
+                csp=csp.replace("{block_assets}","http://"+host+"/view-block/"+quote(token,safe="")+"/")
+                self.send_header("Access-Control-Allow-Origin","*")
+            self.send_header("Content-Security-Policy", csp)
             self.end_headers()
             if self.command != "HEAD":
                 stream.seek(start)
@@ -1937,6 +1954,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path.startswith("/workbench/"):
                 workbench_proxy(self)
+                return
+            if path.startswith("/view-block/"):
+                self.artifact_response(path, parsed.query, block=True)
+                return
+            if path.startswith("/file-preview/"):
+                self.artifact_response(path,parsed.query,media=True)
                 return
             if path.startswith("/project-artifact/"):
                 self.artifact_response(path, parsed.query)
@@ -1976,13 +1999,20 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == "/api/editor/extensions":
                     result = self.server.service.workbench.catalog.search(query.get("query", [""])[0], query.get("offset", [0])[0])
                 elif path == "/api/editor/session":
-                    result = self.server.service.workbench.poll(query.get("id", [""])[0], query.get("after", [0])[0])
+                    result = self.server.service.workbench.poll(query.get("id", [""])[0], query.get("after", [0])[0], wait=query.get("wait", [0])[0])
                 elif path == "/api/surfboard":
                     result = self.server.service.surfboard(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/view-layout":
                     result = self.server.service.view_layout(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/latex":
                     result = self.server.service.latex_status({key: value[0] for key, value in query.items()})
+                elif path == "/api/view-blocks":
+                    result = self.server.service.view_blocks.list()
+                elif path == "/api/view-block":
+                    result = self.server.service.view_blocks.open(query.get("id",[""])[0])
+                elif path == "/api/code/media":
+                    project=self.server.service.lookup("projects",query.get("project_id",[""])[0])
+                    result=self.server.service.file_previews.create(project,query.get("path",[""])[0])
                 elif path == "/api/code/pdf":
                     project = self.server.service.lookup("projects", query.get("project_id", [""])[0])
                     mapped, relative = self.server.service.code_file_target(project, query.get("path", [""])[0])
@@ -2121,7 +2151,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

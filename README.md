@@ -1,3 +1,36 @@
+# SuperSurfer 0.1.36 — more room for your work
+
+The desktop's application toolbar is gone. Use the native **Rearrange** menu to
+add and arrange blocks. Code and PDF panels expose secondary actions through a
+small handle in the top right; drag it to move or snap the panel. Nested dividers
+resize independently. Detaching a panel expands the remaining tools; closing its
+window restores the saved arrangement without saving or discarding editor drafts.
+
+**Code** keeps the VS Code editor and installed extensions, with SuperSurfer's
+Files section above Projects. Files open in place, including images, GIFs, videos
+and multi-page PDFs. Cmd/Ctrl+B cannot reopen the native sidebar. Optional **Full
+VS Code**, **Terminal**, and **Ports** blocks remain available through Rearrange.
+Ports opens only the port you select, through a temporary SSH tunnel in an
+isolated desktop window. It does not expose a general localhost proxy.
+Code/PDF selections appear as compact chat attachments; editor events arrive
+without waiting for the previous one-second application poll. The agents list and
+entire right panel have independent collapse controls.
+
+Connect a new project with **Connect & enable tools**, or enable an existing
+project when its editor first opens. This remembers one exact folder on that host
+and restores native approval across new windows and tunnel origins. Browsing in
+Restricted Mode remains an explicit alternative; workspace trust stays enabled.
+
+Agents can create workspace-wide reusable HTML blocks with copied media via
+`publish_view_block`, reread owned HTML with `list_view_blocks(block_id)`, and add
+HTML tiles using `update_view_layout`. These immutable versioned publications
+persist after their source outputs move. HTML runs in a sandbox without app API
+access or credentials. Use the Results tools for live measured W&B curves.
+
+Workspace uploads are framed and bounded before taking the connection lock.
+Progress reports the stage; disconnects/timeouts stop only owned connection
+helpers and leave running remote work intact.
+
 # SuperSurfer 0.1.35 — a desktop for your task
 
 **Changes** is part of each code editor. Open an agent patch there and use inline

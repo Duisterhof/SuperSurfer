@@ -33,6 +33,12 @@ means some chunks accepted and others rejected, not full acceptance. A manually
 toggled Reviewed badge is separate inspection metadata. Neither is PR approval,
 a successful check, task completion, publication or launch authorization.
 
+Native chunk controls retain their stable recorded-diff URI and data across a
+diff-language update. Late refreshes must not steal focus from a subsequently
+selected source file or another review. Keep current user navigation and source
+independent of asynchronous receipt refresh; reopen the intended recorded change
+only when needed for inspection, not to replay an already finalized decision.
+
 Lost replies preserve the exact pending selected chunk set, before/after revisions
 and decision. Inspect the same receipt and retry that operation before another
 review action; do not broaden an uncertain retry to newly undecided chunks. Once

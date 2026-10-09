@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import select
 import subprocess
 import sys
 import tarfile
@@ -48,7 +49,37 @@ def ensure_manager(release, home):
         raise RuntimeError('Workspace manager did not confirm startup. No replacement was attempted.') from error
 
 
-def _install():
+def progress(message):
+    print('SUPERSURFER_PROGRESS: ' + json.dumps({'message':message}),file=sys.stderr,flush=True)
+
+
+def read_bundle(expected=None, timeout=30, stream=None):
+    """Read a framed upload before taking any workspace/service lock.
+
+    SSH EOF may be delayed by a wrapper or shared session. An explicit byte
+    count avoids waiting for it; a remote deadline also survives client death.
+    """
+    limit=32*1024*1024
+    if expected is not None and (type(expected) is not int or not 0 < expected <= limit):
+        raise RuntimeError('Invalid workspace bundle size.')
+    source=stream or sys.stdin.buffer;descriptor=source.fileno();chunks=[];size=0
+    deadline=time.monotonic()+timeout
+    while expected is None or size < expected:
+        remaining=deadline-time.monotonic()
+        if remaining <= 0 or not select.select([descriptor],[],[],max(0,remaining))[0]:
+            raise RuntimeError('Workspace upload timed out. No connection lock or service was changed. Retry the connection.')
+        chunk=os.read(descriptor,min(1024*1024,(expected-size) if expected is not None else limit+1-size))
+        if not chunk:
+            if expected is not None and size != expected:
+                raise RuntimeError('Workspace upload was interrupted. No connection lock or service was changed. Retry the connection.')
+            break
+        chunks.append(chunk);size+=len(chunk)
+        if size > limit:raise RuntimeError('Remote bundle is too large.')
+    if not size:raise RuntimeError('The workspace upload was empty. Retry the connection.')
+    return b''.join(chunks)
+
+
+def _install(payload):
     if sys.version_info < (3, 10):
         raise RuntimeError('The workspace computer needs Python 3.10 or newer.')
     config = json.loads(sys.argv[1])
@@ -58,9 +89,7 @@ def _install():
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     state = root / 'state'
     state.mkdir(exist_ok=True, mode=0o700)
-    payload = sys.stdin.buffer.read(32 * 1024 * 1024 + 1)
-    if len(payload) > 32 * 1024 * 1024:
-        raise RuntimeError('Remote bundle is too large.')
+    progress('Checking the workspace installation…')
     digest = hashlib.sha256(payload).hexdigest()[:16]
     release = root / 'releases' / digest
     release.parent.mkdir(exist_ok=True, mode=0o700)
@@ -125,8 +154,10 @@ def _install():
     # Only the explicit connection/bootstrap flow initializes the engine. API
     # reads and ordinary sidecar startup never start or replace a research manager.
     if not session_info.get('read_only'):
+        progress('Checking the remote research manager…')
         ensure_manager(release, aml_home)
     if not token:
+        progress('Starting the workspace service…')
         command = [sys.executable, '-m', 'server.app', '--state-dir', str(state), '--port', str(port), '--aml-home', str(Path(config.get('amlHome') or '~/.auto-ml').expanduser())]
         env = dict(os.environ)
         # SSH noninteractive shells often omit the Codex install directory.
@@ -180,6 +211,7 @@ def _install():
             details = ('journalctl --user -u ' + unit_name + ' -n 30 --no-pager') if mode == 'systemd' else str(state / 'service.log')
             raise RuntimeError('Remote service did not become ready. Inspect ' + details)
         (state / 'release.json').write_text(json.dumps({'path': str(release), 'python': sys.executable, 'command': command, 'mode': mode}))
+    progress('Workspace ready. Opening its private connection…')
     print(json.dumps({'token': token, 'port': port, 'root': str(root), 'version': session_info.get('version')}))
 
 
@@ -189,7 +221,10 @@ def main():
     if not root.is_absolute():
         raise RuntimeError('Choose an absolute remote folder, or a path starting with ~/')
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    progress('SSH connected. Uploading the workspace bundle…')
+    payload=read_bundle(config.get('bundle_size'))
     # Two new windows can connect at the same time; only one installs/starts.
+    progress('Waiting for workspace setup…')
     with (root / 'connection.lock').open('a+') as lock:
         deadline = time.monotonic() + 60
         while True:
@@ -200,7 +235,7 @@ def main():
                 if time.monotonic() >= deadline:
                     raise RuntimeError('Another window is still initializing this workspace. Try connecting again shortly.')
                 time.sleep(.1)
-        _install()
+        _install(payload)
 
 
 if __name__ == '__main__':

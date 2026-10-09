@@ -61,6 +61,7 @@ class Workbench:
         self.service = service
         self.root = service.directory / "editor"
         self.lock = threading.RLock()
+        self.events_ready = threading.Condition(self.lock)
         self.process = None
         self.setup_process = None
         self.socket_dir = None
@@ -268,9 +269,11 @@ class Workbench:
         except (ValueError, OSError) as exc:
             raise SurfboardError("Existing editor keybindings could not be read; preserve and repair keybindings.json") from exc
         removal = {"key": "escape escape", "command": "-workbench.action.toggleZenMode"}
-        if removal not in rules:
-            rules.append(removal)
-            atomic_write(bindings, json.dumps(rules, indent=2) + "\n")
+        owned=[removal,*[{"key":key,"command":"workbench.action.closeSidebar","when":"config.supersurfer.editorOnly"} for key in ("ctrl+b","cmd+b")]]
+        changed=False
+        for rule in owned:
+            if rule not in rules:rules.append(rule);changed=True
+        if changed:atomic_write(bindings,json.dumps(rules,indent=2)+"\n")
 
     def start(self):
         with self.lock:
@@ -304,33 +307,54 @@ class Workbench:
     def open(self, fields):
         if self.service.read_only:
             raise SurfboardError("Read-only workspace: the VS Code extension host is disabled", 403)
-        if set(fields) - {"project_id", "experiment_id", "client_id"}:
+        if set(fields) - {"project_id", "experiment_id", "client_id", "view_kind"}:
             raise SurfboardError("Choose a project and task for the editor")
         project = self.service.lookup("projects", fields.get("project_id"))
         self.service.board_record(project["id"], fields.get("experiment_id"))
         client = fields.get("client_id")
         if not isinstance(client, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{16,100}", client):
             raise SurfboardError("The editor needs a window identity")
+        view_kind=fields.get('view_kind','code')
+        if view_kind not in {'code','vscode','terminal','ports'}:raise SurfboardError('Choose an editor, terminal or ports view')
         self.start()
         with self.lock:
-            existing = next((row for row in self.sessions.values() if row["client_id"] == client and row["project_id"] == project["id"] and row["experiment_id"] == fields.get("experiment_id")), None)
+            existing = next((row for row in self.sessions.values() if row["client_id"] == client and row["project_id"] == project["id"] and row["experiment_id"] == fields.get("experiment_id") and row.get("view_kind","code")==view_kind), None)
             if existing:
                 return self.public(existing)
-            identity = hashlib.sha256((client + ":" + project["id"] + ":" + (fields.get("experiment_id") or "")).encode()).hexdigest()[:32]
+            identity = hashlib.sha256((client + ":" + project["id"] + ":" + (fields.get("experiment_id") or "")+":"+view_kind).encode()).hexdigest()[:32]
             token = secrets.token_urlsafe(32)
             workspace = self.root / "workspaces" / (identity + ".code-workspace")
             workspace.parent.mkdir(exist_ok=True, mode=0o700)
-            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": True, "window.title": project["name"] + " · SuperSurfer"}}))
+            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": view_kind!="vscode", "workbench.activityBar.location":"default" if view_kind=="vscode" else "hidden", "workbench.statusBar.visible":view_kind=="vscode", "workbench.panel.opensMaximized":"always" if view_kind in {"terminal","ports"} else "preserve", "window.title": project["name"] + " · SuperSurfer"}}))
             row = {"id": identity, "client_id": client, "token": token, "project_id": project["id"],
-                   "experiment_id": fields.get("experiment_id"), "repo": str(Path(project["repo"]).resolve()), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
+                   "experiment_id": fields.get("experiment_id"), "view_kind":view_kind, "repo": str(Path(project["repo"]).resolve()), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
             self.sessions[identity] = row
             return self.public(row)
+
+    def check_port(self,fields):
+        if self.service.read_only:raise SurfboardError('Read-only workspace',403)
+        if set(fields)!={'project_id','port'}:raise SurfboardError('Choose a project and one localhost development port')
+        port=fields['port']
+        if type(port) is not int or not 1024<=port<=65535 or port in {8765,9876,9877,9880}:raise SurfboardError('Choose a localhost development port outside workspace management ports')
+        project=self.service.lookup('projects',fields['project_id']);repo=str(Path(project['repo']).expanduser().resolve())
+        if self.service.store.get('editor_project_trust:'+project['id'],{}).get('repo')!=repo:raise SurfboardError('Enable project tools in its Code block before opening a port',403)
+        return {'project_id':project['id'],'port':port}
+
+    def trust(self,fields):
+        if self.service.read_only:raise SurfboardError('Read-only workspace',403)
+        if set(fields)!={'project_id','repo','trusted'} or type(fields['trusted']) is not bool:
+            raise SurfboardError('Choose this exact project folder and whether to enable its tools')
+        project=self.service.lookup('projects',fields['project_id'])
+        repo=str(Path(project['repo']).expanduser().resolve())
+        if fields['repo']!=repo:raise SurfboardError('The project folder changed; reopen it before enabling tools',409)
+        self.service.store.put('editor_project_trust:'+project['id'],{'repo':repo} if fields['trusted'] else {})
+        return {'trusted':fields['trusted'],'repo':repo}
 
     def public(self, row):
         consent = self.service.store.get("editor_project_trust:" + row["project_id"], {})
         approved = row.get("repo") and consent.get("repo") == row["repo"]
-        return {"id": row["id"], "url": "/workbench/" + row["token"] + "/?" + urlencode({"workspace": row["workspace"]}),
-                "events": row["events"], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "trusted": row.get("trusted"),
+        return {"id": row["id"], "repo":row["repo"], "view_kind":row.get("view_kind","code"), "url": "/workbench/" + row["token"] + "/?" + urlencode({"workspace": row["workspace"]}),
+                "folders": row.get("folders",[]), "events": row["events"], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "trusted": row.get("trusted"),
                 "approved_trust_paths": [row["repo"], str(Path(row["workspace"]).resolve())] if approved else []}
 
     def session(self, identity):
@@ -339,10 +363,16 @@ class Workbench:
             raise SurfboardError("Editor session expired; reopen this pane", 404)
         return row
 
-    def poll(self, identity, after=0):
-        with self.lock:
-            row = self.session(identity)
-            return {"events": [event for event in row["events"] if event["sequence"] > int(after)], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "dirty_observed_at":row.get("dirty_observed_at"), "trusted":row.get("trusted")}
+    def poll(self, identity, after=0, wait=0):
+        try:wait=float(wait)
+        except (ValueError,TypeError):raise SurfboardError('Choose a bounded editor event wait')
+        if not 0 <= wait <= 25:raise SurfboardError('Editor event wait must be between 0 and 25 seconds')
+        with self.events_ready:
+            row=self.session(identity);after=int(after)
+            state=lambda:(row['dirty'],row.get('trusted'),row['connected_at'] is not None)
+            before=state()
+            self.events_ready.wait_for(lambda:any(event['sequence']>after for event in row['events']) or state()!=before or self.service.shutdown.is_set(),timeout=wait)
+            return {"folders":row.get("folders",[]),"events":[event for event in row['events'] if event['sequence']>after],"dirty":row['dirty'],"connected":row['connected_at'] is not None,"dirty_observed_at":row.get('dirty_observed_at'),"trusted":row.get('trusted')}
 
     def command(self, fields):
         with self.lock:
@@ -350,7 +380,7 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files", "changes"}:
+            if kind not in {"file", "save", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files", "changes"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
@@ -371,17 +401,20 @@ class Workbench:
                     data = self.service.agent_change(project, fields.get("scope"), fields.get("change_id"))
                     result.update(title="Agent changes", data=data, scope=fields.get("scope"))
             row["commands"].append(result)
+            self.events_ready.notify_all()
             row["commands"] = row["commands"][-20:]
             return {"accepted": True}
 
     def bridge(self, fields):
         with self.lock:
             row = self.session(fields.get("session"))
+            previous_state=(row["dirty"],row.get("trusted"),row["connected_at"] is not None)
             row["connected_at"] = time.time()
             if fields.get("operation") == "comparison":
                 project = self.service.lookup("projects", row["project_id"])
                 return self.service.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path"))
-            if fields.get("operation") == "poll":
+            if fields.get("operation") in {"poll","state"}:
+                row["folders"] = [path for path in fields.get("folders",[]) if isinstance(path,str) and len(path)<=4096][:16] if isinstance(fields.get("folders"),list) else []
                 previous_trust = row.get("trusted")
                 row["trusted"] = fields.get("trusted") if type(fields.get("trusted")) is bool else None
                 # Remember only trust actually granted in the native UI. Restore
@@ -398,8 +431,11 @@ class Workbench:
                 row["dirty_observed_at"] = time.time()
                 ack = fields.get("ack", [])
                 row["commands"] = [command for command in row["commands"] if command["id"] not in ack]
-                return {"commands": row["commands"]}
-            if fields.get("operation") not in {"selection", "saved", "error", "open_pdf", "open_source", "chunk_decision"}:
+                if previous_state!=(row["dirty"],row.get("trusted"),True):self.events_ready.notify_all()
+                if fields.get('operation')=='poll' and fields.get('wait')==2:
+                    self.events_ready.wait_for(lambda:bool(row['commands']) or self.service.shutdown.is_set(),timeout=2)
+                return {"commands": row["commands"],"workspace_folder":row["repo"],"view_kind":row.get("view_kind","code")}
+            if fields.get("operation") not in {"selection", "saved", "error", "open_pdf", "open_source", "review_active", "chunk_decision"}:
                 raise SurfboardError("Unknown editor bridge event")
             event = {"kind": fields["operation"], "sequence": (row["events"][-1]["sequence"] if row["events"] else 0) + 1}
             project = self.service.lookup("projects", row["project_id"])
@@ -415,6 +451,9 @@ class Workbench:
                     raise SurfboardError("Choose a PDF file")
                 event.update(path=relative, project_id=project["id"], text=str(fields.get("text", ""))[:16000],
                              label=str(fields.get("label", path.name))[:300])
+            elif event['kind']=='review_active':
+                change=self.service.agent_change(project,fields.get('scope'),fields.get('change_id'))
+                event.update(scope=fields['scope'],change_id=change['id'],project_id=project['id'])
             else:
                 event["error"] = str(fields.get("error", "Editor command failed"))[:2000]
             if event['kind'] == 'chunk_decision':
@@ -429,6 +468,7 @@ class Workbench:
                 self.service.latex.invalidate(project["id"], repo=project["repo"])
             row["events"].append(event)
             row["events"] = row["events"][-50:]
+            self.events_ready.notify_all()
             return {"accepted": True}
 
     @staticmethod
@@ -444,6 +484,7 @@ class Workbench:
                 pass
 
     def close(self):
+        with self.events_ready:self.events_ready.notify_all()
         self.stop_process(self.setup_process)
         self.stop_process(self.process)
         if self.socket_dir:
@@ -466,7 +507,7 @@ def proxy(handler):
         raise SurfboardError("Editor session expired; reopen this pane", 403)
     path = "/" + relative + ("?" + parsed.query if parsed.query else "")
     if relative.startswith(("proxy/", "absproxy/")):
-        raise SurfboardError("Editor port forwarding is disabled", 403)
+        raise SurfboardError("Use the SuperSurfer Ports block to open an explicitly selected port",403)
     if handler.headers.get("Transfer-Encoding"):
         raise SurfboardError("Chunked editor uploads are not supported", 400)
     length = int(handler.headers.get("Content-Length", 0))

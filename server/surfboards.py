@@ -21,7 +21,7 @@ class SurfboardError(ValueError):
 
 ROLES = ("lead", "worker", "manager")
 WORKFLOWS = ("research", "software", "web", "writing")
-COMMON_TOOLS = {"ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "export_diagnostics"}
+COMMON_TOOLS = {"list_view_blocks", "publish_view_block", "ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "export_diagnostics"}
 ITEM_TOOLS = {"create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item"}
 EXPERIMENT_TOOLS = {"create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment"}
 COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node",
@@ -552,10 +552,11 @@ def tile_catalog(board, level="item"):
     if editor is None:
         editor = {"id": "editor", "kind": "editor", "label": "Code editor", "title": "Code editor"}
         result.append(editor)
-    for kind, title in (("file_explorer", "Repository files"), ("agent_changes", "Agent changes")):
+    for kind, title in (("file_explorer", "Repository files"), ("agent_changes", "Agent changes"),("vscode","Full VS Code"),("terminal","Terminal"),("ports","Ports")):
         result.append({**editor, "id": kind, "kind": kind, "label": title, "title": title})
     if not any(row["kind"] == "pdf" for row in result):
         result.append({"id": "pdf", "kind": "pdf", "label": "PDF viewer", "title": "PDF viewer", "min_height": 160})
+    result.append({"id":"html","kind":"html","label":"Custom HTML","title":"Custom HTML"})
     result.append({"id": "todos", "kind": "todos", "label": "To-dos", "title": "To-dos"})
     return result
 
@@ -589,14 +590,14 @@ def validate_pages(pages, board, level="item"):
         tile_ids, tile_kinds, normalized = set(), set(), []
         for tile_index, tile in enumerate(tiles):
             tile_at = f"{at}.tiles[{tile_index}]"
-            _fields(tile, {"id", "kind", "span", "height", "placement", "path", "bounds"}, tile_at)
+            _fields(tile, {"id", "kind", "span", "height", "placement", "path", "bounds", "block_id"}, tile_at)
             tile_id = _page_identifier(tile.get("id"), tile_at + ".id")
             kind = tile.get("kind")
             if not isinstance(kind, str) or kind not in available:
                 _fail(tile_at + ".kind", "choose a tile available in this scope")
             if tile_id in tile_ids:
                 _fail(tile_at + ".id", "tile IDs must be unique within a page")
-            if kind in tile_kinds:
+            if kind in tile_kinds and kind!="html":
                 _fail(tile_at + ".kind", "a page can contain only one tile of each kind")
             tile_ids.add(tile_id)
             tile_kinds.add(kind)
@@ -604,6 +605,10 @@ def validate_pages(pages, board, level="item"):
                                "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12),
                                "height": _number(tile.get("height", 400), tile_at + ".height" + (" (PDF preview)" if kind == "pdf" else ""),
                                                  160, 5000, True)})
+            if kind=="html":
+                if not isinstance(tile.get("block_id"),str) or not re.fullmatch(r"block_[a-f0-9]{16}",tile["block_id"]):_fail(tile_at+".block_id","choose a published reusable block")
+                normalized[-1]["block_id"]=tile["block_id"]
+            elif "block_id" in tile:_fail(tile_at+".block_id","only HTML tiles accept block_id")
             if "bounds" in tile:
                 bounds = tile["bounds"]
                 if not isinstance(bounds, dict):

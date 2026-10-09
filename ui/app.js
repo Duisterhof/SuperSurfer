@@ -1,5 +1,6 @@
 import {ensureDockLayout,renderDockLayout} from './dock-layout.js';
 import {createPanelWindows} from './panel-windows.js';
+import {createPorts} from './ports.js';
 import {createTodos} from './todos.js';
 import {createFileUploads} from './file-uploads.js';
 import {workspacePath} from './workspace-files.js';
@@ -8,6 +9,7 @@ import {createPanelFocus} from './panel-focus.js';
 import {createChatContext,contextMarkup} from './chat-context.js';
 import {createSurfboardEditor, createViewLayoutEditor, createPageLayoutEditor} from './surfboard.js';
 import {createEditorSettings} from './editor-settings.js';
+import {createWorkbenchEditor} from './workbench-editor.js';
 import {createCodeEditor} from './code-editor.js';
 import {createLatexPanel} from './latex-panel.js';
 import {projectCapacity,capacityWaitReason} from './run-capacity.js';
@@ -20,6 +22,7 @@ import {createAccountGate} from './account-gate.js';
 if (window.superSurferDesktop) document.body.classList.add('desktop-app');
 document.querySelector('#new-workspace-window').hidden=!window.superSurferDesktop?.newWindow;
 const $ = (selector, root = document) => root.querySelector(selector);
+window.superSurferDesktop?.onWorkspaceCommand?.(command=>$('#'+({rearrange:'arrange-page',sidebar:'sidebar-toggle',chat:'chat-toggle'}[command]))?.click());
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const e = escapeHtml;
@@ -219,17 +222,21 @@ const projectWorkflow = (p=project()) => (p?.id===state.projectId&&state.experim
 const itemLabel = (p=project()) => (p?.id===state.projectId&&state.experimentId?scopeBoard()?.item_label:null)||p?.surfboard?.item_label||({research:'experiment',software:'feature',web:'design task',writing:'writing task'}[projectWorkflow(p)])||'experiment';
 const pluralItems = (p=project()) => itemLabel(p)+'s';
 const leadLabel = (p=project()) => ({research:'Research lead',software:'Technical lead',web:'Design lead',writing:'Writing lead'}[projectWorkflow(p)]||'Project lead');
-const surfboardEditor=createSurfboardEditor({api,action,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
+const surfboardEditor=createSurfboardEditor({api,action,chooseBlock:chooseReusableBlock,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
 const filePicker=createFilePicker({api}),panelFocus=createPanelFocus();
-const panelWindows=createPanelWindows({capture:()=>({projectId:state.projectId,experimentId:state.experimentId,page:state.tab}),hasUnsaved:()=>codeEditor.hasUnsaved(state.projectId),presentation:()=>codeEditor.presentation(),prepareEditor:()=>codeEditor.prepareDetach?.(),onChange:()=>renderMain(),onError:error=>toast(error.message,true)});
+const panelWindows=createPanelWindows({capture:()=>({projectId:state.projectId,experimentId:state.experimentId,page:state.tab}),hasUnsaved:kind=>(extraEditors[kind]||codeEditor).hasUnsaved(state.projectId),presentation:kind=>(extraEditors[kind]||codeEditor).presentation(),prepareEditor:kind=>(extraEditors[kind]||codeEditor).prepareDetach?.(),onChange:()=>renderMain(),onError:error=>toast(error.message,true)});
 function pickWorkspaceFile(onChoose,{pdfOnly=false,title='Open file',uploadTarget='editor'}={}){const p=project();if(!p)return;filePicker.open({projectId:p.id,repo:p.repo,pdfOnly,title,onChoose,onUpload:readOnly()?null:()=>fileUploads.pick(uploadTarget),onError:error=>toast(error.message,true)});}
 async function loadWorkspacePdf(url,{signal}={}){const response=await fetch(url,{signal,headers:sessionStorage.getItem('supersurfer-token')?{Authorization:'Bearer '+sessionStorage.getItem('supersurfer-token')}:{}});if(!response.ok)throw new Error('PDF could not be loaded ('+response.status+').');return new Uint8Array(await response.arrayBuffer());}
 const editorSettings=createEditorSettings({api,action,readOnly:()=>readOnly(),hasUnsaved:()=>codeEditor.hasUnsaved(),onConfigureExtension:configureEditorExtension});
-const codeEditor=createCodeEditor({api,action,editorSettings,readOnly:()=>readOnly(),onOpenWorkspaceFile:path=>openPageCode({path}),onExtensions:()=>{if(panelWindows.detached){toast('Open workspace Settings → Editor in the main window.');return;}state.view='settings';renderMain();},onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onCompare:showCompareDialog,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
+const codeEditor=createCodeEditor({api,action,editorSettings,readOnly:()=>readOnly(),onOpenWorkspaceFile:path=>openPageCode({path}),onToggleFiles:()=>{if(panelWindows.detached){pickWorkspaceFile(path=>codeEditor.openFile(path));return;}const section=$('#workspace-files-section');if(state.sidebarCollapsed){state.sidebarCollapsed=false;section.open=true;applySidebarLayout();persistNavigation();}else section.open=!section.open;},onExtensions:()=>{if(panelWindows.detached){toast('Open workspace Settings → Editor in the main window.');return;}state.view='settings';renderMain();},onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onCompare:showCompareDialog,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
 const latexPanel=createLatexPanel({api,action,editorSettings,onError:error=>toast(error.message,true),readOnly:()=>readOnly(),hasUnsaved:projectId=>codeEditor.hasUnsaved(projectId),
  onSource:({path,...range})=>openPageCode({path,range}),
  onSetup:()=>prepareCodeQuestion('Set up the supported LaTeX compiler on this connected workspace. Check system pdfLaTeX, BibTeX, bubblewrap, prlimit and Poppler (pdfinfo, pdftotext, pdftoppm), then verify compile_latex can compile and inspect a small paper. Preserve project source and existing host environments. If administrator access is needed, explain the exact missing dependency and ask for that access. Do not use an external compiler service or search private service state.', 'Compiler setup message prepared. Send when ready.'),
  onSelection:record=>prepareCodeQuestion({kind:'pdf',project_id:state.projectId,path:record.source_path,label:record.source_path.split('/').at(-1)+' · p. '+record.page,text:'Compiled PDF · Source: '+record.source_path+' · PDF page '+record.page+' · Build '+record.build_id+'\nThis is PDF text, not a source-line mapping.\n'+record.text+(record.truncated?'\n[Selection truncated]':'')})});
+const workspaceFiles=createRepositoryExplorer({api,onOpenFile:path=>openPageCode({path})});
+let rightSidebarCollapsed=false;document.querySelector('#right-sidebar-toggle').onclick=()=>{rightSidebarCollapsed=!rightSidebarCollapsed;document.body.classList.toggle('right-sidebar-collapsed',rightSidebarCollapsed);const button=$('#right-sidebar-toggle');button.textContent=rightSidebarCollapsed?'‹':'›';button.title=button.ariaLabel=rightSidebarCollapsed?'Open right agent sidebar':'Collapse right agent sidebar';};
+const portsPanel=createPorts();
+const extraEditors=Object.fromEntries(['vscode','terminal'].map(kind=>[kind,createWorkbenchEditor({api,action,readOnly:()=>readOnly(),loadBytes:loadWorkspacePdf,onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onSave:record=>latexPanel.sourceSaved(record),onExtensions:()=>{state.view='settings';renderMain();}})]));
 const repositoryExplorer=createRepositoryExplorer({api,onOpenFile:path=>openPageCode({path})});
 const agentChangesTile=createAgentChanges({api,action,readOnly:()=>readOnly(),hasUnsaved:id=>codeEditor.hasUnsaved(id),onDecision:()=>Promise.all([codeEditor.refresh(),repositoryExplorer.refresh()]),onOpenChange:(scope,changeId)=>openPageCode({scope,changeId})});
 const projectRuns = id => (state.data?.runs||[]).filter(r=>r.project_id===id);
@@ -405,7 +412,9 @@ async function fetchExperiment(force=false){const id=state.experimentId;if(!id)r
  state.experiment=data;if((changed||force||pageCacheChanged)&&!state.edit&&!$('#modal').open)renderMain();if(pageHasTile('results')){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(pageHasTile('overview'))loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
 function renderMain(){
  if(tileLayout.active())return;
+ const filesSection=$('#workspace-files-section'),showFiles=state.view==='workspace'&&!!state.projectId&&(pageHasTile('editor')||state.tab==='_files');filesSection.hidden=!showFiles;if(showFiles)workspaceFiles.mount($('#workspace-files-tree'),{projectId:state.projectId,repo:project()?.repo});else workspaceFiles.unmount();
  codeEditor.prepareScope({projectId:state.projectId,experimentId:state.experimentId});
+ for(const editor of Object.values(extraEditors))editor.prepareScope?.({projectId:state.projectId,experimentId:state.experimentId});
  if(state.data)ensureLayoutTab();
  const archiveItem=$('#archive-item'),item=state.experiment||experiment();archiveItem.hidden=state.view!=='workspace'||!state.experimentId;archiveItem.disabled=readOnly();archiveItem.setAttribute('aria-label',item?.archived?'Restore work item':'Archive work item');archiveItem.title=(item?.archived?'Restore':'Archive')+' '+itemLabel()+' · existing work continues';archiveItem.innerHTML=icon(item?.archived?'history':'archive');
  for(const id of ['window-layout-toggle','dock-layout-toggle'])$('#'+id).hidden=!savedActivePage()||panelWindows.detached;
@@ -571,7 +580,7 @@ function dockChat(){
 }
 async function prepareCodeQuestion(text,notice='Selection context added to your agent message.'){
  const projectId=state.projectId,experimentId=state.experimentId,requestedScope=state.scope;
- await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId||requestedScope&&requestedScope!==state.scope)return;
+ if(!currentAgentDirectory())await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId||requestedScope&&requestedScope!==state.scope)return;
  if(!state.scope||state.scope.startsWith('surfboard:'))syncAgentChooser();
  state.chatVisible=true;chatRevealScope=chatLayoutKey();
  if(!panelWindows.detached&&currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
@@ -588,7 +597,7 @@ async function showViewLayout({addPage=false}={}){
  openModal('Layout for this '+itemLabel(),`<p class="modal-description">Create pages and arrange their tiles. This changes only this ${e(itemLabel())}; other items keep the Surfboard defaults.</p><div id="item-pages-editor"></div><details class="page-dock-settings"><summary>Side panel placement</summary><div id="item-layout-editor"></div></details><p id="item-layout-error" class="form-error" hidden></p><div class="modal-footer"><button class="button" id="layout-inherit"${disabled()}>Use Surfboard default</button><button class="button primary" id="layout-save"${disabled()}>Save layout</button></div>`,'item-layout');
  const editor=createViewLayoutEditor({onChange:rows=>{draft=rows;},readOnly:()=>readOnly()});
  editor.mount($('#item-layout-editor'),{rows:draft,available:record.available});
- const pageEditor=createPageLayoutEditor({onChange:value=>{pages=value;pagesChanged=true;},readOnly:()=>readOnly()});
+ const pageEditor=createPageLayoutEditor({chooseBlock:chooseReusableBlock,onChange:value=>{pages=value;pagesChanged=true;},readOnly:()=>readOnly()});
  pageEditor.mount($('#item-pages-editor'),{pages,available:record.available_tiles||record.available,selectedPageId:state.tab});
  if(addPage)$('#item-pages-editor [data-pages-action="add-page"]')?.click();
  async function save(rows){
@@ -615,6 +624,7 @@ async function loadProjectResults(){
 // Page shells are reconciled by tile identity. Code buffers and embedded results
 // stay mounted across workspace refreshes; switching pages never saves a file.
 function tileBody(kind,tile){
+ if(kind==='html')return `<div class=html-block-root data-html-block="${e(tile.block_id||'')}"></div>`;
  if(kind==='pdf'&&(tile?.path||!pageTileCatalog().find(row=>row.kind==='pdf')?.node_id))return '<div id="standalone-pdf-tile" class="standalone-pdf-tile"></div>';
  if(kind==='file_explorer')return '<div id="repository-explorer-tile" class="code-tile-root"></div>';
  if(kind==='agent_changes')return '<div id="agent-changes-tile" class="code-tile-root"></div>';
@@ -641,6 +651,7 @@ function clearPageTileDocks(){
  standalonePdf.unmount();$('.app-shell').classList.remove('has-page-left','arranging-page');applySidebarLayout();
 }
 function applyPageTileSizes(page){
+ page=panelWindows.page(page);
  const canvas=$('#page-tile-grid'),floating=page.arrangement==='windows'&&!panelWindows.detached;canvas?.classList.toggle('window-canvas',floating);if(canvas)canvas.style.minHeight=floating?Math.max(500,...page.tiles.filter(t=>(t.placement||'main')==='main').map(t=>(t.bounds?.y||0)+(t.bounds?.height||t.height)+24))+'px':'';canvas?.classList.toggle('dock-canvas',!floating&&!panelWindows.detached);
  for(const element of $$('[data-live-tile]')){const tile=page.tiles.find(tile=>tile.id===element.dataset.tileId);if(tile){element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');const bounds=tile.bounds;if(floating&&(tile.placement||'main')==='main'&&bounds){Object.assign(element.style,{left:bounds.x+'px',top:bounds.y+'px',width:bounds.width+'px',height:bounds.height+'px'});}else for(const field of ['left','top','width','height'])element.style[field]='';}}
  if(canvas&&!floating&&!panelWindows.detached)renderDockLayout(canvas,page);else if(canvas){canvas.style.minWidth='';canvas.querySelectorAll('[data-dock-key]').forEach(el=>el.remove());}
@@ -675,7 +686,7 @@ function renderTilePage(){
   }
   tileLayout.decorate(element,tile,catalog.find(row=>row.kind===tile.kind)?.label||tile.kind.replaceAll('_',' '));
   const body=$('.page-tile-body',element),html=tileBody(tile.kind,tile);
-  const persistent=['editor','file_explorer','agent_changes','chat','pdf','todos'].includes(tile.kind);
+  const persistent=['editor','vscode','terminal','ports','file_explorer','agent_changes','chat','pdf','todos'].includes(tile.kind);
   const editingContent=body.querySelector('#project-compute-form[data-dirty="true"],#document-editor')||body.contains(document.activeElement)&&document.activeElement?.matches('input,textarea,select');
   const pdfChanged=tile.kind==='pdf'&&(body.dataset.pdfPath!==(tile.path||'')||body.dataset.markup!==html);
   if(!body.hasChildNodes()||pdfChanged||(!persistent&&!editingContent&&body.dataset.markup!==html)){
@@ -698,7 +709,7 @@ function renderTilePage(){
 function pageTileCatalog(){return (state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];}
 const tileLayout=createTileLayout({
  key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly:()=>readOnly()||panelWindows.detached,render:()=>renderMain(),resize:applyPageTileSizes,
- save:savePageLayout,configure:fields=>showViewLayout(fields),workflow:()=>navigate({projectId:state.projectId,experimentId:state.experimentId,tab:'surfboard'})
+ chooseBlock:chooseReusableBlock,editorCommand:(kind,tileKind)=>{const editor=tileKind==='pdf'?latexPanel:extraEditors[tileKind]||codeEditor;if(!editor.command?.(kind))toast('This action is unavailable in the current editor. Open Settings → Editor to choose its engine.',true);},project:page=>panelWindows.page(page),save:savePageLayout,configure:fields=>showViewLayout(fields),workflow:()=>navigate({projectId:state.projectId,experimentId:state.experimentId,tab:'surfboard'})
 });
 const rearrangeSize=new ResizeObserver(()=>{const overlay=$('#rearrange-overlay');document.documentElement.style.setProperty('--rearrange-height',overlay.hidden?'0px':overlay.getBoundingClientRect().height+'px');});rearrangeSize.observe($('#rearrange-overlay'));
 async function savePageLayout(page,base){
@@ -761,7 +772,7 @@ async function openPageCode({path,scope,changeId,range,comparison}){
   state.tab=pageId||'_files';persistNavigation();renderMain();
  }
  const root=$('#code-editor-root');if(!root)return;
- await codeEditor.mount(root,{projectId,repo:project()?.repo,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')?'editor':'full'});
+ await codeEditor.mount(root,{projectId,repo:project()?.repo,experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:'editor'});
  if(projectId!==state.projectId||experimentId!==state.experimentId||!root.isConnected)return;
  if(comparison)await codeEditor.showComparison(comparison);else if(path)await codeEditor.openFile(path,range);else await codeEditor.showAgentChange(scope,changeId);
 }
@@ -770,6 +781,7 @@ function panelLoadError(entry){return entry?.error?`<div class="notice warn">${e
 function configuredViewBody(kind,{right=false}={}){
  const p=project(),x=state.experiment||experiment();
  if(kind==='todos')return '<div id="todos-root"></div>';
+ if(['vscode','terminal','ports'].includes(kind))return '<div id="'+kind+'-block-root" class="code-editor-root standalone-native-block" data-native-kind="'+kind+'"></div>';
  if(kind==='editor')return '<div id="code-editor-root" class="code-editor-root"></div>';
  if(kind==='pdf')return '<div id="latex-panel-root" class="latex-panel-root"></div>';
  if(kind==='chat')return '<div id="main-chat-host"></div>';
@@ -797,9 +809,13 @@ function configuredViewBody(kind,{right=false}={}){
  return '<p class="muted">Choose a view from your layout.</p>';
 }
 function syncConfiguredEditors(){
+ for(const element of $$('[data-html-block]')){if(element.dataset.loadingBlock===element.dataset.htmlBlock)continue;element.dataset.loadingBlock=element.dataset.htmlBlock;api('view-block?id='+encodeURIComponent(element.dataset.htmlBlock)).then(block=>{if(!element.isConnected)return;const iframe=document.createElement('iframe');iframe.title=block.title;iframe.src=block.url;iframe.sandbox='allow-scripts allow-downloads';iframe.referrerPolicy='no-referrer';iframe.className='html-block-frame';element.replaceChildren(iframe);}).catch(error=>{element.textContent=error.message;delete element.dataset.loadingBlock;});}
+
  const todosRoot=$('#todos-root');if(todosRoot)todosView.mount(todosRoot,{projectId:state.projectId,experimentId:state.experimentId});else todosView.unmount();
- const root=$('#code-editor-root');
- if(root)codeEditor.mount(root,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:$('#repository-explorer-tile')?'editor':'full'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
+ const portsRoot=$('#ports-block-root');if(portsRoot)portsPanel.mount(portsRoot,{projectId:state.projectId});else portsPanel.unmount();
+ for(const [kind,editor]of Object.entries(extraEditors)){const element=$('#'+kind+'-block-root');if(element)editor.mount(element,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,viewKind:kind}).catch(error=>toast(error.message,true));else editor.unmount();}
+ const root=$('#code-editor-root'),filesSection=$('#workspace-files-section');filesSection.hidden=!root;if(root)workspaceFiles.mount($('#workspace-files-tree'),{projectId:state.projectId,repo:project()?.repo});else workspaceFiles.unmount();
+ if(root)codeEditor.mount(root,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:'editor'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
  const context={projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId};
  const pdfTile=activePage()?.tiles.find(tile=>tile.kind==='pdf'),pdfViewer=$('#standalone-pdf-tile');
  if(pdfViewer){if(pdfTile?.path){standalonePdf.mount(pdfViewer,{url:'/api/code/pdf?'+new URLSearchParams({project_id:state.projectId,path:pdfTile.path}),source_path:pdfTile.path,title:workspacePath(project()?.repo,state.projectId,pdfTile.path)});}else{standalonePdf.unmount();pdfViewer.innerHTML='<div class="empty-state"><strong>Choose a PDF</strong><p>Open a PDF from this project’s repository.</p><button type="button" class="button" data-action="choose-pdf">Choose PDF…</button></div>';}}else standalonePdf.unmount();
@@ -1361,7 +1377,7 @@ function bindDirectorySuggestions(){
   list.addEventListener('click',event=>{const option=event.target.closest('[data-directory-index]');if(option)choose(Number(option.dataset.directoryIndex));});
 }
 
-function showAddProject(){openModal('Add a project',`<p class="modal-description">Choose a shared project folder. Each task can choose its own workflow. Project context is saved in <code>.SuperSurfer</code>.</p><form><div class="field-stack">${field('Project name','name',{placeholder:'my-project',required:true,maxlength:64,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*',help:'Lowercase letters, numbers and single hyphens; up to 64 characters.'})}${projectDirectoryField()}<label class="field"><span>Default surfboard for new tasks</span><select name="surfboard_template"><option value="research">Research · experiments, GPUs, W&B</option><option value="software">Software · features, checks, pull requests</option><option value="web">Web design · pages, browser, preview</option><option value="writing">Research writing · LaTeX, PDF, review</option></select></label>${textarea('Project goal','goal',{placeholder:'What would you like to build or discover?'})}<p class="muted small">No project GPU or concurrent-run cap by default. Add optional limits in the Surfboard’s Compute block.</p></div>${formFooter('Add project')}</form>`,'project');bindDirectorySuggestions();bindModalForm(async fd=>{const result=await action('project.add',{name:fd.get('name').trim(),repo:fd.get('repo').trim(),goal:fd.get('goal').trim(),surfboard_template:fd.get('surfboard_template')});closeModal();await refreshState(true);const id=result.id||result.project?.id||state.data.projects.find(p=>p.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:id,tab:fd.get('surfboard_template')==='writing'?'writing':fd.get('surfboard_template')==='research'?'overview':'surfboard'});toast('Project connected.');});}
+function showAddProject(){openModal('Add a project',`<p class="modal-description">Choose a shared project folder. Each task can choose its own workflow. Project context is saved in <code>.SuperSurfer</code>.</p><form><div class="field-stack">${field('Project name','name',{placeholder:'my-project',required:true,maxlength:64,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*',help:'Lowercase letters, numbers and single hyphens; up to 64 characters.'})}${projectDirectoryField()}<label class="field"><span>Default surfboard for new tasks</span><select name="surfboard_template"><option value="research">Research · experiments, GPUs, W&B</option><option value="software">Software · features, checks, pull requests</option><option value="web">Web design · pages, browser, preview</option><option value="writing">Research writing · LaTeX, PDF, review</option></select></label>${textarea('Project goal','goal',{placeholder:'What would you like to build or discover?'})}<p class="muted small">No project GPU or concurrent-run cap by default. Add optional limits in the Surfboard’s Compute block.</p></div><p class="muted small">Connecting enables editor extensions, terminals and localhost previews for this folder.</p>${formFooter('Connect & enable tools')}</form>`,'project');bindDirectorySuggestions();bindModalForm(async fd=>{const result=await action('project.add',{name:fd.get('name').trim(),repo:fd.get('repo').trim(),goal:fd.get('goal').trim(),surfboard_template:fd.get('surfboard_template')});const added=result.project||result;await action('editor.trust',{project_id:added.id,repo:added.repo,trusted:true});closeModal();await refreshState(true);const id=result.id||result.project?.id||state.data.projects.find(p=>p.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:id,tab:fd.get('surfboard_template')==='writing'?'writing':fd.get('surfboard_template')==='research'?'overview':'surfboard'});toast('Project connected.');});}
 function showAddExperiment(){const p=project();if(!p)return showAddProject();openModal('New '+itemLabel(),`<p class="modal-description">Describe the work for ${e(p.name)}. Creating a ${e(itemLabel())} does not start execution.</p><form><div class="field-stack">${field(itemLabel().replace(/^./,c=>c.toUpperCase())+' name','name',{placeholder:'What should be done?',required:true})}${textarea('Brief explanation','summary',{placeholder:'The goal, scope, and how we will know it is complete.',required:true})}<label class="field"><span>Task surfboard</span><select name="surfboard_template"><option value="">Project default · ${e(p.surfboard?.name||'Research')}</option><option value="research">Research</option><option value="software">Software</option><option value="writing">Writing · LaTeX & PDF</option><option value="web">Web design</option></select></label></div>${formFooter('Create '+itemLabel())}</form>`,'experiment');bindModalForm(async fd=>{const result=await action('experiment.create',{project_id:p.id,name:fd.get('name').trim(),summary:fd.get('summary').trim(),...(fd.get('surfboard_template')?{surfboard_template:fd.get('surfboard_template')}:{})});closeModal();await refreshState(true);const id=result.id||result.experiment?.id||state.data.experiments.find(x=>x.project_id===p.id&&x.name===fd.get('name').trim())?.id;if(id)await navigate({projectId:p.id,experimentId:id});toast(itemLabel().replace(/^./,c=>c.toUpperCase())+' created.');});}
 function showAddHost(){openModal('Register a machine',`<p class="modal-description">Register the GPU indices this workspace can use. Leave the SSH target empty to use the workspace computer itself.</p><form><div class="field-stack"><div class="field-grid">${field('Display name','name',{placeholder:'trinity',required:true,maxlength:64,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*',help:'Lowercase letters, numbers and single hyphens; up to 64 characters.'})}${field('SSH target (optional)','target',{placeholder:'Empty = this workspace computer',help:'For another machine, use an SSH alias or user@hostname.'})}</div>${field('Working directory on this machine','root',{placeholder:'/home/researcher/supersurfer',required:true})}<div class="field-grid">${field('GPU indices','gpus',{placeholder:'0, 1, 2, 3',help:'Leave empty for a CPU-only machine.'})}${field('Runner Python (3.9+)','python',{value:'auto',required:true,help:'Auto finds a compatible interpreter. Separate from project Python; no AML installation is needed on the host.'})}</div></div>${formFooter('Register machine')}</form>`,'host');bindModalForm(async fd=>{const gpuText=fd.get('gpus').trim(),parts=gpuText?gpuText.split(',').map(s=>s.trim()):[];if(parts.some(p=>!/^[0-9]+$/.test(p)))throw new Error('Enter GPU indices separated by commas, such as 0, 1.');await action('host.add',{name:fd.get('name').trim(),target:fd.get('target').trim(),root:fd.get('root').trim(),gpus:[...new Set(parts.map(Number))],python:fd.get('python').trim()});closeModal();await refreshState(true);toast('Machine registered.');});}
 async function openExperimentWorker(scope=experimentWorkerScope()){
@@ -1597,3 +1613,7 @@ document.addEventListener('pointerdown',event=>{if(!taskContextMenu.contains(eve
 $('#project-tree').addEventListener('toggle',event=>{const id=event.target.dataset.archivedProject;if(!id||event.target.open===archivedItemProjects.has(id))return;if(event.target.open)archivedItemProjects.add(id);else archivedItemProjects.delete(id);state.sidebarSignature='';},true);
 
 $('#project-tree').addEventListener('toggle',event=>{if(!event.target.classList.contains('archived-project-folder')||event.target.open===archivedProjectsExpanded)return;archivedProjectsExpanded=event.target.open;state.sidebarSignature='';},true);
+
+function chooseReusableBlock(){return new Promise(async resolve=>{try{const data=await api('view-blocks');if(!data.blocks.length){toast('Ask an agent to publish a custom HTML block first.');resolve(null);return;}openModal('Reusable blocks',`<p class=modal-description>Published views persist in this workspace. Adding one does not change agent permissions.</p><div class=block-library>${data.blocks.map(block=>`<button class=button data-pick-block="${e(block.id)}">${e(block.title)} <small>v${block.version}</small></button>`).join('')}</div>`,'blocks');const dialog=$('#modal');const done=()=>resolve(null);dialog.addEventListener('close',done,{once:true});for(const button of $$('[data-pick-block]',dialog))button.onclick=()=>{dialog.removeEventListener('close',done);resolve(button.dataset.pickBlock);closeModal();};}catch(error){toast(error.message,true);resolve(null);}});}
+
+{const handle=$('#workspace-files-divider'),tree=$('#workspace-files-tree');let drag;let height=240;try{height=Math.max(100,Math.min(600,Number(localStorage.getItem('supersurfer-files-height'))||240));}catch{}tree.style.height=height+'px';handle.addEventListener('pointerdown',event=>{if(event.button)return;event.preventDefault();drag={start:event.clientY,height:tree.getBoundingClientRect().height};handle.setPointerCapture(event.pointerId);});handle.addEventListener('pointermove',event=>{if(!drag)return;height=Math.max(100,Math.min(innerHeight*.6,drag.height+event.clientY-drag.start));tree.style.height=height+'px';});const finish=()=>{if(!drag)return;drag=null;try{localStorage.setItem('supersurfer-files-height',String(height));}catch{}};handle.addEventListener('pointerup',finish);handle.addEventListener('pointercancel',finish);handle.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();height=Math.max(100,Math.min(innerHeight*.6,height+(event.key==='ArrowDown'?20:-20)));tree.style.height=height+'px';try{localStorage.setItem('supersurfer-files-height',String(height));}catch{}});}

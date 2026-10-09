@@ -74,7 +74,7 @@ class SurfboardServiceTests(unittest.TestCase):
         context = self.service.context_provider(scope)
         self.assertEqual(context['agent_skill']['name'], 'supersurfer-surfboard')
         env = context['mcp_servers']['supersurfer']['env']
-        self.assertEqual(set(json.loads(env['SUPERSURFER_ALLOWED_TOOLS'])), {'read_surfboard', 'propose_surfboard', 'read_view_layout', 'update_view_layout', 'present_code', 'manage_todos', 'ask_user'})
+        self.assertEqual(set(json.loads(env['SUPERSURFER_ALLOWED_TOOLS'])), {'list_view_blocks','publish_view_block','read_surfboard', 'propose_surfboard', 'read_view_layout', 'update_view_layout', 'present_code', 'manage_todos', 'ask_user'})
         with self.assertRaises(APIError):
             self.service.agent_action(scope, 'supersurfer_queue_run', {})
         state = self.service.agent_action(scope, 'supersurfer_read_surfboard', {})

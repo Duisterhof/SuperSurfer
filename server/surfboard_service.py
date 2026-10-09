@@ -445,6 +445,13 @@ class SurfboardService:
             raise SurfboardError("Select project_id for this operation.")
         state = self.board_record(project["id"], self.board_item(scope, arguments))
         fields = {k: v for k, v in arguments.items() if k != "project_id"}
+        if tool == "list_view_blocks":
+            if set(fields)-{"block_id"}:raise SurfboardError("List blocks accepts project_id and optional block_id")
+            if fields.get("block_id"):return self.view_blocks.source(project,fields["block_id"])
+            return self.view_blocks.list()
+        if tool == "publish_view_block":
+            if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope)!="user":raise SurfboardError("Publishing a reusable block requires an active user task",403)
+            return self.view_blocks.publish(project,fields)
         if tool == "manage_todos":
             from . import todos
             item_id = self.board_item(scope, arguments)

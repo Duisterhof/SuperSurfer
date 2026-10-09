@@ -1,3 +1,47 @@
+# SuperSurfer 0.1.36 — October 9, 2026
+
+Controlled fixture tests exercise framed upload deadlines, reconnect lock
+ownership, exact-project trust, native Code/Full VS Code/Terminal/Ports, in-place
+multi-page PDFs, Cmd/B suppression, selection-to-chat, nested docking, detachment
+and reflow with dirty source buffers. HTML fixtures verify copied immutable media,
+version conflicts, source reads, multiple saved HTML tiles, range requests,
+symlink/traversal rejection and an opaque sandbox that cannot access parent DOM.
+Settings and compiler tests preserve drafts/history while refreshes run.
+
+The public browser walkthrough tests launching representative VLA comparisons,
+agent-added Results tables, parallel code and writing projects, local PR drafts,
+shared GPU queue assignment, nested layout controls and mobile width. All runs,
+metrics and agent responses there are explicitly simulated.
+
+Final regression: **666 Python tests**, **28 Node tests**, and all **5 opt-in real
+SSH tests** passed. Browser workflows cover native editor/media/trust, measured
+selection-to-chat (75 ms in the isolated fixture), native floating-release snapping
+and iframe drag targets, dirty-buffer detachment/reflow, nested dividers, real
+LaTeX/PDF builds and error recovery, compiler controls, settings refresh and
+extension search, HTML/GIF/local-data sandboxing and persistent library reuse.
+The interactive demo passes experiment/parallel-project/resource/PR-draft and
+mobile checks. The native Electron lifecycle verifies saved multi-host windows,
+main-frame-only credentials, and a selected-port preview with no app cookies,
+authorization headers or desktop bridge; closing it retains both host connections.
+All **12 release skills** are reviewed and validated.
+
+The Linux-hosted native editor and browser workflows are exercised locally.
+Mac archives are cross-built on Linux; actual Mac launch is not exercised here.
+
+# SuperSurfer 0.1.36 connection hotfix — October 8, 2026
+
+Reproduced an owned installer stalled reading its bundle while holding the
+workspace lock. Stopping only that helper freed the lock; the live workspace and
+manager were not restarted. Isolated regressions verify complete uploads without
+EOF, interrupted/stalled upload deadlines, and that waiting transfers never own
+the connection lock. Real cold connections still initialize one manager and reuse
+the workspace, preserving paused queue state and avoiding Codex login side effects.
+Node tests cover fragmented progress/banners and forced cleanup of only a timed-out
+owned process. Real isolated SSH tests retain unrelated listeners, clear inherited
+forwards, reject invalid credentials and clean private control sockets on cancel.
+
+Mac packages are cross-built on Linux; actual Mac launch is not exercised here.
+
 # SuperSurfer 0.1.35 nested desktops — October 8, 2026
 
 Both the built-in Monaco editor and pinned native Code OSS exercise real per-chunk

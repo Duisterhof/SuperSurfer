@@ -57,8 +57,9 @@ class InstallerTests(unittest.TestCase):
             def popen(*args, **kwargs):
                 (self.state / "token").write_text(self.token)
                 return Mock(poll=lambda: None)
-        config = {"remoteRoot": str(self.root), "remotePort": 8765, "amlHome": str(self.home / ".auto-ml")}
-        with patch.object(sys, "argv", ["bootstrap.py", json.dumps(config)]), patch.object(sys, "stdin", Mock(buffer=io.BytesIO(self.bundle.getvalue()))), patch.object(sys, "stdout", output), patch.object(bootstrap.Path, "home", return_value=self.home), patch.object(bootstrap.urllib.request, "urlopen", side_effect=urlopen or self.response), patch.object(bootstrap.shutil, "which", return_value="/usr/bin/systemctl" if systemd else None), patch.object(bootstrap.subprocess, "Popen", side_effect=popen) as spawned, patch.object(bootstrap.subprocess, "run", side_effect=run) as commands, patch.object(bootstrap, "ensure_manager", side_effect=self.ensure_manager):
+        config = {"remoteRoot": str(self.root), "remotePort": 8765, "amlHome": str(self.home / ".auto-ml"),"bundle_size":len(self.bundle.getvalue())}
+        transfer=tempfile.TemporaryFile();transfer.write(self.bundle.getvalue());transfer.seek(0);self.addCleanup(transfer.close)
+        with patch.object(sys, "argv", ["bootstrap.py", json.dumps(config)]), patch.object(sys, "stdin", Mock(buffer=transfer)), patch.object(sys, "stdout", output), patch.object(bootstrap.Path, "home", return_value=self.home), patch.object(bootstrap.urllib.request, "urlopen", side_effect=urlopen or self.response), patch.object(bootstrap.shutil, "which", return_value="/usr/bin/systemctl" if systemd else None), patch.object(bootstrap.subprocess, "Popen", side_effect=popen) as spawned, patch.object(bootstrap.subprocess, "run", side_effect=run) as commands, patch.object(bootstrap, "ensure_manager", side_effect=self.ensure_manager):
             bootstrap.main()
         return json.loads(output.getvalue()), spawned, commands
 

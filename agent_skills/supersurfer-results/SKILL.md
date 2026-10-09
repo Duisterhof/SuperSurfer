@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.35. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.36. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -28,6 +28,12 @@ as an independent seed. Update live bindings only from the verified recovery rec
 Retrying a rejected submission for that same child preserves its reserved writer;
 it is not another scientific attempt. A retained receipt without a child run ID
 does not establish a queued run or measured results.
+
+A desktop SSH setup error does not establish run failure or a broken W&B writer.
+Use the app's bounded connection retry and inspect the existing report and source
+status after access returns. Keep previously available samples with their genuine
+ages; do not republish, invent fresh measurements or allocate another writer to
+repair transport. Connection recovery never authorizes a replacement run.
 
 ## Respect the board's data input
 
@@ -89,8 +95,8 @@ each main tile exactly once and the other pages when changing that tree.
 Use the scoped layout tool to set geometry rather than publishing an HTML wrapper
 to imitate draggable panels. The user's separate-window control opens another view
 of that report; the original panel hides until the child closes and restores to
-its saved position. The child may refetch sources and initialize its own chart
-interaction.
+its saved position; other panels reflow while it is absent. The child may refetch
+sources and initialize its own chart interaction.
 Do not promise synchronized zoom across windows or treat a reopened view as a new
 scientific sample. No result-publication tool opens native desktop windows.
 
@@ -204,7 +210,13 @@ bridge or domain embed. `publish_markdown_tab` holds detailed prose/protocols:
 read an existing `page_id`, then update with its current version. Use
 `update_experiment_brief` for the curated overview: read first, replace bounded
 sections with current version, and put short operational updates in `activity`
-rather than appending logs. Workers omit `experiment_id`; leads/managers supply
+rather than appending logs. Findings use ordinary spaced prose; method comparisons
+belong in a readable Markdown table. Identify the actual sample count, split,
+run/status and measured versus not-yet-measured evidence. Avoid dense inline slash
+strings that compress different protocols, values and statuses into one fragment.
+Malformed saved prose is a document problem, not evidence of a renderer failure;
+correct the source with its current version. Follow
+[brief Findings guidance](references/brief-findings.md). Workers omit `experiment_id`; leads/managers supply
 an in-scope experiment on every document read/write.
 
 Before declaring delivery, inspect the actual rendered comparison at normal width
@@ -212,3 +224,23 @@ with chat open and resized. Check source identity, split/units, decimal ticks,
 hover/scroll zoom/pan, requested EEF/domain evidence, and fresh/partial/stale states.
 Returning from fullscreen should restore the report without republishing. State
 which rendering checks were actually performed and any missing evidence.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Reusable HTML blocks can request only their own declared copied local assets,
+including modules or 3D models; external live fetches are unavailable. Their local
+asset access is separate from Results' declared live-data bridge, and does not
+make an exported fixed visualization update with W&B.

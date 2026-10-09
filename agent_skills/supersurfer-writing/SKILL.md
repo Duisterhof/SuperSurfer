@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.35. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.36. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -36,6 +36,12 @@ same physical paper can have only one active build across those projects. Inspec
 your scoped build history and let an existing compile finish rather than trying
 to bypass that limit through a different project or task.
 
+A failed desktop upload/reconnect is distinct from a compiler failure. The app
+reports bounded setup progress; retry access and inspect the same saved build
+record before starting another compile. Preserve the source path, dirty-buffer
+warning and last-good PDF identity. Connection retry neither saves source nor
+authorizes installing host packages or replacing a still-running build.
+
 A compact PDF or editor tile still refers to the same saved source and build.
 Check the existing compile, stop and preview controls at its actual width without
 starting another build to fix layout. Resizing neither saves source nor refreshes
@@ -57,9 +63,10 @@ path or exact compiler build when changing that arrangement. The app's separate-
 window button can show the existing PDF in another client view; it does not compile,
 publish, transfer the build's ownership or let the agent open a native window.
 The original panel hides until that child closes, then restores in place without
-creating another build. The compact extension editor retains the native Explorer;
-selecting a repository PDF uses SuperSurfer's multi-page overlay while keeping
-the Explorer available. PDF display is SuperSurfer's own viewer, so installing a desktop-only VS Code PDF
+creating another build; remaining panels fill the vacated space. Default Code
+uses SuperSurfer Files, with optional Full VS Code retaining its native Explorer.
+Selecting a repository PDF uses SuperSurfer's multi-page viewer. Images/video/audio
+can also be previewed without compiling or importing them as paper inputs. PDF display is SuperSurfer's own viewer, so installing a desktop-only VS Code PDF
 extension is unnecessary. A connected extension editor still honors native
 workspace trust; trusting a folder adds no compiler or research-launch authority.
 A watcher warning does not prove a LaTeX build failed: inspect the recorded build
@@ -167,3 +174,18 @@ agent's owned compiler work; a manual UI build is separately owned by the user.
 Background activity exposes active build metadata without source, logs or PDF
 capability URLs. Expired build history does not permit replaying its old request
 ID: request a new build only when one is actually intended.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.

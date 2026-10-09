@@ -13,7 +13,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
  fs.writeFileSync(path.join(fixture,'fixture.cjs'),`
  const http=require('node:http'),{EventEmitter}=require('node:events');
  const root=${JSON.stringify(root)};
- global.__fixture={calls:[],aborted:[],killed:[],unavailable:new Set(['offline']),children:new Map(),origins:new Map()};
+ global.__fixture={calls:[],aborted:[],killed:[],unavailable:new Set(['offline']),children:new Map(),origins:new Map(),previewClosed:0,previewRequests:[]};
  const connection=require(root+'/desktop/connection.cjs');
  connection.connect=async(raw,status,{signal}={})=>{
   const config=connection.validateConfig(raw),id=config.target||'local';__fixture.calls.push(id);
@@ -26,7 +26,10 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
    res.setHeader('Content-Type','text/html');res.end('<title>Fixture</title><h1>'+id+'</h1>');
   });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;__fixture.origins.set(id,origin);}
   const child=new EventEmitter();child.exitCode=null;child.kill=()=>{if(child.exitCode!==null)return;child.exitCode=0;__fixture.killed.push(id);setImmediate(()=>child.emit('exit',0));};__fixture.children.set(id,child);
-  return {config,origin,token:'fixture-token-'+id,child};
+  return {config,origin,token:'fixture-token-'+id,child,openPort:async port=>{
+   connection.previewPort(port);const server=http.createServer((req,res)=>{const seen={authorization:req.headers.authorization||null,cookie:req.headers.cookie||null};__fixture.previewRequests.push(seen);res.setHeader('Content-Type','text/html');res.end('<title>Selected port</title><pre>'+JSON.stringify(seen)+'</pre>');});
+   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));let closed=false;return {url:'http://127.0.0.1:'+server.address().port,close:async()=>{if(closed)return;closed=true;__fixture.previewClosed++;server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}};
+  }};
  };
  Object.defineProperty(require('electron').app,'dock',{value:{setMenu:menu=>{__fixture.dockMenu=menu;}}});
  require(root+'/desktop/main.cjs');
@@ -55,6 +58,12 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal((await probe(panel)).authorization,'Bearer fixture-token-tulip');assert.equal(new URL(panel.url()).searchParams.get('panel_tile'),'pdf');
   const embeddedProbe=await panel.evaluate(async()=>{const iframe=document.createElement('iframe');iframe.src='/embedded';document.body.append(iframe);await new Promise(resolve=>iframe.onload=resolve);return iframe.contentWindow.fetch('/api/probe').then(r=>r.json());});assert.equal(embeddedProbe.authorization,null);
   await a.evaluate(()=>{window.__closedPanels=[];superSurferDesktop.onPanelClosed(event=>window.__closedPanels.push(event.id));});const detached=await a.evaluate(()=>superSurferDesktop.listPanels());assert.equal(detached.length,1);assert.equal(detached[0].tile,'pdf');await panel.close();await a.waitForFunction(()=>window.__closedPanels.length===1);assert.equal(await a.evaluate(()=>superSurferDesktop.listPanels().then(rows=>rows.length)),0);assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');console.log('PASS detached native panel shares the correct host, limits credentials to its main frame, and closes independently');
+  await app.evaluate(async({BrowserWindow},origin)=>{const w=BrowserWindow.getAllWindows().find(w=>w.getTitle().startsWith('tulip'));await w.webContents.session.cookies.set({url:origin,name:'workspace-secret',value:'must-not-leak'});},new URL(a.url()).origin);
+  const portEvent=app.waitForEvent('window');await a.evaluate(()=>superSurferDesktop.openPort({project_id:'vla',port:8099}));const portPreview=await portEvent;await portPreview.getByText('null',{exact:false}).waitFor();
+  assert.deepEqual(JSON.parse(await portPreview.locator('pre').innerText()),{authorization:null,cookie:null});assert.equal(await portPreview.evaluate(()=>typeof window.superSurferDesktop),'undefined');
+  await app.evaluate(({BrowserWindow},url)=>{const main=BrowserWindow.getAllWindows().find(w=>w.getTitle().startsWith('tulip')),preview=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()===url);if(main.webContents.session===preview.webContents.session)throw new Error('Preview shared app session');},portPreview.url());
+  await portPreview.close();for(let i=0;i<100;i++){if(await app.evaluate(()=>__fixture.previewClosed===1))break;await new Promise(resolve=>setTimeout(resolve,20));}assert.equal(await app.evaluate(()=>__fixture.previewClosed),1);assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');assert.equal((await probe(b)).authorization,'Bearer fixture-token-trinity');
+  console.log('PASS selected port has no app cookies, credentials or bridge; closing it preserves both host connections');
   const userData=await app.evaluate(({app})=>app.getPath('userData'));
   await app.close();app=await launch();
   let pages=await waitWindows(2);

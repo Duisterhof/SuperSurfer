@@ -1,5 +1,7 @@
 """Real fresh-workspace installation, isolated from user services and research state."""
 import concurrent.futures
+import importlib.util
+import fcntl
 import io
 import json
 import os
@@ -124,3 +126,59 @@ asyncio.run(test())
                     if not live: break
                     time.sleep(.1)
                 self.assertFalse(live, 'Fixture services did not exit')
+
+
+class BundleTransferTests(unittest.TestCase):
+    def setUp(self):
+        spec=importlib.util.spec_from_file_location('bootstrap_transfer',SOURCE/'desktop/bootstrap.py')
+        self.bootstrap=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.bootstrap)
+
+    def test_framed_upload_completes_without_ssh_eof(self):
+        reader,writer=os.pipe()
+        with os.fdopen(reader,'rb') as source:
+            try:
+                os.write(writer,b'complete bundle')
+                self.assertEqual(b'complete bundle',self.bootstrap.read_bundle(15,timeout=.2,stream=source))
+            finally:os.close(writer)
+
+    def test_stalled_or_interrupted_upload_times_out_without_any_workspace_lock(self):
+        for close_writer in (False,True):
+            reader,writer=os.pipe()
+            with os.fdopen(reader,'rb') as source:
+                try:
+                    os.write(writer,b'part')
+                    if close_writer:os.close(writer);writer=None
+                    start=time.monotonic()
+                    with self.assertRaisesRegex(RuntimeError,'upload (timed out|was interrupted)'):
+                        self.bootstrap.read_bundle(20,timeout=.1,stream=source)
+                    self.assertLess(time.monotonic()-start,1)
+                finally:
+                    if writer is not None:os.close(writer)
+        for count in (0,-1,True,'100',33*1024*1024):
+            with self.assertRaisesRegex(RuntimeError,'Invalid workspace bundle size'):
+                self.bootstrap.read_bundle(count)
+
+    def test_waiting_upload_never_holds_connection_lock(self):
+        driver="""import importlib.util,sys
+spec=importlib.util.spec_from_file_location('b',sys.argv.pop(1))
+b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
+read=b.read_bundle
+b.read_bundle=lambda expected:read(expected,timeout=.3)
+b.main()
+"""
+        with tempfile.TemporaryDirectory(prefix='ss-upload-') as temporary:
+            root=Path(temporary)/'workspace'
+            child=subprocess.Popen([sys.executable,'-c',driver,str(SOURCE/'desktop/bootstrap.py'),json.dumps({'remoteRoot':str(root),'bundle_size':100})],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            try:
+                child.stdin.write(b'part');child.stdin.flush()
+                line=child.stderr.readline()
+                self.assertIn(b'Uploading',line)
+                with (root/'connection.lock').open('a+') as lock:
+                    fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                    self.assertFalse((root/'state').exists())
+                child.wait(timeout=2)
+                self.assertNotEqual(0,child.returncode)
+                self.assertIn(b'upload timed out',child.stderr.read())
+            finally:
+                if child.poll() is None:child.kill();child.wait()
+                child.stdin.close();child.stdout.close();child.stderr.close()

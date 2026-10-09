@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.35. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.36. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -16,6 +16,12 @@ artifacts, data, compute and caps remain shared within that project. Follow
 [task scope](../supersurfer-surfboard/references/task-scope.md). Your advertised tools and server scope determine what you can do;
 board prose does not override them. Preserve the goal through follow-ups and
 reconnects. A normal final message ends a turn, not an unfinished deliverable.
+
+The desktop reports bounded SSH upload/setup progress; a connection error does
+not establish that a configured check or remote preview failed. Reconnect through
+the app, then inspect the same durable action receipt before retrying execution.
+Keep the task, source and existing permissions; transport recovery creates no
+new action or authorization to republish a site.
 
 For Software engineering, implement the requested behavior, run the relevant
 configured check, and report the change with evidence. For Web design, build the
@@ -74,7 +80,10 @@ source. Incorporate an imported file into the repository only as needed for the
 requested task, preserving the original artifact and normal source checks.
 
 The Coding page preset uses a full-width editor with integrated **Changes**;
-standalone explorer or Agent changes tiles are optional. Per-chunk Accept/Reject
+standalone explorer or Agent changes tiles are optional. Default Code uses the
+shared Files tree above Projects; Full VS Code, Terminal and Ports can be added
+as separate views when requested. Their presence grants no new agent tools or
+launch authority. Per-chunk Accept/Reject
 and remaining-chunk Accept all/Reject all are user review controls, not task
 completion or check receipts. Preserve final chunk decisions and conflicts; use
 the editor guidance instead of issuing a whole-file rollback. Returning to a task
@@ -105,7 +114,8 @@ records attached to their original project/item. Separate native panel windows a
 user GUI controls, not managed agent actions. A detached editor is another client
 with its own draft buffers, so save the current draft before opening it and re-read
 saved source before editing. The original panel hides while the child is open and
-restores on child close; the saved page and underlying task remain unchanged. Do not claim cross-window buffer synchronization or
+restores on child close, while remaining panels reflow into its vacated space;
+the saved page and underlying task remain unchanged. Do not claim cross-window buffer synchronization or
 create a second task merely to open a panel elsewhere.
 
 When verifying a UI change, exercise the actual controls at a narrow pane width
@@ -155,3 +165,27 @@ The board restricts managed SuperSurfer tools. Codex's shell/file access is stil
 controlled by the session's sandbox and permission mode, not by individual graph
 edges. Do not promise OS isolation or use shell commands to bypass a denied managed
 operation or missing requirement.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Ports is an app-owned user GUI block: after exact-project consent, desktop opens
+one explicitly selected localhost development port in an isolated preview window.
+It is not a native VS Code forwarding view or an agent tool. Closing the preview
+releases only that temporary listener; it neither stops the remote server nor
+closes the workspace. Existing command/board-action authorization still governs
+starting a server. Do not use code-server proxy routes, broaden app CORS or relay
+arbitrary localhost services to bypass these boundaries. Browser-only access
+starts no forwarding; use the desktop flow.

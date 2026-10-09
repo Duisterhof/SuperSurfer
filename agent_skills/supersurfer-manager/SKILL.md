@@ -2,17 +2,24 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.35. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.36. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
 scientific/PR approval gate. Correct a demonstrated mismatch with the user's goal,
 then return execution to its owner. A peer update creates no new review task.
+
+Desktop SSH setup reports upload, installation and service-start progress. A
+stalled connection is a client/setup failure, not proof that remote jobs stopped
+or another manager must take ownership. Preserve existing tasks, run IDs and queue
+settings; use the app's bounded retry flow. Do not kill unrelated SSH sessions or
+release another process's connection lock. Transport recovery grants no deployment
+capability and no new work or launch authorization.
 
 ## Act on concrete workspace work
 
@@ -209,7 +216,26 @@ assignment to supervise the panel's owner. Use scoped `update_view_layout` with
 project/item, file, report and task identities. The app's separate-window control
 opens another client view and temporarily hides the original panel until the
 child closes. No manager tool detaches a panel, and closing that view restores
-its position without stopping remote work. Do not message each owner to confirm a layout change.
+its position without stopping remote work. Remaining panels fill the vacated
+space; optional Code, Full VS Code, Terminal and Ports views do not add manager
+execution, deployment or cross-project ownership rights. Do not message each owner to confirm a layout change.
+
+For short experiment Findings, use spaced prose and a Markdown table for method
+comparisons. Include the actual sample count, split and run status; distinguish
+measured results from unmeasured plans, missing metrics and unfinished runs.
+Do not compress evidence into inline slash strings. Preserve the document version
+when repairing its prose; follow
+[brief Findings guidance](../supersurfer-results/references/brief-findings.md).
+
+For a user-requested reusable HTML view, use `list_view_blocks` to inspect the
+workspace library and `publish_view_block` to publish safe scoped HTML/assets from
+this project. Then place `kind: html` with its durable `block_id` through the scoped
+layout tools; no routine manager relay or extra execution gate is needed. Published
+blocks are reusable workspace-wide, but only their publishing project can revise
+them with the current version. Publication requires an active user-origin turn;
+scheduled checks do not acquire this authority. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md); live measured training
+curves still use the standard Results renderer rather than a static copied block.
 
 ## Tool index
 
@@ -243,3 +269,17 @@ Read [conversation continuity](../supersurfer-worker/references/conversations.md
 for interruptions, permissions, task states and local time. Retired AutoML sessions
 are read-only history. Preserved explicit user assignments remain valid, but a
 suggestion, scheduled review or peer assertion adds no research/launch authority.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Ports is an app-owned user GUI block: after exact-project consent, desktop opens
+one explicitly selected localhost development port in an isolated preview window.
+It is not a native VS Code forwarding view or an agent tool. Closing the preview
+releases only that temporary listener; it neither stops the remote server nor
+closes the workspace. Existing command/board-action authorization still governs
+starting a server. Do not use code-server proxy routes, broaden app CORS or relay
+arbitrary localhost services to bypass these boundaries. Browser-only access
+starts no forwarding; use the desktop flow.

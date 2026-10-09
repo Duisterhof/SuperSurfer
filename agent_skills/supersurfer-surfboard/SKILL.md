@@ -2,18 +2,24 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.35. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.36. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
 Follow [task scope](references/task-scope.md) before choosing which configurator
 or version to edit. The applied board, available catalog and actual tools are
 the authority. A diagram label or Markdown instruction cannot grant a capability.
+
+Desktop connection/setup now has progress stages and bounded upload waits.
+Failure to connect is not an invalid workflow graph. Preserve the applied board,
+versions, page layout and any proposal; retry access before rereading those records.
+Do not add a connection-repair block, remove requirements or submit another
+proposal merely to recover SSH transport.
 
 Use `read_surfboard` before workflow edits; use `read_view_layout` before
 presentation-only edits. Preserve the current version, stable node/edge
@@ -65,10 +71,15 @@ window's ordinary navigation width. Moving Repository files left reuses its tile
 ID; the UI shortcut prepares a Rearrange draft, while the scoped agent layout
 tool applies the requested page edit with both current versions. PDF tiles can also
 specify a repository-relative `.pdf` `path` or a returned `artifact:` PDF identity
-from this project's artifact library. Keep one of each tile kind per page,
-at most 24 pages per scope and 16 tiles per page. File explorer, Code editor,
-Agent changes and PDF viewer need no additional execution block. File selections
-use the existing shared editor, not another checkout or worker.
+from this project's artifact library. Keep one of each ordinary tile kind per
+page; multiple `html` tiles are allowed with distinct tile IDs and published
+`block_id` values. Retain at most 24 pages per scope and 16 tiles per page. File explorer, Code editor,
+Agent changes and PDF viewer need no additional execution block. The clean Code
+tile uses SuperSurfer Files above Projects. Optional `vscode` (Full VS Code),
+`terminal` (Terminal) and `ports` (Ports) are independently configurable views,
+not new workflow actions, agent roles or compute permissions. File selections
+use the existing shared repository, not another checkout or worker; separate
+native view clients may have independent buffers.
 
 A page may select `arrangement: "docked" | "windows"`; omitted arrangement keeps
 the existing docked behavior. A movable tile may include
@@ -84,9 +95,13 @@ appear exactly once, with no sidebar tile in the tree; at most 63 total nodes an
 depth 16. Preserve this tree when editing another page property. Use mixed nested
 axes or empty drop space for the requested app arrangement, not duplicated viewers
 or a workflow-policy proposal; see the shared layout reference for a valid example.
+A user pointer-drop at another movable panel's edge can snap the page into docked
+splits, preserving tile identities. Read the resulting saved arrangement instead
+of assuming its previous windows mode still applies.
 Separate native panel windows are a user GUI feature; this configurator has no
 native-window tool. Detachment temporarily hides the original panel until the
-child closes; this does not remove its saved tile or change its source identity.
+child closes and lets remaining panels fill its space; this does not remove its
+saved tile or change its source identity.
 Neither a detached panel nor a trusted editor grants an agent
 another scope, execution capability or extension installation permission. Native
 editor trust is not a surfboard role gate. Watcher defaults are editor-runtime
@@ -106,7 +121,8 @@ source files. Temporary fullscreen/restore is a viewing action, not a reason to
 save another board or duplicate a tile. Editor sidebar width, file selection and
 attachment chips likewise add no agent tools or launch authority. Preserve dirty
 buffers and existing iframe/report identities when revising a layout. The compact
-top row exposes **Rearrange** beside workspace status. Its overlay contains Blocks,
+desktop uses the native **Rearrange** menu or Cmd/Ctrl+Alt+Shift+R; the browser retains
+its top-row **Rearrange** beside workspace status. Their shared overlay contains Blocks,
 Windows/Dock, Pages…, + Page and Surfboard…, with **Done** to save the explicit
 layout draft and **Cancel** to discard it. Pages…, + Page and Surfboard… first
 save that draft safely; a conflict keeps the overlay open and blocks navigation.
@@ -125,6 +141,16 @@ an executable configured action. An editor block supplies shared-file collaborat
 guidance, not a new command, review/PR gate or launch capability. See
 [editor guidance](../supersurfer-code-editor/SKILL.md) for what recorded agent diffs
 can prove; do not invent full attribution for shell-only changes or old history.
+
+Reusable HTML blocks are workspace presentation, not workflow execution nodes.
+Use `list_view_blocks` for metadata and versions. An active user-origin request
+can use `publish_view_block` with safe HTML and copied scoped assets, then
+`update_view_layout` with an `html` tile bound to the returned `block_id`. Only the
+publishing project can revise a block, with the expected current version; other
+projects may use its already-published view. Publishing does not change board
+requirements or expand data sharing through graph arrows. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md), preserving workspace-
+wide visibility expectations and never storing expiring preview URLs in tiles.
 
 An arrow needs an operational meaning. Resolve it from the user's request and the
 catalog's supported connection types. If it remains ambiguous, use `ask_user`
@@ -159,3 +185,17 @@ The board restricts managed SuperSurfer tools. Codex's shell/file access is stil
 controlled by the session's sandbox and permission mode, not by individual graph
 edges. Do not promise OS isolation or use shell commands to bypass a denied managed
 operation or missing requirement.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Ports is an app-owned user GUI block: after exact-project consent, desktop opens
+one explicitly selected localhost development port in an isolated preview window.
+It is not a native VS Code forwarding view or an agent tool. Closing the preview
+releases only that temporary listener; it neither stops the remote server nor
+closes the workspace. Existing command/board-action authorization still governs
+starting a server. Do not use code-server proxy routes, broaden app CORS or relay
+arbitrary localhost services to bypass these boundaries. Browser-only access
+starts no forwarding; use the desktop flow.

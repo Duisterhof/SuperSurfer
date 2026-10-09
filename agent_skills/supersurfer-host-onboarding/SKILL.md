@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.35. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.36. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -57,7 +57,9 @@ missing host registration or unavailable GPU evidence.
 Movable or separately opened Compute panels still show workspace observations;
 they are not a new compute host or fresh capacity check. Detachment hides the
 original panel until the child closes; it never removes the registered resources
-or stops their remote work. A compact editor's native
+or stops their remote work. Remaining panels reflow; optional Terminal/Ports or
+Full VS Code tiles belong to the connected workspace host, not a selected compute
+node or an automatic node-acquisition command. A compact editor's native
 workspace-trust decision controls extensions, not this node's Python/data readiness
 or the worker's shell permissions. An editor watcher warning can reflect the
 workspace host's shared inotify quota, not this compute node's readiness. Preserve
@@ -228,6 +230,15 @@ saved lineage rather than requeueing under an invented request identity.
 For training, follow [telemetry guidance](../supersurfer-worker/references/training-metrics.md),
 including real MFU and individual W&B logging in the exact-source PR.
 
+Desktop workspace setup uploads an explicitly sized bundle with a 30-second
+remote deadline before acquiring its installation lock; older EOF-based uploads
+are bounded too. An interrupted upload changes no service or connection lock.
+Installation stages report progress, and a lock held by another setup produces a
+bounded error rather than waiting indefinitely. Retry through the app; do not
+remove the lock file or kill unrelated SSH/IDE sessions. The app terminates only
+its owned timed-out/aborted connection client and retains host-key validation.
+These transport checks do not replace exact-run compute readiness checks.
+
 A workspace service is different from a compute-only node. Explicit desktop
 connection initializes a missing bundled manager; the sidecar needs Python 3.10+
 and starting the bundled manager needs installed Python 3.11+. Existing managers
@@ -239,3 +250,27 @@ reconnection state instead of reinstalling the workspace or copying credentials.
 GitHub/W&B access are separate, and a Results fetch failure does not
 prove compute readiness or ChatGPT access failed. Never copy tokens or weaken the
 Results sandbox to repair a chart; preserve existing jobs and genuine sample ages.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Ports is an app-owned user GUI block: after exact-project consent, desktop opens
+one explicitly selected localhost development port in an isolated preview window.
+It is not a native VS Code forwarding view or an agent tool. Closing the preview
+releases only that temporary listener; it neither stops the remote server nor
+closes the workspace. Existing command/board-action authorization still governs
+starting a server. Do not use code-server proxy routes, broaden app CORS or relay
+arbitrary localhost services to bypass these boundaries. Browser-only access
+starts no forwarding; use the desktop flow.

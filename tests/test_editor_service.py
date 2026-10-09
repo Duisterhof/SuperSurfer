@@ -75,6 +75,100 @@ class EditorServiceTests(unittest.TestCase):
     def work_item(self, project=None):
         return self.service.store.create(project or self.project, "Feature", "Build and check the feature")
 
+    def test_port_checks_require_exact_project_consent_and_block_management_ports(self):
+        fields={'project_id':self.pid,'port':8000}
+        self.assertEqual(403,self.action('editor.port.check',**fields)[0])
+        self.service.workbench.trust({'project_id':self.pid,'repo':str(self.repository.resolve()),'trusted':True})
+        self.assertEqual(200,self.action('editor.port.check',**fields)[0])
+        for port in (True,22,8765,9876,9877,9880,65536):self.assertEqual(400,self.action('editor.port.check',**{**fields,'port':port})[0])
+        self.service.read_only=True;self.assertEqual(403,self.action('editor.port.check',**fields)[0])
+
+    def test_media_capabilities_ranges_and_safe_paths(self):
+        from urllib.request import Request,urlopen
+        (self.repository/'clip.mp4').write_bytes(b'0123456789')
+        code,data=self.query('media',path='clip.mp4')
+        self.assertEqual(200,code)
+        with urlopen(Request(self.base+data['url'],headers={'Range':'bytes=3-6'})) as reply:
+            self.assertEqual(206,reply.status);self.assertEqual(b'3456',reply.read())
+            self.assertEqual('bytes 3-6/10',reply.headers['Content-Range'])
+        (self.repository/'linked.mp4').symlink_to(self.repository/'clip.mp4')
+        self.assertEqual(403,self.query('media',path='linked.mp4')[0])
+        self.assertEqual(403,self.query('media',path='../../outside.mp4')[0])
+        self.assertEqual(400,self.query('media',path='main.py')[0])
+        for cap in self.service.file_previews.tokens.values():cap['expires']=0
+        with self.assertRaises(HTTPError) as error:urlopen(self.base+data['url'])
+        self.assertEqual(404,error.exception.code)
+
+    def test_reusable_html_blocks_persist_assets_and_versions(self):
+        from server.view_blocks import ViewBlocks
+        from urllib.request import Request,urlopen
+        (self.repository/'movie.mp4').write_bytes(b'0123456789')
+        fields={'project_id':self.pid,'title':'Failure cases','html':'<video controls src="clips/demo.mp4"></video>','assets':{'clips/demo.mp4':'movie.mp4'}}
+        code,published=self.action('view-block.publish',**fields);self.assertEqual(200,code)
+        (self.repository/'movie.mp4').write_bytes(b'CHANGED')
+        with urlopen(Request(self.base+published['url'].replace('index.html','clips/demo.mp4'),headers={'Range':'bytes=-3'})) as reply:
+            self.assertEqual(b'789',reply.read());self.assertEqual(206,reply.status)
+        with urlopen(self.base+published['url']) as reply:
+            self.assertIn("connect-src "+self.base+"/view-block/",reply.headers['Content-Security-Policy'])
+            self.assertEqual("*",reply.headers["Access-Control-Allow-Origin"])
+            self.assertIn('sandbox allow-scripts',reply.headers['Content-Security-Policy'])
+        with self.assertRaises(HTTPError):urlopen(self.base+published['url'].replace('index.html','undeclared.png'))
+        self.service.view_blocks=ViewBlocks(self.service)
+        restored=self.service.view_blocks.list()['blocks'][0]
+        self.assertEqual(published['id'],restored['id']);self.assertEqual(1,restored['version'])
+        self.assertEqual(409,self.action('view-block.publish',**fields,id=restored['id'],version=0)[0])
+        code,changed=self.action('view-block.publish',**fields,id=restored['id'],version=1)
+        self.assertEqual(200,code);self.assertEqual(2,changed['version'])
+        source=self.service.view_blocks.source(self.project,changed['id']);self.assertEqual(fields['html'],source['html'])
+        code,preserved=self.action('view-block.publish',project_id=self.pid,id=changed['id'],version=2,title='Revised',html='<h1>Same evidence</h1>');self.assertEqual(200,code)
+        with urlopen(self.base+preserved['url'].replace('index.html','clips/demo.mp4')) as reply:self.assertEqual(b'CHANGED',reply.read())
+        self.assertEqual(403,self.action('view-block.publish',**{**fields,'assets':{'../secret':'movie.mp4'}})[0])
+        (self.repository/'linked.mp4').symlink_to(self.repository/'movie.mp4')
+        self.assertEqual(403,self.action('view-block.publish',**{**fields,'assets':{'linked.mp4':'linked.mp4'}})[0])
+        self.service.read_only=True
+        self.assertEqual(403,self.action('view-block.publish',**fields)[0])
+
+    def test_html_tiles_allow_multiple_blocks_without_changing_execution(self):
+        from server.surfboards import validate_pages,template
+        board=template('software');original=board.copy()
+        pages=[{'id':'gallery','title':'Cases','tiles':[{'id':'first','kind':'html','block_id':'block_0123456789abcdef'},{'id':'second','kind':'html','block_id':'block_abcdef0123456789'}]}]
+        checked=validate_pages(pages,board)
+        self.assertEqual(2,len(checked[0]['tiles']));self.assertEqual(original,board)
+        pages[0]['tiles'][1]['block_id']='../../bad'
+        with self.assertRaises(ValueError):validate_pages(pages,board)
+
+    def test_application_trust_is_an_exact_project_choice(self):
+        from unittest.mock import patch
+        self.service.workbench.root.mkdir(parents=True,exist_ok=True)
+        fields={'project_id':self.pid,'repo':str(self.repository.resolve()),'trusted':True}
+        self.assertEqual(200,self.request('/api/action',{'op':'editor.trust','params':fields})[0])
+        with patch.object(self.service.workbench,'start'):
+            opened=self.service.workbench.open({'project_id':self.pid,'client_id':'explicit-trust-window'})
+        self.assertEqual(str(self.repository.resolve()),opened['approved_trust_paths'][0])
+        self.assertEqual(409,self.request('/api/action',{'op':'editor.trust','params':{**fields,'repo':str(self.root/'other')}})[0])
+        self.assertEqual(400,self.request('/api/action',{'op':'editor.trust','params':{**fields,'trusted':'yes'}})[0])
+        self.service.workbench.trust({**fields,'trusted':False})
+        self.assertEqual([],self.service.workbench.public(self.service.workbench.sessions[opened['id']])['approved_trust_paths'])
+        self.service.read_only=True
+        self.assertEqual(403,self.request('/api/action',{'op':'editor.trust','params':fields})[0])
+
+    def test_editor_events_wake_waiter_immediately_without_fast_periodic_probing(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from unittest.mock import patch
+        import time
+        self.service.workbench.root.mkdir(parents=True,exist_ok=True)
+        with patch.object(self.service.workbench,'start'):
+            opened=self.service.workbench.open({'project_id':self.pid,'client_id':'event-wakeup-window'})
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pending=pool.submit(self.service.workbench.poll,opened['id'],0,2)
+            time.sleep(.05);start=time.monotonic()
+            self.service.workbench.bridge({'session':opened['id'],'operation':'selection','path':str(self.repository/'main.py'),'text':'selected source'})
+            data=pending.result(timeout=1)
+        self.assertLess(time.monotonic()-start,.5)
+        self.assertEqual('selected source',data['events'][0]['text'])
+        for value in (-1,26,'invalid'):
+            with self.assertRaises(Exception):self.service.workbench.poll(opened['id'],0,value)
+
     def test_native_project_trust_is_scoped_and_revocable(self):
         from unittest.mock import patch
         workbench = self.service.workbench

@@ -165,11 +165,21 @@ function openPanel(context,fields){
   child.on('closed',()=>{if(!context.window.isDestroyed())context.window.webContents.send('panel-closed',{id:childId});panelWindows.delete(childId);releaseConnection(panel.connection);if(!contexts().some(row=>row.window.webContents.session===partition))partition.webRequest.onBeforeSendHeaders(null);});
   void child.loadURL(url.href);return {opened:true,id:childId};
 }
+async function openPort(context,fields){
+  if(!fields||Object.keys(fields).sort().join(',')!=='port,project_id'||!Number.isInteger(fields.port))throw new Error('Choose a project and one localhost development port.');
+  const connection=context.connection;if(!connection)throw new Error('Connect a workspace first.');
+  const response=await fetch(connection.origin+'/api/action',{method:'POST',headers:{Authorization:'Bearer '+connection.token,'Content-Type':'application/json'},body:JSON.stringify({op:'editor.port.check',params:fields})});const checked=await response.json();if(!response.ok)throw new Error(checked.error||'This project port could not be opened.');
+  const tunnel=await connection.openPort(fields.port);if(context.window.isDestroyed()||context.connection!==connection){await tunnel.close();throw new Error('The workspace changed before this preview opened.');}
+  const preview=new BrowserWindow({width:1040,height:760,minWidth:360,minHeight:260,title:'localhost:'+fields.port+' — SuperSurfer',webPreferences:{partition:'port-preview-'+require('node:crypto').randomUUID(),contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true}});
+  const origin=new URL(tunnel.url).origin;preview.webContents.setWindowOpenHandler(({url})=>{openExternal(url);return {action:'deny'};});preview.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===origin)return;}catch{}event.preventDefault();openExternal(url);});preview.webContents.on('will-attach-webview',event=>event.preventDefault());
+  const parentClosed=()=>{if(!preview.isDestroyed())preview.close();};context.window.once('closed',parentClosed);preview.on('closed',()=>{context.window.removeListener('closed',parentClosed);void tunnel.close();});await preview.loadURL(tunnel.url).catch(error=>{preview.close();throw error;});return {opened:true,port:fields.port};
+}
 function connectionSettings() {
   const context=focused();if (!context) { makeWindow();return; }
   if (context.attempt) cancelConnection(context);
   sendStatus(context,'idle','');void showSetup(context);
 }
+function workspaceCommand(command){const context=focused();if(context?.connection&&context.window.webContents.getURL().startsWith(context.connection.origin+'/'))context.window.webContents.send('workspace-command',command);}
 function updateMenu() {
   const recent=store.recent().map(record => ({label:windowLabel(record)+(record.config.remoteRoot !== '~/.local/share/supersurfer' ? ' · '+record.config.remoteRoot : ''),click:() => makeWindow(record)}));
   if (app.dock) app.dock.setMenu(Menu.buildFromTemplate([{label:'New Window',click:() => makeWindow()}]));
@@ -177,6 +187,7 @@ function updateMenu() {
     ...(process.platform === 'darwin' ? [{label:'SuperSurfer',submenu:[{role:'about'},{type:'separator'},{label:'Connection Settings…',accelerator:'CmdOrCtrl+,',click:connectionSettings},{type:'separator'},{role:'hide'},{role:'hideOthers'},{role:'unhide'},{type:'separator'},{role:'quit'}]}] : []),
     {label:'File',submenu:[{label:'New Window',accelerator:'CmdOrCtrl+Shift+N',click:() => makeWindow()},{label:'Open Recent',submenu:recent.length?recent:[{label:'No recent workspaces',enabled:false}]},{label:'Connection Settings…',click:connectionSettings},{type:'separator'},{role:'close'},...(process.platform === 'darwin' ? [] : [{role:'quit'}])]},
     {label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},
+    {label:'Rearrange',submenu:[{label:'Rearrange current page…',accelerator:'CmdOrCtrl+Alt+Shift+R',click:()=>workspaceCommand('rearrange')},{label:'Toggle workspace sidebar',click:()=>workspaceCommand('sidebar')},{label:'Toggle agent panel',click:()=>workspaceCommand('chat')}]},
     {label:'View',submenu:[{role:'reload'},{role:'togglefullscreen'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{type:'separator'},{label:'Connection Settings…',click:connectionSettings}]},
     {label:'Window',submenu:[{role:'minimize'},{role:'zoom'},{type:'separator'},...[...windows.values()].map(context => ({label:windowLabel(context.record),click:() => focus(context)}))]},
   ]));
@@ -186,6 +197,7 @@ else {
   app.on('second-instance', () => { const context=focused();if (context) focus(context);else if (store) store.restore().forEach(makeWindow); });
   app.whenReady().then(() => {
     store=new WindowStore(app.getPath('userData'));nativeTheme.themeSource=themeSource(loadTheme());
+    ipcMain.handle('port:open',(event,fields)=>openPort(ownWindow(event),fields));
     ipcMain.handle('panel:open',(event,fields)=>openPanel(ownWindow(event),fields));
     ipcMain.handle('window:new',event => { ownWindow(event);makeWindow();return {opened:true}; });
     ipcMain.handle('configuration',event => ownWindow(event,true).record.config || {});
