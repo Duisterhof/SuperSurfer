@@ -1,3 +1,10 @@
+# Completed in 0.1.39
+
+- Fix Settings rendering: workspace defaults do not reference chat-local capabilities.
+- Verify Cursor-only and Claude-only startup, chat, persisted role defaults and all agent roles.
+- Preserve provider-specific permissions and native session pinning.
+- Review all twelve release skills against the unchanged scoped tools and repaired settings.
+
 # Completed in 0.1.37
 
 - Inline incoming edit Accept/Reject in existing native and built-in source drafts.

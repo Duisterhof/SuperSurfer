@@ -1,3 +1,18 @@
+# SuperSurfer 0.1.39 — October 9, 2026
+
+The Settings browser regression passes rendering, periodic refresh, scroll and
+unsaved preferences, explicit saves and extension search. The new provider-only
+fixture omits Codex and the other provider executable entirely. Cursor-only and
+Claude-only browser checks both pass initial chat, Settings, all three saved role
+defaults, reload persistence and completed manager/lead/new-worker conversations.
+It asserts no Codex wire traffic and no JavaScript page errors. These checks use
+fake official CLI protocols in disposable repositories, with no paid inference.
+
+This UI fix changes no backend or native editor bridge. The preceding 0.1.38
+backend regression passed 699 Python and 31 enabled Node checks. The live UI
+repair was backed up, matched against the exact .38 baseline and verified against
+served bytes without restarting agents. Mac launch remains untested on this host.
+
 # SuperSurfer 0.1.37 — October 9, 2026
 
 Full backend regression: **679 Python tests** pass. All **28 enabled Node

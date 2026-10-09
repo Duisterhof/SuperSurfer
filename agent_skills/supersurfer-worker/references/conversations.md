@@ -92,7 +92,12 @@ artifact, and importing a file does not execute its contents or grant new tools.
 
 
 Workspace Settings supplies the persistent default permission unless a chat
-explicitly overrides it. Cursor and Claude Code support Ask and YOLO; Codex
+explicitly overrides it. Its selector always offers Ask, Approve for me and YOLO;
+per-chat controls are filtered independently by the selected provider. Initial
+manager/lead/worker defaults remain Codex. The user selects another provider in
+Settings for new conversations or in a chat before its session starts. A
+Cursor/Claude-only workspace can use those selected chats without Codex installed;
+a provider selection does not install or sign in its official CLI automatically. Cursor and Claude Code support Ask and YOLO; Codex
 automatic approval review, reasoning-effort and Fast controls are unavailable
 on those adapters. Ask uses the provider's native permissions/sandbox, which
 differs from Codex containment; it is not a promise of identical OS isolation.

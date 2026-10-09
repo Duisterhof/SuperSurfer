@@ -12,7 +12,11 @@ from server.backends import BackendRouter
 from server.app import create_server
 fixture=ConversationTests();fixture.setUp();root=fixture.root
 os.environ['SS_TEST_WIRE']=str(root/'cli-wire.jsonl');os.environ['SS_FAKE_LOG']=str(root/'codex-wire.jsonl');os.environ['SS_FAKE_DOC']=str(root/'document.md')
+only=sys.argv[sys.argv.index('--only-provider')+1] if '--only-provider' in sys.argv else None
+if only not in (None,'cursor','claude'):raise ValueError('Choose cursor or claude')
 for name in ('codex','cursor','claude'):
+ os.environ['SUPERSURFER_'+name.upper()]=str(root/name)
+ if only and name!=only:continue
  binary=root/name;body=CODEX_FAKE if name=='codex' else CLI_FAKE.replace("text=='approval'","text.startswith('approval')").replace("text=='question'","text.startswith('question')").replace("text=='hold'","text.startswith('hold')").replace("text=v['message']['content'];","text=v['message']['content'].splitlines()[0];").replace("backend=os.environ['SS_TEST_PROVIDER'];",f"backend={name!r};")
  binary.write_text('#!'+sys.executable+'\n'+body);binary.chmod(0o700);os.environ['SUPERSURFER_'+name.upper()]=str(binary)
 service=fixture.service;service.codex=BackendRouter(service.directory,service.store,service.context_provider,service._chat_scope,service.agent_action)

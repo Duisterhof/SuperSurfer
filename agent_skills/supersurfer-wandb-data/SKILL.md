@@ -2,12 +2,12 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.38. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.39. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.
@@ -112,3 +112,7 @@ copied media; an explicit asset map replaces the whole set. Preserve unrelated
 content and its current version rather than guessing lost source mappings.
 
 Desktop page tabs and Activity remain accessible below the native drag strip. Sidebar collapse is reversible through edge arrows and changes no W&B sharing policy, writer or fetch state. Inspect the same data source after reopening a hidden view instead of creating another tracking run.
+
+Workspace Settings and provider choice do not change W&B credentials, sharing
+or writer identities. A provider-specific Ask fallback does not authorize a new
+tracking run or a broader data selection.

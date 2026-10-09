@@ -1,3 +1,15 @@
+# SuperSurfer 0.1.39 — provider-only setup and Settings repair
+
+Settings renders independently of per-chat capabilities. All three workspace
+permission defaults remain available; Cursor/Claude inherit automatic review as
+Ask, while their chat controls offer only their supported choices.
+
+A Cursor-only or Claude-only workspace needs no Codex installation or ChatGPT
+account. Install and sign in to the chosen provider's official CLI on the workspace
+host, then set the manager, lead and worker Backend defaults in Settings. The
+initial default remains Codex until changed. Existing started chats keep their
+provider; create a new conversation to use another one.
+
 # SuperSurfer 0.1.38 — Cursor and Claude Code backends
 
 ## Cursor and Claude Code backends (0.1.38)

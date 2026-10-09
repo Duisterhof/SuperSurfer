@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.38. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.39. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -309,3 +309,7 @@ external edits merged into an
 unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
 a draft choice as a durable agent-patch receipt or saved source. A successful
 explicit Save is still separate from checks, commits and launch authorization.
+
+Workspace Settings offers all three permission defaults, while this chat uses
+its provider's supported controls. An inherited Approve for me resolves to Ask
+on Cursor/Claude; verify the effective mode without replacing this task owner.

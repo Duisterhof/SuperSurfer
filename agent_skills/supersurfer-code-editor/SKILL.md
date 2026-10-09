@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.38. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.39. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
 to be installed and selected. The default Code block is a clean editing surface:
@@ -332,3 +332,7 @@ confirmation: the former replaces the disk file with the editor version; the
 latter discards that unsaved draft. Compare both versions first. These fallback
 choices are distinct from per-chunk review and must not be used to silently
 overwrite another owner's work or bypass an unresolved source requirement.
+
+Selecting Cursor/Claude does not require the Codex executable for their chats.
+Codex stays the initial default until the user selects another backend; this is
+independent of Code OSS editor installation, trust and extensions.
