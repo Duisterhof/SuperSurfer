@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.38. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.39. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
@@ -212,3 +212,7 @@ arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
 
 Desktop page tabs and Activity use native-safe click areas below a thin drag strip; the in-app topbar stays hidden. Sidebar edge arrows collapse or restore views without changing the saved board, layout or agent work. Keep these window controls separate from workflow edits.
+
+Provider and permission defaults live in workspace Settings; a board proposal
+does not select another provider or grant unsupported chat controls. Settings
+retains all three defaults even when the selected chat supports only Ask/YOLO.

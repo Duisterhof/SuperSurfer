@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.38. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.39. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -302,3 +302,7 @@ external edits merged into an
 unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
 a draft choice as a durable agent-patch receipt or saved source. A successful
 explicit Save is still separate from checks, commits and launch authorization.
+
+Workspace Settings keeps Ask, Approve for me and YOLO defaults independently
+of the selected chat provider. Cursor/Claude inherit Approve for me as Ask; do
+not change worker ownership or infer a launch grant from that fallback.

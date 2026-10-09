@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.38. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.39. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -202,3 +202,7 @@ external edits merged into an
 unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
 a draft choice as a durable agent-patch receipt or saved source. A successful
 explicit Save is still separate from checks, commits and launch authorization.
+
+Workspace Settings exposes all three permission defaults independently of the
+current provider. Cursor/Claude resolve an inherited Approve for me to Ask;
+workflow gates and saved action receipts remain unchanged.

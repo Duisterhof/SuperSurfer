@@ -1,3 +1,12 @@
+# SuperSurfer 0.1.39 — workspace settings versus chat capabilities
+
+The workspace permission selector uses the workspace's three supported defaults;
+it never reads a capability object local to a chat renderer. Provider-specific
+controls and validation still apply in each chat. Inherited automatic review
+falls back to Ask on Cursor/Claude; explicit unsupported overrides are rejected.
+Provider-only startup and role defaults do not require Codex installation or
+ChatGPT authentication. Choosing another provider never migrates a started chat.
+
 # SuperSurfer 0.1.37 — collaborative source drafts
 
 The scoped draft planner compares a known baseline, the current editor draft and

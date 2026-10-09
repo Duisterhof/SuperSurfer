@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.38'
+  supersurfer-version: '0.1.39'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.38. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.39. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -297,3 +297,7 @@ external edits merged into an
 unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
 a draft choice as a durable agent-patch receipt or saved source. A successful
 explicit Save is still separate from checks, commits and launch authorization.
+
+Use Settings to choose the provider default for new lead conversations, or the
+chat selector before work starts. Codex remains the initial default. This choice
+does not transfer an existing session or change a worker's authorization.
