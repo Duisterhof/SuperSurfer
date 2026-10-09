@@ -1,3 +1,18 @@
+## Completed in 0.1.34
+
+- Drag-to-split/rearrange without Arrange; freely positioned and resized windows.
+- Persist bounded window geometry through the scoped, version-checked layout API.
+- Native separate panel windows with independent navigation and shared host lifetime.
+- Keep credentials limited to each trusted main frame, not embedded viewers.
+- Compact VS Code extension surface with SuperSurfer file navigation and PDF viewing.
+- Explicit native project trust and installed-extension compatibility notes.
+- Retain source drafts while moving; require explicit save before editor pop-out.
+
+## Next update
+
+- [x] Direct Terminal and Ports controls in the native VS Code editor toolbar.
+  The standalone website demonstrates these with a clearly simulated console.
+
 ## Completed in 0.1.33
 
 - Keep queue and W&B identities aligned when correcting a rejected source folder.

@@ -30,10 +30,10 @@ class WritingServiceTests(unittest.TestCase):
         board=template('writing');compiled=compile_board(board)
         self.assertEqual(compiled['pages']['project'][0]['id'],'writing')
         self.assertEqual([row['kind'] for row in compiled['pages']['project'][0]['tiles']],['editor','pdf'])
-        self.assertEqual(next(row for row in compiled['available_tiles']['project'] if row['kind']=='pdf')['min_height'],400)
+        self.assertEqual(next(row for row in compiled['available_tiles']['project'] if row['kind']=='pdf')['min_height'],160)
         short=deepcopy(board)
-        next(row for row in short['pages']['project'][0]['tiles'] if row['kind']=='pdf')['height']=160
-        with self.assertRaisesRegex(SurfboardError,'400'):
+        next(row for row in short['pages']['project'][0]['tiles'] if row['kind']=='pdf')['height']=159
+        with self.assertRaisesRegex(SurfboardError,'160'):
             validate(short)
         next(row for row in short['pages']['project'][0]['tiles'] if row['kind']=='pdf')['height']=400
         self.assertEqual(next(row for row in validate(short)['pages']['project'][0]['tiles'] if row['kind']=='pdf')['height'],400)

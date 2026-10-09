@@ -50,6 +50,11 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');assert.equal((await probe(b)).authorization,'Bearer fixture-token-trinity');
   const foreign=await b.evaluate(async origin=>fetch(origin+'/api/probe').then(r=>r.json()),new URL(a.url()).origin);assert.equal(foreign.authorization,null,'Other host must not receive this window’s credentials');
   const framed=await a.evaluate(async()=>{const frame=document.createElement('iframe');frame.src='/embedded';document.body.append(frame);await new Promise(resolve=>frame.onload=resolve);return frame.contentWindow.fetch('/api/probe').then(r=>r.json());});assert.equal(framed.authorization,null,'Embedded content must not receive native credentials');
+  await assert.rejects(a.evaluate(()=>superSurferDesktop.openPanel({project:'p1',page:'writing',tile:'pdf',item:'',title:'PDF',url:'https://outside.invalid'})),/project panel/);
+  const panelEvent=app.waitForEvent('window');await a.evaluate(()=>superSurferDesktop.openPanel({project:'p1',page:'writing',tile:'pdf',item:'',title:'PDF'}));const panel=await panelEvent;await panel.waitForURL('http://127.0.0.1:*/**');
+  assert.equal((await probe(panel)).authorization,'Bearer fixture-token-tulip');assert.equal(new URL(panel.url()).searchParams.get('panel_tile'),'pdf');
+  const embeddedProbe=await panel.evaluate(async()=>{const iframe=document.createElement('iframe');iframe.src='/embedded';document.body.append(iframe);await new Promise(resolve=>iframe.onload=resolve);return iframe.contentWindow.fetch('/api/probe').then(r=>r.json());});assert.equal(embeddedProbe.authorization,null);
+  await panel.close();assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');console.log('PASS detached native panel shares the correct host, limits credentials to its main frame, and closes independently');
   const userData=await app.evaluate(({app})=>app.getPath('userData'));
   await app.close();app=await launch();
   let pages=await waitWindows(2);
@@ -64,7 +69,8 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   await a.waitForURL('http://127.0.0.1:*/**');assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');
   const stored=fs.readFileSync(path.join(userData,'windows.json'),'utf8');assert.ok(!stored.includes('fixture-token'));assert.ok(!stored.includes('http://127.0.0.1:'));
   console.log('PASS automatic two-host restore, separate navigation/bounds, main-frame-only credentials and token-free saved state');
-  await a.close();assert.equal((await probe(b)).authorization,'Bearer fixture-token-trinity');
+  const keepPanelEvent=app.waitForEvent('window');await a.evaluate(()=>superSurferDesktop.openPanel({project:'p1',page:'writing',tile:'pdf',item:'',title:'PDF'}));const keepPanel=await keepPanelEvent;await keepPanel.waitForURL('http://127.0.0.1:*/**');
+  await a.close();assert.equal((await probe(keepPanel)).authorization,'Bearer fixture-token-tulip');assert.equal((await probe(b)).authorization,'Bearer fixture-token-trinity');await keepPanel.close();console.log('PASS detached panel retains its connection when its parent closes');
   await menu('tulip');await waitWindows(2);
   const offline=await newWindow();
   await offline.waitForFunction(()=>!document.querySelector('#connect-button')?.disabled);

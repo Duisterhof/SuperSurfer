@@ -87,7 +87,7 @@ class SurfboardPagesTests(unittest.TestCase):
         cases.extend([{**page, "id": value}] for value in ("", "../page", "page:notes", "surfboard", "empty-layout", "a" * 65, []))
         cases.extend([{**page, "title": value}] for value in ("", "   ", "A\nB", "x" * 101, None))
         cases.extend([{**page, "tiles": value}] for value in (None, {}, [page["tiles"][0]] * 17))
-        for field, values in (("span", (0, 13, True, float("nan"), "6")), ("height", (159, 1201, True, float("inf"), "400")), ("kind", ("command", "file:///etc/passwd", [])), ("id", ("", "../tile", "a" * 65))):
+        for field, values in (("span", (0, 13, True, float("nan"), "6")), ("height", (159, 5001, True, float("inf"), "400")), ("kind", ("command", "file:///etc/passwd", [])), ("id", ("", "../tile", "a" * 65))):
             cases.extend([{**page, "tiles": [{**page["tiles"][0], field: value}]}] for value in values)
         cases.extend(([{**page, "script": "execute"}], [{**page, "tiles": [{**page["tiles"][0], "argv": ["sh"]}]}]))
         for pages in cases:

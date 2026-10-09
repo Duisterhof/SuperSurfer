@@ -28,6 +28,12 @@ function activate(context) {
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc=>{if(doc.uri.scheme==='file')request({operation:'saved',path:doc.uri.fsPath}).catch(()=>{});}));
   async function command(item){
     if(item.kind==='selection')return selection();
+    if(item.kind==='trust')return vscode.commands.executeCommand('workbench.trust.manage');
+    if(item.kind==='terminal'){
+      const terminal=vscode.window.activeTerminal||vscode.window.createTerminal({name:'Terminal',cwd:vscode.workspace.workspaceFolders?.[0]?.uri});
+      terminal.show();return;
+    }
+    if(item.kind==='ports')return vscode.commands.executeCommand('remoteExplorer.toggleForwardedPortsView');
     if(item.kind==='extensions')return vscode.commands.executeCommand('workbench.view.extensions');
     if(item.kind==='settings')return vscode.commands.executeCommand('workbench.action.openSettings','@ext:'+item.extension_id);
     if(item.kind==='theme')return vscode.commands.executeCommand('workbench.action.selectTheme');
@@ -36,7 +42,7 @@ function activate(context) {
       if(item.range){const r=item.range,start=new vscode.Position(Math.max(0,(r.line||1)-1),Math.max(0,(r.column||1)-1)),end=new vscode.Position(Math.max(0,(r.endLine||r.line||1)-1),Math.max(0,(r.endColumn||r.column||1)-1));editor.selection=new vscode.Selection(start,end);editor.revealRange(editor.selection,vscode.TextEditorRevealType.InCenter);}return;
     }
     if(item.kind==='agent_diff'){
-      const row=item.data,uri=virtual(row.path+'.patch',row.patch||row.diff||'No patch recorded.');const doc=await vscode.workspace.openTextDocument(uri);await vscode.languages.setTextDocumentLanguage(doc,'diff');return vscode.window.showTextDocument(doc,{preview:false});
+      const row=item.data;if(typeof row.original==='string'&&typeof row.modified==='string')return vscode.commands.executeCommand('vscode.diff',virtual('Before-'+row.path,row.original),virtual('After-'+row.path,row.modified),item.title+' · '+row.path,{preview:false});const uri=virtual(row.path+'.patch',row.patch||row.diff||'No patch recorded.');const doc=await vscode.workspace.openTextDocument(uri);await vscode.languages.setTextDocumentLanguage(doc,'diff');return vscode.window.showTextDocument(doc,{preview:false});
     }
     if(item.kind==='comparison'){
       let data=item.data;
@@ -47,10 +53,11 @@ function activate(context) {
   }
   async function poll(){
     if(stopped)return;
-    try{const received=await request({operation:'poll',dirty:vscode.workspace.textDocuments.some(doc=>doc.isDirty),ack});ack=[];
+    try{const received=await request({operation:'poll',trusted:vscode.workspace.isTrusted,dirty:vscode.workspace.textDocuments.some(doc=>doc.isDirty),ack});ack=[];
       for(const item of received.commands){try{await command(item);}catch(error){await request({operation:'error',error:error.message}).catch(()=>{});}ack.push(item.id);}
     }catch{}finally{if(!stopped)timer=setTimeout(poll,800);}
   }
+  if(vscode.workspace.getConfiguration('supersurfer').get('editorOnly'))vscode.commands.executeCommand('workbench.action.toggleZenMode').catch(()=>{});
   stopped=false;poll();context.subscriptions.push({dispose(){stopped=true;clearTimeout(timer);}});
 }
 function deactivate(){stopped=true;clearTimeout(timer);}

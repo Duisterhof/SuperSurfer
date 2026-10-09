@@ -103,7 +103,7 @@ class Workbench:
                 row = json.loads(path.read_text())
                 identity = row["publisher"] + "." + row["name"]
                 if row.get("publisher") != "supersurfer" and not obsolete.get(path.parent.name) and (active is None or identity.lower() in active):
-                    extensions.append({"id": row["publisher"] + "." + row["name"], "name": row.get("displayName") or row["name"], "version": row["version"]})
+                    extensions.append({"id": row["publisher"] + "." + row["name"], "name": row.get("displayName") or row["name"], "version": row["version"], "compatible": not(row.get("extensionKind")==["ui"] and row.get("main") and not row.get("browser")), "compatibility_note": "Desktop UI extension; use SuperSurfer’s PDF viewer or a workspace/web-compatible extension." if row.get("extensionKind")==["ui"] and row.get("main") and not row.get("browser") else "Workspace/web extension host"})
             except (OSError, ValueError, KeyError):
                 pass
         return {"installed": installed, "version": VERSION, "running": bool(self.process and self.process.poll() is None),
@@ -237,6 +237,7 @@ class Workbench:
             "editor.minimap.enabled": settings["minimap"], "editor.wordWrap": "off" if settings["word_wrap"] == "auto" else settings["word_wrap"],
             "chat.disableAIFeatures": True, "workbench.secondarySideBar.defaultVisibility": "hidden",
             "telemetry.telemetryLevel": "off", "workbench.startupEditor": "none", "window.menuBarVisibility": "compact",
+            "workbench.layoutControl.enabled": False, "window.customTitleBarVisibility": "never", "zenMode.hideLineNumbers": False, "zenMode.silentNotifications": False, "zenMode.fullScreen": False, "zenMode.centerLayout": False, "zenMode.hideActivityBar": True, "zenMode.hideStatusBar": True, "zenMode.showTabs": "multiple", "zenMode.restore": False, "window.commandCenter": False,
             "supersurfer.latexSpellcheck": settings["latex_spellcheck"], "supersurfer.dictionary": settings["dictionary"],
             "cSpell.enabledLanguageIds": ["latex"] if settings["latex_spellcheck"] else [], "cSpell.words": settings["dictionary"]})
         for language in ("latex", "markdown"):
@@ -246,6 +247,21 @@ class Workbench:
         if theme != "match":
             current["workbench.colorTheme"] = themes.get(theme, theme)
         atomic_write(path, json.dumps(current, indent=2) + "\n")
+
+        # Escape stays an editor key; a repeated Vim escape must not restore a
+        # second application's navigation chrome inside SuperSurfer.
+        bindings = path.with_name("keybindings.json")
+        try:
+            rules = read_jsonc('{"bindings":' + bindings.read_text() + '}')["bindings"]
+            if not isinstance(rules, list): raise ValueError("Keybindings must be an array")
+        except FileNotFoundError:
+            rules = []
+        except (ValueError, OSError) as exc:
+            raise SurfboardError("Existing editor keybindings could not be read; preserve and repair keybindings.json") from exc
+        removal = {"key": "escape escape", "command": "-workbench.action.toggleZenMode"}
+        if removal not in rules:
+            rules.append(removal)
+            atomic_write(bindings, json.dumps(rules, indent=2) + "\n")
 
     def start(self):
         with self.lock:
@@ -295,7 +311,7 @@ class Workbench:
             token = secrets.token_urlsafe(32)
             workspace = self.root / "workspaces" / (identity + ".code-workspace")
             workspace.parent.mkdir(exist_ok=True, mode=0o700)
-            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "window.title": project["name"] + " · SuperSurfer"}}))
+            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": True, "window.title": project["name"] + " · SuperSurfer"}}))
             row = {"id": identity, "client_id": client, "token": token, "project_id": project["id"],
                    "experiment_id": fields.get("experiment_id"), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
             self.sessions[identity] = row
@@ -303,7 +319,7 @@ class Workbench:
 
     def public(self, row):
         return {"id": row["id"], "url": "/workbench/" + row["token"] + "/?" + urlencode({"workspace": row["workspace"]}),
-                "events": row["events"], "dirty": row["dirty"], "connected": row["connected_at"] is not None}
+                "events": row["events"], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "trusted": row.get("trusted")}
 
     def session(self, identity):
         row = self.sessions.get(identity)
@@ -314,7 +330,7 @@ class Workbench:
     def poll(self, identity, after=0):
         with self.lock:
             row = self.session(identity)
-            return {"events": [event for event in row["events"] if event["sequence"] > int(after)], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "dirty_observed_at":row.get("dirty_observed_at")}
+            return {"events": [event for event in row["events"] if event["sequence"] > int(after)], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "dirty_observed_at":row.get("dirty_observed_at"), "trusted":row.get("trusted")}
 
     def command(self, fields):
         with self.lock:
@@ -322,7 +338,7 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings"}:
+            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
@@ -354,6 +370,7 @@ class Workbench:
                 project = self.service.lookup("projects", row["project_id"])
                 return self.service.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path"))
             if fields.get("operation") == "poll":
+                row["trusted"] = fields.get("trusted") if type(fields.get("trusted")) is bool else None
                 row["dirty"] = fields.get("dirty") is True
                 row["dirty_observed_at"] = time.time()
                 ack = fields.get("ack", [])

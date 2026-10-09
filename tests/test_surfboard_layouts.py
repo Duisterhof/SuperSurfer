@@ -3,7 +3,7 @@ from copy import deepcopy
 import unittest
 
 from server.surfboards import (SurfboardError, catalog, compile_board, compile_layouts,
-                              diff_summary, layout_catalog, template, validate, validate_layout)
+                              validate_pages, diff_summary, layout_catalog, template, validate, validate_layout)
 
 
 class SurfboardLayoutsTests(unittest.TestCase):
@@ -108,3 +108,19 @@ class SurfboardLayoutsTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class WindowGeometryTests(unittest.TestCase):
+    def test_window_geometry_and_small_pdf_are_preserved(self):
+        board=template('writing')
+        pages=[{'id':'writing','title':'Writing','arrangement':'windows','tiles':[{'id':'pdf','kind':'pdf','height':220,'bounds':{'x':75,'y':40,'width':900,'height':220}}]}]
+        normalized=validate_pages(pages,board,'item')
+        self.assertEqual('windows',normalized[0]['arrangement'])
+        self.assertEqual(pages[0]['tiles'][0]['bounds'],normalized[0]['tiles'][0]['bounds'])
+        self.assertEqual(220,normalized[0]['tiles'][0]['height'])
+
+    def test_invalid_geometry_cannot_become_styles_or_unbounded_windows(self):
+        board=template('writing')
+        for field,value in [('x',-1),('y',float('nan')),('width',True),('width',100),('height',5001),('x','1; color:red')]:
+            bounds={'x':0,'y':0,'width':600,'height':500};bounds[field]=value
+            with self.assertRaises(SurfboardError):validate_pages([{'id':'writing','title':'Writing','tiles':[{'id':'pdf','kind':'pdf','bounds':bounds}]}],board,'item')
+        with self.assertRaises(SurfboardError):validate_pages([{'id':'writing','title':'Writing','arrangement':'execute','tiles':[]}],board,'item')

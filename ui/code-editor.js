@@ -545,7 +545,7 @@ function createMonacoEditor(options) {
     unmount();unsubscribe?.();spelling?.dispose();for(const project of projects.values())for(const file of project.files.values()){file.listener?.dispose();file.model?.dispose();}
     projects.clear();window.removeEventListener('beforeunload',beforeUnload);window.removeEventListener('focus',onFocus);
   }
-  return {mount,unmount,hasUnsaved,refresh,dispose,showComparison,
+  return {mount,unmount,hasUnsaved,refresh,dispose,showComparison,presentation:()=>({path:active()?.path}),
     async openFile(path,range){const token=epoch;if(!await ensureReady()||!current(token))return false;return openFile(path,range);},
     async showAgentChange(scope,changeId){const token=epoch;if(!await ensureReady()||!current(token))return false;return showAgentDiff(changeId,scope);}};
 }
@@ -553,7 +553,7 @@ function createMonacoEditor(options) {
 export function createCodeEditor(options){
  const builtin=createMonacoEditor(options),workbench=createWorkbenchEditor(options);let current=builtin,mounted=null,ctx=null;
  const hasUnsaved=id=>builtin.hasUnsaved(id)||workbench.hasUnsaved(id);
- return {hasUnsaved,prepareScope(context){if(ctx&&(ctx.projectId!==context.projectId||ctx.experimentId!==context.experimentId)){current.unmount();mounted=null;ctx=null;}},detachWithin(element){if(mounted&&element?.contains(mounted)){current.unmount();mounted=null;ctx=null;}},async mount(element,context){
+ return {hasUnsaved,presentation:()=>current.presentation?.(),async prepareDetach(){if(current===workbench)await workbench.prepareDetach();if(hasUnsaved())throw new Error('Save editor changes before opening a separate editor window.');},prepareScope(context){if(ctx&&(ctx.projectId!==context.projectId||ctx.experimentId!==context.experimentId)){current.unmount();mounted=null;ctx=null;}},detachWithin(element){if(mounted&&element?.contains(mounted)){current.unmount();mounted=null;ctx=null;}},async mount(element,context){
   let next=options.editorSettings?.get().engine==='vscode'&&!options.readOnly?.()?workbench:builtin;
   // A preference changed in another window must never discard this window's drafts.
   if(current!==next&&hasUnsaved())next=current;

@@ -1,3 +1,4 @@
+import {createPanelWindows} from './panel-windows.js';
 import {createTodos} from './todos.js';
 import {createFileUploads} from './file-uploads.js';
 import {workspacePath} from './workspace-files.js';
@@ -50,6 +51,7 @@ async function readNavigation() {
     try { const saved = await window.superSurferDesktop.getWorkspace(); if (saved && typeof saved === 'object' && !Array.isArray(saved)) savedNavigation = saved; } catch {}
   }
   if (!savedNavigation || typeof savedNavigation !== 'object' || Array.isArray(savedNavigation)) savedNavigation = {};
+  if(panelWindows.detached)savedNavigation={...savedNavigation,...panelWindows.navigation};
   state.view = ['workspace', 'compute', 'settings'].includes(savedNavigation.view) ? savedNavigation.view : 'workspace';
   state.tab = ['_files', '_todos', 'overview', 'runs', 'results', 'compute', 'surfboard', 'artifacts', 'activity', 'editor', 'chat', 'documents', 'preview'].includes(savedNavigation.tab)||/^(?:page:page_[a-f0-9]+|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.test(savedNavigation.tab||'') ? savedNavigation.tab : 'overview';
   state.chatVisible = typeof savedNavigation.chatVisible === 'boolean' ? savedNavigation.chatVisible : true;
@@ -65,6 +67,7 @@ async function readNavigation() {
   applyChatLayout();
 }
 function restoreNavigation(data) {
+  if(panelWindows.detached){state.projectId=panelWindows.navigation.projectId;state.experimentId=panelWindows.navigation.experimentId;navigationRestored=true;return;}
   if (!navigationRestored) {
     state.projectId = data.projects.some(p => p.id === savedNavigation?.projectId) ? savedNavigation.projectId : (data.projects.find(p=>!p.archived)||data.projects[0])?.id || null;
     state.experimentId = state.view === 'workspace' && data.experiments.some(x => x.id === savedNavigation?.experimentId && x.project_id === state.projectId) ? savedNavigation.experimentId : null;
@@ -83,6 +86,7 @@ function restoreNavigation(data) {
   }
 }
 function persistNavigation() {
+  if(panelWindows.detached)return;
   const value = { view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, sidebarWidth: state.sidebarWidth, sidebarCollapsed:state.sidebarCollapsed, projectTreeHeight:state.projectTreeHeight, chatMaximized: state.chatMaximized, pinnedAgent:state.pinnedAgent };
   try { localStorage.setItem('supersurfer-workspace', JSON.stringify(value)); } catch {}
   savedNavigation = value;
@@ -118,7 +122,7 @@ function chatWidthBounds(){
 }
 function applyChatLayout(){
  const shell=$('.app-shell'),maximized=state.chatVisible&&state.chatMaximized;
- shell.classList.toggle('chat-maximized',maximized);applySidebarLayout();
+ shell.classList.toggle('chat-maximized',maximized);document.body.classList.toggle('detached-chat',panelWindows.detached&&state.chatVisible);applySidebarLayout();
  $('#chat-panel').hidden=!state.chatVisible;
  const bounds=chatWidthBounds(),width=Math.round(Math.min(bounds.max,Math.max(bounds.min,activePage()?.right_width||state.chatWidth||390)));
  shell.style.setProperty('--chat-panel-width',width+'px');
@@ -213,10 +217,11 @@ const pluralItems = (p=project()) => itemLabel(p)+'s';
 const leadLabel = (p=project()) => ({research:'Research lead',software:'Technical lead',web:'Design lead',writing:'Writing lead'}[projectWorkflow(p)]||'Project lead');
 const surfboardEditor=createSurfboardEditor({api,action,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
 const filePicker=createFilePicker({api}),panelFocus=createPanelFocus();
+const panelWindows=createPanelWindows({capture:()=>({projectId:state.projectId,experimentId:state.experimentId,page:state.tab}),hasUnsaved:()=>codeEditor.hasUnsaved(state.projectId),presentation:()=>codeEditor.presentation(),prepareEditor:()=>codeEditor.prepareDetach?.(),onError:error=>toast(error.message,true)});
 function pickWorkspaceFile(onChoose,{pdfOnly=false,title='Open file',uploadTarget='editor'}={}){const p=project();if(!p)return;filePicker.open({projectId:p.id,repo:p.repo,pdfOnly,title,onChoose,onUpload:readOnly()?null:()=>fileUploads.pick(uploadTarget),onError:error=>toast(error.message,true)});}
 async function loadWorkspacePdf(url,{signal}={}){const response=await fetch(url,{signal,headers:sessionStorage.getItem('supersurfer-token')?{Authorization:'Bearer '+sessionStorage.getItem('supersurfer-token')}:{}});if(!response.ok)throw new Error('PDF could not be loaded ('+response.status+').');return new Uint8Array(await response.arrayBuffer());}
 const editorSettings=createEditorSettings({api,action,readOnly:()=>readOnly(),hasUnsaved:()=>codeEditor.hasUnsaved(),onConfigureExtension:configureEditorExtension});
-const codeEditor=createCodeEditor({api,action,editorSettings,readOnly:()=>readOnly(),onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onCompare:showCompareDialog,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
+const codeEditor=createCodeEditor({api,action,editorSettings,readOnly:()=>readOnly(),onOpenWorkspaceFile:path=>openPageCode({path}),onExtensions:()=>{if(panelWindows.detached){toast('Open workspace Settings → Editor in the main window.');return;}state.view='settings';renderMain();},onAskAgent:prepareCodeQuestion,onPickFile:pickWorkspaceFile,onUpload:()=>fileUploads.pick('editor'),onCompare:showCompareDialog,loadBytes:loadWorkspacePdf,onSave:record=>latexPanel.sourceSaved(record)});
 const latexPanel=createLatexPanel({api,action,editorSettings,onError:error=>toast(error.message,true),readOnly:()=>readOnly(),hasUnsaved:projectId=>codeEditor.hasUnsaved(projectId),
  onSource:({path,...range})=>openPageCode({path,range}),
  onSetup:()=>prepareCodeQuestion('Set up the supported LaTeX compiler on this connected workspace. Check system pdfLaTeX, BibTeX, bubblewrap, prlimit and Poppler (pdfinfo, pdftotext, pdftoppm), then verify compile_latex can compile and inspect a small paper. Preserve project source and existing host environments. If administrator access is needed, explain the exact missing dependency and ask for that access. Do not use an external compiler service or search private service state.', 'Compiler setup message prepared. Send when ready.'),
@@ -255,7 +260,7 @@ function toggleAgentPin(){
  else if(state.scope){const origin=chatOrigin();state.pinnedAgent={...origin,scope:state.scope,name:selectedAgent()?.name||state.chat?.agent?.name||'Agent',owner:'supersurfer'};}
  updateChatHeader();persistNavigation();
 }
-function rememberScope(scope){const key=directoryKey()||'manager';Object.defineProperty(scopeChoices,key,{value:scope,enumerable:true,writable:true,configurable:true});try{localStorage.setItem('supersurfer-conversation-selection',JSON.stringify(scopeChoices));}catch{}}
+function rememberScope(scope){const key=directoryKey()||'manager';Object.defineProperty(scopeChoices,key,{value:scope,enumerable:true,writable:true,configurable:true});if(panelWindows.detached)return;try{localStorage.setItem('supersurfer-conversation-selection',JSON.stringify(scopeChoices));}catch{}}
 const chatContext=createChatContext({scope:()=>state.scope,onChange:()=>updateChatHeader(),onError:error=>toast(error.message,true),onPickFile:()=>{const projectId=state.projectId,scope=state.scope;pickWorkspaceFile(async path=>{if(!chatAcceptsProject(projectId))throw new Error('This pinned agent belongs to another project. Unpin it or return to its project before attaching files.');if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');let text='Reference file '+path+' on the connected workspace. Read the current file before editing.';if(!/\.pdf$/i.test(path)){const file=await api('code/file?'+new URLSearchParams({project_id:projectId,path}));if(typeof file.content==='string')text+='\nSaved file excerpt:\n'+file.content.slice(0,16000)+(file.content.length>16000?'\n[Excerpt truncated]':'');}if(state.projectId!==projectId||state.scope!==scope)throw new Error('The conversation changed. Choose the file again.');await prepareCodeQuestion({kind:/\.pdf$/i.test(path)?'pdf':'file',project_id:projectId,path,label:path.split('/').at(-1),text});},{title:'Attach file',uploadTarget:'chat'});}});
 const fileUploads=createFileUploads({
  capture(target){const p=project();if(!p||readOnly())throw new Error('Select a writable project before uploading.');if(target==='chat'&&!chatAcceptsProject(p.id))throw new Error('Return to the pinned agent’s project before attaching files.');if(target==='chat'&&(!state.scope||state.scope.startsWith('agent:')))throw new Error('Choose a SuperSurfer conversation first.');return {target,projectId:p.id,projectName:p.name,experimentId:state.experimentId,attachmentCount:target==='chat'?chatContext.get().length:0,scope:target==='chat'?state.scope:null};},
@@ -398,6 +403,7 @@ function renderMain(){
  codeEditor.prepareScope({projectId:state.projectId,experimentId:state.experimentId});
  if(state.data)ensureLayoutTab();
  const archiveItem=$('#archive-item'),item=state.experiment||experiment();archiveItem.hidden=state.view!=='workspace'||!state.experimentId;archiveItem.disabled=readOnly();archiveItem.setAttribute('aria-label',item?.archived?'Restore work item':'Archive work item');archiveItem.title=(item?.archived?'Restore':'Archive')+' '+itemLabel()+' · existing work continues';archiveItem.innerHTML=icon(item?.archived?'history':'archive');
+ for(const id of ['window-layout-toggle','dock-layout-toggle'])$('#'+id).hidden=!savedActivePage()||panelWindows.detached;
  const arrange=$('#arrange-page');arrange.hidden=!savedActivePage()||tileLayout.editing();arrange.disabled=readOnly();
  const arrangeControls=$('#tile-arrange-controls'),arrangeMarkup=tileLayout.toolbar();if(arrangeControls.innerHTML!==arrangeMarkup)arrangeControls.innerHTML=arrangeMarkup;
  const filesButton=$('#sidebar-add-files'),fileTile=activePage()?.tiles.find(tile=>tile.kind==='file_explorer');
@@ -544,6 +550,7 @@ function ensureViewDock(){
 }
 function dockChat(){
  const dock=ensureViewDock(),chat=$('#chat-panel'),rows=currentLayout();
+ if(panelWindows.detached&&!panelWindows.page(activePage())?.tiles.some(tile=>tile.kind==='chat')){if(chat.parentElement!==dock)dock.append(chat);chat.hidden=!state.chatVisible;dock.hidden=!state.chatVisible;dock.classList.remove('views-only');$('.app-shell').classList.remove('main-chat-view');$('#chat-resizer').hidden=!state.chatVisible||state.chatMaximized;return;}
  const chatView=rows?.find(row=>row.id==='chat');const place=chatView?.placement||'right';
  chat.style.order=String(chatView?.order??1000);
  const pageChat=pageHasTile('chat');
@@ -562,8 +569,8 @@ async function prepareCodeQuestion(text,notice='Selection context added to your 
  await loadAgentDirectory();if(state.projectId!==projectId||state.experimentId!==experimentId||requestedScope&&requestedScope!==state.scope)return;
  if(!state.scope||state.scope.startsWith('surfboard:'))syncAgentChooser();
  state.chatVisible=true;chatRevealScope=chatLayoutKey();
- if(currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
- applyChatLayout();dockChat();
+ if(!panelWindows.detached&&currentLayout()?.find(row=>row.id==='chat')?.placement==='main'){state.tab='chat';renderMain();}
+ applyChatLayout();dockChat();if(panelWindows.detached)startChatPolling();
  panelFocus.close();const input=$('#chat-input');if(typeof text==='object'){if(text.project_id!==state.projectId)return;if(!chatAcceptsProject(text.project_id))throw new Error('This pinned agent belongs to another project. Unpin it before attaching this selection.');chatContext.add(text);}else{const previous=input.value.trim();input.value=previous?previous+'\n\n'+text:text;}
  stashMessageDraft();resizeComposer();input.focus();toast(notice);
 }
@@ -629,12 +636,13 @@ function clearPageTileDocks(){
  standalonePdf.unmount();$('.app-shell').classList.remove('has-page-left','arranging-page');applySidebarLayout();
 }
 function applyPageTileSizes(page){
- for(const element of $$('[data-live-tile]')){const tile=page.tiles.find(tile=>tile.id===element.dataset.tileId);if(tile){element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');}}
+ const canvas=$('#page-tile-grid'),floating=page.arrangement==='windows'&&!panelWindows.detached;canvas?.classList.toggle('window-canvas',floating);if(canvas)canvas.style.minHeight=floating?Math.max(500,...page.tiles.filter(t=>(t.placement||'main')==='main').map(t=>(t.bounds?.y||0)+(t.bounds?.height||t.height)+24))+'px':'';
+ for(const element of $$('[data-live-tile]')){const tile=page.tiles.find(tile=>tile.id===element.dataset.tileId);if(tile){element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');const bounds=tile.bounds;if(floating&&(tile.placement||'main')==='main'&&bounds){Object.assign(element.style,{left:bounds.x+'px',top:bounds.y+'px',width:bounds.width+'px',height:bounds.height+'px'});}else for(const field of ['left','top','width','height'])element.style[field]='';}}
  const shell=$('.app-shell');shell.classList.toggle('has-page-left',page.tiles.some(tile=>tile.placement==='left')||tileLayout.editing());
  applySidebarLayout(page);applyChatLayout();
 }
 function renderTilePage(){
- const page=activePage(),main=$('#main'),key=chatLayoutKey()+':'+page.id;
+ const original=activePage(),page=panelWindows.page(original),main=$('#main'),key=chatLayoutKey()+':'+page.id;
  main.classList.remove('configured-editor-main','results-full-page');
  if(main.dataset.tilePageKey!==key||!$('#page-tile-grid')){
   if(main.contains($('#chat-panel')))ensureViewDock().append($('#chat-panel'));
@@ -681,7 +689,7 @@ function renderTilePage(){
 }
 function pageTileCatalog(){return (state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];}
 const tileLayout=createTileLayout({
- key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly,render:()=>renderMain(),resize:applyPageTileSizes,
+ key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly:()=>readOnly()||panelWindows.detached,render:()=>renderMain(),resize:applyPageTileSizes,
  save:savePageLayout
 });
 async function savePageLayout(page,base){
@@ -1547,13 +1555,15 @@ document.addEventListener('dragleave',event=>event.target.closest('.drag-over')?
 document.addEventListener('drop',async event=>{const row=event.target.closest('[draggable="true"][data-run]');if(row&&draggedRun&&row.dataset.run!==draggedRun){event.preventDefault();const runId=draggedRun;draggedRun=null;const rows=queuedRuns(),index=rows.findIndex(r=>r.id===row.dataset.run),after=event.clientY>row.getBoundingClientRect().top+row.getBoundingClientRect().height/2;const before=after?(rows[index+1]?.id||null):row.dataset.run;if(before!==runId)await perform('run.move',{run_id:runId,before_id:before},'Queue order updated.');}});
 document.addEventListener('dragend',()=>{draggedRun=null;$$('.dragging,.drag-over').forEach(el=>el.classList.remove('dragging','drag-over'));});
 async function refreshAccountModels(){await Promise.allSettled([accountGate.refresh(),fetchModelCatalog()]);renderChatPreferences();if(state.view==='settings'&&$('#settings-form')?.dataset.dirty!=='true'&&!editorSettings.dirty()&&!$('#modal').open)renderMain();}
+let chatPollingStarted=false;
+function startChatPolling(){if(chatPollingStarted)return;chatPollingStarted=true;refreshAccountModels();chatPoll();}
 async function chatPoll(){await refreshChat();setTimeout(chatPoll,state.chat?.busy?800:3000);}
 const accountGate=createAccountGate({api,action,readOnly,onAccount:account=>{state.account=account;if(state.data)updateChatHeader();}});
 await readNavigation();
 await refreshState(true);
+if(panelWindows.detached&&panelWindows.path)await openPageCode({path:panelWindows.path}).catch(error=>toast(error.message,true));
 syncClientTimezone();
-refreshAccountModels();
-chatPoll();
+if(!panelWindows.detached||panelWindows.page(activePage())?.tiles.some(tile=>tile.kind==='chat')){startChatPolling();}
 setInterval(()=>refreshState(),5000);
 setInterval(updateRunDurations,1000);
 setInterval(()=>{if(!document.hidden&&$('#modal').open)refreshRunTelemetry($('#run-telemetry-body')?.dataset.runId);},10000);

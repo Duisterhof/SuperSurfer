@@ -2,7 +2,7 @@
   "name": "workspace",
   "displayName": "SuperSurfer workspace",
   "publisher": "supersurfer",
-  "version": "0.1.33",
+  "version": "0.1.34",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -60,6 +60,12 @@
           },
           "default": [],
           "description": "Workspace spelling dictionary."
+        },
+        "supersurfer.editorOnly": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Use the compact editor surface inside SuperSurfer."
         }
       }
     }

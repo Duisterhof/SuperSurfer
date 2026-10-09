@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.33. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.34. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -50,6 +50,12 @@ changes its readiness. The main navigation divider is independent of compute
 registration and the editor's internal file column. Do not onboard another host
 because a narrow sidebar hides a path; inspect the existing node's saved contract.
 See [layout editing](../supersurfer-surfboard/references/view-layout.md).
+
+Movable or separately opened Compute panels still show workspace observations;
+they are not a new compute host or fresh capacity check. A compact editor's native
+workspace-trust decision controls extensions, not this node's Python/data readiness
+or the worker's shell permissions. Keep setup and candidate validation on the
+registered target; neither rearranging a panel nor trusting an editor checks a run.
 
 ## Separate the causes of a queue wait
 

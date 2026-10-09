@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.33. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.34. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -198,6 +198,13 @@ retains its original authority. Task right-click Archive/Restore and the Archive
 folder organize items; project Archive hides its tree under Archived projects.
 These app controls and chat archiving preserve history, running work and monitoring;
 restore is not a new assignment or launch.
+
+A user request to place source and PDF/Results panels freely can be completed
+through this item's `update_view_layout`: read first, set the page's arrangement
+and individual bounds, and retain stable tile IDs. Use the layout reference for
+sizes and conflicts. Opening a separate native panel window is a user GUI action,
+not a worker tool or another execution owner. A closed or detached view does not
+complete your deliverable, cancel a run or transfer your saved recovery grant.
 
 ## Tool index
 

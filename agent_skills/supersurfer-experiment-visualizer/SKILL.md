@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.33. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.34. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -38,6 +38,13 @@ or inventing another report. Use enabled `read_view_layout` / `update_view_layou
 tools for requested arrangement within your role scope, following
 [layout editing](../supersurfer-surfboard/references/view-layout.md). Keep the current
 report and data bindings; publish only when requested report content changes.
+
+For freely positioned views, arrange the existing tile with page
+`arrangement: windows` and explicit bounds through the scoped layout tool. The
+app also offers separate panel windows as a user viewing control; agents cannot
+detach one through publication or layout tools. Retain the report/source identity
+across these surfaces, while allowing each view its own chart interaction. A new
+window is not another writer or a reason to widen the comparison cohort.
 
 An empty numeric history without a fetch error is missing measurement evidence,
 not proof of a broken chart. Check the declared writers and their logger/run state;
