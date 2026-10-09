@@ -48,6 +48,30 @@ Mac arm64/x64 and Linux x64 package/source-byte and archive checks are performed
 by the release verifier. Actual unsigned macOS launch/Gatekeeper and a fresh real
 provider sign-in callback remain external-platform validation.
 
+# Native Mac packaging and contributor workflow — October 9, 2026
+
+Checked on Apple Silicon macOS with Node 24.4.1 and Python 3.12.11, using the
+0.1.39 source plus this packaging/documentation change (no new release).
+
+- Reproduced the original `codesign --verify --deep --strict` failure: “code has
+  no resources but signature indicates they must be present.”
+- `npm run package:mac` now produces an ad-hoc-signed arm64 app and ZIP.
+- `node tests/mac-package.electron.cjs` passes for both the built app and the
+  ZIP-extracted app: strict signature verification, isolated-profile launch,
+  usable setup screen, context isolation, renderer sandbox and no Node integration.
+- Capability-skill checker and its four regression tests pass. All 31 enabled
+  Node tests pass; five optional/environment-dependent cases are skipped.
+- Full Python suite with loopback access and `TMPDIR=/private/tmp`: 699 tests,
+  658 pass, seven failures, 34 skips. All seven failures are in the unchanged
+  node-onboarding tests because macOS rsync rejects `--protect-args`. The ordinary
+  `npm test` chain stops there; Node checks were run separately. An earlier
+  restricted run also blocked fixture sockets and used aliased temporary paths.
+- Repository documentation links, code fences and whitespace checks pass.
+
+The tests do not authenticate providers or connect to live workspaces. No installed
+app or running service was replaced. Browser-download Gatekeeper acceptance,
+Developer ID signing, notarization and Intel Mac launch are not claimed verified.
+
 # SuperSurfer 0.1.39 — October 9, 2026
 
 The Settings browser regression passes rendering, periodic refresh, scroll and

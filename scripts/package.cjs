@@ -17,6 +17,15 @@ require('./build-remote.cjs');
     icon: path.join(root, platform === 'darwin' ? 'desktop/icon.icns' : 'desktop/icon.png'),
     ignore: [/^\/dist(?:\/|$)/, /^\/tests(?:\/|$)/, /^\/\.git(?:\/|$)/, /^\/\.pytest_cache(?:\/|$)/, /^\/node_modules(?:\/|$)/, /__pycache__/],
     darwinDarkModeSupport: true,
+    // Renaming/repacking Electron invalidates its original bundle signature.
+    // Seal native Mac builds locally; this does not provide Developer ID trust.
+    osxSign: platform === 'darwin' && process.platform === 'darwin' ? {
+      identity: '-', identityValidation: false,
+      preAutoEntitlements: false, preEmbedProvisioningProfile: false,
+      // Ad-hoc identities have no Team ID for hardened-runtime library validation.
+      optionsForFile: () => ({ hardenedRuntime: false }),
+      continueOnError: false,
+    } : undefined,
   });
   for (const folder of apps) {
     if (platform === 'linux') {
