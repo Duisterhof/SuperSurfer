@@ -157,13 +157,13 @@ function openPanel(context,fields){
   if(fields.path!==undefined&&(typeof fields.path!=='string'||fields.path.length>2000||/[\x00-\x1f]/.test(fields.path)))throw new Error('Choose a valid source path.');
   const partition=context.window.webContents.session;const connection=context.connection,url=new URL('/',connection.origin);for(const key of ['project','item','page','tile','path'])url.searchParams.set('panel_'+key,fields[key]||'');
   const child=new BrowserWindow({width:940,height:760,minWidth:360,minHeight:260,title:fields.title+' — SuperSurfer',backgroundColor:nativeTheme.shouldUseDarkColors?'#1c201c':'#f8f8f6',titleBarStyle:'hiddenInset',trafficLightPosition:{x:14,y:14},webPreferences:{preload:path.join(__dirname,'preload.cjs'),session:context.window.webContents.session,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true}});
-  const childId=child.webContents.id;const panel={window:child,record:context.record,connection,hostConfig:connection.config,parent:context,parentPanel:true};panelWindows.set(child.webContents.id,panel);
+  const childId=child.webContents.id;const panel={window:child,record:context.record,connection,hostConfig:connection.config,parent:context,parentPanel:true,fields:{...fields}};panelWindows.set(child.webContents.id,panel);
   child.webContents.setWindowOpenHandler(({url})=>{openExternal(url);return {action:'deny'};});
   child.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===panel.connection.origin)return;}catch{}event.preventDefault();openExternal(url);});
   child.webContents.on('will-attach-webview',event=>event.preventDefault());
   child.webContents.on('will-prevent-unload',event=>{const choice=dialog.showMessageBoxSync(child,{type:'question',buttons:['Keep editing','Discard unsaved changes'],defaultId:0,cancelId:0,title:'Unsaved source files',message:'Discard unsaved editor changes?'});if(choice===1)event.preventDefault();else shuttingDown=false;});
-  child.on('closed',()=>{panelWindows.delete(childId);releaseConnection(panel.connection);if(!contexts().some(row=>row.window.webContents.session===partition))partition.webRequest.onBeforeSendHeaders(null);});
-  void child.loadURL(url.href);return {opened:true};
+  child.on('closed',()=>{if(!context.window.isDestroyed())context.window.webContents.send('panel-closed',{id:childId});panelWindows.delete(childId);releaseConnection(panel.connection);if(!contexts().some(row=>row.window.webContents.session===partition))partition.webRequest.onBeforeSendHeaders(null);});
+  void child.loadURL(url.href);return {opened:true,id:childId};
 }
 function connectionSettings() {
   const context=focused();if (!context) { makeWindow();return; }
@@ -189,6 +189,7 @@ else {
     ipcMain.handle('panel:open',(event,fields)=>openPanel(ownWindow(event),fields));
     ipcMain.handle('window:new',event => { ownWindow(event);makeWindow();return {opened:true}; });
     ipcMain.handle('configuration',event => ownWindow(event,true).record.config || {});
+    ipcMain.handle('panel:list',event=>{const parent=ownWindow(event);return [...panelWindows.values()].filter(panel=>panel.parent===parent).map(panel=>({id:panel.window.webContents.id,...panel.fields}));});
     ipcMain.handle('hosts:list',event => { ownWindow(event,true);return knownHosts(); });
     ipcMain.handle('connection:ready',event => {
       const context=ownWindow(event,true);

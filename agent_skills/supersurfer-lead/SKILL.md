@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.34. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.35. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -136,6 +136,11 @@ owner and preserve unrelated changes. Recorded agent patches help review a chang
 but are not a complete history of shell edits or a new PR gate. See
 [editor collaboration](../supersurfer-code-editor/SKILL.md). Changing project or
 experiment pane placement does not change these responsibilities or launch rights.
+Native editor trust governs extension activation, not worker scope, shell
+permissions or launch requirements. A file-watcher warning is not experiment-
+failure evidence; preserve saved source
+and existing ownership while checking the workspace-host runtime. Do not create
+another worker or require a manager handoff solely for that editor warning.
 When handing off a task that uses an attachment, preserve its connected-workspace
 path, selected lines, diff side or PDF page and supplied build identity, and any
 unsaved warning.
@@ -157,7 +162,9 @@ pages and specific work-item arrangements can be changed directly with
 `read_view_layout` and `update_view_layout` within this project. Preserve unrelated
 pages and each item's explicit override; follow
 [layout editing](../supersurfer-surfboard/references/view-layout.md). No manager
-relay is needed, and presentation edits grant no execution tools. A requested
+relay is needed, and presentation edits grant no execution tools. Nested dock
+splits and reserved empty drop space use those same version-checked page tools;
+preserve every main tile exactly once without changing worker ownership. A requested
 left-side file browser should reuse the existing `file_explorer` tile on that
 page, preserving its ID and other content. A visible Arrange draft is not proof
 that its layout was saved.
@@ -191,8 +198,9 @@ For an assigned page arrangement, choose docked tiles or movable windows through
 `update_view_layout`, retaining the same file/report/agent identities. Independent
 writing and research panels in one project do not need new experiments or workers.
 The app can open a panel in a separate native window, but this lead has no tool for
-that GUI action. A second view adds no launch intent or recovery ownership; preserve
-any existing worker's task and stop state.
+that GUI action. The original panel hides until its child closes, then restores
+in place. That move adds no launch intent or recovery ownership; preserve any
+existing worker's task and stop state.
 
 ## Tool index
 

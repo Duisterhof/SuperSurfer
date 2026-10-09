@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.34. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.35. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -39,12 +39,23 @@ tools for requested arrangement within your role scope, following
 [layout editing](../supersurfer-surfboard/references/view-layout.md). Keep the current
 report and data bindings; publish only when requested report content changes.
 
+A docked page's `layout` can nest horizontal/vertical splits and reserve empty
+drop space. Reuse the visualizer's main tile exactly once and preserve its report
+and input binding; this changes geometry, not measurement publication.
 For freely positioned views, arrange the existing tile with page
 `arrangement: windows` and explicit bounds through the scoped layout tool. The
 app also offers separate panel windows as a user viewing control; agents cannot
 detach one through publication or layout tools. Retain the report/source identity
-across these surfaces, while allowing each view its own chart interaction. A new
+across these surfaces, while allowing the child its own chart interaction. The
+original panel hides while detached and restores when the child closes; this is
+not a removal or republication of the report. A new
 window is not another writer or a reason to widen the comparison cohort.
+
+A native editor trust decision does not publish visualization source or satisfy
+its rendering checks. Use the normal versioned publication path.
+Editor file-watch errors are distinct from live-source transport or chart errors;
+use the declared source response and rendered view to diagnose the latter instead
+of republishing merely to clear a host-quota warning.
 
 An empty numeric history without a fetch error is missing measurement evidence,
 not proof of a broken chart. Check the declared writers and their logger/run state;

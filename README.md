@@ -1,3 +1,32 @@
+# SuperSurfer 0.1.35 — a desktop for your task
+
+Drag a panel grip to any panel edge to nest horizontal and vertical splits. Drag
+the divider to resize only that branch. **＋ Panel** brings another view into the
+page; drag it into a reserved space or onto an existing panel. The panel header’s
+**⋯** menu reserves space on any side. Close unused space with **×**. Named project
+and task pages use the same layout controls. **Windows** retains freely positioned
+windows, and **Dock** returns to splits. Layout changes preserve source drafts.
+
+Opening a panel in a separate window moves it out of the original page until its
+window closes, then restores it. Desktop reloads retain that separation. Save
+source buffers before moving an editor into another window. Each task remembers
+its last page, including custom pages, across task switches and app reopens.
+
+The VS Code engine keeps its genuine **Explorer**, line editor and extension host.
+SuperSurfer supplies the surrounding panels, chat, recorded-edit review and PDF
+viewer. Activity, status and native title chrome stay hidden; opening project trust
+no longer toggles the editor back into the full workbench. PDFs clicked in native
+Explorer open in SuperSurfer’s selectable multi-page overlay while Explorer stays
+usable. Terminal and Ports remain available in the compact toolbar. Monaco retains
+SuperSurfer’s own tree, and a separate File browser tile remains available.
+
+A project’s explicit native trust approval survives reconnects and changed tunnel
+origins. Only the exact approved project and its owned editor session are restored.
+New or relocated projects still require native approval; revoking approval clears
+remembered consent. Workspace Trust remains enabled. Generated environments and
+caches are excluded from file watching by default, preserving user overrides and
+source watching. Host-wide watcher exhaustion still needs capacity on the host.
+
 # SuperSurfer 0.1.34 — movable panels and an integrated editor
 
 Drag a panel’s grip at any time to split or rearrange a docked page. **Windows**

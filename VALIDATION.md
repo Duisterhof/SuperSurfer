@@ -1,3 +1,30 @@
+# SuperSurfer 0.1.35 nested desktops — October 8, 2026
+
+The full backend suite passes **652 Python tests**. All **24 enabled Node checks**
+pass; four optional localhost SSH checks were skipped. The native Electron lifecycle
+regression passes host isolation, detached-panel close notifications, restored window
+preferences, main-frame credentials and denied untrusted IPC. Nested layout validation rejects
+missing/duplicate/foreign leaves, sidebar leaves, invalid ratios and oversized trees.
+Native trust tests cover exact-project consent, unrelated/relocated projects and
+revocation. Watcher tests preserve custom and explicitly disabled exclusions.
+
+Real browser fixtures verify nested mixed-axis panels, independent divider changes,
+reserved space receiving another app and retained unsaved source. Existing page CRUD,
+scoped defaults, live results reloading and task navigation pass. Returning to a task
+restores its last custom page before and after reload. The writing regression compiles
+real multi-file LaTeX, recompiles saves, retains the last good PDF on errors and keeps
+selected text tied to its build. Narrow windows retain desktop splits rather than
+silently changing the user’s arrangement.
+
+Pinned real Code OSS tests verify genuine Explorer with hidden activity chrome,
+Terminal reuse, Ports, native Explorer PDF/source round trips and the owned two-page
+PDF viewer. A fresh browser on a different origin restores the exact previously
+approved project without another native prompt. Separate-window browser tests verify
+hide/restore semantics, source protection and unchanged parent navigation.
+
+Mac packages are cross-built on Linux; actual Mac launch is not exercised here.
+Fixture tests do not submit or stop production GPU jobs.
+
 # SuperSurfer 0.1.34 movable panels and integrated editor — October 8, 2026
 
 The full backend suite passes **647 Python tests**. All **20 enabled Node checks**

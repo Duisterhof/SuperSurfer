@@ -75,6 +75,29 @@ class EditorServiceTests(unittest.TestCase):
     def work_item(self, project=None):
         return self.service.store.create(project or self.project, "Feature", "Build and check the feature")
 
+    def test_native_project_trust_is_scoped_and_revocable(self):
+        from unittest.mock import patch
+        workbench = self.service.workbench
+        workbench.root.mkdir(parents=True, exist_ok=True)
+        with patch.object(workbench, 'start'):
+            first = workbench.open({'project_id': self.pid, 'client_id': 'native-project-window-a'})
+        self.assertEqual([], first['approved_trust_paths'])
+        workbench.bridge({'session': first['id'], 'operation': 'poll', 'trusted': False})
+        self.assertEqual([], workbench.public(workbench.sessions[first['id']])['approved_trust_paths'])
+        workbench.bridge({'session': first['id'], 'operation': 'poll', 'trusted': True})
+        with patch.object(workbench, 'start'):
+            second = workbench.open({'project_id': self.pid, 'client_id': 'native-project-window-b'})
+        self.assertEqual(str(self.repository.resolve()), second['approved_trust_paths'][0])
+        self.assertNotEqual(first['url'], second['url'])
+        other = self.service.action('project.add', {'name': 'other', 'repo': str(self.root/'other'), 'surfboard_template': 'software'})
+        with patch.object(workbench, 'start'):
+            unrelated = workbench.open({'project_id': other['id'], 'client_id': 'native-project-window-a'})
+        self.assertEqual([], unrelated['approved_trust_paths'])
+        row = dict(workbench.sessions[first['id']], repo=str(self.root/'relocated'))
+        self.assertEqual([], workbench.public(row)['approved_trust_paths'])
+        workbench.bridge({'session': first['id'], 'operation': 'poll', 'trusted': False})
+        self.assertEqual([], workbench.public(workbench.sessions[second['id']])['approved_trust_paths'])
+
     def test_editor_routes_require_auth_and_reject_foreign_origins(self):
         (self.repository / "file.txt").write_text("private source")
         for operation in ("tree", "file", "changes", "diff", "agents"):

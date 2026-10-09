@@ -14,3 +14,6 @@
 /* Independent tiles already supply a compact header and refresh control. */
 .page-tile[data-tile-kind=file_explorer]>.page-tile-heading,.page-tile[data-tile-kind=agent_changes]>.page-tile-heading{display:none}
 .code-coverage{color:var(--muted,#777);padding:4px 7px;font-size:10px;line-height:1.5}.code-coverage summary{cursor:pointer}.code-coverage p{margin:5px 0 0;overflow-wrap:anywhere}
+
+/* Native Explorer owns navigation; SuperSurfer owns the PDF overlay and chat. */
+.workbench-frame{position:relative}.native-pdf-overlay{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--background,#fff);min-width:0;overflow:hidden}.native-pdf-overlay .native-pdf-view{flex:1;min-height:0;overflow:auto}

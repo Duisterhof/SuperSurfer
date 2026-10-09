@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.34. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.35. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
@@ -57,8 +57,8 @@ and their explicit page overrides remain independent.
 
 Custom `pages.project` and `pages.item` contain ordered `{id, title, tiles}` lists.
 Use stable IDs and the returned `available_tiles`; tiles have `id`, `kind`,
-`span` (number 1–12, including fractional widths), `height` (160–5000; PDF minimum
-400), and optional `placement`
+`span` (number 1–12, including fractional widths), `height` (160–5000, including
+PDFs), and optional `placement`
 (`main`, `left`, `right`). Left means the navigation sidebar. Pages may specify
 `left_width` (160–600 px) or `right_width` (280–760 px), independently of the
 window's ordinary navigation width. Moving Repository files left reuses its tile
@@ -76,9 +76,22 @@ the existing docked behavior. A movable tile may include
 width 200–5000 px and height 160–5000 px. Keep `span`, tile `height` and placement
 for docked/sidebar rendering, and preserve existing bounds when changing another
 property. Use the layout tool for requested geometry, not a policy proposal.
+A docked page may also contain `layout`, a binary split tree. Leaves are
+`{tile: "existing-main-tile-id"}` or reserved `{empty: true}` space. Branches are
+`{axis: "x" | "y", ratio: 0.05–0.95, first: node, second: node}`: x splits left/right,
+y splits top/bottom and ratio is the first child's fraction. Every main tile must
+appear exactly once, with no sidebar tile in the tree; at most 63 total nodes and
+depth 16. Preserve this tree when editing another page property. Use mixed nested
+axes or empty drop space for the requested app arrangement, not duplicated viewers
+or a workflow-policy proposal; see the shared layout reference for a valid example.
 Separate native panel windows are a user GUI feature; this configurator has no
-native-window tool. Neither a detached panel nor a trusted editor grants an agent
-another scope, execution capability or extension installation permission.
+native-window tool. Detachment temporarily hides the original panel until the
+child closes; this does not remove its saved tile or change its source identity.
+Neither a detached panel nor a trusted editor grants an agent
+another scope, execution capability or extension installation permission. Native
+editor trust is not a surfboard role gate. Watcher defaults are editor-runtime
+settings, not workflow gates; preserve user overrides rather than encoding a
+host-quota workaround into every task's graph.
 
 The older `layouts.project` / `layouts.item` rows remain separate from page tiles:
 rows contain `id`, `placement` (`main`, `right`, `hidden`) and numeric `order`.

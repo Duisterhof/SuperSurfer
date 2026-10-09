@@ -33,8 +33,7 @@ for that separate request.
 Pages contain `{id, title, tiles}` and optional integer sidebar widths
 `left_width` (160–600 px), `right_width` (280–760 px). Each tile has `id`, a `kind` from
 `available_tiles`, `span` (number 1–12; fractional widths are supported), `height`
-(integer 160–5000; PDF minimum
-400), and optional `placement: "main" | "left" | "right"` (main by default).
+(integer 160–5000, including PDFs), and optional `placement: "main" | "left" | "right"` (main by default).
 Order comes from the arrays. Preserve IDs, titles, source paths and unrelated
 pages; at most 24 pages, 16 tiles per page and one of each kind per page. The older
 `rows` side-panel layout is returned for context; the agent update accepts pages,
@@ -47,11 +46,42 @@ and height 160–5000 px. Preserve its docked `span`, tile height and sidebar pl
 as well as any unrelated bounds. Moving a window does not change its file/report
 binding, and restoring docked mode does not require new tiles or agents.
 
+Docked pages may also include an optional binary `layout` tree:
+
+- `{tile: "tile-id"}` uses an existing main tile. Every main tile must appear
+  exactly once; tiles placed left/right belong to their sidebar, not this tree.
+- `{empty: true}` reserves blank drop space without adding a tile, source or agent.
+- `{axis: "x" | "y", ratio: 0.05–0.95, first: node, second: node}` divides the
+  available area. `x` places first left and second right; `y` places first above
+  second. `ratio` is the first child's fraction and defaults to 0.5 if omitted.
+
+The tree accepts at most 63 total nodes and depth 16, counting the root at depth
+zero. Preserve existing trees during unrelated edits; an omitted tree keeps the
+legacy span-based derivation. Keep docked trees when switching to movable windows
+so returning to docking retains the requested arrangement. An empty leaf is not
+an omitted page, hidden tile, workflow block or execution dependency.
+
+For example, source on the left with a PDF above notes on the right uses:
+
+```json
+{"axis":"x","ratio":0.6,"first":{"tile":"source"},"second":{"axis":"y","ratio":0.7,"first":{"tile":"pdf"},"second":{"tile":"notes"}}}
+```
+
+Those three IDs must already be the page's main tiles. To reserve a place beside
+one existing panel, split its leaf against `{empty: true}` instead of adding a
+second editor or dummy tile. Use the same scoped `update_view_layout` with both
+current versions and the complete preserved pages list. Splitter dragging updates
+ratios; no source save, compiler invocation or capability change is implied.
+
 Native separate windows use the tile's user GUI control, not this agent tool.
 Do not create another page, report or owner to imitate that action. Detached views
 keep the original project/item/path identity but are separate client instances;
 chart interactions and editor drafts need not synchronize. Save dirty editor work
 before opening its separate view and preserve conflict checks on later disk edits.
+The original window hides that panel until the child closes, then restores its
+original position. A docked location may appear as reserved empty space during
+that period; this is temporary client presentation, not removal of the saved tile.
+Do not persist a page deletion merely because its panel is currently detached.
 Closing a panel window does not stop remote work, monitoring or compilation.
 
 An existing PDF can use a `pdf` tile with a repository-relative `.pdf` `path`,

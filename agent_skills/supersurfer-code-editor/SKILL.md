@@ -2,20 +2,29 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.34. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.35. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
-to be installed and selected. Its compact editor surface retains the native
-language/extension engine, while SuperSurfer supplies repository browsing and PDF
-viewing instead of a second full IDE Explorer. Inspect the selected engine rather
+to be installed and selected. Its compact surface retains the genuine VS Code
+Explorer and language/extension engine, while hiding the surrounding activity,
+status and title chrome. Monaco continues to use SuperSurfer's own file tree;
+standalone File explorer tiles remain available with either engine. SuperSurfer
+supplies multi-page PDF viewing for both engines. Inspect the selected engine rather
 than assuming an extension exists. Native workspace trust is still enforced: use
 **Trust project…** for the user's trust decision; do not silently disable restricted
-mode, copy trusted-state files or equate YOLO with editor-folder trust.
+mode, copy trusted-state files or equate YOLO with editor-folder trust. SuperSurfer
+remembers approval only after the native editor reports the project trusted, for
+that project's exact canonical repository. It restores that same approval for a
+new tunnel/window origin, including its owned editor-session workspace file;
+new or relocated projects stay restricted. Native trust revocation clears the
+remembered approval. This is app-owned persistence, not an agent trust-bypass
+tool. Trust is separate from watcher availability and does not change read-only
+restrictions, agent permissions or research-launch authority.
 The `editor` surfboard block is a view; it adds no agent shell tool, executable
 action or launch permission.
 
@@ -23,8 +32,10 @@ Custom pages can place File explorer, Code editor and Agent changes as separate
 tiles on any project, including Research, without adding an editor workflow block.
 They can sit beside chat or other views and share repository identities and the
 editor's buffers; opening a file from an explorer or switching pages does not
-create another checkout or agent. The editor tile can omit its built-in sidebar
-when a separate explorer is present. Opening a file preserves the browser; it
+create another checkout or agent. The Monaco editor tile can omit its built-in
+sidebar when a separate explorer is present. The selected Code OSS engine uses its native
+Explorer; do not mistake that filesystem view for a second checkout. Opening a
+file preserves the browser; it
 does not switch to the workflow diagram. If the page lacks an editor, the app
 reuses an existing editor page or creates a File viewer page. Page arrangement is a presentation choice,
 not a new source owner or permission. Use enabled `read_view_layout` and
@@ -59,7 +70,11 @@ use the existing scoped layout tools directly; see the layout reference above.
 Use the visible connected-workspace
 absolute path to identify the file; it is a path on the workspace host, not the
 Mac desktop or a compute node. Quick open (Cmd/Ctrl+P) searches repository files.
-Source files and PDFs open in editor tabs. The PDF view scrolls through the
+Source files and PDFs open in editor tabs. Selecting a repository PDF from the
+native Explorer hands its scoped path to SuperSurfer's PDF overlay; the Explorer
+remains usable, and selecting a source file or **Back to source** returns to code.
+That handoff neither compiles the PDF nor requires a desktop-only PDF extension.
+The PDF view scrolls through the
 whole document; only nearby pages need to be rendered at once. A missing canvas
 outside the visible range is not proof that those pages are absent.
 
@@ -77,6 +92,11 @@ Installed extensions expose Configure, which opens their native `@ext` settings
 in the File viewer when the VS Code workbench engine is selected; it does not
 install another extension or change task policy. Native extension settings and commands remain available through the compact
 editor; SuperSurfer's Extensions control opens its catalog/settings workflow.
+Compact startup selects the native Explorer and closes the auxiliary sidebar
+idempotently; extension-host restarts after trust approval must not toggle the
+surrounding full IDE chrome back into view. This
+presentation behavior preserves native user keybindings and does not reactivate
+an extension that is incompatible with the runtime.
 Compatible VSIX packages are supported by the native extension runtime. Desktop-only
 UI extensions with no web entry point can be installed yet unavailable in this
 browser-backed editor; a catalog entry is not proof of usable activation. Use
@@ -85,6 +105,14 @@ Microsoft Marketplace, proprietary-extension compatibility or Grammarly integrat
 A catalogue/network failure is distinct from a missing extension or failed runtime
 installation. Read the visible operation status before retrying an install; a search
 result or accepted install request is not evidence that an extension is active.
+A file-watcher warning is another distinct runtime failure. Generated work and
+cache directories are excluded by default; existing user watcher overrides and
+native keybindings are preserved. Check the actual saved file before assuming an
+external edit has appeared in the editor. Watch capacity belongs to the connected
+host and may be shared with unrelated IDEs; if its inotify quota is exhausted,
+report the host limit rather than killing other editors or declaring the user's
+source inaccessible. Raising a host-wide limit requires its administrator's
+normal authorization, not a new surfboard block or agent permission level.
 Install only for requested editor capabilities, without treating installation as
 a way to evade an agent-tool denial. These workspace editor preferences and installs
 are app Settings operations, not a new managed tool granted by a surfboard block.
@@ -125,11 +153,17 @@ pane width instead of creating a duplicate checkout to work around presentation.
 A page can use `arrangement: docked` or `arrangement: windows`; movable tiles
 have independent saved position/size rather than requiring a new editor per size.
 Use scoped layout tools for requested geometry, preserving tile IDs and file paths.
+Docked pages can use a nested `layout` split tree for mixed side-by-side and stacked
+panels, including reserved `{empty: true}` drop space. Every main tile appears
+once; sidebars are outside that tree. Preserve existing leaves and follow the
+layout reference's bounds rather than generating duplicate source editors.
 The panel's separate-window button is a user GUI action; there is no agent tool to
 open it. Editor detachment requires saved buffers and confirmed native dirty state,
-then opens another client with its own drafts. It does not silently transfer or
-synchronize dirty text across windows. Re-read saved source before subsequent edits;
-closing a panel view does not stop the worker or save its editor buffer.
+then opens another client with its own drafts. While that child window is open,
+the original window hides the detached panel; closing the child restores its
+original position without rewriting the saved layout. It does not silently transfer
+or synchronize dirty text across windows. Re-read saved source before subsequent
+edits; closing a panel view does not stop the worker or save its editor buffer.
 
 **Agents** shows exact recorded Codex file-change patches attributed to a named
 conversation, with time and turn provenance. Patches may contain partial hunks or

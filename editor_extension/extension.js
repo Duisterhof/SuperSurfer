@@ -26,14 +26,17 @@ function activate(context) {
   }
   context.subscriptions.push(vscode.commands.registerCommand('supersurfer.askAgent',()=>selection().catch(error=>vscode.window.showErrorMessage(error.message))));
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument(doc=>{if(doc.uri.scheme==='file')request({operation:'saved',path:doc.uri.fsPath}).catch(()=>{});}));
+  context.subscriptions.push(vscode.window.registerCustomEditorProvider('supersurfer.pdf',{async openCustomDocument(uri){return {uri,dispose(){}};},async resolveCustomEditor(document,panel){panel.webview.html='<!doctype html><html><body>Opening SuperSurfer PDF viewer…</body></html>';panel.onDidChangeViewState(event=>{if(event.webviewPanel.active)request({operation:'open_pdf',path:document.uri.fsPath}).catch(()=>{});});await request({operation:'open_pdf',path:document.uri.fsPath});}},{supportsMultipleEditorsPerDocument:false}));
+  context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor=>{if(editor?.document.uri.scheme==='file')request({operation:'open_source',path:editor.document.uri.fsPath}).catch(()=>{});}));
   async function command(item){
+    if(item.kind==='files')return vscode.commands.executeCommand('workbench.view.explorer');
     if(item.kind==='selection')return selection();
     if(item.kind==='trust')return vscode.commands.executeCommand('workbench.trust.manage');
     if(item.kind==='terminal'){
       const terminal=vscode.window.activeTerminal||vscode.window.createTerminal({name:'Terminal',cwd:vscode.workspace.workspaceFolders?.[0]?.uri});
       terminal.show();return;
     }
-    if(item.kind==='ports')return vscode.commands.executeCommand('remoteExplorer.toggleForwardedPortsView');
+    if(item.kind==='ports')return vscode.commands.executeCommand('~remote.forwardedPorts.focus');
     if(item.kind==='extensions')return vscode.commands.executeCommand('workbench.view.extensions');
     if(item.kind==='settings')return vscode.commands.executeCommand('workbench.action.openSettings','@ext:'+item.extension_id);
     if(item.kind==='theme')return vscode.commands.executeCommand('workbench.action.selectTheme');
@@ -57,7 +60,7 @@ function activate(context) {
       for(const item of received.commands){try{await command(item);}catch(error){await request({operation:'error',error:error.message}).catch(()=>{});}ack.push(item.id);}
     }catch{}finally{if(!stopped)timer=setTimeout(poll,800);}
   }
-  if(vscode.workspace.getConfiguration('supersurfer').get('editorOnly'))vscode.commands.executeCommand('workbench.action.toggleZenMode').catch(()=>{});
+  if(vscode.workspace.getConfiguration('supersurfer').get('editorOnly'))for(const command of ['workbench.view.explorer','workbench.action.closeAuxiliaryBar'])vscode.commands.executeCommand(command).catch(()=>{});
   stopped=false;poll();context.subscriptions.push({dispose(){stopped=true;clearTimeout(timer);}});
 }
 function deactivate(){stopped=true;clearTimeout(timer);}

@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.34. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.35. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -57,6 +57,10 @@ existing live source bindings and verify the requested view at its actual size.
 HTML edited in the Code editor is a shared source file; unsaved text or a reviewed
 agent patch does not mean the report was published. Preserve concurrent edits and
 use the normal versioned publishing tool when publication was requested.
+A managed-editor watcher warning is not evidence that W&B fetching or the report
+failed. Live measurement refresh uses its declared source bridge, not the editor's
+file-watch quota; diagnose those paths independently. Editor trust does not
+publish changed HTML; use the normal versioned publication call.
 Fullscreen and restore change the view, not its report identity or evidence. Keep
 existing interactive chart/media state instead of republishing to enlarge it.
 A source/diff/PDF attachment can describe a requested revision; preserve its
@@ -79,9 +83,14 @@ This does not authorize altering metric keys, comparison cohorts or scientific
 content, and it does not require republishing the report.
 
 Docked and movable-window layouts keep the same report and declared sources.
+A docked page's nested split tree can place an existing report beside source or
+above notes and reserve empty drop space without another publication. Preserve
+each main tile exactly once and the other pages when changing that tree.
 Use the scoped layout tool to set geometry rather than publishing an HTML wrapper
 to imitate draggable panels. The user's separate-window control opens another view
-of that report; it may refetch sources and initialize its own chart interaction.
+of that report; the original panel hides until the child closes and restores to
+its saved position. The child may refetch sources and initialize its own chart
+interaction.
 Do not promise synchronized zoom across windows or treat a reopened view as a new
 scientific sample. No result-publication tool opens native desktop windows.
 

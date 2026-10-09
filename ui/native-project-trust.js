@@ -1,0 +1,8 @@
+// The pinned Code OSS runtime keeps native trust in browser shared storage.
+// Tunnel origins change; restore only the exact paths whose native approval the
+// service witnessed. New projects and relocated folders remain restricted.
+export async function restoreNativeProjectTrust(paths){
+ if(!Array.isArray(paths)||paths.length!==2||paths.some(path=>typeof path!=='string'||!path.startsWith('/')||/[\x00-\x1f]/.test(path)))return;
+ const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('vscode-web-state-db-global-shared',1);request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains('ItemTable'))request.result.createObjectStore('ItemTable');};request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+ try{await new Promise((resolve,reject)=>{const transaction=db.transaction('ItemTable','readwrite'),store=transaction.objectStore('ItemTable'),key='content.trust.model.key',request=store.get(key);transaction.oncomplete=resolve;transaction.onabort=()=>reject(transaction.error);transaction.onerror=()=>reject(transaction.error);request.onsuccess=()=>{let model;try{model=request.result?JSON.parse(request.result):{uriTrustInfo:[]};if(!Array.isArray(model.uriTrustInfo))throw new Error('Invalid native project trust data');}catch{transaction.abort();return;}for(const path of paths){const uri={$mid:1,scheme:'vscode-remote',authority:location.host,path};if(!model.uriTrustInfo.some(row=>row.trusted===true&&row.uri?.scheme===uri.scheme&&row.uri.authority===uri.authority&&row.uri.path===uri.path))model.uriTrustInfo.push({trusted:true,uri});}store.put(JSON.stringify(model),key);};});}finally{db.close();}
+}

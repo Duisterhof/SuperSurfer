@@ -124,3 +124,20 @@ class WindowGeometryTests(unittest.TestCase):
             bounds={'x':0,'y':0,'width':600,'height':500};bounds[field]=value
             with self.assertRaises(SurfboardError):validate_pages([{'id':'writing','title':'Writing','tiles':[{'id':'pdf','kind':'pdf','bounds':bounds}]}],board,'item')
         with self.assertRaises(SurfboardError):validate_pages([{'id':'writing','title':'Writing','arrangement':'execute','tiles':[]}],board,'item')
+
+
+class NestedDockTests(unittest.TestCase):
+    def test_mixed_splits_with_empty_space_preserve_all_panels(self):
+        page={'id':'desk','title':'Desk','tiles':[{'id':'code','kind':'editor'},{'id':'pdf','kind':'pdf'}], 'layout':{'axis':'x','ratio':.6,'first':{'axis':'y','ratio':.7,'first':{'tile':'code'},'second':{'empty':True}},'second':{'tile':'pdf'}}}
+        result=validate_pages([page],template('writing'),'item')[0]
+        self.assertEqual(page['layout'],result['layout'])
+        for tree in ({'tile':'code'},{'tile':'missing'},{'axis':'x','ratio':True,'first':{'tile':'code'},'second':{'tile':'pdf'}},{'axis':'x','ratio':.99,'first':{'tile':'code'},'second':{'tile':'pdf'}},{'axis':'x','ratio':.5,'first':{'tile':'code'},'second':{'tile':'code'}},{'empty':False}):
+            with self.subTest(tree=tree), self.assertRaises(SurfboardError):
+                validate_pages([{**page,'layout':tree}],template('writing'),'item')
+    def test_sidebar_tiles_are_not_dock_leaves_and_depth_is_bounded(self):
+        page={'id':'desk','title':'Desk','tiles':[{'id':'code','kind':'editor','placement':'left'}]}
+        self.assertEqual({'empty':True},validate_pages([{**page,'layout':{'empty':True}}],template('writing'),'item')[0]['layout'])
+        with self.assertRaises(SurfboardError):validate_pages([{**page,'layout':{'tile':'code'}}],template('writing'),'item')
+        tree={'empty':True}
+        for _ in range(17):tree={'axis':'y','ratio':.5,'first':tree,'second':{'empty':True}}
+        with self.assertRaises(SurfboardError):validate_pages([{**page,'layout':tree}],template('writing'),'item')

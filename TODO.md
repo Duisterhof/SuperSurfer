@@ -1,3 +1,14 @@
+## Completed in 0.1.35
+
+- Nested horizontal/vertical splits with independent divider resizing.
+- Always-available panel dragging, edge preview, palette and reservable empty space.
+- Move separate panels out of their original view and restore them on closure.
+- Remember each task’s last page across navigation and desktop reopens.
+- Genuine native Explorer inside compact Code OSS; owned multi-page PDF handoff.
+- Idempotent compact startup and exact-project trust persistence across origins.
+- Generated-file watcher defaults that preserve source and user overrides.
+- Revised all eleven capability skills for final behavior.
+
 ## Completed in 0.1.34
 
 - Drag-to-split/rearrange without Arrange; freely positioned and resized windows.
