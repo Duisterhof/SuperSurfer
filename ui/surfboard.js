@@ -27,10 +27,10 @@ export function viewLayoutRows(board,level='item') {
 }
 
 export function pageLayoutAvailableTiles(board,level='item') {
- const rows=viewLayoutCatalog(board,level).map(row=>({...row,title:row.label,...(row.kind==='pdf'?{min_height:400}:{})}));
+ const rows=viewLayoutCatalog(board,level).map(row=>({...row,title:row.label,...(row.kind==='pdf'?{min_height:160}:{})}));
  let editor=rows.find(row=>row.kind==='editor');if(!editor){editor={id:'editor',kind:'editor',label:'Code editor',title:'Code editor'};rows.push(editor);}
  for(const [kind,label] of [['file_explorer','Repository files'],['agent_changes','Agent changes']])rows.push({...editor,id:kind,kind,label,title:label});
- if(!rows.some(row=>row.kind==='pdf'))rows.push({id:'pdf',kind:'pdf',label:'PDF viewer',title:'PDF viewer',min_height:400});
+ if(!rows.some(row=>row.kind==='pdf'))rows.push({id:'pdf',kind:'pdf',label:'PDF viewer',title:'PDF viewer',min_height:160});
  rows.push({id:'todos',kind:'todos',label:'To-dos',title:'To-dos'});
  return rows;
 }

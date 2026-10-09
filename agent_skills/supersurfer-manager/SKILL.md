@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.33. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.34. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -191,6 +191,13 @@ retains its original authority. Task right-click Archive/Restore and the Archive
 folder organize items; project Archive hides its tree under Archived projects.
 These app controls and chat archiving preserve history, running work and monitoring;
 restore is not a new assignment or launch.
+
+A requested movable-panel arrangement is workspace presentation work, not an
+assignment to supervise the panel's owner. Use scoped `update_view_layout` with
+`arrangement: windows` and tile bounds after reading both versions; preserve the
+project/item, file, report and task identities. The app's separate-window control
+opens another client view; no manager tool detaches a panel, and closing that view
+does not stop its remote work. Do not message each owner to confirm a layout change.
 
 ## Tool index
 

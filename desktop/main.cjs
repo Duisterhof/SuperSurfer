@@ -8,7 +8,9 @@ const { knownHosts } = require('./hosts.cjs');
 const themes = require('./themes.cjs');
 const { workspacePreference } = require('./preferences.cjs');
 const { WindowStore, configKey, windowLabel } = require('./windows.cjs');
-const windows = new Map();
+const windows = new Map(), panelWindows = new Map();
+const contexts=()=>[...windows.values(),...panelWindows.values()];
+const releaseConnection=(connection)=>{if(connection&&!contexts().some(row=>row.connection===connection))connection.child?.kill();};
 let store, shuttingDown = false;
 const setupPath = path.join(__dirname, 'setup.html');
 const setupUrl = pathToFileURL(setupPath).href;
@@ -16,7 +18,7 @@ const setupUrl = pathToFileURL(setupPath).href;
 function loadTheme() { try { const theme = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'appearance.json'), 'utf8')).theme; return typeof theme === 'string' && (['light','dark','system'].includes(theme) || theme.startsWith('vscode:')) ? theme : 'system'; } catch { return 'system'; } }
 function themeSource(value) { if (['light','dark','system'].includes(value)) return value; const theme = themes.listThemes(app.getPath('userData')).themes.find(t => t.id === value); return /light/i.test(theme?.type || '') ? 'light' : 'dark'; }
 function ownWindow(event, setupOnly = false) {
-  const context = [...windows.values()].find(item => item.window.webContents === event.sender);
+  const context = contexts().find(item => item.window.webContents === event.sender);
   const message = setupOnly ? 'Connection settings are available only in the setup window.' : 'This action is available only in a trusted workspace window.';
   if (!context || event.senderFrame !== context.window.webContents.mainFrame) throw new Error(message);
   const url = event.senderFrame.url;
@@ -59,6 +61,7 @@ async function connectWindow(context, raw) {
   let next;
   try {
     const config = validateConfig(raw);
+    if(context.connection&&configKey(context.connection.config)!==configKey(config)&&[...panelWindows.values()].some(row=>row.parent===context))throw new Error('Close this workspace’s separate panels before changing its host, or use New Window for the other host.');
     sendStatus(context, 'connecting', `Connecting to ${config.mode === 'local' ? 'this machine' : config.target}…`);
     next = await connect(config, message => sendStatus(context, 'connecting', message), {signal:attempt.signal});
     if (attempt.signal.aborted || context.attempt !== attempt || context.window.isDestroyed()) { next.child?.kill();return {error:'Connection cancelled.'}; }
@@ -66,9 +69,10 @@ async function connectWindow(context, raw) {
     if (changedHost) await context.window.webContents.session.clearStorageData();
     attempt.signal.throwIfAborted();
     store.connected(context.record, next.config);
-    const previous = context.connection;context.connection = next;previous?.child?.kill();
+    const previous = context.connection;context.connection = next;releaseConnection(previous);for(const panel of panelWindows.values())if((panel.parent===context||panel.parent.window.isDestroyed()&&panel.parent.record.id===context.record.id)&&configKey(panel.hostConfig)===configKey(next.config)){panel.parent=context;panel.connection=next;const url=new URL(panel.window.webContents.getURL());void panel.window.loadURL(next.origin+'/'+url.search);}releaseConnection(previous);
     context.window.setTitle(windowLabel(context.record) + ' — SuperSurfer');updateMenu();
     next.child?.once('exit', () => {
+      for(const panel of panelWindows.values())if(panel.connection===next){panel.connection=null;sendStatus(panel,'error','Connection lost. The panel and remote work are preserved. Reopen the same host to reconnect.');}
       if (context.connection !== next || shuttingDown || context.window.isDestroyed()) return;
       context.connection = null;
       sendStatus(context, 'error', 'Connection lost. Your remote work is still running.');
@@ -113,7 +117,8 @@ function makeWindow(record = store.create()) {
   partition.setPermissionRequestHandler((_contents,_permission,callback) => callback(false));
   partition.webRequest.onBeforeSendHeaders((details,callback) => {
     // Credentials belong to this window's main frame and exact loopback origin.
-    if (context.connection && details.webContentsId === window.webContents.id && details.frame === window.webContents.mainFrame && details.frame.url.startsWith(context.connection.origin+'/') && details.url.startsWith(context.connection.origin+'/api/')) details.requestHeaders.Authorization = `Bearer ${context.connection.token}`;
+    const owner=contexts().find(row=>row.window.webContents.id===details.webContentsId),connection=owner?.connection;
+    if(connection&&details.frame===owner.window.webContents.mainFrame&&details.frame.url.startsWith(connection.origin+'/')&&details.url.startsWith(connection.origin+'/api/'))details.requestHeaders.Authorization=`Bearer ${connection.token}`;
     callback({requestHeaders:details.requestHeaders});
   });
   window.once('ready-to-show', () => { if (record.maximized) window.maximize();window.show(); });
@@ -138,10 +143,27 @@ function makeWindow(record = store.create()) {
   window.on('close', () => { clearTimeout(geometryTimer);saveWindow(context); });
   window.on('closed', () => {
     if (!shuttingDown) { record.open=false;store.save(); }
-    windows.delete(record.id);context.attempt?.abort();context.connection?.child?.kill();
-    partition.webRequest.onBeforeSendHeaders(null);if (!shuttingDown) updateMenu();
+    windows.delete(record.id);context.attempt?.abort();releaseConnection(context.connection);
+    if(!contexts().some(row=>row.window.webContents.session===partition))partition.webRequest.onBeforeSendHeaders(null);if (!shuttingDown) updateMenu();
   });
   void showSetup(context, !!record.config);updateMenu();return context;
+}
+function openPanel(context,fields){
+  if(!context.connection)throw new Error('Connect a workspace before opening a panel window.');
+  if(!fields||typeof fields!=='object'||Object.keys(fields).some(key=>!['project','item','page','tile','title','path'].includes(key)))throw new Error('Choose a project panel.');
+  const valid=value=>typeof value==='string'&&/^[A-Za-z0-9_:-]{1,128}$/.test(value);
+  if(!['project','page','tile'].every(key=>valid(fields[key]))||fields.item&&!valid(fields.item))throw new Error('Choose a saved project page and panel.');
+  if(typeof fields.title!=='string'||fields.title.length>100)throw new Error('Choose a short panel title.');
+  if(fields.path!==undefined&&(typeof fields.path!=='string'||fields.path.length>2000||/[\x00-\x1f]/.test(fields.path)))throw new Error('Choose a valid source path.');
+  const partition=context.window.webContents.session;const connection=context.connection,url=new URL('/',connection.origin);for(const key of ['project','item','page','tile','path'])url.searchParams.set('panel_'+key,fields[key]||'');
+  const child=new BrowserWindow({width:940,height:760,minWidth:360,minHeight:260,title:fields.title+' — SuperSurfer',backgroundColor:nativeTheme.shouldUseDarkColors?'#1c201c':'#f8f8f6',titleBarStyle:'hiddenInset',trafficLightPosition:{x:14,y:14},webPreferences:{preload:path.join(__dirname,'preload.cjs'),session:context.window.webContents.session,contextIsolation:true,sandbox:true,nodeIntegration:false,webSecurity:true}});
+  const childId=child.webContents.id;const panel={window:child,record:context.record,connection,hostConfig:connection.config,parent:context,parentPanel:true};panelWindows.set(child.webContents.id,panel);
+  child.webContents.setWindowOpenHandler(({url})=>{openExternal(url);return {action:'deny'};});
+  child.webContents.on('will-navigate',(event,url)=>{try{if(new URL(url).origin===panel.connection.origin)return;}catch{}event.preventDefault();openExternal(url);});
+  child.webContents.on('will-attach-webview',event=>event.preventDefault());
+  child.webContents.on('will-prevent-unload',event=>{const choice=dialog.showMessageBoxSync(child,{type:'question',buttons:['Keep editing','Discard unsaved changes'],defaultId:0,cancelId:0,title:'Unsaved source files',message:'Discard unsaved editor changes?'});if(choice===1)event.preventDefault();else shuttingDown=false;});
+  child.on('closed',()=>{panelWindows.delete(childId);releaseConnection(panel.connection);if(!contexts().some(row=>row.window.webContents.session===partition))partition.webRequest.onBeforeSendHeaders(null);});
+  void child.loadURL(url.href);return {opened:true};
 }
 function connectionSettings() {
   const context=focused();if (!context) { makeWindow();return; }
@@ -164,6 +186,7 @@ else {
   app.on('second-instance', () => { const context=focused();if (context) focus(context);else if (store) store.restore().forEach(makeWindow); });
   app.whenReady().then(() => {
     store=new WindowStore(app.getPath('userData'));nativeTheme.themeSource=themeSource(loadTheme());
+    ipcMain.handle('panel:open',(event,fields)=>openPanel(ownWindow(event),fields));
     ipcMain.handle('window:new',event => { ownWindow(event);makeWindow();return {opened:true}; });
     ipcMain.handle('configuration',event => ownWindow(event,true).record.config || {});
     ipcMain.handle('hosts:list',event => { ownWindow(event,true);return knownHosts(); });

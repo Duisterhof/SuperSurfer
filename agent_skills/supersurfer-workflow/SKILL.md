@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.33. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.34. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -82,6 +82,14 @@ pane placement. Follow [layout editing](../supersurfer-surfboard/references/view
 including both versions and existing overrides. No manager handoff or duplicate
 source browser is needed. Configure checks/previews through the surfboard only
 when execution behavior is part of the request.
+
+Pages support docked panels and freely movable windows with saved tile bounds.
+Use the scoped layout tool for a requested arrangement; keep source and check
+records attached to their original project/item. Separate native panel windows are
+user GUI controls, not managed agent actions. A detached editor is another client
+with its own draft buffers, so save the current draft before opening it and re-read
+saved source before editing. Do not claim cross-window buffer synchronization or
+create a second task merely to open a panel elsewhere.
 
 When verifying a UI change, exercise the actual controls at a narrow pane width
 as well as the main view. A reachable preview alone does not establish usable

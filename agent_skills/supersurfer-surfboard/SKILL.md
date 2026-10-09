@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.33. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.34. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
@@ -57,7 +57,7 @@ and their explicit page overrides remain independent.
 
 Custom `pages.project` and `pages.item` contain ordered `{id, title, tiles}` lists.
 Use stable IDs and the returned `available_tiles`; tiles have `id`, `kind`,
-`span` (number 1–12, including fractional widths), `height` (160–1200; PDF minimum
+`span` (number 1–12, including fractional widths), `height` (160–5000; PDF minimum
 400), and optional `placement`
 (`main`, `left`, `right`). Left means the navigation sidebar. Pages may specify
 `left_width` (160–600 px) or `right_width` (280–760 px), independently of the
@@ -69,6 +69,16 @@ from this project's artifact library. Keep one of each tile kind per page,
 at most 24 pages per scope and 16 tiles per page. File explorer, Code editor,
 Agent changes and PDF viewer need no additional execution block. File selections
 use the existing shared editor, not another checkout or worker.
+
+A page may select `arrangement: "docked" | "windows"`; omitted arrangement keeps
+the existing docked behavior. A movable tile may include
+`bounds: {x, y, width, height}` in page coordinates: integer x/y 0–10000,
+width 200–5000 px and height 160–5000 px. Keep `span`, tile `height` and placement
+for docked/sidebar rendering, and preserve existing bounds when changing another
+property. Use the layout tool for requested geometry, not a policy proposal.
+Separate native panel windows are a user GUI feature; this configurator has no
+native-window tool. Neither a detached panel nor a trusted editor grants an agent
+another scope, execution capability or extension installation permission.
 
 The older `layouts.project` / `layouts.item` rows remain separate from page tiles:
 rows contain `id`, `placement` (`main`, `right`, `hidden`) and numeric `order`.

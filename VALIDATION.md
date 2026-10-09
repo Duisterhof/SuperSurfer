@@ -1,12 +1,32 @@
-# Unreleased editor panel shortcuts — October 8, 2026
+# SuperSurfer 0.1.34 movable panels and integrated editor — October 8, 2026
 
-All **8 focused editor-extension tests** pass, including read-only rejection and
-proof that terminal/ports requests cannot inject shell commands, working directories,
-port mappings or arbitrary VS Code command identifiers into the bridge.
-`tests/editor-panels.browser.cjs` passes against the pinned real Code OSS runtime:
-the native terminal opens in an isolated trusted workspace, reopening reuses the
-active terminal, and Ports opens its real forwarding view. No browser errors.
-The full backend suite was not repeated for these two bounded editor actions.
+The full backend suite passes **647 Python tests**. All **20 enabled Node checks**
+pass; the four optional localhost SSH checks were skipped in this run. All eleven
+release skills were reviewed and revised against the final layout, editor,
+permissions and ownership contracts.
+
+Browser checks use real isolated workspaces. Window movement and both resize axes
+persist through the scoped layout API while source remains unsaved. Direct docking
+works without Arrange. Separate PDF windows preserve parent navigation and source
+buffers; separate editor windows can add code context to a visible scoped chat.
+Page creation, presets, sizing, draft persistence and reviewed application pass.
+The writing regression compiles actual multi-file LaTeX, automatically recompiles
+confirmed saves, retains the last good PDF after a compiler error and keeps PDF
+selection context tied to the correct build and page.
+
+Against the pinned real Code OSS runtime, SuperSurfer owns file navigation while
+native Explorer and activity bars stay hidden. Repeated Escape does not leave the
+compact editor surface. Terminal reuses the active shell; Ports opens the native
+forwarding view. PDF files use the selectable two-page SuperSurfer viewer without
+requiring a desktop-only PDF extension. These browser suites report no JS errors.
+Native workspace trust and custom keybindings remain enforced and preserved;
+malformed keybindings are reported instead of silently overwritten.
+
+The Electron lifecycle regression verifies two-host isolation and window restoration,
+main-frame-only credentials, denied iframe IPC, panel credentials limited to the
+correct host, independent child closure and retained connections after parent
+closure. Remote GPU jobs are not touched by these fixture tests. Mac packages are
+cross-built on Linux; actual Mac launch is not exercised here.
 
 # SuperSurfer 0.1.33 tracking recovery — October 8, 2026
 

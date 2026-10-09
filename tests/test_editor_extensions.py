@@ -75,6 +75,26 @@ class ExtensionAPItests(unittest.TestCase):
         self.assertTrue(all(set(row)=={'id','kind'} for row in commands))
         with self.assertRaises(SurfboardError):workbench.command({'id':'editor','kind':'executeCommand'})
 
+    def test_editor_surface_preserves_user_keybindings_and_trust_settings(self):
+        workbench=self.service.workbench
+        folder=workbench.root/'user-data/User';folder.mkdir(parents=True)
+        (folder/'settings.json').write_text('{"security.workspace.trust.enabled": true, "files.autoSave": "afterDelay"}')
+        (folder/'keybindings.json').write_text('[// custom mapping\n{"key":"ctrl+k ctrl+c","command":"example.custom"},]')
+        workbench.sync_settings();workbench.sync_settings()
+        settings=json.loads((folder/'settings.json').read_text())
+        bindings=json.loads((folder/'keybindings.json').read_text())
+        self.assertTrue(settings['security.workspace.trust.enabled'])
+        self.assertEqual('afterDelay',settings['files.autoSave'])
+        self.assertEqual('example.custom',bindings[0]['command'])
+        self.assertEqual(1,sum(row['command']=='-workbench.action.toggleZenMode' for row in bindings))
+
+    def test_invalid_keybindings_are_preserved_instead_of_overwritten(self):
+        workbench=self.service.workbench
+        folder=workbench.root/'user-data/User';folder.mkdir(parents=True)
+        path=folder/'keybindings.json';path.write_text('invalid user keybindings')
+        with self.assertRaises(SurfboardError):workbench.sync_settings()
+        self.assertEqual('invalid user keybindings',path.read_text())
+
     def test_read_only_workspace_cannot_open_terminal_or_ports(self):
         workbench=self.service.workbench
         workbench.sessions['editor']={'project_id':'p1','commands':[]}

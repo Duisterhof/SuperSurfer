@@ -1,3 +1,32 @@
+# SuperSurfer 0.1.34 — movable panels and an integrated editor
+
+Drag a panel’s grip at any time to split or rearrange a docked page. **Windows**
+changes the page to movable windows: drag the title or grip, resize the right/bottom
+edges or corner, and switch back with **Dock**. Coordinates and sizes are saved with
+the task page using the same version checks as agent layout edits. Moving a panel
+keeps its editor, extension session and source draft alive.
+
+Every task-page panel has **Open in separate window**. In the desktop app it opens a
+native window on the same workspace connection; in a browser it opens a popup.
+The separate view leaves main-window navigation alone. Closing either window does
+not stop remote agents or jobs; the shared connection stays alive until its last
+window closes. An editor with unsaved changes must be saved before opening a separate
+editor window. Detaching a PDF does not require saving another panel’s source.
+
+The optional VS Code engine now shows the line editor, tabs and extensions inside
+SuperSurfer’s own file browser and panels. Its native Explorer, activity/status bars
+and title chrome are hidden. Files opened from SuperSurfer stay in this view; PDFs
+use the built-in selectable multi-page viewer, including with the VS Code engine.
+A desktop-only UI extension such as a PDF viewer may not run in this remote/web host;
+installed incompatible packages show a note in Settings. Workspace/web-capable
+extensions retain the real extension engine, not a simulated Monaco plugin layer.
+
+Project trust is a visible, compact **Trust project** choice. Native VS Code retains
+that choice and its existing trust enforcement; this release does not disable trust
+for unrelated projects. Trust and extension failures remain visible. Editor file
+navigation, PDF viewers, page geometry and separate-window controls belong to
+SuperSurfer.
+
 ## 0.1.33 tracking recovery hotfix
 
 Correcting a definitively rejected source folder now retains both the original queue

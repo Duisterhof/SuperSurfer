@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.33. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.34. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -77,6 +77,13 @@ and `update_view_layout` tools within your role scope; preserve current versions
 and unrelated views. Follow [layout editing](../supersurfer-surfboard/references/view-layout.md).
 This does not authorize altering metric keys, comparison cohorts or scientific
 content, and it does not require republishing the report.
+
+Docked and movable-window layouts keep the same report and declared sources.
+Use the scoped layout tool to set geometry rather than publishing an HTML wrapper
+to imitate draggable panels. The user's separate-window control opens another view
+of that report; it may refetch sources and initialize its own chart interaction.
+Do not promise synchronized zoom across windows or treat a reopened view as a new
+scientific sample. No result-publication tool opens native desktop windows.
 
 When a live comparison is empty, distinguish a successful fetch with no numeric
 history from an authentication or transport error. Check each declared writer's

@@ -135,3 +135,18 @@
 .tile-page-heading .configured-tabs .tab{flex:none;font-size:11px;padding:4px 7px;line-height:20px;margin:0}
 .tile-page-heading .configured-tabs .layout-tab{margin-left:0}
 @media(max-width:600px){.tile-page-heading{gap:6px}.tile-page-title{max-width:25%}.tile-page-heading h1{font-size:12px}.tile-page-heading .configured-tabs .tab{font-size:10px;padding:4px 6px}}
+
+/* Movable windows preserve their editor/iframe nodes and saved page coordinates. */
+.page-tile-grid.window-canvas{display:block;position:relative;min-width:0;overflow:visible}.window-canvas>.page-tile{position:absolute;flex:none;z-index:1;min-width:200px;min-height:160px}.window-canvas>.page-tile:focus-within{z-index:4;box-shadow:0 10px 35px #12344420}.window-canvas [data-window-drag]{cursor:move;touch-action:none}.page-tile-heading .tile-grip{display:inline-flex!important;flex:none;padding:0 4px;cursor:grab;font-size:16px;background:transparent;border:0;color:var(--muted)}.dragging-page-tile .page-tile-dock{display:flex!important;min-height:100px;border:1px dashed var(--green)}
+.detached-panel .sidebar,.detached-panel #chat-panel,.detached-panel #chat-resizer,.detached-panel #view-dock,.detached-panel .topbar-actions,.detached-panel .tile-page-heading{display:none!important}.detached-panel .app-shell{grid-template-columns:minmax(0,1fr)!important}.detached-panel .workspace-body{display:block!important}.detached-panel .workspace{min-width:0}.detached-panel #main{padding:0!important;overflow:hidden}.detached-panel .tile-page{height:100%;padding:6px}.detached-panel .page-tile-grid{height:100%;display:block!important}.detached-panel .page-tile{width:100%!important;height:calc(100dvh - 85px)!important;position:relative!important;left:auto!important;top:auto!important}.detached-panel .tile-edge,.detached-panel .tile-grip,.detached-panel [data-panel-window]{display:none!important}.detached-panel .topbar{min-height:38px}.panel-return{margin-left:auto;font:inherit;font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text)}
+
+.window-canvas .tile-edge-x{display:block}.tile-grip:disabled{opacity:.4}.window-canvas>.page-tile .page-tile-heading{user-select:none}
+
+.detached-panel [data-tile-kind=chat] #chat-panel{display:flex!important;height:100%;width:100%;border:0}.detached-panel .topbar-navigation #sidebar-toggle{display:none}
+
+/* A separate editor can still collaborate with its scoped agent. */
+.detached-panel.detached-chat .workspace-body{display:flex!important}
+.detached-panel.detached-chat #view-dock:not([hidden]){display:flex!important}
+.detached-panel.detached-chat #chat-panel:not([hidden]){display:flex!important}
+.detached-panel.detached-chat #chat-resizer:not([hidden]){display:block!important}
+.detached-panel #view-dock>#project-view-panels,.detached-panel #page-right-tiles{display:none!important}

@@ -1,3 +1,25 @@
+## 0.1.34 panel windows and editor surface
+
+Page arrangement is presentation: docked rows/splits or windows with validated
+integer coordinates and bounds. It grants no agent tool, runtime or source-write
+permission. Existing pages retain their defaults. Updates preserve scoped ownership,
+base-version comparison and unrelated pages. Dragging and resizing preserve live
+DOM/iframe nodes. Source buffers are not saved as part of a layout change.
+
+Separate panel windows are user GUI actions on a validated saved project/task/page
+and tile. Desktop pop-outs share their original host connection, keep main-frame-only
+credentials, reject untrusted IPC and retain the connection until its last window
+closes. Browser pop-outs receive unique extension session clients. Neither pop-out
+closes nor page navigation changes agent/work/monitoring ownership. Dirty editor
+pop-outs are blocked; PDFs and other views do not save unrelated source.
+
+The compact editor keeps the genuine Code OSS extension host but removes its
+Explorer/window chrome in favor of SuperSurfer controls. Native project trust is
+not bypassed. PDFs use the authenticated built-in viewer, not an assumed compatible
+UI extension. Extension compatibility labels describe host eligibility, not a
+promise that every desktop extension works. The filesystem under the editor remains
+on the connected workspace; the visible explorer and artifacts belong to SuperSurfer.
+
 ## Editor terminal and ports controls
 
 The native workbench toolbar exposes Terminal and Ports through its authenticated

@@ -546,7 +546,7 @@ def compile_layouts(board):
 
 def tile_catalog(board, level="item"):
     """Code tiles expose authenticated repository views, never agent capabilities."""
-    result = [{**row, "title": row["label"], **({"min_height": 400} if row["kind"] == "pdf" else {})}
+    result = [{**row, "title": row["label"], **({"min_height": 160} if row["kind"] == "pdf" else {})}
               for row in layout_catalog(board, level)]
     editor = next((row for row in result if row["kind"] == "editor"), None)
     if editor is None:
@@ -555,7 +555,7 @@ def tile_catalog(board, level="item"):
     for kind, title in (("file_explorer", "Repository files"), ("agent_changes", "Agent changes")):
         result.append({**editor, "id": kind, "kind": kind, "label": title, "title": title})
     if not any(row["kind"] == "pdf" for row in result):
-        result.append({"id": "pdf", "kind": "pdf", "label": "PDF viewer", "title": "PDF viewer", "min_height": 400})
+        result.append({"id": "pdf", "kind": "pdf", "label": "PDF viewer", "title": "PDF viewer", "min_height": 160})
     result.append({"id": "todos", "kind": "todos", "label": "To-dos", "title": "To-dos"})
     return result
 
@@ -577,7 +577,7 @@ def validate_pages(pages, board, level="item"):
     page_ids, result = set(), []
     for index, page in enumerate(pages):
         at = f"{path}[{index}]"
-        _fields(page, {"id", "title", "tiles", "left_width", "right_width"}, at)
+        _fields(page, {"id", "title", "tiles", "left_width", "right_width", "arrangement"}, at)
         page_id = _page_identifier(page.get("id"), at + ".id")
         if page_id in page_ids:
             _fail(at + ".id", "page IDs must be unique within a scope")
@@ -589,7 +589,7 @@ def validate_pages(pages, board, level="item"):
         tile_ids, tile_kinds, normalized = set(), set(), []
         for tile_index, tile in enumerate(tiles):
             tile_at = f"{at}.tiles[{tile_index}]"
-            _fields(tile, {"id", "kind", "span", "height", "placement", "path"}, tile_at)
+            _fields(tile, {"id", "kind", "span", "height", "placement", "path", "bounds"}, tile_at)
             tile_id = _page_identifier(tile.get("id"), tile_at + ".id")
             kind = tile.get("kind")
             if not isinstance(kind, str) or kind not in available:
@@ -603,7 +603,17 @@ def validate_pages(pages, board, level="item"):
             normalized.append({"id": tile_id, "kind": kind,
                                "span": _number(tile.get("span", 12), tile_at + ".span", 1, 12),
                                "height": _number(tile.get("height", 400), tile_at + ".height" + (" (PDF preview)" if kind == "pdf" else ""),
-                                                 400 if kind == "pdf" else 160, 1200, True)})
+                                                 160, 5000, True)})
+            if "bounds" in tile:
+                bounds = tile["bounds"]
+                if not isinstance(bounds, dict):
+                    _fail(tile_at + ".bounds", "choose window coordinates and size")
+                _fields(bounds, {"x", "y", "width", "height"}, tile_at + ".bounds")
+                normalized[-1]["bounds"] = {
+                    field: _number(bounds.get(field), tile_at + ".bounds." + field,
+                                   minimum, maximum, True)
+                    for field, minimum, maximum in (("x", 0, 10000), ("y", 0, 10000),
+                                                     ("width", 200, 5000), ("height", 160, 5000))}
             if "placement" in tile:
                 if tile["placement"] not in ("main", "left", "right"):
                     _fail(tile_at + ".placement", "choose main, left or right")
@@ -617,6 +627,10 @@ def validate_pages(pages, board, level="item"):
                     _fail(tile_at + ".path", "choose a PDF file")
                 normalized[-1]["path"] = tile["path"]
         result.append({"id": page_id, "title": title, "tiles": normalized})
+        if "arrangement" in page:
+            if page["arrangement"] not in ("docked", "windows"):
+                _fail(at + ".arrangement", "choose docked panels or movable windows")
+            result[-1]["arrangement"] = page["arrangement"]
         for field, minimum, maximum in (("left_width", 160, 600), ("right_width", 280, 760)):
             if field in page:
                 result[-1][field] = _number(page[field], at + "." + field, minimum, maximum, True)

@@ -33,12 +33,26 @@ for that separate request.
 Pages contain `{id, title, tiles}` and optional integer sidebar widths
 `left_width` (160–600 px), `right_width` (280–760 px). Each tile has `id`, a `kind` from
 `available_tiles`, `span` (number 1–12; fractional widths are supported), `height`
-(integer 160–1200; PDF minimum
+(integer 160–5000; PDF minimum
 400), and optional `placement: "main" | "left" | "right"` (main by default).
 Order comes from the arrays. Preserve IDs, titles, source paths and unrelated
 pages; at most 24 pages, 16 tiles per page and one of each kind per page. The older
 `rows` side-panel layout is returned for context; the agent update accepts pages,
 not row or policy mutations. Removing all pages is not a reset to defaults.
+
+Pages may set `arrangement: "docked" | "windows"` (docked when omitted).
+In movable-window mode, a tile's optional `bounds` is
+`{x, y, width, height}`: integer page coordinates x/y 0–10000, width 200–5000 px
+and height 160–5000 px. Preserve its docked `span`, tile height and sidebar placement
+as well as any unrelated bounds. Moving a window does not change its file/report
+binding, and restoring docked mode does not require new tiles or agents.
+
+Native separate windows use the tile's user GUI control, not this agent tool.
+Do not create another page, report or owner to imitate that action. Detached views
+keep the original project/item/path identity but are separate client instances;
+chart interactions and editor drafts need not synchronize. Save dirty editor work
+before opening its separate view and preserve conflict checks on later disk edits.
+Closing a panel window does not stop remote work, monitoring or compilation.
 
 An existing PDF can use a `pdf` tile with a repository-relative `.pdf` `path`,
 or the returned `artifact:` editor path for a PDF in this project's artifact

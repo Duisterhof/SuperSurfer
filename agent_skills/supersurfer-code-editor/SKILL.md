@@ -2,16 +2,20 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.33'
+  supersurfer-version: '0.1.34'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.33. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.34. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
-editor uses Monaco. The optional Code OSS workbench requires its separate runtime
-to be installed and selected before VS Code extension-host capabilities are
-available. Inspect the selected engine rather than assuming an extension exists.
+editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
+to be installed and selected. Its compact editor surface retains the native
+language/extension engine, while SuperSurfer supplies repository browsing and PDF
+viewing instead of a second full IDE Explorer. Inspect the selected engine rather
+than assuming an extension exists. Native workspace trust is still enforced: use
+**Trust project…** for the user's trust decision; do not silently disable restricted
+mode, copy trusted-state files or equate YOLO with editor-folder trust.
 The `editor` surfboard block is a view; it adds no agent shell tool, executable
 action or launch permission.
 
@@ -71,8 +75,12 @@ same catalogue without installing anything. Installation/removal affects the
 connected workspace computer and requires the optional Code OSS workbench.
 Installed extensions expose Configure, which opens their native `@ext` settings
 in the File viewer when the VS Code workbench engine is selected; it does not
-install another extension or change task policy. Its Extensions view also supports
-compatible VSIX packages. Do not promise the
+install another extension or change task policy. Native extension settings and commands remain available through the compact
+editor; SuperSurfer's Extensions control opens its catalog/settings workflow.
+Compatible VSIX packages are supported by the native extension runtime. Desktop-only
+UI extensions with no web entry point can be installed yet unavailable in this
+browser-backed editor; a catalog entry is not proof of usable activation. Use
+SuperSurfer's PDF viewer for PDFs rather than promising `vscode-pdf` can run. Do not promise the
 Microsoft Marketplace, proprietary-extension compatibility or Grammarly integration.
 A catalogue/network failure is distinct from a missing extension or failed runtime
 installation. Read the visible operation status before retrying an install; a search
@@ -113,6 +121,15 @@ surface without saving a layout, recreating files or starting work. Closing the
 agent pane gives its space back to the remaining views. Preserve the
 editor buffers and existing iframe state; verify compact controls at the actual
 pane width instead of creating a duplicate checkout to work around presentation.
+
+A page can use `arrangement: docked` or `arrangement: windows`; movable tiles
+have independent saved position/size rather than requiring a new editor per size.
+Use scoped layout tools for requested geometry, preserving tile IDs and file paths.
+The panel's separate-window button is a user GUI action; there is no agent tool to
+open it. Editor detachment requires saved buffers and confirmed native dirty state,
+then opens another client with its own drafts. It does not silently transfer or
+synchronize dirty text across windows. Re-read saved source before subsequent edits;
+closing a panel view does not stop the worker or save its editor buffer.
 
 **Agents** shows exact recorded Codex file-change patches attributed to a named
 conversation, with time and turn provenance. Patches may contain partial hunks or
