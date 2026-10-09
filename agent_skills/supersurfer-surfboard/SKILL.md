@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.37. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.38. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
@@ -187,10 +187,15 @@ Existing jobs keep their execution contracts, and chat/run stops remain authorit
 Name an unsupported request plainly and preserve a draft without pretending a drawn
 arrow implements it.
 
-The board restricts managed SuperSurfer tools. Codex's shell/file access is still
-controlled by the session's sandbox and permission mode, not by individual graph
-edges. Do not promise OS isolation or use shell commands to bypass a denied managed
-operation or missing requirement.
+The board restricts managed SuperSurfer tools through the same scoped MCP access
+for Codex, Cursor and Claude Code. Native shell/file access follows the selected
+provider's own sandbox and permission mode, not individual graph edges. Ask does
+not promise identical OS containment across providers. Do not use native commands
+to bypass a denied managed operation or missing requirement. A workflow proposal
+cannot transfer provider-owned native sessions or enable unsupported backend
+controls. Cursor/Claude offer Ask/YOLO but no active-turn steering, Codex auto-review,
+effort or Fast controls. Read [conversation guidance](../supersurfer-worker/references/conversations.md)
+for official CLI-owned terminal login; never request passwords, codes or tokens in chat.
 
 Read an owned block's HTML and asset names using `list_view_blocks` with
 `block_id` before revising it. An HTML-only revision omits `assets` to retain its

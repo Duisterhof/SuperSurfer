@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.37. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.38. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -82,6 +82,16 @@ the requested paper work needs them, incorporate the intended files into ordinar
 project source while preserving the original upload, then use the normal saved-
 source compiler workflow. Uploading does not compile, publish externally or send
 a request to an agent.
+
+The writing conversation may use Codex, Cursor or Claude Code with the same scoped
+MCP compilation and artifact tools. Provider-owned native sessions do not transfer
+when backend defaults change; compiler containment remains the compilation
+service's boundary, distinct from the provider's native Ask/YOLO sandbox. Official
+Cursor/Claude login belongs in the user's trusted workspace-host terminal, never
+in paper text, agent chat or pasted passwords/codes/tokens. Follow
+[conversation guidance](../supersurfer-worker/references/conversations.md) for
+backend capabilities; Cursor/Claude have no active-turn steering, Codex auto-review,
+effort or Fast controls. None of these settings authorizes a paper submission.
 
 ## Compile and inspect
 

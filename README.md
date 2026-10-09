@@ -1,3 +1,55 @@
+# SuperSurfer 0.1.38 — Cursor and Claude Code backends
+
+## Cursor and Claude Code backends (0.1.38)
+
+Settings now offers Codex, Cursor and Claude Code defaults for manager, lead and
+worker roles. An empty conversation can choose its backend above the composer.
+The first accepted turn pins that conversation to its provider; existing Codex
+sessions remain Codex sessions. Create another conversation to use a different
+provider. Model overrides belong to that conversation. Workspace model/effort
+fields continue to configure Codex defaults; Cursor and Claude start with their
+provider defaults and can choose another model in chat.
+
+Each provider uses its official CLI on the selected workspace host. Codex keeps
+its existing ChatGPT device-code flow. Cursor and Claude sign-in buttons open the
+Mac's trusted Terminal, connect to that host with SSH when needed, and run
+`agent login` or `claude auth login`. On other desktop platforms or in a browser,
+the app displays the command to run on that host. Complete all provider codes in
+your terminal or on the official provider page, never in agent chat. SuperSurfer
+accepts no provider passwords, keys, codes or tokens, implements no provider OAuth,
+and does not read or copy CLI credential files. It reads only allowlisted account
+status metadata; the CLI manages credentials. Existing API-key or subscription
+configuration is reported as the CLI's actual auth method, where available.
+Provider CLI installation is a prerequisite; `SUPERSURFER_CURSOR` and
+`SUPERSURFER_CLAUDE` can identify an official executable outside the normal PATH.
+
+Cursor runs ACP v1 with scoped MCP servers supplied separately to each session.
+Claude runs the official binary's bidirectional JSON stream and per-turn private
+MCP configuration. The same service-enforced tools, role scopes, PR verification,
+queue intent, task state, questions and wakeups are shared across providers. The
+new adapters use one process per active conversation, resume provider-native
+sessions, and never replay a message after uncertain delivery or a service restart.
+Claude MCP configuration is private (0600), removed after its turn, and never
+placed in a repository or persisted transcript. Login terminal output is never
+captured. These are application boundaries; running agents under the same OS user
+is not isolation from that user's files or credentials.
+
+Cursor and Claude currently support Ask and YOLO. They use provider-native
+permissions/sandboxing, rather than Codex's sandbox policy. Inherited Codex
+automatic review falls back to Ask; explicit unsupported choices are rejected.
+Fast mode, Codex effort controls and exact-turn steering are unavailable on these
+adapters. Answer pending questions/approvals, wait, or stop before sending another
+message. Narrowing an active YOLO turn stops it; other mode changes take effect on
+the next turn. Unknown blocking protocol requests receive a rejection, not silent
+approval. Tool activity is shown; Codex patch attribution remains richer than the
+new providers' current Changes history. An empty Changes panel is not evidence
+that no file changed.
+
+Official integration references: [Cursor ACP](https://cursor.com/docs/cli/acp),
+[Cursor login](https://cursor.com/docs/cli/reference/authentication),
+[Claude CLI](https://code.claude.com/docs/en/cli-reference), and
+[Claude product authentication conditions](https://code.claude.com/docs/en/legal-and-compliance).
+
 # SuperSurfer 0.1.37 — edit together without losing your draft
 
 Incoming agent or external edits appear as reviewable chunks in the file you are
@@ -702,3 +754,9 @@ The glass treatment follows [Apple's materials guidance](https://developer.apple
 Run the ordinary suite with `npm test`. `python3 scripts/qa-shuffle.py --seed 20261007` randomizes the Python test order and the durable-state/concurrent-retry scenarios. Browser tests use installed Playwright and Chrome at `CHROME_PATH` (new suites) or `/opt/google/chrome/chrome` (existing suites). Build the login preview before its browser test. The native Electron smoke uses an isolated user profile and a Linux package runtime at `ELECTRON_PATH` or `dist/SuperSurfer-linux-x64/SuperSurfer`, under `xvfb-run` when headless. Chromium sandboxing remains enabled in that native check.
 
 A bounded campaign is `python3 scripts/qa-campaign.py --hours 6 --output /absolute/path/to/qa-report`. It changes the seed and test order every cycle, runs the loopback SSH cases, saves JSON/HTML reports after each command and stops on the first failure. Optional `--engine-tests` and `--engine-source` point to matching isolated AML test/source directories. Development Node/Python must be on PATH. It exercises temporary fixtures, never research jobs; logs include the exact source commit and seed. Running the campaign in a process supervisor preserves it across client disconnects. A running report is not a completed overnight result.
+
+Authenticated backend checks (0.1.38): Cursor Auto and Claude Haiku passed chat,
+resume, scoped questions, file work, cancellation and denied shell approvals in
+isolated QA repositories. Ask follows each CLI's native policy; permitted workspace
+edits may not prompt. Cursor model availability still depends on account entitlement.
+See VALIDATION.md for coverage, measured test usage and remaining platform limits.

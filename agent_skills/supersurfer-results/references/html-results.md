@@ -15,7 +15,8 @@ responsive. Inline assets or use public/CORS-enabled HTTPS resources. JavaScript
 WebGL/3D and HTTPS iframes are allowed; parent/app credentials, local files and
 forms are not. Never embed secrets. Authenticated remote embeds may reject framing
 or need their own sign-in: provide useful measured fallback content and a source
-link. Workspace ChatGPT login does not authenticate W&B/Rerun embeds.
+link. Workspace Codex, Cursor or Claude Code login does not authenticate W&B/Rerun
+embeds. Keep provider and data-service credentials out of result HTML.
 
 Verify requested media in the real app pane, near the initial comparison where
 the user can find it: images/GIFs must load, videos must play, and errors need a

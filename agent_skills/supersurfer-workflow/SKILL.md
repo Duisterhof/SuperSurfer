@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.37. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.38. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -161,10 +161,15 @@ configurator, or the project configurator for future-task defaults, and its [ski
 has `propose_surfboard`; it creates a reviewable draft that the user applies. Never expand your own tools or requirements
 by altering a board as a workaround for an action denial.
 
-The board restricts managed SuperSurfer tools. Codex's shell/file access is still
-controlled by the session's sandbox and permission mode, not by individual graph
-edges. Do not promise OS isolation or use shell commands to bypass a denied managed
-operation or missing requirement.
+The board restricts managed SuperSurfer tools identically for Codex, Cursor and
+Claude Code through scoped MCP access. Native shell/file access follows the
+selected provider's own sandbox and permission mode, not individual graph edges;
+Ask does not promise identical OS containment across providers. Do not use native
+commands to bypass a denied managed operation or missing requirement. Conversations
+retain their provider-owned sessions. Cursor/Claude offer Ask/YOLO but no active-turn
+steering, Codex auto-review, effort or Fast controls. Follow
+[conversation guidance](../supersurfer-worker/references/conversations.md) for
+official CLI-owned terminal login; never collect passwords, codes or tokens in chat.
 
 For a requested persistent HTML view, use enabled `list_view_blocks` /
 `publish_view_block`, then place an `html` tile with its durable `block_id` through

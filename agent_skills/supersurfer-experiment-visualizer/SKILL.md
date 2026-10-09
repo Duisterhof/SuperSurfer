@@ -2,15 +2,24 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.37. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.38. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
+
+The same scoped MCP visualization and publishing tools serve Codex, Cursor and
+Claude Code; provider-owned native sessions and model preferences do not change
+the selected sources or scientific provenance. Provider sign-in does not log in
+to W&B/Rerun embeds. Keep passwords, login codes and tokens out of agent chat and
+visualization assets; official CLI authentication belongs in the user's trusted
+workspace-host terminal. Read
+[conversation guidance](../supersurfer-worker/references/conversations.md) for
+the backend's actual controls and permission/sandbox limits.
 
 A desktop SSH setup timeout is not chart or measurement-failure evidence. Use
 the bounded app reconnect flow, then inspect this existing report's declared live

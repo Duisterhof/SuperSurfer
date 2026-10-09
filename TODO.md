@@ -372,3 +372,16 @@ Ongoing list of requested improvements. Unchecked items are planned, not impleme
 - [x] Agent-created versioned Markdown tabs.
 - [x] Isolated HTML Results for plots, embeds and compatible 3D widgets.
 - [x] Support Forge-formatted W&B group/run links.
+
+## Backend integration follow-up
+
+- [x] Live account testing: authenticated Cursor Auto and Claude Haiku passed
+  chat, scoped MCP, session resume, file work, cancellation and denied shell writes.
+- Verify exact-turn steering and richer file-change attribution before advertising
+  those controls for Cursor or Claude.
+- Add role-level alternate-provider model defaults if per-chat overrides are insufficient.
+
+0.1.38 live follow-up: authenticated Cursor Auto and Claude Haiku smoke checks
+are complete; keep native macOS launch/Gatekeeper as the remaining packaging check.
+Cursor ACP does not expose usage receipts, and listed model IDs may be plan-restricted.
+Native multi-select questions currently direct the agent to scoped ask_user.

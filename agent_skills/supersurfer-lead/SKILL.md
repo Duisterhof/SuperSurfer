@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.37. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.38. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -19,6 +19,17 @@ not another research assignment. Setup now reports bounded SSH upload/install
 progress. If it fails, preserve worker ownership and experiment/run IDs and retry
 the connection instead of creating replacement experiments or relaying the same
 handoff again. A transport error alone does not establish worker or run failure.
+
+The lead's Codex, Cursor or Claude Code native session stays with its provider;
+backend defaults apply to new conversations and cannot resume another provider's
+session. Shared scoped MCP tools preserve this project's ownership and handoff
+limits. Pass the user's actual preparation or queue intent to the existing worker;
+a different backend or successful login creates no launch grant. Follow
+[conversation guidance](../supersurfer-worker/references/conversations.md): official
+Cursor/Claude login happens in the user's trusted workspace-host terminal, never
+through passwords, codes or tokens pasted into chat. Cursor/Claude offer Ask/YOLO
+with provider-native permissions, but no active-turn steering, Codex auto-review,
+effort or Fast controls. Await or stop a live turn before giving a new instruction.
 
 ## Move requested work forward
 

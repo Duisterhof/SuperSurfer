@@ -14,7 +14,7 @@ import uuid
 from .aml import decoded
 from .time_context import validate_timezone
 
-DEFAULT_SETTINGS = {"models": {"manager": "", "lead": "", "worker": ""},
+DEFAULT_SETTINGS = {"backends": {"manager": "codex", "lead": "codex", "worker": "codex"}, "models": {"manager": "", "lead": "", "worker": ""},
                     "reasoning": {"manager": "medium", "lead": "high", "worker": "medium"},
                     "monitor_interval_minutes": 15, "monitor_enabled": False,
                     "approval_mode": "ask", "timezone": None}
@@ -71,7 +71,7 @@ class Store:
         result = json.loads(json.dumps(DEFAULT_SETTINGS))
         saved = self.get("settings", {})
         for key, value in saved.items():
-            if key in {"models", "reasoning"}:
+            if key in {"models", "reasoning", "backends"}:
                 result[key].update(value)
             elif key in result:
                 result[key] = value
@@ -81,7 +81,7 @@ class Store:
         settings = self.settings()
         if set(params) - set(DEFAULT_SETTINGS):
             raise ValueError("Unknown setting")
-        for field in ("models", "reasoning"):
+        for field in ("models", "reasoning", "backends"):
             if field not in params:
                 continue
             value = params[field]
@@ -92,6 +92,8 @@ class Store:
                     raise ValueError(f"Invalid {field} value")
                 if field == "reasoning" and not re.fullmatch(r"[A-Za-z0-9_.-]+", setting):
                     raise ValueError("Reasoning effort must be a nonempty value from the model catalog")
+                if field == "backends" and setting not in {"codex", "cursor", "claude"}:
+                    raise ValueError("Choose codex, cursor or claude.")
                 settings[field][role] = setting
         if "monitor_enabled" in params:
             if not isinstance(params["monitor_enabled"], bool):
@@ -115,14 +117,16 @@ class Store:
 
     def chat_settings(self, scope):
         saved = self.get("chat_settings:" + scope, {})
-        return {"model": saved.get("model"), "reasoning": saved.get("reasoning"), "fast_mode": saved.get("fast_mode"), "approval_mode": saved.get("approval_mode")}
+        return {"backend": saved.get("backend"), "model": saved.get("model"), "reasoning": saved.get("reasoning"), "fast_mode": saved.get("fast_mode"), "approval_mode": saved.get("approval_mode")}
 
     def save_chat_settings(self, scope, changes, validate=None):
-        if not isinstance(changes, dict) or set(changes) - {"model", "reasoning", "fast_mode", "approval_mode"}:
+        if not isinstance(changes, dict) or set(changes) - {"backend", "model", "reasoning", "fast_mode", "approval_mode"}:
             raise ValueError("Chat settings accept only model, reasoning, fast_mode and approval_mode")
         with self.lock:
             settings = self.chat_settings(scope)
             for key, value in changes.items():
+                if key == "backend" and value not in {None, "codex", "cursor", "claude"}:
+                    raise ValueError("Choose codex, cursor, claude or null to inherit.")
                 if key == "approval_mode":
                     if value not in (None, "ask", "auto_review", "yolo"):
                         raise ValueError("approval_mode must be ask, auto_review, yolo or null to inherit")

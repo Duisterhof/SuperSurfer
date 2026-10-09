@@ -2,18 +2,25 @@
 name: supersurfer-blocks
 description: Publish requested reusable HTML views with copied project assets, then place their durable identities on scoped SuperSurfer pages without changing execution authority.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Reusable HTML blocks
 
-Reviewed for SuperSurfer 0.1.37. Use for a user-requested persistent custom view,
+Reviewed for SuperSurfer 0.1.38. Use for a user-requested persistent custom view,
 such as a failure-video comparison, GIF gallery or interactive explanation.
 The library is workspace-wide: already-published views can be reused across
 projects, independently of a Results block's experiment data-sharing selection.
 Publish only the explicitly intended content; ordinary source access does not
 permit exposing credentials, private service state or unrequested private data.
 Presentation grants no execution tools, launch permission or new agent scope.
+
+Codex, Cursor and Claude Code use the same scoped MCP publication tools; a backend
+change does not widen publishing-project ownership or authenticate an embed.
+Native sessions stay provider-owned. Keep provider passwords, login codes and
+tokens out of chat, HTML and copied assets; official CLI login belongs in the
+user's trusted workspace-host terminal. See
+[conversation guidance](../supersurfer-worker/references/conversations.md).
 
 ## Publish and arrange
 

@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.37'
+  supersurfer-version: '0.1.38'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.37. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.38. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -243,13 +243,26 @@ A workspace service is different from a compute-only node. Explicit desktop
 connection initializes a missing bundled manager; the sidecar needs Python 3.10+
 and starting the bundled manager needs installed Python 3.11+. Existing managers
 are reused without changing queue settings. Ordinary state reads start no manager.
-A workspace host also needs its own ChatGPT sign-in through the app; compute-only
-nodes do not. Account discovery retries for 15 seconds before prompting, and a
-connection failure stays distinct from confirmed sign-out. Follow the app's
+A workspace host needs the selected backend's official CLI and its own account
+sign-in; compute-only nodes do not. Codex uses the app's ChatGPT flow. Cursor
+uses `agent login` and Claude Code uses `claude auth login` in the user's trusted
+terminal on the workspace host, with the official provider browser flow and an
+account recheck afterward. The CLI owns login output and credential storage.
+Never collect pasted passwords, login codes or tokens in agent chat/`ask_user`,
+capture authentication output, inspect account files or copy secrets across hosts.
+If the official CLI needs a code, the user enters it directly in that terminal.
+A connection failure stays distinct from confirmed sign-out; follow the app's
 reconnection state instead of reinstalling the workspace or copying credentials.
-GitHub/W&B access are separate, and a Results fetch failure does not
-prove compute readiness or ChatGPT access failed. Never copy tokens or weaken the
-Results sandbox to repair a chart; preserve existing jobs and genuine sample ages.
+GitHub/W&B access are separate, and a Results fetch failure does not prove compute
+readiness or provider account access failed. Never weaken the Results sandbox
+to repair a chart; preserve existing jobs and genuine sample ages.
+
+Provider selection preserves the same scoped MCP compute tools, saved run contract
+and recovery owner. It cannot turn preparation into queue intent or autonomous
+suggestions into authorization. Cursor/Claude Ask and YOLO use their provider's
+native permissions/sandbox; Codex auto-review, effort, Fast and active-turn
+steering are unavailable. A backend session cannot transfer to another provider.
+See [conversation guidance](../supersurfer-worker/references/conversations.md).
 
 For a requested persistent HTML view, use enabled `list_view_blocks` /
 `publish_view_block`, then place an `html` tile with its durable `block_id` through
