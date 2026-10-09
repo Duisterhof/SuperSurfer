@@ -56,6 +56,59 @@ function parseSetupResponse(output) {
   }
   throw new Error('Remote setup did not return valid connection credentials. Check the remote service log.');
 }
+const REQUIREMENTS_SCRIPT = `import json,sys,shutil,os,subprocess
+from pathlib import Path
+modern=sys.version_info >= (3,11)
+if not modern:
+    candidates=[shutil.which('python3.'+str(v)) for v in range(14,10,-1)]
+    candidates += [str(Path.home()/folder/'bin/python') for folder in ('miniforge3','miniconda3','anaconda3')]
+    for candidate in candidates:
+        if not candidate or not os.path.isfile(candidate) or not os.access(candidate,os.X_OK):continue
+        try:
+            result=subprocess.run([candidate,'-c','import sys; print(int(sys.version_info >= (3,11)))'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=2)
+            if result.returncode==0 and result.stdout.strip()==b'1':modern=True;break
+        except (OSError,subprocess.SubprocessError):pass
+print(json.dumps({'supersurfer_requirements':True,'python':list(sys.version_info[:3]),'manager_python':modern,'git':bool(shutil.which('git')),'providers':{k:bool(shutil.which(v)) for k,v in [('codex','codex'),('cursor','agent'),('claude','claude')]},'cursor_legacy':bool(shutil.which('cursor-agent'))}))`;
+function parseRequirements(output) {
+  for (const line of String(output).split(/\r?\n/).reverse()) {
+    let value;try {value=JSON.parse(line.trim());}catch {continue;}
+    if(value?.supersurfer_requirements===true&&Array.isArray(value.python)&&value.python.length===3&&value.python.every(Number.isInteger)){
+      if(value.python[0]<3||value.python[0]===3&&value.python[1]<10)throw new Error('This computer has Python '+value.python.join('.')+'. Install Python 3.10 or newer on it, then try again.');
+      if(value.manager_python===false)throw new Error('Install Python 3.11 or newer on this computer for the bundled workspace manager, then retry. No separate AutoML installation is needed.');
+      if(value.git===false)throw new Error('Install Git on the workspace computer before connecting a project, then retry.');
+      return value;
+    }
+  }
+  throw new Error('Could not check this computer’s requirements. Make sure python3 is available in its terminal, then retry.');
+}
+function connectionError(error,config) {
+  const message=String(error?.message||'');
+  if(error?.code==='ENOENT'||/python3:.*(?:not found|No such file)/i.test(message))return new Error('Install Python 3.10 or newer on the workspace computer, then try again.');
+  if(/Permission denied|Authentication failed/i.test(message))return new Error('SSH sign-in is required. Open a terminal and connect to '+config.target+' with SSH first, then retry here. SuperSurfer uses your SSH keys.');
+  if(/Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(message))return new Error('Check this computer’s SSH identity in a terminal before connecting. Confirm the host key for '+config.target+' with your administrator if it has changed.');
+  if(/Could not resolve hostname/i.test(message))return new Error('This SSH host could not be found. Check its name and your SSH configuration, then retry.');
+  if(/Connection refused|No route to host|banner exchange|Connection timed out/i.test(message))return new Error('This computer is not reachable over SSH. Check your network, VPN and SSH connection, then retry.');
+  if(/Traceback|SUPERSURFER_PROGRESS:/.test(message)){
+    // Keep a useful final bootstrap error, never expose progress records or a traceback.
+    const detail=message.split(/\r?\n/).findLast(line=>/^RuntimeError: /.test(line));
+    if(detail)return new Error(detail.slice(14).split(' Details:')[0].slice(0,500));
+    if(!message.includes('Traceback'))return new Error(message.split(/\r?\n/).filter(line=>!line.startsWith('SUPERSURFER_PROGRESS:')).join('\n').trim().slice(0,500)||'Workspace setup could not finish. Retry the connection.');
+    return new Error('Workspace setup could not finish. Check the computer’s requirements and retry. Details are in the workspace service log.');
+  }
+  return error;
+}
+async function checkRequirements(config,onStatus,signal) {
+  onStatus(config.mode==='local'?'Checking Python on this computer…':'Checking SSH sign-in and Python…');
+  let output;
+  try {
+    output=config.mode==='local'
+      ? await collect(process.env.SUPERSURFER_PYTHON||'python3',['-c',REQUIREMENTS_SCRIPT],undefined,30000,signal)
+      : await collect('/usr/bin/ssh',[...BOOTSTRAP_SSH_OPTIONS,config.target,'python3 -c '+shellQuote(REQUIREMENTS_SCRIPT)],undefined,30000,signal);
+  }catch(error){throw connectionError(error,config);}
+  const result=parseRequirements(output),installed=Object.values(result.providers).some(Boolean)||result.cursor_legacy;
+  onStatus('Requirements checked. '+(installed?'Choose your AI provider when the workspace opens.':'Install a provider CLI on this computer; the next screen will guide you.'));
+  return result;
+}
 async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS, signal } = {}) {
   // ClearAllForwardings clears command-line -L as well as inherited forwards.
   // Connect a private master first; then add only our listener over its socket.
@@ -107,7 +160,8 @@ async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS, signal } =
 async function connect(raw, onStatus = () => {}, { signal } = {}) {
   signal?.throwIfAborted();
   const config = validateConfig(raw);
-  onStatus(config.mode === 'local' ? 'Starting your workspace on this machine…' : 'Connecting securely over SSH…');
+  await checkRequirements(config,onStatus,signal);
+  onStatus('Preparing your workspace…');
   const script = fs.readFileSync(path.join(__dirname, 'bootstrap.py'), 'utf8');
   const bundle = fs.readFileSync(path.join(__dirname, 'remote.tar.gz'));
   const setupConfig={...config,bundle_size:bundle.length};
@@ -115,8 +169,8 @@ async function connect(raw, onStatus = () => {}, { signal } = {}) {
   let result;
   if (config.mode === 'local') {
     try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(setupConfig)], bundle, 90000, signal, onStatus); }
-    catch (error) { if (error.code === 'ENOENT') throw new Error('This machine needs Python 3.10+ to run a local workspace. Install Python, then reopen SuperSurfer.'); throw error; }
-  } else result = await collect('/usr/bin/ssh', [...BOOTSTRAP_SSH_OPTIONS, config.target, remoteCommand], bundle, 90000, signal, onStatus);
+    catch (error) { throw connectionError(error,config); }
+  } else {try {result = await collect('/usr/bin/ssh', [...BOOTSTRAP_SSH_OPTIONS, config.target, remoteCommand], bundle, 90000, signal, onStatus);}catch(error){throw connectionError(error,config);}}
   signal?.throwIfAborted();
   const ready = parseSetupResponse(result);
   if (config.mode === 'local') {
@@ -126,6 +180,6 @@ async function connect(raw, onStatus = () => {}, { signal } = {}) {
     return {config,origin,token:ready.token,child:null,async openPort(port){previewPort(port,[ready.port]);return {url:'http://127.0.0.1:'+port,async close(){}};}};
   }
   onStatus('Remote workspace is ready. Opening the connection…');
-  return startTunnel(config, ready, { signal });
+  try {return await startTunnel(config, ready, { signal });}catch(error){throw connectionError(error,config);}
 }
-module.exports = { previewPort, connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, SSH_OPTIONS, BOOTSTRAP_SSH_OPTIONS, collect };
+module.exports = { previewPort, connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, parseRequirements, connectionError, checkRequirements, SSH_OPTIONS, BOOTSTRAP_SSH_OPTIONS, collect };

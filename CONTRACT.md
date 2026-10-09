@@ -1,3 +1,60 @@
+# SuperSurfer 0.1.40 — accounts, onboarding and research Results
+
+Settings shows Codex, Cursor and Claude together, with status, official CLI sign-in
+and sign-out. The chosen workspace host owns its account, not the Mac client.
+Fresh workspaces ask for an explicit signed-in provider before sending; it persists
+all three new-agent defaults. Existing bindings are never migrated. Sign-out uses
+the provider's native operation, preserves history, rejects active owned turns and
+shares a per-provider lock with new sends. External environment credentials may
+continue to authenticate after CLI sign-out; the app displays the actual status.
+No passwords, API keys, verification codes or arbitrary sign-out commands are
+accepted by the app API. Missing CLIs get installation guidance; they are not
+silently downloaded. Authentication UI and versioned backend support must both
+be updated on the workspace host.
+
+Desktop checks SSH keys/host identity, sidecar Python 3.10+, an available manager
+Python 3.11+ and Git before uploading/installing the workspace. It does not change
+SSH identities or training environments. Provider CLI availability is reported;
+its official sign-in remains a separate human flow. Progress records and Python
+tracebacks do not become connection error copy. Data folders are created when
+missing. Projects open on a task list; Surfboard editing is optional.
+
+Configured page removal saves the scoped layout with both layout and board
+versions. Utility and Markdown tabs use independent scoped visibility preferences.
+Files, report HTML, Markdown, conversations and jobs remain. The utility/Markdown
+restore menu does not replay work. Block removal is available outside Rearrange,
+autosaves presentation and prunes split leaves so other panels fill the space.
+It never saves or discards source drafts: built-in models and native parked frames
+stay within their existing window session. That is not a durable saved file.
+Rearrange cannot start in the middle of an automatic layout save. Ordinary page
+and block removal is disabled in detached/read-only views.
+
+Results report tabs reorder with an exact visible-ID set and presentation revision;
+removed reports are archived metadata, preserving their HTML, source bindings and
+existing preview expiry rules. Restoring visibility does not launch work. Report
+selection remains stable while ordering changes. New task attempts also appear
+in a compact Results list directly from the scheduler read model, before report
+publication; statuses such as unreachable are never converted into measured failure.
+
+Research boards with connected Results expose check_experiment_results. Workers
+are confined to their task, leads to their project, and the manager to explicit
+cross-project requests. Held-only drafts and nonresearch workflows do not force
+this checkpoint. Released/started attempt IDs, statuses and W&B identity form its
+version. The server seeds one durable required deliverable per owned worker scope
+at turn start or queue success. The ordinary completion harness keeps it unfinished;
+update_task cannot complete it while the Results receipt is missing/stale.
+
+A successful review cites the current attempt version and visible report ID/SHA,
+and the report must reference every observed released/started attempt through its
+run ID or W&B source/link. Missing measurements must be labeled unavailable or
+pending; identifier coverage alone does not prove scientific correctness. Actual
+train/validation overlays and requested domain comparisons remain mandatory role
+skill/completion-review work. The scoped check can archive redundant owned reports
+while preserving source, but cannot archive its reviewed comparison. No general
+agent reorder/unarchive tool is added. New attempts, status/source identity changes,
+report edits or removal reopen review; disconnected manager observations cannot
+produce a fresh completion receipt. The check grants no launch authorization.
+
 # Native Mac development packaging
 
 On macOS, `package:mac` re-signs the completed Electron bundle with an ad-hoc

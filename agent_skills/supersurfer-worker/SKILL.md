@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.39. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.40. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -313,3 +313,16 @@ explicit Save is still separate from checks, commits and launch authorization.
 Workspace Settings offers all three permission defaults, while this chat uses
 its provider's supported controls. An inherited Approve for me resolves to Ask
 on Cursor/Claude; verify the effective mode without replacing this task owner.
+
+Removing this task's tab or a visible block preserves its files, conversations,
+run records and remote work. Continue the existing goal and deliverables; missing
+view geometry is not completion or cancellation. Account setup/sign-out remains
+a user GUI action, never an extra worker MCP tool.
+
+Research tasks with observed released/started attempts can carry a required
+Results checkpoint. Use enabled `check_experiment_results` in this own task;
+inspect every attempt and the existing report, publish the current comparison,
+then complete with its exact version/SHA and measured-or-unavailable evidence.
+`update_task` cannot complete a stale checkpoint. New attempts/status/report
+changes reopen it, separately from the overall goal and authorized monitoring.
+Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).

@@ -58,8 +58,34 @@ class EditorService:
                 "version": saved["version"], "board_version": record["version"],
                 "overridden": saved.get("rows") is not None or saved.get("pages") is not None,
                 "rows_overridden": saved.get("rows") is not None, "pages_overridden": saved.get("pages") is not None,
+                "hidden_tabs": self.store.get("hidden_view_tabs:" + project_id + ":" + (experiment_id or ""), []),
                 "rows": compile_layouts(definition)[level], "available": available,
                 "pages": compile_pages(definition)[level], "available_tiles": available_tiles}
+
+    def hide_view_tab(self, params):
+        if self.read_only:
+            raise SurfboardError("Read-only workspace: tab visibility cannot be changed", 403)
+        if set(params) != {"project_id", "experiment_id", "tab", "hidden"} or type(params["hidden"]) is not bool:
+            raise SurfboardError("Tab visibility requires project, work item, tab and hidden boolean")
+        project_id, experiment_id, tab = params["project_id"], params["experiment_id"], params["tab"]
+        if (not isinstance(project_id, str) or not isinstance(tab, str) or
+                experiment_id is not None and not isinstance(experiment_id, str)):
+            raise SurfboardError("Select a saved project, work item and tab")
+        self.view_layout(project_id, experiment_id)  # Validate ownership before changing preferences.
+        available = {"_todos", "_files"}
+        if experiment_id:
+            available.update("page:" + row["id"] for row in self.results.pages(experiment_id))
+        if tab not in available:
+            raise SurfboardError("Remove configured pages through the versioned view layout")
+        key = "hidden_view_tabs:" + project_id + ":" + (experiment_id or "")
+        with self.store.lock:
+            hidden = set(self.store.get(key, []))
+            if params["hidden"]:
+                hidden.add(tab)
+            else:
+                hidden.discard(tab)
+            self.store.put(key, sorted(hidden))
+        return self.view_layout(project_id, experiment_id)
 
     def save_view_layout(self, params):
         from .surfboards import validate_layout, validate_pages

@@ -93,9 +93,12 @@ artifact, and importing a file does not execute its contents or grant new tools.
 
 Workspace Settings supplies the persistent default permission unless a chat
 explicitly overrides it. Its selector always offers Ask, Approve for me and YOLO;
-per-chat controls are filtered independently by the selected provider. Initial
-manager/lead/worker defaults remain Codex. The user selects another provider in
-Settings for new conversations or in a chat before its session starts. A
+per-chat controls are filtered independently by the selected provider. A fresh
+unconfigured workspace asks the user to choose a signed-in provider; Use this
+provider saves manager/lead/worker defaults and setup completion on that machine.
+It does not transfer already-pinned sessions. Existing configured hosts retain
+their settings. Later choices use Settings for new conversation defaults or a
+chat selector before its session starts. A
 Cursor/Claude-only workspace can use those selected chats without Codex installed;
 a provider selection does not install or sign in its official CLI automatically. Cursor and Claude Code support Ask and YOLO; Codex
 automatic approval review, reasoning-effort and Fast controls are unavailable
@@ -118,6 +121,10 @@ effort fields configure Codex; Cursor defaults to auto and Claude to sonnet unle
 the conversation overrides its model. Do not pass Codex effort or Fast values to
 a different provider.
 
+Desktop first performs a read-only check of SSH access and workspace Python
+3.10+ before uploading or installing. Missing/old Python or SSH identity/access
+errors need the stated host repair, not a lock-file deletion or relaxed host-key
+check. This workspace requirement is separate from runner/project Python.
 Desktop SSH setup shows upload, installation and service-start stages instead of
 one indefinite connecting message. Its framed bundle upload has a 30-second remote
 deadline before any connection lock is acquired; a short/aborted upload changes no
@@ -127,6 +134,16 @@ clients or change host-key validation. Client timeout cleanup concerns its owned
 process only. Connection recovery is not evidence of sign-in, compiler success,
 completed tasks or fresh GPU/W&B observations. Re-read actual records after
 reconnect and preserve uncertainty around commands whose replies were lost.
+
+Settings → Accounts shows Codex, Cursor and Claude status, refresh, official
+sign-in and sign-out. The service refuses account changes while any turn on that
+provider is active; finish or deliberately stop it first, not another provider's
+work. Sign-out invokes the official CLI and retains histories, provider bindings
+and task/run identities. If external host configuration still supplies credentials,
+a completed CLI sign-out can remain connected; report that actual status without
+deleting account files or environment settings. These are authenticated user GUI
+actions, not agent MCP tools. A missing executable exposes official install
+guidance; the app does not silently install or migrate credentials.
 
 A workspace host needs the selected provider's official CLI and its own account
 sign-in; a compute-only node does not. Codex uses the app's ChatGPT sign-in flow.
@@ -144,3 +161,11 @@ uncertain action's outcome.
 Use the application's fresh IANA timezone for dates/schedules, setting `TZ`
 explicitly in time-sensitive remote commands. Render equations in chat/Markdown
 with inline `\(...\)`/`$...$` or display `\[...\]`/`$$...$$`, outside literal code.
+
+Research attempts may seed a saved required Results checkpoint from service
+context and after queue/recovery. Use enabled `check_experiment_results` rather
+than completing that task with update_task or duplicating it. Its current report
+must account for all returned attempts, including failed/pending/unavailable
+measurements; new attempt/status/report changes reopen it. Held-only drafts and
+nonresearch workflows do not force this check. Follow
+[Results checkpoint guidance](../../supersurfer-results/references/results-checkpoint.md).

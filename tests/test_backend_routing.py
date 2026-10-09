@@ -3,6 +3,8 @@ import json
 import os
 import subprocess
 import threading
+from pathlib import Path
+from unittest.mock import patch
 import unittest
 from server.backends import BackendRouter
 from server.app import create_server
@@ -28,6 +30,46 @@ class ProviderServiceTests(unittest.TestCase):
     def test_login_rejects_credentials_and_only_returns_official_terminal_command(self):
         with self.assertRaises(ValueError):self.service.action('account.login',{'backend':'claude','token':'SECRET'})
         value=self.service.action('account.login',{'backend':'claude'});self.assertEqual('claude auth login',value['command']);self.assertEqual('terminal',value['type'])
+
+    def test_first_machine_choice_requires_signin_and_persists_all_roles(self):
+        self.assertTrue(self.service.account_setup()['required'])
+        with patch.dict(os.environ,{'SS_TEST_SIGNED_OUT':'1'}):
+            with self.assertRaises(ValueError):self.service.action('account.choose',{'backend':'claude'})
+        self.assertTrue(self.service.account_setup()['required'])
+        chosen=self.service.action('account.choose',{'backend':'claude'})
+        self.assertFalse(chosen['setup']['required'])
+        self.assertEqual({'manager':'claude','lead':'claude','worker':'claude'},chosen['settings']['backends'])
+        for scope in ('manager','project:p1',self.scope):self.assertEqual('claude',self.service.codex.backend_for(scope))
+        self.service.codex.close()
+        self.service.codex=BackendRouter(self.service.directory,self.service.store,self.service.context_provider,self.service._chat_scope,self.service.agent_action)
+        self.assertFalse(self.service.account_setup()['required'])
+        with self.assertRaises(ValueError):self.service.action('account.choose',{'backend':'cursor'})
+
+    def test_logout_is_cli_owned_preserves_history_and_rejects_active_turns(self):
+        auth=self.cli.root/'auth.json';auth.write_text(json.dumps({'claude':True}))
+        with patch.dict(os.environ,{'SS_TEST_AUTH':str(auth)}):
+            self.select();self.service.action('chat.send',{'scope':self.scope,'text':'hello'})
+            self.cli.wait(lambda:not self.service.codex.chat(self.scope)['busy'])
+            before=self.service.codex.chat(self.scope)
+            for extra in ('token','command','path'):
+                with self.assertRaises(ValueError):self.service.action('account.logout',{'backend':'claude',extra:'untrusted'})
+            self.service.action('chat.send',{'scope':self.scope,'text':'hold'})
+            self.cli.wait(lambda:self.service.codex.chat(self.scope)['status']=='working')
+            for operation in ('account.logout','account.login'):
+                with self.assertRaises(BridgeError):self.service.action(operation,{'backend':'claude'})
+            self.assertTrue(json.loads(auth.read_text())['claude']);self.assertTrue(self.service.codex.chat(self.scope)['busy'])
+            self.service.action('chat.stop',{'scope':self.scope});self.cli.wait(lambda:not self.service.codex.chat(self.scope)['busy'])
+            result=self.service.action('account.logout',{'backend':'claude'})
+            self.assertTrue(result['logout_completed']);self.assertTrue(result['login_required']);self.assertIsNone(result['account'])
+            after=self.service.codex.chat(self.scope);self.assertEqual(before['thread_id'],after['thread_id'])
+            self.assertGreaterEqual(len(after['messages']),len(before['messages']))
+            self.assertEqual('claude',self.service.codex.backend_for(self.scope))
+
+    def test_missing_codex_has_structured_install_status_without_starting_process(self):
+        with patch.dict(os.environ,{'SUPERSURFER_CODEX':str(self.cli.root/'not-installed')}):
+            result=self.service.codex.account('codex')
+            self.assertFalse(result['installed']);self.assertTrue(result['login_required'])
+            self.assertIsNone(self.service.codex.provider('codex')._proc)
     def test_unsupported_controls_cannot_be_written_and_workspace_defaults_fall_back_safely(self):
         self.select()
         for fields in ({'fast_mode':True},{'reasoning':'high'},{'approval_mode':'auto_review'}):

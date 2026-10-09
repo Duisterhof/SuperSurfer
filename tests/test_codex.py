@@ -22,6 +22,13 @@ waiting = {}
 approval_chains = {}
 thread_models = {}
 active_turns = {}
+auth=pathlib.Path(os.environ['SS_TEST_AUTH']) if os.environ.get('SS_TEST_AUTH') else None
+def signed_in():return json.loads(auth.read_text()).get('codex',True) if auth and auth.exists() else not os.environ.get('SS_FAKE_SIGNED_OUT')
+def set_auth(value):
+    if auth:
+        data=json.loads(auth.read_text()) if auth.exists() else {};data['codex']=value;auth.write_text(json.dumps(data))
+    elif value:os.environ.pop('SS_FAKE_SIGNED_OUT',None)
+    else:os.environ['SS_FAKE_SIGNED_OUT']='1'
 for line in sys.stdin:
     request = json.loads(line)
     with open(os.environ['SS_FAKE_LOG'], 'a') as log: log.write(json.dumps(request)+'\n')
@@ -40,13 +47,17 @@ for line in sys.stdin:
     if not method or 'id' not in request: continue
     p, result = request.get('params', {}), {}
     if method == 'initialize': result = {'userAgent':'fake'}
-    elif method == 'account/read' and os.environ.get('SS_FAKE_SIGNED_OUT'): result = {'account': None, 'requiresOpenaiAuth':True}
+    elif method == 'account/read' and not signed_in(): result = {'account': None, 'requiresOpenaiAuth':True}
     elif method == 'account/read': result = {'account': {'type':'chatgpt','email':'test@example.com','planType':'pro','accessToken':'SECRET'}, 'requiresOpenaiAuth':True,'token':'SECRET'}
     elif method == 'config/read': result = {'config':{} if os.environ.get('SS_FAKE_CONFIG_EMPTY') else {'model':'model-a','model_reasoning_effort':'medium','api_key':'SECRET'},'origins':{}}
     elif method == 'model/list': result = {'data':[{'id':'model-b' if p.get('cursor') else 'model-a','displayName':'Test model','isDefault':not bool(p.get('cursor')),'defaultReasoningEffort':'low'}], 'nextCursor':None if p.get('cursor') else 'page2'}
     elif method == 'account/login/start':
+        set_auth(True)
         result = {'type':'chatgptDeviceCode','verificationUrl':'https://auth.openai.com/codex/device','userCode':'TEST-CODE','loginId':'login1','accessToken':'SECRET'}
         event('account/login/completed', {'loginId':'login1','success':True})
+    elif method == 'account/logout':
+        set_auth(False)
+        event('account/updated', {'authMode':None})
     elif method in ('thread/start','thread/resume'):
         thread_id = p.get('threadId') or 'ss-'+uuid.uuid4().hex
         old_model = thread_models.setdefault(thread_id,p.get('model','default-model'))
@@ -162,6 +173,33 @@ class CodexBridgeTests(unittest.TestCase):
         bridge = CodexBridge(self.root / 'state', lambda scope: {'cwd':str(self.repo), 'instructions':'Project: VLA. Use observed results.', 'name':'VLA lead', 'role':'lead', 'document_path':str(self.doc)})
         self.bridges.append(bridge)
         return bridge
+
+    def test_server_required_checkpoint_is_logged_reused_and_preserved(self):
+        requirement = {'key': 'research_results', 'title': 'Review research Results', 'status': 'working', 'summary': 'Compare the new attempt with previous evidence.'}
+        self.bridge.context_provider = lambda scope: {'cwd': str(self.repo), 'name': 'Worker', 'role': 'worker', 'required_tasks': [requirement]}
+        self.bridge.send('experiment:vla', 'hold')
+        self.wait_for(lambda: self.bridge.chat('experiment:vla').get('turn_id'))
+        chat = self.bridge.chat('experiment:vla')
+        task_id = chat['required_tasks']['research_results']
+        self.assertEqual('incomplete', chat['task_state'])
+        updated = self.bridge.set_required_task('experiment:vla', {**requirement, 'summary': 'Include both measured and unavailable attempts.'})
+        self.assertEqual(task_id, updated['id'])
+        self.assertEqual(1, len(self.bridge.chat('experiment:vla')['tasks']))
+        self.bridge.stop('experiment:vla');self.finished('experiment:vla')
+        self.bridge.close();self.bridge = self.new_bridge()
+        saved = self.bridge.chat('experiment:vla')
+        self.assertEqual(task_id, saved['required_tasks']['research_results'])
+        self.assertEqual('working', saved['tasks'][0]['status'])
+
+    def test_full_task_log_rejects_new_required_checkpoint_before_reserving_turn(self):
+        scope = 'experiment:vla'
+        self.bridge.chat(scope)
+        with self.bridge._lock:
+            self.bridge._chats[scope]['tasks'] = [{'id': 'task_' + str(index), 'title': 'Done', 'status': 'completed', 'summary': 'Evidence'} for index in range(200)]
+        self.bridge.context_provider = lambda scope: {'cwd': str(self.repo), 'required_tasks': [{'key': 'research_results', 'title': 'Results', 'status': 'working', 'summary': 'Review evidence'}]}
+        with self.assertRaises(CodexError):self.bridge.send(scope, 'Start')
+        self.assertFalse(self.bridge.chat(scope)['busy'])
+        self.assertEqual([], self.bridge.chat(scope)['messages'])
     def requests(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
     def wait_for(self, condition, seconds=4):

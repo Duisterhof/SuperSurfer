@@ -20,6 +20,7 @@ import threading
 import time
 import uuid
 from urllib.parse import parse_qs, quote, unquote, urlsplit
+from . import results_review
 
 from .chat_context import attachments as chat_attachments
 
@@ -254,6 +255,7 @@ class Service(SurfboardService, EditorService, WritingService):
             project["archived"] = bool(self.store.get("project_archived:"+project["id"],False))
             board = self.boards.get(project["id"])
             project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
+            project["surfboard"]["hidden_tabs"] = self.store.get("hidden_view_tabs:" + project["id"] + ":", [])
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
         for item in state["experiments"]:
@@ -274,6 +276,7 @@ class Service(SurfboardService, EditorService, WritingService):
                     run["config"] = {**run["config"], "wandb_tracking": prepared}
                     run["wandb_url"] = prepared.get("run_url") or run["wandb_url"]
         state["settings"] = self.store.settings()
+        state["account_setup"] = self.account_setup()
         state["monitoring"] = self.store.get("monitoring", {"last_check": None, "next_check": None, "alerts": []})
         if not state["settings"]["monitor_enabled"]:
             state["monitoring"]["next_check"] = None
@@ -605,6 +608,11 @@ class Service(SurfboardService, EditorService, WritingService):
                 "Log measured training/evaluation metrics with the training logger; parameter metadata alone is not a measured result. "
                 "Preserve existing training runs and never invent metric values. The Results tab reads this experiment's W&B group.")
             instructions.append("Published HTML Results (preserve source bindings; use expected_sha256 when updating): " + json.dumps(self.store.get("results:" + experiment["id"], [])))
+            review = results_review.inspect(self, experiment["id"])
+            instructions.append("Results checkpoint: " + json.dumps(review))
+            if review["needs_review"] and "check_experiment_results" in self.board_record(project["id"], experiment["id"])["compiled"]["tools_by_role"]["worker"]:
+                context["required_tasks"] = [results_review.requirement(review)]
+                instructions.append(results_review.SUMMARY + " Use one current comparison report rather than appending a new report for every poll. This check grants no new run or protocol authority.")
             instructions.append("Custom Markdown tabs: " + json.dumps(self.results.pages(experiment["id"])))
             instructions.append("Current structured brief (version required for updates): " + json.dumps(brief.read(self.store, experiment["id"])))
             instructions.append(f"Experiment document: {experiment['document_path']}\nThese are technical notes and provenance, not the main overview. Update the main page with update_experiment_brief: replace objective/method/findings/next_steps, and put routine status changes in activity. Keep live run status in the app run list, measured visualizations in publish_result. Preserve technical provenance and unrelated edits.\n\n{experiment['markdown'][:40000]}")
@@ -806,6 +814,8 @@ class Service(SurfboardService, EditorService, WritingService):
                 if name == "supersurfer_publish_training_results":
                     fields = compile_report(fields)
                 return self.results.publish(experiment["id"], fields)
+            if name == "supersurfer_check_experiment_results":
+                return self.check_results(scope, arguments)
             if name in {"supersurfer_inspect_project_compute", "supersurfer_inspect_compute_host", "supersurfer_register_compute_host", "supersurfer_register_compute_gpus", "supersurfer_onboard_project_node", "supersurfer_configure_project_compute", "supersurfer_set_project_limits"}:
                 return self.agent_compute_action(scope, name, arguments)
             if name == "supersurfer_update_task":
@@ -813,6 +823,11 @@ class Service(SurfboardService, EditorService, WritingService):
                     raise APIError("Task tools belong to SuperSurfer conversations", 403)
                 if not isinstance(arguments, dict):
                     raise APIError("Task fields must be an object")
+                required = self.codex.chat(scope).get("required_tasks", {}).get(results_review.KEY)
+                if required and arguments.get("task_id") == required and arguments.get("status") == "completed":
+                    experiment = self.experiment_for_scope(scope)
+                    if results_review.inspect(self, experiment["id"])["needs_review"]:
+                        raise APIError("The Results checkpoint is unfinished. Use check_experiment_results and publish the current comparison before completing it.", 409)
                 if arguments.get("status") == "watching":
                     rules = self.store.get("worker_wakeups", [])
                     if not any(rule["id"] == arguments.get("wakeup_id") and rule["scope"] == scope and rule.get("enabled") for rule in rules):
@@ -1147,10 +1162,60 @@ class Service(SurfboardService, EditorService, WritingService):
         return {"queued": True, "ready": True, "already_queued": False, "run_id": run_id, "run": released}
 
     def enable_run_recovery(self, scope, run):
+        self.seed_results_checkpoint(scope, run.get("experiment_id"))
         if (scope.startswith(("experiment:", "conversation:")) and self.turn_origins.get(scope) == "user"
                 and run.get("config", {}).get("host_contracts") and not self.recovery.get(run["id"]) and scope not in self.recovery.submitting):
             self.recovery.enable(scope, run, "Complete the existing user-requested run " + run["name"] +
                 ". Consult this conversation's task and preserve its protocol, inputs, resource limits and stop orders.")
+
+    def seed_results_checkpoint(self, scope, experiment_id):
+        if (not experiment_id or not scope.startswith(("experiment:", "conversation:")) or
+                not hasattr(self.codex, "set_required_task")):
+            return
+        try:
+            experiment = self.store.experiment(experiment_id)
+            tools = self.board_record(experiment["project_id"], experiment_id)["compiled"]["tools_by_role"]["worker"]
+            if "check_experiment_results" not in tools:
+                return
+            status = results_review.inspect(self, experiment_id)
+            requirement = results_review.requirement(status)
+            if requirement:
+                self.codex.set_required_task(scope, requirement)
+        except Exception:
+            # The next context/tool inspection seeds the checkpoint. Successful
+            # queue/recovery must not appear to fail because bookkeeping or its
+            # cached observation could not finish after release.
+            pass
+
+    def check_results(self, scope, arguments):
+        if not isinstance(arguments, dict):
+            raise APIError("Results check fields must be an object")
+        if "agent" in self._chat_scope(scope) or not self.codex.chat(scope).get("busy"):
+            raise APIError("Results checks require an active owned conversation", 403)
+        fields = dict(arguments)
+        if scope == "manager" or scope.startswith("project:"):
+            experiment = self.store.experiment(text_field(fields, "experiment_id", 180))
+            if scope.startswith("project:") and experiment["project_id"] != scope.removeprefix("project:"):
+                raise APIError("Experiment belongs to another project", 403)
+            fields.pop("experiment_id")
+        else:
+            experiment = self.experiment_for_scope(scope)
+        action = fields.pop("action", "inspect")
+        if action == "complete":
+            results_review.complete(self, experiment["id"], fields)
+        elif action != "inspect" or set(fields) - {"result_id"}:
+            raise APIError("Results check accepts inspect with optional result_id, or complete with the reviewed evidence")
+        status = results_review.inspect(self, experiment["id"])
+        if scope.startswith(("experiment:", "conversation:")) and hasattr(self.codex, "set_required_task"):
+            requirement = results_review.requirement(status)
+            if requirement:
+                self.codex.set_required_task(scope, requirement)
+            elif status["receipt"]:
+                self.codex.set_required_task(scope, {"key": results_review.KEY, "title": results_review.TITLE,
+                    "status": "completed", "summary": status["receipt"]["summary"]})
+        if action == "inspect" and fields.get("result_id"):
+            status["report"] = results_review.read_report(self, experiment["id"], fields["result_id"])
+        return status
 
     def prepare_run_submission(self, params, *, repo_correction=False):
         """Validate and build a held submission before crossing the manager RPC boundary."""
@@ -1313,6 +1378,14 @@ class Service(SurfboardService, EditorService, WritingService):
     def run_context(runs):
         return [{**{key: run.get(key) for key in ("id", "project_id", "experiment_id", "name", "status", "ready", "gpu_count", "allocated_gpus", "host_id", "host_name", "revision", "pr_url", "wandb_url", "waiting_reason", "error", "updated")}, "progress": run.get("config", {}).get("progress"), "purpose": run.get("config", {}).get("purpose")} for run in runs]
 
+    def account_setup(self):
+        configured = self.store.get("account_setup_complete", False)
+        bindings = getattr(self.codex, "bindings", {})
+        backends = self.store.settings()["backends"]
+        required = (hasattr(self.codex, "backend_for") and not configured and not bindings
+                    and all(value == "codex" for value in backends.values()))
+        return {"required": bool(required), "backends": backends}
+
     def backend_for(self, scope):
         return self.codex.backend_for(scope) if hasattr(self.codex, "backend_for") else "codex"
 
@@ -1461,7 +1534,7 @@ class Service(SurfboardService, EditorService, WritingService):
     def _validate_role_settings(self, settings, changes):
         roles = set(changes.get("models", {})) | set(changes.get("reasoning", {})) | set(changes.get("backends", {}))
         for role in roles:
-            self._model_choice(settings["models"][role] if settings["backends"][role] == "codex" else None, settings["reasoning"][role] if settings["backends"][role] == "codex" else None, explicit_reasoning=settings["backends"][role] == "codex", backend=settings["backends"][role])
+            self._model_choice(settings["models"][role] if settings["backends"][role] == "codex" else None, settings["reasoning"][role] if settings["backends"][role] == "codex" else None, explicit_reasoning=settings["backends"][role] == "codex" and (role in changes.get("models", {}) or role in changes.get("reasoning", {})), backend=settings["backends"][role])
 
     def chat(self, scope):
         if scope.startswith("agent:"):
@@ -1559,6 +1632,8 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.latex_action(params)
         if op == "view-layout.save":
             return self.save_view_layout(params)
+        if op == "view-tab.hide":
+            return self.hide_view_tab(params)
         if op.startswith("surfboard."):
             return self.surfboard_action(op, params)
         if op == "settings.save":
@@ -1659,10 +1734,31 @@ class Service(SurfboardService, EditorService, WritingService):
             from .cli_backends import provider_name
             provider_name(backend)
             return self.codex.login(backend=backend) if hasattr(self.codex, "backend_for") else self.codex.login()
+        if op in {"account.logout", "account.choose"}:
+            if set(params) != {"backend"}:
+                raise APIError("Account actions accept only the backend name; never send credentials or codes.")
+            from .cli_backends import provider_name
+            backend = provider_name(params["backend"])
+            if op == "account.logout":
+                if not hasattr(self.codex, "logout"):
+                    raise APIError("This workspace cannot sign out through the app.", 409)
+                return self.codex.logout(backend=backend)
+            if not self.account_setup()["required"]:
+                raise APIError("This workspace already has provider defaults. Change them in Settings; existing chats retain their provider.", 409)
+            account = self.codex.account(backend=backend, refresh=True)
+            if account.get("login_required") or account.get("error") or not account.get("account"):
+                raise APIError("Sign in to the selected provider on this machine before using it.", 403)
+            changes = {"backends": {role: backend for role in ("manager", "lead", "worker")}}
+            settings = self.store.save_settings(changes, validate=lambda values: self._validate_role_settings(values, changes))
+            self.store.put("account_setup_complete", True)
+            return {"settings": settings, "setup": self.account_setup(), "backend": backend}
         if op in {"experiment.result.publish", "experiment.page.publish"}:
             experiment_id = text_field(params, "experiment_id", 180)
             fields = {key: value for key, value in params.items() if key != "experiment_id"}
             return self.results.publish(experiment_id, fields) if op == "experiment.result.publish" else self.results.publish_page(experiment_id, fields)
+        if op == "experiment.results.manage":
+            experiment_id = text_field(params, "experiment_id", 180)
+            return self.results.manage(experiment_id, {key: value for key, value in params.items() if key != "experiment_id"})
         if op == "experiment.brief.save":
             experiment_id = text_field(params, "experiment_id", 180)
             return brief.update(self.store, experiment_id, {key: value for key, value in params.items() if key != "experiment_id"})
@@ -2071,10 +2167,12 @@ class Handler(BaseHTTPRequestHandler):
                     result["surfboard"] = {**board["compiled"], "name": board["board"]["name"], "version": board["version"]}
                     result["brief"] = brief.read(self.server.service.store, result["id"])
                     result["pages"] = self.server.service.results.pages(result["id"])
+                    result["results_review"] = results_review.inspect(self.server.service, result["id"])
                 elif path == "/api/experiment-page":
                     result = self.server.service.results.page(query.get("experiment_id", [""])[0], query.get("page_id", [""])[0])
                 elif path == "/api/results":
-                    result = {"pages": self.server.service.results.list(query.get("experiment_id", [""])[0])}
+                    experiment_id = query.get("experiment_id", [""])[0]
+                    result = {**self.server.service.results.listing(experiment_id), "review": results_review.inspect(self.server.service, experiment_id)}
                 elif path == "/api/result-data":
                     sources = self.server.service.results.sources(query.get("experiment_id", [""])[0], query.get("result_id", [""])[0], float(query["revision"][0]) if "revision" in query else None)
                     reader = self.server.service.result_data.snapshot if query.get("background", [""])[0] == "1" else self.server.service.result_data.read
@@ -2190,7 +2288,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

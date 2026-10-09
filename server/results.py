@@ -1,5 +1,6 @@
 """Experiment HTML pages with short-lived, document-only preview capabilities."""
 import hashlib
+import json
 from pathlib import Path
 import re
 import secrets
@@ -55,12 +56,50 @@ class Results:
             rows = self.store.get("results:" + experiment_id, [])
             result = []
             for row in rows:
+                if row.get("archived"):
+                    continue
                 token = next((key for key, value in self.previews.items() if value["id"] == row["id"] and value["updated"] == row["updated"]), None)
                 if token is None:
                     token = secrets.token_urlsafe(32)
                     self.previews[token] = {**row, "expires": now + 3600}
                 result.append({**row, "preview_url": "/result-preview/" + token})
             return result
+
+    def presentation(self, experiment_id):
+        self.store.experiment(experiment_id)
+        with self.lock:
+            rows = self.store.get("results:" + experiment_id, [])
+            version = hashlib.sha256(json.dumps([(row["id"], bool(row.get("archived"))) for row in rows]).encode()).hexdigest()
+            return {"version": version, "archived": [{"id": row["id"], "title": row["title"]} for row in rows if row.get("archived")]}
+
+    def listing(self, experiment_id):
+        with self.lock:
+            return {"pages": self.list(experiment_id), **self.presentation(experiment_id)}
+
+    def manage(self, experiment_id, fields):
+        if not isinstance(fields, dict) or set(fields) not in ({"version", "order"}, {"version", "result_id", "archived"}):
+            raise ValueError("Report layout accepts its version and order, or result_id and archived boolean")
+        self.store.experiment(experiment_id)
+        with self.lock:
+            if fields["version"] != self.presentation(experiment_id)["version"]:
+                raise Conflict("Reports changed. Refresh Results before rearranging them.")
+            key = "results:" + experiment_id
+            rows = self.store.get(key, [])
+            if "order" in fields:
+                order = fields["order"]
+                visible = [row for row in rows if not row.get("archived")]
+                if (not isinstance(order, list) or not all(isinstance(value, str) for value in order) or
+                        len(order) != len(visible) or set(order) != {row["id"] for row in visible}):
+                    raise ValueError("Supply every visible report ID exactly once")
+                by_id = {row["id"]: row for row in visible}
+                rows = [by_id[value] for value in order] + [row for row in rows if row.get("archived")]
+            else:
+                row = next((row for row in rows if row["id"] == fields["result_id"]), None)
+                if row is None or type(fields["archived"]) is not bool:
+                    raise ValueError("Choose a report in this experiment and an archived boolean")
+                row["archived"] = fields["archived"]
+            self.store.put(key, rows)
+            return self.presentation(experiment_id)
 
     def preview(self, token):
         with self.lock:

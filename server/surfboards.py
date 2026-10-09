@@ -26,7 +26,7 @@ ITEM_TOOLS = {"create_work_item", "create_work_item_agent", "handoff_work_item",
 EXPERIMENT_TOOLS = {"create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment"}
 COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node",
                  "check_available_node", "acquire_new_node", "recover_run", "set_project_limits", "stop_run"}
-SHARED_CONTENT = {"publish_result", "publish_markdown_tab", "update_experiment_brief", "publish_training_results", "run_board_action", "compile_latex",
+SHARED_CONTENT = {"check_experiment_results", "publish_result", "publish_markdown_tab", "update_experiment_brief", "publish_training_results", "run_board_action", "compile_latex",
                   "list_project_artifacts", "publish_artifact", "inspect_project_activity"}
 ROLE_TOOLS = {
     "worker": COMMON_TOOLS | SHARED_CONTENT | COMPUTE_TOOLS | {"prepare_run", "queue_run", "configure_worker_wakeup"},
@@ -747,6 +747,8 @@ def compile_board(board):
                 enabled.add(tool)
         if block_kinds & {"results", "preview"}:
             enabled.add("publish_result")
+            if workflow == "research":
+                enabled.add("check_experiment_results")
         if block_kinds & {"wandb", "visualizer"}:
             enabled.add("publish_training_results")
         if block_kinds & ACTION_KINDS:

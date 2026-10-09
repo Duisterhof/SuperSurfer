@@ -39,3 +39,22 @@ test('a timed-out setup kills only its owned child even if SIGTERM is ignored',a
 });
 
 test('port previews accept one explicit development port and exclude workspace management ports',()=>{const {previewPort}=require('../desktop/connection.cjs');assert.equal(previewPort(8000),8000);for(const value of [true,'8000',0,22,8765,9876,9877,9880,65536,8000.5])assert.throws(()=>previewPort(value));assert.throws(()=>previewPort(9000,[9000]));});
+
+test('preflight tolerates banners, rejects old Python and reports actionable SSH errors',()=>{
+ const {parseRequirements,connectionError}=require('../desktop/connection.cjs'),row={supersurfer_requirements:true,python:[3,10,0],providers:{claude:true}};
+ assert.deepEqual(parseRequirements('Welcome\n'+JSON.stringify(row)+'\nSSH warning'),row);
+ assert.throws(()=>parseRequirements(JSON.stringify({...row,python:[3,6,8]})),/Install Python 3.10/);
+ assert.throws(()=>parseRequirements(JSON.stringify({...row,manager_python:false})),/Python 3.11/);
+ assert.throws(()=>parseRequirements('unrelated output'),/Could not check/);
+ assert.match(connectionError(Error('Permission denied (publickey).'),{target:'tulip'}).message,/SSH sign-in is required/);
+ assert.match(connectionError(Error('Host key verification failed.'),{target:'tulip'}).message,/SSH identity/);
+ assert.match(connectionError(Error('python3: command not found'),{}).message,/Install Python/);
+ const error=connectionError(Error('SUPERSURFER_PROGRESS: {"message":"Internal step"}\nTraceback (most recent call last):\nRuntimeError: Remote port 8765 belongs to a different workspace.'),{});
+ assert.equal(error.message,'Remote port 8765 belongs to a different workspace.');
+});
+
+test('requirements probe checks the actual local interpreter without starting a service',async()=>{
+ const {checkRequirements}=require('../desktop/connection.cjs'),status=[];
+ const value=await checkRequirements({mode:'local'},message=>status.push(message));
+ assert.equal(value.supersurfer_requirements,true);assert.ok(value.python[0]>=3);assert.ok(status[0].startsWith('Checking Python'));assert.ok(status.at(-1).startsWith('Requirements checked.'));
+});

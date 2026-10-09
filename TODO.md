@@ -1,3 +1,19 @@
+# Completed in 0.1.40
+
+- Unified Codex/Cursor/Claude Accounts in Settings with sign-in/out and active-turn guards.
+- Explicit first-machine provider choice with persistent new-agent defaults.
+- Python/Git/SSH preflight, actionable errors and automatic workspace data folders.
+- First project opens the task list instead of the Surfboard editor.
+- Direct page/tab removal, recoverable utility/Markdown visibility and block removal.
+- Reflow neighboring panels after removal; preserve unsaved models/parked frames.
+- Results report drag/move/remove/restore with stale-layout guards.
+- Immediate task-attempt visibility plus mandatory research Results review checkpoint.
+- Review every release skill against actual tools, role boundaries and permissions.
+
+Remaining validation: a brand-new real provider account's authentication callback
+on macOS; unsigned Mac launch/Gatekeeper on an actual Mac. Synthetic sign-in and
+all three provider protocol tests do not claim that external validation.
+
 # Native Mac packaging follow-ups
 
 - [x] Seal native Mac builds with an ad-hoc signature and test original/ZIP launches.
