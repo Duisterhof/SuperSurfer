@@ -2,15 +2,21 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.35. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.36. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.
+
+Desktop SSH setup reports bounded progress and errors independently of W&B
+fetching. After reconnect, resolve the same saved individual writers and sharing
+selection; do not allocate new tracking runs or move credentials to repair the
+connection. Available cached history retains its original age until a successful
+source fetch establishes new evidence.
 
 The Research default shares data within the project. The block can narrow its
 selection to the current experiment or explicitly selected experiments. Preserve
@@ -48,7 +54,9 @@ selection. Bind each view to the same declared writers instead of copying live
 history into a local array or allocating a writer per window. A fresh fetch in one
 view is evidence about that fetch only; it does not prove another window's cached
 curves are current. A detached panel hides in its original window until the child
-closes; this does not change the saved data selection or create a writer. Separate windows are app controls, not data-block tools.
+closes, with other panels reflowing into its space; this does not change the saved
+data selection or create a writer. A repository-media preview is a short-lived
+view of a file, not a new W&B writer or permanent publication URL. Separate windows are app controls, not data-block tools.
 
 Managed-editor extension activation and file-watcher status do not establish
 W&B connectivity or sample freshness. Inspect the actual source response rather
@@ -80,3 +88,18 @@ is inaccessible, report that source's error and retain available evidence. Fetch
 new values on Results open is handled by the live Results bridge; no agent wakeup
 or republishing loop is needed. A requested selection change belongs in the configurator, which can call
 `propose_surfboard`; current board permissions apply until the user applies it.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.

@@ -1,3 +1,46 @@
+## 0.1.36 clean views and reusable blocks
+
+- Native desktop menus own Rearrange; panel handles own secondary actions. Default
+  Code has no VS Code file sidebar. SuperSurfer Files routes file/media selections
+  to the current editor, preserving page and source-buffer ownership.
+- Full VS Code and Terminal have distinct native sessions and private
+  workspace files. Ports is an app-owned view: an explicit user selection opens
+  exactly one localhost development port in a separate desktop partition, using
+  a temporary private SSH listener for remote workspaces. No app authentication
+  or preload is supplied to that window. Closing it releases only its listener.
+  Native arbitrary port proxying stays disabled; workspace management ports and
+  projects without exact-folder consent are rejected. An empty native workspace may attach only its session's exact
+  registered repository; this does not grant trust or alter shared source files.
+- One explicit project connection/editor choice enables tools for an exact
+  canonical folder. The GUI persists it by host/project; native trust remains
+  enabled. Agents cannot approve project trust through presentation tools.
+- Detachment is a transient projection: remaining panels fill the available area,
+  splitter edits map back to the saved tree, and closing the child restores its
+  panel. Source buffers are never saved by geometry changes.
+- HTML publication is explicit user work. Assets are copied from safe regular
+  project/artifact files into immutable workspace-owned revisions. Only the
+  publishing project revises a block, with its current version; other projects
+  can reuse published IDs. Omitted assets on revision retain copied media;
+  an explicit asset map replaces the set. Expiring capabilities are not persisted
+  in page layouts. The opaque iframe sandbox cannot access app credentials,
+  parent DOM or app APIs. Script/model data requests are limited by CSP to that
+  publication’s copied assets; capability responses support credentialless CORS.
+  Static views provide no agent execution authority.
+- Media capabilities are file-scoped, expire, validate paths again on access and
+  support byte ranges. Codec support varies; a download remains available.
+
+## 0.1.36 connection setup
+
+The desktop sends an exact bounded bundle_size. The remote installer receives it
+with a 30-second deadline before acquiring connection.lock. Legacy EOF uploads
+remain supported with the same deadline. Interrupted/incomplete transfers never
+hold the workspace lock or start/replace services. Setup uses a private bootstrap
+SSH command session; it cannot inherit a shared control master, null stdin or a
+tunnel-only session. Host-key verification and clearing inherited forwards remain
+enforced. Structured progress is presentation only; credentials stay confined to
+the existing authenticated setup/tunnel flow. Local timeout/cancel terminates only
+the owned child, with a bounded forced-termination fallback.
+
 ## 0.1.35 nested desktop layout and editor recovery
 
 Chunk review uses recorded unified hunks and the current file revision, not Git

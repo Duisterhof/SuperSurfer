@@ -25,8 +25,14 @@ Send both exact versions and the **full preserved pages list** to the update;
 change only the requested page/tiles. Stable IDs preserve view identity. A 409
 means someone changed the layout or board: reread and reconcile, never retry an
 old full list blindly. Read the returned saved layout before claiming success.
-The Coding preset is a single full-width editor tile; native/built-in file browsing
-and Changes are inside it, while separate explorer/review tiles remain optional.
+The Coding preset is a single full-width clean Code tile. SuperSurfer Files sits
+above Projects; Changes is integrated, and separate explorer/review tiles remain
+optional. `vscode` (Full VS Code), `terminal` and `ports` are independently
+configurable tiles with explicit project consent. Full VS Code and Terminal may
+have distinct native buffers; do not claim synchronized unsaved text. Ports is
+SuperSurfer-owned: it opens one selected development port in an isolated desktop
+preview, not a native workbench forwarding frame. It grants no command execution
+or agent opening capability.
 Do not add mandatory duplicate tiles to imitate its existing controls. Each window
 remembers the last selected valid page per project/work item. Returning to it
 restores that page without sending work; detached panel navigation does not
@@ -43,7 +49,12 @@ Pages contain `{id, title, tiles}` and optional integer sidebar widths
 `available_tiles`, `span` (number 1–12; fractional widths are supported), `height`
 (integer 160–5000, including PDFs), and optional `placement: "main" | "left" | "right"` (main by default).
 Order comes from the arrays. Preserve IDs, titles, source paths and unrelated
-pages; at most 24 pages, 16 tiles per page and one of each kind per page. The older
+pages; at most 24 pages, 16 tiles per page and one of each ordinary kind per page.
+Multiple `html` tiles are allowed, each with a distinct tile ID and a published
+`block_id` matching `block_` plus sixteen lowercase hexadecimal characters. Keep
+the durable ID rather than a preview URL. HTML copies are workspace-wide reusable
+presentations, not workflow actions or live measurement sources; follow the
+[blocks skill](../../supersurfer-blocks/SKILL.md) before publishing their content. The older
 `rows` side-panel layout is returned for context; the agent update accepts pages,
 not row or policy mutations. Removing all pages is not a reset to defaults.
 
@@ -81,14 +92,23 @@ second editor or dummy tile. Use the same scoped `update_view_layout` with both
 current versions and the complete preserved pages list. Splitter dragging updates
 ratios; no source save, compiler invocation or capability change is implied.
 
+Movable window pointer-drags also support edge snapping. A preview identifies
+the target and split direction; dropping there converts the same page to docked
+mode through its nested tree, preserving tile identities and source buffers.
+Read the saved result after a gesture before another versioned layout edit.
+Desktop editor strips are hidden; the compact top-right handle provides dragging
+and its panel-action menu. Do not add a header tile just to regain those controls.
+
 Native separate windows use the tile's user GUI control, not this agent tool.
 Do not create another page, report or owner to imitate that action. Detached views
 keep the original project/item/path identity but are separate client instances;
 chart interactions and editor drafts need not synchronize. Save dirty editor work
 before opening its separate view and preserve conflict checks on later disk edits.
-The original window hides that panel until the child closes, then restores its
-original position. A docked location may appear as reserved empty space during
-that period; this is temporary client presentation, not removal of the saved tile.
+The original window hides that panel until the child closes, reflowing remaining
+panels into the vacated space, then restores its original position. This is
+temporary client presentation, not removal of the saved tile. Explicitly reserved
+empty leaves remain layout choices; do not use a placeholder to duplicate the
+detached panel.
 Do not persist a page deletion merely because its panel is currently detached.
 Closing a panel window does not stop remote work, monitoring or compilation.
 
@@ -98,7 +118,8 @@ library. Preserve that identity; do not reinterpret it as a source-tree path.
 Do not use private service paths, absolute file URLs or a guessed compiler output.
 A PDF view does not enable `compile_latex`; compilation still requires the applied
 LaTeX block and that role's existing permissions. Preserve the selected PDF/build
-identity and distinguish a saved PDF from current source. Moving a tile does not
+identity and distinguish a saved PDF from current source. The editor handle's **Save** writes the active source file; Rearrange **Done**
+saves page geometry. These are different operations. Moving a tile does not
 save dirty editor buffers, republish Results, create W&B writers, start work or
 cancel remote work. Verify the requested arrangement at its actual pane size.
 
@@ -115,8 +136,9 @@ window/workspace width. Page-specific dividers and tile edges resize directly;
 the automatic page change saves when dragging ends. During explicit Rearrange,
 changes stay in its draft: **Done** persists, **Cancel** discards. A failed
 save retains a visible draft/error instead of claiming the size persisted.
-The compact top row has **Rearrange** beside workspace status. Its overlay groups
-the current page identity, Blocks palette, Windows/Dock, Pages…, + Page,
+Desktop hides the in-app topbar: use its native **Rearrange** menu or
+Cmd/Ctrl+Alt+Shift+R. The browser retains **Rearrange** beside workspace status. Their
+overlay groups the current page identity, Blocks palette, Windows/Dock, Pages…, + Page,
 Surfboard… and other window/view controls. Verify that identity before Done or
 Cancel. Pages…, + Page and Surfboard… safely save the pending layout draft before
 opening their editor; a save failure or conflict leaves Rearrange open and blocks

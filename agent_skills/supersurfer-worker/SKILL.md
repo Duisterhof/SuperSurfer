@@ -2,17 +2,24 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.35. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.36. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
 recoverable failures and reconnects; preserve prior authorization, task/run IDs,
 stop orders and resource limits. A turn ending is not completion.
+
+If the desktop stalls while connecting, keep the saved task, request and run
+identities. The app now reports bounded upload/install progress and connection
+errors; use its retry flow rather than launching a replacement run or treating
+lost desktop access as completed work. Inspect existing receipts after reconnect
+before repeating an uncertain action. Remote work and account sign-in are
+separate from the client's SSH transport.
 
 ## Complete the work
 
@@ -216,9 +223,29 @@ through this item's `update_view_layout`: read first, set the page's arrangement
 and individual bounds, and retain stable tile IDs. Use the layout reference for
 sizes and conflicts. Opening a separate native panel window is a user GUI action,
 not a worker tool or another execution owner. The original panel hides until the
-child closes, then restores without changing the saved layout. A closed or
+child closes, then restores without changing the saved layout; other panels
+reflow while it is absent. Default Code's shared Files and optional Full VS Code,
+Terminal or Ports views do not create another owner or change node readiness.
+A closed or
 detached view does not
 complete your deliverable, cancel a run or transfer your saved recovery grant.
+
+For short experiment Findings, use spaced prose and a Markdown table for method
+comparisons. Include the actual sample count, split and run status; distinguish
+measured results from unmeasured plans, missing metrics and unfinished runs.
+Do not compress evidence into inline slash strings. Preserve the document version
+when repairing its prose; follow
+[brief Findings guidance](../supersurfer-results/references/brief-findings.md).
+
+For a user-requested reusable HTML view, use `list_view_blocks` to inspect the
+workspace library and `publish_view_block` to publish safe scoped HTML/assets from
+this project. Then place `kind: html` with its durable `block_id` through the scoped
+layout tools; no routine manager relay or extra execution gate is needed. Published
+blocks are reusable workspace-wide, but only their publishing project can revise
+them with the current version. Publication requires an active user-origin turn;
+scheduled checks do not acquire this authority. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md); live measured training
+curves still use the standard Results renderer rather than a static copied block.
 
 ## Tool index
 
@@ -248,3 +275,17 @@ For questions, interruptions, permissions, local time and persistent chat behavi
 read [conversation continuity](references/conversations.md) when relevant.
 Retired AutoML sessions are read-only history; continue in an owned SuperSurfer
 conversation, without replacing an existing owner merely to evade a limitation.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Ports is an app-owned user GUI block: after exact-project consent, desktop opens
+one explicitly selected localhost development port in an isolated preview window.
+It is not a native VS Code forwarding view or an agent tool. Closing the preview
+releases only that temporary listener; it neither stops the remote server nor
+closes the workspace. Existing command/board-action authorization still governs
+starting a server. Do not use code-server proxy routes, broaden app CORS or relay
+arbitrary localhost services to bypass these boundaries. Browser-only access
+starts no forwarding; use the desktop flow.

@@ -22,7 +22,7 @@ class AgentSkillsTests(unittest.TestCase):
             shutil.copytree(ROOT / "agent_skills", root / "agent_skills")
             (root / "package.json").write_text(json.dumps({"version": "999.0.0"}))
             errors = checker.check(root)
-            self.assertEqual(11, len(errors))
+            self.assertEqual(12, len(errors))
             self.assertTrue(all("review capabilities" in error for error in errors))
 
     def test_missing_skill_or_tool_guidance_blocks_packaging(self):

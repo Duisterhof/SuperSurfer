@@ -54,7 +54,7 @@ async function closeServer(server) {
   server.closeAllConnections?.();
   await closed;
 }
-async function fixture(t) {
+async function fixture(t, {extraPort} = {}) {
   // Short path also exercises the same Unix-domain socket limits as macOS.
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ss-test-'));
   const servers = [], children = [];
@@ -97,7 +97,7 @@ async function fixture(t) {
     'StrictModes no', 'PasswordAuthentication no', 'KbdInteractiveAuthentication no',
     'PubkeyAuthentication yes', 'AuthenticationMethods publickey', 'UsePAM no',
     'PermitRootLogin yes', 'AllowTcpForwarding local', 'GatewayPorts no',
-    `PermitOpen 127.0.0.1:${remotePort}`, 'LogLevel ERROR',
+    `PermitOpen 127.0.0.1:${remotePort}${extraPort ? ` 127.0.0.1:${extraPort}` : ""}`, 'LogLevel ERROR',
     `AllowUsers ${os.userInfo().username}`, '',
   ].join('\n'), { mode: 0o600 });
   let daemonError = '';
@@ -200,3 +200,5 @@ test('aborting a window connection closes only its owned tunnel', { skip, timeou
   assert.equal(await isListening(Number(new URL(result.origin).port)), false);
   assert.equal(await isListening(f.occupiedPort), true);
 });
+
+test('explicit preview tunnel forwards one selected port and closes only that listener', {skip,timeout:45000},async t=>{const preview=http.createServer((req,res)=>res.end('selected preview'));const port=await listen(preview);t.after(()=>closeServer(preview));const f=await fixture(t,{extraPort:port});const connection=await startTunnel(f.config,f.ready,{sshOptions:f.sshOptions});t.after(()=>terminate(connection.child));const opened=await connection.openPort(port);assert.equal(await (await fetch(opened.url)).text(),'selected preview');const listener=Number(new URL(opened.url).port);await opened.close();assert.equal(await isListening(listener),false);assert.equal((await fetch(connection.origin+'/api/session',{headers:{Authorization:'Bearer '+f.ready.token}})).status,200);await assert.rejects(connection.openPort(f.ready.port));assert.equal(await isListening(f.occupiedPort),true);});

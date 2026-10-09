@@ -1,3 +1,21 @@
+## Completed in 0.1.36
+
+- Compact native desktop: remove application toolbar; Rearrange in the menu bar.
+- Small Code/PDF panel handle with accessible Save, file and compiler controls.
+- Native SuperSurfer Files above Projects; media and multi-page PDF previews.
+- Clean Code with native Cmd/B disabled; optional Full VS Code, Terminal, Ports.
+- Fix floating-window release snapping; preserve nested split resizing.
+- Detach/reflow/restore without deleting saved panels or saving source drafts.
+- Restore agent-list collapse and add a right-panel collapse control.
+- Notify editor event waiters and reuse agent directories for selection context.
+- Frame uploads before setup locking; bounded timeout and connection progress.
+- One exact-project consent restored across new native windows and tunnel origins.
+- Persistent versioned HTML block library, copied media, source reads and agent tools.
+- Readable E17 Findings without changing its measured values.
+- Review all twelve agent guides against actual tools and workflows.
+- Serious interactive website: VLA comparison, code review/PR draft, workshop writing,
+  agent-added views, parallel projects and shared resource queue.
+
 ## Completed in 0.1.35
 
 - Integrated Changes drawer and inline chunk Accept/Reject in both editor engines.

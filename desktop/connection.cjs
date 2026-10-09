@@ -6,6 +6,7 @@ const net = require('node:net');
 const os = require('node:os');
 
 const SSH_OPTIONS = ['-T', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ClearAllForwardings=yes', '-o', 'ForkAfterAuthentication=no', '-o', 'ConnectTimeout=12', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3'];
+const BOOTSTRAP_SSH_OPTIONS = [...SSH_OPTIONS,'-o','ControlMaster=no','-o','ControlPath=none','-o','ControlPersist=no','-o','StdinNull=no','-o','SessionType=default','-o','RemoteCommand=none'];
 function shellQuote(value) { return "'" + String(value).replaceAll("'", "'\\''") + "'"; }
 function validateConfig(value) {
   if (!value || typeof value !== 'object') throw new Error('Choose a workspace connection.');
@@ -21,14 +22,15 @@ function validateConfig(value) {
   if (!Number.isInteger(remotePort) || remotePort < 1024 || remotePort > 65535) throw new Error('Workspace port must be between 1024 and 65535.');
   return { mode, target: mode === 'local' ? '' : target, remoteRoot, amlHome, remotePort };
 }
-function collect(command, args, input, timeout = 90000, signal) {
+function collect(command, args, input, timeout = 90000, signal, onProgress = () => {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], signal });
-    const output = [], errors = []; let size = 0;
-    const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('SSH connection timed out. Check that the remote host is reachable.')); }, timeout);
+    const output = [], errors = []; let size = 0,progressBuffer='';
+    const terminate=()=>{child.kill('SIGTERM');const killer=setTimeout(()=>{if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');},500);killer.unref();};
+    const timer = setTimeout(() => { terminate(); reject(new Error('Workspace connection timed out. Check the host and retry; remote work is preserved.')); }, timeout);
     child.stdout.on('data', chunk => { size += chunk.length; if (size > 2 * 1024 * 1024) child.kill(); else output.push(chunk); });
-    child.stderr.on('data', chunk => { if (errors.reduce((n, x) => n + x.length, 0) < 100000) errors.push(chunk); });
-    child.on('error', error => { clearTimeout(timer); reject(error); });
+    child.stderr.on('data', chunk => { if (errors.reduce((n, x) => n + x.length, 0) < 100000) errors.push(chunk);progressBuffer+=chunk.toString();const lines=progressBuffer.split(/\r?\n/);progressBuffer=lines.pop().slice(-1000);for(const line of lines){if(!line.startsWith('SUPERSURFER_PROGRESS: '))continue;try{const data=JSON.parse(line.slice(22));if(typeof data.message==='string'&&data.message.length<=300)onProgress(data.message);}catch{}} });
+    child.on('error', error => { clearTimeout(timer);if(error.name==='AbortError')terminate();reject(error); });
     child.on('close', code => {
       clearTimeout(timer);
       if (code !== 0) reject(new Error(Buffer.concat(errors).toString().trim() || `SSH exited with code ${code}.`));
@@ -38,6 +40,7 @@ function collect(command, args, input, timeout = 90000, signal) {
     child.stdin.end(input);
   });
 }
+function previewPort(value,reserved=[]){if(!Number.isInteger(value)||value<1024||value>65535||[8765,9876,9877,9880,...reserved].includes(value))throw new Error('Choose one localhost development port outside workspace management ports.');return value;}
 function freePort() {
   return new Promise((resolve, reject) => {
     const server = net.createServer(); server.once('error', reject);
@@ -88,7 +91,7 @@ async function startTunnel(config, ready, { sshOptions = SSH_OPTIONS, signal } =
       if (exited) throw new Error(failure.trim() || 'SSH tunnel closed.');
       try {
         const response = await fetch(origin + '/api/session', { headers: { Authorization: `Bearer ${ready.token}` }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(1500)]) : AbortSignal.timeout(1500) });
-        if (response.ok && (await response.json()).ok) return { config, origin, token: ready.token, child };
+        if (response.ok && (await response.json()).ok) return {config,origin,token:ready.token,child,async openPort(remotePort){previewPort(remotePort,[ready.port]);if(exited)throw new Error('Reconnect this workspace before opening a port.');const localPort=await freePort(),mapping=`127.0.0.1:${localPort}:127.0.0.1:${remotePort}`;await collect('/usr/bin/ssh',[...controlArgs,'-O','forward','-o','ExitOnForwardFailure=yes','-L',mapping,config.target],undefined,5000);let closed=false;return {url:'http://127.0.0.1:'+localPort,async close(){if(closed)return;closed=true;if(!exited)await collect('/usr/bin/ssh',[...controlArgs,'-O','cancel','-L',mapping,config.target],undefined,5000).catch(()=>{});}};}};
         if (response.status === 401 || response.status === 403) throw new Error('The remote rejected the workspace credentials. Reconnect to run setup again.');
       } catch (error) {
         if (error.message.startsWith('The remote rejected')) throw error;
@@ -107,21 +110,22 @@ async function connect(raw, onStatus = () => {}, { signal } = {}) {
   onStatus(config.mode === 'local' ? 'Starting your workspace on this machine…' : 'Connecting securely over SSH…');
   const script = fs.readFileSync(path.join(__dirname, 'bootstrap.py'), 'utf8');
   const bundle = fs.readFileSync(path.join(__dirname, 'remote.tar.gz'));
-  const remoteCommand = `python3 -c ${shellQuote(script)} ${shellQuote(JSON.stringify(config))}`;
+  const setupConfig={...config,bundle_size:bundle.length};
+  const remoteCommand = `python3 -c ${shellQuote(script)} ${shellQuote(JSON.stringify(setupConfig))}`;
   let result;
   if (config.mode === 'local') {
-    try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(config)], bundle, 90000, signal); }
+    try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(setupConfig)], bundle, 90000, signal, onStatus); }
     catch (error) { if (error.code === 'ENOENT') throw new Error('This machine needs Python 3.10+ to run a local workspace. Install Python, then reopen SuperSurfer.'); throw error; }
-  } else result = await collect('/usr/bin/ssh', [...SSH_OPTIONS, config.target, remoteCommand], bundle, 90000, signal);
+  } else result = await collect('/usr/bin/ssh', [...BOOTSTRAP_SSH_OPTIONS, config.target, remoteCommand], bundle, 90000, signal, onStatus);
   signal?.throwIfAborted();
   const ready = parseSetupResponse(result);
   if (config.mode === 'local') {
     const origin = `http://127.0.0.1:${ready.port}`;
     const response = await fetch(origin + '/api/session', { headers: { Authorization: `Bearer ${ready.token}` }, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000) });
     if (!response.ok || !(await response.json()).ok) throw new Error('The local workspace did not pass its connection check.');
-    return { config, origin, token: ready.token, child: null };
+    return {config,origin,token:ready.token,child:null,async openPort(port){previewPort(port,[ready.port]);return {url:'http://127.0.0.1:'+port,async close(){}};}};
   }
   onStatus('Remote workspace is ready. Opening the connection…');
   return startTunnel(config, ready, { signal });
 }
-module.exports = { connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, SSH_OPTIONS };
+module.exports = { previewPort, connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, SSH_OPTIONS, BOOTSTRAP_SSH_OPTIONS, collect };

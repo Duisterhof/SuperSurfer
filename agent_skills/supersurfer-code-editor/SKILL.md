@@ -2,39 +2,53 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.35. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.36. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
-to be installed and selected. Its compact surface retains the genuine VS Code
-Explorer and language/extension engine, while hiding the surrounding activity,
-status and title chrome. Monaco continues to use SuperSurfer's own file tree;
-standalone File explorer tiles remain available with either engine. SuperSurfer
-supplies multi-page PDF viewing for both engines. Inspect the selected engine rather
-than assuming an extension exists. Native workspace trust is still enforced: use
-**Trust project…** for the user's trust decision; do not silently disable restricted
-mode, copy trusted-state files or equate YOLO with editor-folder trust. SuperSurfer
-remembers approval only after the native editor reports the project trusted, for
-that project's exact canonical repository. It restores that same approval for a
-new tunnel/window origin, including its owned editor-session workspace file;
-new or relocated projects stay restricted. Native trust revocation clears the
-remembered approval. This is app-owned persistence, not an agent trust-bypass
-tool. Trust is separate from watcher availability and does not change read-only
+to be installed and selected. The default Code block is a clean editing surface:
+SuperSurfer's **Files** section sits above Projects, while the selected native
+engine keeps language/extension support without its embedded sidebar or IDE chrome.
+Monaco likewise uses SuperSurfer file browsing. Optional **Full VS Code**
+(`vscode`), **Terminal** (`terminal`) and **Ports** (`ports`) tiles are separately
+configurable; Full VS Code retains its native Explorer and broader workbench.
+These views refer to the same repository but can have separate client buffers.
+Standalone File explorer tiles remain available. SuperSurfer supplies multi-page
+PDF and supported media viewing. Inspect the selected engine rather
+than assuming an extension exists. Project editor trust remains an explicit user
+GUI choice: **Connect & enable tools** enables the exact new project's folder;
+first opening an existing project offers **Enable tools and open** or deliberate
+**Browse in Restricted Mode**. A native **Trust project…** decision is also honored.
+Do not silently disable workspace trust, copy trusted-state files or equate YOLO
+with editor-folder trust. The app remembers that explicit choice or native trusted
+attestation for the exact canonical project repository, restoring it on a new
+window/tunnel origin together with its owned editor-session workspace file. A
+new or relocated project needs its own decision; native revocation clears the
+remembered approval. `editor.trust` is a user-only GUI action, not an agent tool.
+Trust is separate from watcher availability and does not change read-only
 restrictions, agent permissions or research-launch authority.
 The `editor` surfboard block is a view; it adds no agent shell tool, executable
 action or launch permission.
+
+A bounded SSH reconnect restores workspace access, not unsaved editor text or
+proof of extension activation. Keep dirty buffers and their captured file paths;
+inspect the app's upload/install progress and retry errors before recommending a
+reinstall or new sign-in. Re-read saved source after reconnection without replaying
+edits or clearing project trust. Do not change native keybindings, shared host
+watch limits or unrelated SSH sessions to repair a client upload failure.
 
 Custom pages can place File explorer, Code editor and Agent changes as separate
 tiles on any project, including Research, without adding an editor workflow block.
 They can sit beside chat or other views and share repository identities and the
 editor's buffers; opening a file from an explorer or switching pages does not
 create another checkout or agent. The Monaco editor tile can omit its built-in
-sidebar when a separate explorer is present. The selected Code OSS engine uses its native
-Explorer; do not mistake that filesystem view for a second checkout. Opening a
+sidebar when a separate explorer is present. Default Code hides the native
+sidebar; choose Full VS Code only when that full interface is requested. Neither
+file browser is another checkout. Opening a
 file preserves the browser; it
 does not switch to the workflow diagram. If the page lacks an editor, the app
 reuses an existing editor page or creates a File viewer page. Returning to a
@@ -57,7 +71,12 @@ SuperSurfer state. Do not republish or copy an upload just to view it.
 
 Uploaded text can be edited with the same explicit Save and revision/conflict
 checks. PDFs open in editor tabs, images/video have previews, and other binary
-files are downloads. Uploading never executes content, compiles a paper or sends
+files are downloads. Supported repository images, video and audio also open as
+media previews. Browser codec support is not guaranteed; use the visible download
+fallback for undecodable files. Preview URLs are short-lived scoped capabilities,
+not permanent public artifact links; reopening renews an expired view. Do not
+embed those URLs in published HTML or expose them in shared logs. Uploading never
+executes content, compiles a paper or sends
 a chat message. Chat prepares a compact removable attachment for the original
 conversation; slow uploads must retain their original project/scope through
 navigation. Removing a chip removes pending message context, not the saved file.
@@ -66,7 +85,8 @@ The editor's internal file column and the main left navigation sidebar have
 separate dividers. The latter supports dragging or keyboard width changes down
 to 160 px, with a responsive upper limit of 600 px. Its ordinary width is a saved
 window/workspace preference. Direct page-divider and tile-edge drags persist the
-page size when released; the top-row **Rearrange** opens an overlay whose
+page size when released. On desktop, the native **Rearrange** menu or
+Cmd/Ctrl+Alt+Shift+R opens the overlay; the browser keeps its top-row **Rearrange**.
 **Done** saves the explicit layout draft and **Cancel** discards it. **Add file
 browser** or **Move file browser here** starts a Rearrange draft and reuses the page's existing Repository files tile when present.
 It does not copy files or duplicate an explorer. For an agent-requested page edit,
@@ -74,13 +94,28 @@ use the existing scoped layout tools directly; see the layout reference above.
 Use the visible connected-workspace
 absolute path to identify the file; it is a path on the workspace host, not the
 Mac desktop or a compute node. Quick open (Cmd/Ctrl+P) searches repository files.
-Source files and PDFs open in editor tabs. Selecting a repository PDF from the
-native Explorer hands its scoped path to SuperSurfer's PDF overlay; the Explorer
+Source files and PDFs open in editor tabs. The default Code block uses the
+shared SuperSurfer Files tree; a PDF selected in optional Full VS Code's native
+Explorer also hands its scoped path to SuperSurfer's PDF overlay. That Explorer
 remains usable, and selecting a source file or **Back to source** returns to code.
 That handoff neither compiles the PDF nor requires a desktop-only PDF extension.
 The PDF view scrolls through the
 whole document; only nearby pages need to be rendered at once. A missing canvas
 outside the visible range is not proof that those pages are absent.
+
+The **Ports** block is SuperSurfer-owned, not a VS Code forwarding frame. The
+user explicitly selects one localhost development port (1024–65535, excluding
+workspace management ports) after enabling tools for the exact project folder.
+Desktop opens an isolated preview window with no app preload, app cookies or
+credentials. A remote workspace forwards only that selected listener through its
+owned SSH connection; closing the preview cancels that listener while leaving
+the root workspace connection and remote work intact. Browser-only access directs
+the user to desktop and starts no forwarding.
+
+Opening a port does not start its development server. Terminal work and permitted
+board previews retain their existing execution/permission rules. Ports exposes
+no agent opening tool, arbitrary localhost proxy or code-server proxy route;
+do not relax CORS/origin checks or app credential boundaries to imitate one.
 
 Workspace editor defaults select the engine, theme, text/tab size, word wrapping
 and minimap. They apply across projects without changing source or task scope.
@@ -96,11 +131,22 @@ Installed extensions expose Configure, which opens their native `@ext` settings
 in the File viewer when the VS Code workbench engine is selected; it does not
 install another extension or change task policy. Native extension settings and commands remain available through the compact
 editor; SuperSurfer's Extensions control opens its catalog/settings workflow.
-Compact startup selects the native Explorer and closes the auxiliary sidebar
-idempotently; extension-host restarts after trust approval must not toggle the
-surrounding full IDE chrome back into view. This
+Desktop hides the app topbar and editor title/action strips. A compact draggable
+handle at the editor's top-right offers **Save**, Files, Changes, Theme, Extensions,
+selection-to-chat, fullscreen and separate-window actions. Save writes the active
+file through the existing editor save behavior, not the page layout; Cmd/Ctrl+S
+remains available. Add Terminal or Ports as their own optional blocks. Missing
+toolbar strips do not remove those capabilities or require a second editor.
+Default Code startup closes native sidebars idempotently; its Cmd/Ctrl+B binding
+does not reveal a second Explorer. Optional Full VS Code retains native navigation
+instead. Extension-host restarts after trust approval must not toggle the default
+Code block's surrounding full IDE chrome back into view. This
 presentation behavior preserves native user keybindings and does not reactivate
-an extension that is incompatible with the runtime.
+an extension that is incompatible with the runtime. If native workspace-folder
+state is empty, the bridge can restore only its exact service-registered project
+folder; it does not add arbitrary folders, change shared source, relocate the
+repository or expand trust to another path. A missing browser tree is not authority
+to create a replacement checkout.
 Compatible VSIX packages are supported by the native extension runtime. Desktop-only
 UI extensions with no web entry point can be installed yet unavailable in this
 browser-backed editor; a catalog entry is not proof of usable activation. Use
@@ -128,12 +174,16 @@ merely to clear diagnostics. Saving LaTeX source can trigger the task's configur
 Auto compile even with its PDF panel elsewhere; follow the
 [writing workflow](../supersurfer-writing/SKILL.md) before starting a second build.
 
-**Ask agent**, Cmd/Ctrl+L, Cmd/Ctrl+Shift+L and Cmd/Ctrl+I attach selected text,
-or a file reference when no text is selected, to the current scoped chat and
-focus its composer. Context appears as compact expandable/removable chips and
+**Add selection to chat**/**Ask agent**, Cmd/Ctrl+L and Cmd/Ctrl+I attach selected
+text, or a file reference when no text is selected, to the current scoped chat and
+focus its composer. The built-in editor also supports Cmd/Ctrl+Shift+L; native
+Rearrange uses its separate Cmd/Ctrl+Alt+Shift+R shortcut. Context appears as compact expandable/removable chips and
 is preserved per conversation while navigating in the current window. Adding,
 expanding or removing a chip does not send work, create an agent or save a file;
-only the user's explicit send delivers it with the request.
+only the user's explicit send delivers it with the request. Native selection
+handoff uses a bounded server-notified event wait, with cached scoped agent
+directory data when valid. A briefly pending attachment is not a sent message;
+do not retry by sending the same request or creating a new conversation.
 
 When the user sends an attachment, preserve its captured path, range and text.
 Unsaved selections carry a warning; re-read saved source before patching and
@@ -157,6 +207,9 @@ pane width instead of creating a duplicate checkout to work around presentation.
 A page can use `arrangement: docked` or `arrangement: windows`; movable tiles
 have independent saved position/size rather than requiring a new editor per size.
 Use scoped layout tools for requested geometry, preserving tile IDs and file paths.
+Dragging a movable window near another panel's edge shows a snap preview; dropping
+it converts that page to the equivalent nested docked split. Retain the same tile,
+source and saved buffer identities instead of creating a duplicate docked editor.
 Docked pages can use a nested `layout` split tree for mixed side-by-side and stacked
 panels, including reserved `{empty: true}` drop space. Every main tile appears
 once; sidebars are outside that tree. Preserve existing leaves and follow the
@@ -164,15 +217,18 @@ layout reference's bounds rather than generating duplicate source editors.
 The panel's separate-window button is a user GUI action; there is no agent tool to
 open it. Editor detachment requires saved buffers and confirmed native dirty state,
 then opens another client with its own drafts. While that child window is open,
-the original window hides the detached panel; closing the child restores its
-original position without rewriting the saved layout. It does not silently transfer
+the original window hides the detached panel and reflows its remaining panels
+into the space; closing the child restores its original position without rewriting
+the saved layout. It does not silently transfer
 or synchronize dirty text across windows. Re-read saved source before subsequent
 edits; closing a panel view does not stop the worker or save its editor buffer.
 
 The editor's **Changes** view groups actual recorded agent edits inside the
 workspace; a separate Agent changes tile remains optional. The Coding preset is
-one full-width editor, with its native Explorer or built-in tree and Changes
-controls rather than mandatory separate explorer/review tiles. Changes retain the
+one full-width Code block, with SuperSurfer Files and integrated Changes
+controls rather than mandatory separate explorer/review tiles. Full VS Code,
+Terminal and Ports can be added independently when requested, without changing
+the project's workflow requirements. Changes retain the
 named conversation, time and turn provenance; Git comparisons remain separate.
 Never attribute all repository changes to the selected agent. Recorded patches
 can be partial or truncated and are not reconstructed full before/after files;
@@ -196,6 +252,11 @@ receipt does not mean all edits were accepted or all requested work is complete.
 Dirty user buffers block rejection, and revision conflicts preserve newer work;
 save and reread before retrying. Pending receipts survive lost replies: retry
 only the same selected chunk set and decision before starting another operation.
+Native chunk actions keep stable recorded-diff identities and review state when
+its language changes. Event-driven command waits and late source/diff refreshes
+must preserve the user's newer file selection; a delayed review response is not
+permission to switch the editor back or overwrite its current source. Inspect the
+actual receipt after uncertainty rather than repeating an undo against stale data.
 These are user review controls, not agent tools. A manual Reviewed badge remains
 inspection only, distinct from the final mixed receipt; neither Accept nor review
 state satisfies a PR/check requirement. Follow
@@ -213,3 +274,18 @@ open a verified source path/line; PDF highlights refer to file/page text and,
 for a compiled preview, its build. Locate corresponding source separately. A source selection and a rendered PDF may represent
 different revisions. Preserve the unsaved warning and build identity when helping
 with either; compilation never implicitly saves the editor or publishes the PDF.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.

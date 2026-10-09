@@ -2,7 +2,7 @@
   "name": "workspace",
   "displayName": "SuperSurfer workspace",
   "publisher": "supersurfer",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -29,6 +29,12 @@
         "key": "ctrl+i",
         "mac": "cmd+i",
         "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "workbench.action.closeSidebar",
+        "key": "ctrl+b",
+        "mac": "cmd+b",
+        "when": "config.supersurfer.editorOnly"
       }
     ],
     "menus": {

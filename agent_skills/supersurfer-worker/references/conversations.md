@@ -84,6 +84,16 @@ Reducing permissions can interrupt a broader turn. Read the actual active state,
 honor denials and never infer research/launch authorization from permissions.
 Model/effort/Fast changes apply next turn; steering updates the current task.
 
+Desktop SSH setup shows upload, installation and service-start stages instead of
+one indefinite connecting message. Its framed bundle upload has a 30-second remote
+deadline before any connection lock is acquired; a short/aborted upload changes no
+workspace service or lock. Other setup stages have their own bounded waits. Retry
+a failed connection through the app; do not remove lock files, kill unrelated SSH
+clients or change host-key validation. Client timeout cleanup concerns its owned
+process only. Connection recovery is not evidence of sign-in, compiler success,
+completed tasks or fresh GPU/W&B observations. Re-read actual records after
+reconnect and preserve uncertainty around commands whose replies were lost.
+
 A workspace host needs its own ChatGPT sign-in; a compute-only node does not.
 On connecting, the app gives account discovery 15 seconds with automatic retries
 before prompting. An unavailable connection is not confirmed sign-out: use the

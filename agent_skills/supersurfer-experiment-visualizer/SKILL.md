@@ -2,15 +2,21 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.35. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.36. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
+
+A desktop SSH setup timeout is not chart or measurement-failure evidence. Use
+the bounded app reconnect flow, then inspect this existing report's declared live
+sources and errors. Preserve method/source identity, selected cohort and genuine
+sample ages; do not recreate the report or switch writers merely because the
+view was temporarily inaccessible.
 
 Start with clear overlaid training and actual validation/test curves between the
 requested methods. Select compatible protocols and axes, preserve actual splits,
@@ -48,7 +54,8 @@ app also offers separate panel windows as a user viewing control; agents cannot
 detach one through publication or layout tools. Retain the report/source identity
 across these surfaces, while allowing the child its own chart interaction. The
 original panel hides while detached and restores when the child closes; this is
-not a removal or republication of the report. A new
+not a removal or republication of the report. Other panels fill the vacated space
+without changing their source bindings. A new
 window is not another writer or a reason to widen the comparison cohort.
 
 A native editor trust decision does not publish visualization source or satisfy
@@ -86,3 +93,23 @@ split, units and reading time while preserving the live Results report. A PDF
 tile displays a particular compiled build; it does not make that snapshot refresh
 with W&B. Check figure readability in the actual PDF as well as the interactive
 view, and do not report new measurements merely because the paper recompiled.
+
+For a requested persistent HTML view, use enabled `list_view_blocks` /
+`publish_view_block`, then place an `html` tile with its durable `block_id` through
+scoped layout tools. The workspace library stores copied immutable publication
+assets; editing original files does not refresh that snapshot. Only its publishing
+project can revise it with the current version, and publication requires active
+user work rather than a scheduled poll. Keep source identities and scientific
+provenance; never embed temporary preview capabilities or credentials. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
+not new execution authority or an automatic live W&B connection.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+A reusable 3D view can load its copied local module/model/data assets through its
+own publication capability. Declare those assets explicitly; it cannot fetch live
+W&B, another block's data or app APIs. Preserve snapshot provenance and verify
+the actual widget rather than promising unrestricted library compatibility.

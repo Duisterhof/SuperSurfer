@@ -2,17 +2,23 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.35'
+  supersurfer-version: '0.1.36'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.35. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.36. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
 lead or manager approval. Intervene for a real dependency or observed mismatch
 with the user's goal; resolve it and return ownership.
+
+A desktop reconnect resumes access to this project's existing workspace; it is
+not another research assignment. Setup now reports bounded SSH upload/install
+progress. If it fails, preserve worker ownership and experiment/run IDs and retry
+the connection instead of creating replacement experiments or relaying the same
+handoff again. A transport error alone does not establish worker or run failure.
 
 ## Move requested work forward
 
@@ -203,8 +209,27 @@ For an assigned page arrangement, choose docked tiles or movable windows through
 writing and research panels in one project do not need new experiments or workers.
 The app can open a panel in a separate native window, but this lead has no tool for
 that GUI action. The original panel hides until its child closes, then restores
-in place. That move adds no launch intent or recovery ownership; preserve any
+in place, while other panels reflow into the vacated space. Optional Full VS Code,
+Terminal or Ports tiles do not create workers, run checks or grant launch intent.
+That move adds no recovery ownership; preserve any
 existing worker's task and stop state.
+
+For short experiment Findings, use spaced prose and a Markdown table for method
+comparisons. Include the actual sample count, split and run status; distinguish
+measured results from unmeasured plans, missing metrics and unfinished runs.
+Do not compress evidence into inline slash strings. Preserve the document version
+when repairing its prose; follow
+[brief Findings guidance](../supersurfer-results/references/brief-findings.md).
+
+For a user-requested reusable HTML view, use `list_view_blocks` to inspect the
+workspace library and `publish_view_block` to publish safe scoped HTML/assets from
+this project. Then place `kind: html` with its durable `block_id` through the scoped
+layout tools; no routine manager relay or extra execution gate is needed. Published
+blocks are reusable workspace-wide, but only their publishing project can revise
+them with the current version. Publication requires an active user-origin turn;
+scheduled checks do not acquire this authority. Follow
+[reusable blocks guidance](../supersurfer-blocks/SKILL.md); live measured training
+curves still use the standard Results renderer rather than a static copied block.
 
 ## Tool index
 
@@ -239,3 +264,17 @@ Read [conversation continuity](../supersurfer-worker/references/conversations.md
 for question interruptions, permissions, monitoring ownership and local time.
 Retired native sessions cannot receive new assignments; use owned SuperSurfer
 workers and preserve their histories.
+
+Read an owned block's HTML and asset names using `list_view_blocks` with
+`block_id` before revising it. An HTML-only revision omits `assets` to retain its
+copied media; an explicit asset map replaces the whole set. Preserve unrelated
+content and its current version rather than guessing lost source mappings.
+
+Ports is an app-owned user GUI block: after exact-project consent, desktop opens
+one explicitly selected localhost development port in an isolated preview window.
+It is not a native VS Code forwarding view or an agent tool. Closing the preview
+releases only that temporary listener; it neither stops the remote server nor
+closes the workspace. Existing command/board-action authorization still governs
+starting a server. Do not use code-server proxy routes, broaden app CORS or relay
+arbitrary localhost services to bypass these boundaries. Browser-only access
+starts no forwarding; use the desktop flow.
