@@ -129,3 +129,10 @@ re-enable it from a scheduled/recovery turn or undo an explicit stop. Preserve
 successful work and report an actual unresolved dependency if recovery cannot
 proceed within the remaining grant, rather than widening scope or repeating an
 unchanged failing action.
+
+A linked recovery attempt also belongs in the research comparison. After queue
+or recovery, use enabled `check_experiment_results` in the existing owner's scope
+and preserve every earlier useful attempt and its measured/unavailable evidence.
+Do not replace the report with only the first training attempt, invent missing
+curves, or mark its required checkpoint complete through update_task. Follow
+[Results checkpoint guidance](../../supersurfer-results/references/results-checkpoint.md).

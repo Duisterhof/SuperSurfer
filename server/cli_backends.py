@@ -221,6 +221,17 @@ class CliBridge(ConversationBridge):
         # implement provider OAuth. The desktop opens the user's trusted terminal.
         return {"backend": self.backend, "type": "terminal", "command": "agent login" if self.backend == "cursor" else "claude auth login"}
 
+    def logout(self):
+        args = [executable(self.backend), *( ["auth", "logout"] if self.backend == "claude" else ["logout"] )]
+        try:
+            result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, timeout=15)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise BridgeError("Sign-out could not be confirmed. Check the provider CLI before retrying; no command was replayed.") from error
+        if result.returncode:
+            raise BridgeError("The provider CLI could not sign out. Check its installation and external authentication configuration.")
+        return {"logout_completed": True}
+
     def models(self):
         if self.backend == "claude":
             ids = ["sonnet", "opus", "haiku"]

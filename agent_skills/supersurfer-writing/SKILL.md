@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.39. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.40. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -225,3 +225,8 @@ before claiming the PDF reflects that draft.
 A Cursor/Claude-only workspace can use its selected writing conversation without
 Codex installed. Choose its provider before starting work; fixing Settings or
 changing defaults neither saves the paper nor starts another compiler build.
+
+Removing a writing page or compiler/PDF block preserves saved source, PDFs and
+remote builds. Keep the last-good build identity and any dirty editor draft;
+view removal is not compile cancellation, source Save or paper submission.
+Account sign-out changes provider access, not the compiler's containment or ownership.

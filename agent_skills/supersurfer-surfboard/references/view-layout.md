@@ -160,3 +160,33 @@ The desktop keeps a thin native drag strip above all page tabs and Activity
 controls; it does not restore the in-app toolbar. Edge arrows collapse and restore
 the left navigation or right agent sidebar, including a maximized conversation.
 These client controls do not delete tiles, stop agents or change board policy.
+
+## Remove a view without deleting its work
+
+Page-tab ellipsis/right click removes a configured page through a versioned
+layout save in that project/task. Block Remove is also available outside
+Rearrange: it automatically saves and prunes/reflows dock geometry. During an
+explicit Rearrange draft, removal remains pending until Done; Cancel discards it.
+Removing a view keeps source files, Markdown content, reports, publications,
+conversations and jobs. Dirty editor models/native parked frames remain in the
+current window session; visibility is not a durable source Save.
+
+To-dos/File viewer and task Markdown tabs use authenticated user-only visibility
+controls, with restoration available in page options. They are not new agent MCP
+operations. An agent can remove/re-add configured pages or tiles through enabled
+read_view_layout/update_view_layout using both exact versions and the preserved
+full pages list; do not claim a hidden utility tab was restored through that tool.
+Keep the selected project/task scope and preserve unrelated pages and policy.
+
+Results report tabs have their own user-only organization controls: drag or Move
+earlier/later, Remove to archive, and Removed → Restore. The current presentation
+revision protects concurrent reorder/archive changes. This differs from saving
+a configured page layout or hiding a Markdown/utility tab. Report HTML and
+declared W&B sources survive; publishing an update keeps the archive state.
+Existing layout/publishing tools do not grant report reorder or unarchive actions.
+
+Research check_experiment_results is a separate scoped evidence checkpoint, not a
+layout tool. Its complete action may archive redundant other reports while
+preserving source, but cannot reorder/unarchive reports or archive its reviewed
+comparison. Human organization controls above remain separate. Follow
+[Results checkpoint guidance](../../supersurfer-results/references/results-checkpoint.md).

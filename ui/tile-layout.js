@@ -10,7 +10,7 @@ export function createTileLayout(options){
  const key=()=>options.key(),draft=()=>drafts.get(key());
  const enabled=()=>!!draft()&&!draft().saving&&!options.readOnly();
  const changed=()=>{options.render();};
- function start(automatic=false){const page=options.page();if(options.readOnly())return;if(!page){options.configure?.();return;}if(!draft()){drafts.set(key(),{base:copy(page),page:copy(page),automatic,error:''});ensureDockLayout(draft().page);}else if(!automatic)draft().automatic=false;if(!automatic)changed();}
+ function start(automatic=false){const page=options.page();if(options.readOnly()||draft()?.saving)return;if(!page){options.configure?.();return;}if(!draft()){drafts.set(key(),{base:copy(page),page:copy(page),automatic,error:''});ensureDockLayout(draft().page);}else if(!automatic)draft().automatic=false;if(!automatic)changed();}
  function cancel(){if(draft()?.saving)return;drafts.delete(key());changed();}
  function tile(id){return draft()?.page.tiles.find(row=>row.id===id);}
  function move(id,placement,before){if(!enabled())return;const row=tile(id);if(!row||id===before)return;row.placement=placement;const rows=draft().page.tiles.filter(item=>item!==row),index=rows.findIndex(item=>item.id===before);rows.splice(index<0?rows.length:index,0,row);draft().page.tiles=rows;changed();}
@@ -25,18 +25,26 @@ export function createTileLayout(options){
   catch(error){value.error=error.message;value.saving=false;value.automatic=false;}
   changed();
  }
+ async function remove(id){
+  if(options.readOnly()||draft()?.saving)return;
+  if(!draft())start(true);if(!enabled())return;
+  const value=draft();value.page.tiles=value.page.tiles.filter(row=>row.id!==id);
+  ensureDockLayout(value.page);
+  if(value.automatic)await save();else changed();
+ }
  function toolbar(){const value=draft();if(!value||value.automatic)return '';const disabled=value.saving||options.readOnly();
   return `<div class="tile-arrange-toolbar"><span class="arrange-label">Rearrange · ${esc(value.page.title)}</span><button class="button small-button" data-tile-command="cancel" ${disabled?'disabled':''}>Cancel</button><button class="button small-button primary" data-tile-command="save" ${disabled?'disabled':''}>${value.saving?'Saving…':'Done'}</button>${value.error?`<p class="notice error arrange-error" role="alert">${esc(value.error)} Your layout draft is kept.</p>`:''}</div>`;
  }
  function controls(row,label){
+    const compact=['editor','pdf','vscode','terminal','ports'].includes(row.kind);
     const floating=(draft()?.page||options.page())?.arrangement==='windows'&&place(row)==='main';
     const grip=`<button type="button" class="tile-grip" ${floating?'data-window-drag':'data-tile-grip'}="${esc(row.id)}" draggable="${!floating&&!options.readOnly()}" aria-label="Move ${esc(label)}" title="Drag to move or split panels" ${options.readOnly()||draft()?.saving?'disabled':''}>⠿</button>`;
-    const space=`<details class="tile-space-menu"><summary title="Make room for another panel">⋯</summary><div>${[['left','Space on left'],['right','Space on right'],['top','Space above'],['bottom','Space below']].map(([edge,label])=>`<button type="button" data-tile-space="${esc(row.id)}" data-space-edge="${edge}">${label}</button>`).join('')}</div></details>`;
+    const space=`<details class="tile-space-menu"><summary title="Panel actions">⋯</summary><div>${[['left','Space on left'],['right','Space on right'],['top','Space above'],['bottom','Space below']].map(([edge,label])=>`<button type="button" data-tile-space="${esc(row.id)}" data-space-edge="${edge}">${label}</button>`).join('')}${compact?'':`<button type="button" data-tile-remove="${esc(row.id)}" ${options.readOnly()||draft()?.saving?'disabled':''}>Remove block</button>`}</div></details>`;
     const windowButton=`<button type="button" data-panel-window="${esc(row.id)}" aria-label="Open ${esc(label)} in a separate window" title="Open in separate window">↗</button>`;
 
-  if(['editor','pdf','vscode','terminal','ports'].includes(row.kind)){
+  if(compact){
     const actions=row.kind==='pdf'?[['compile','Compile'],['stop','Stop compile'],['auto','Auto compile'],['options','Build options'],['history','Build history'],['logs','Compiler details'],['refresh','Refresh']]:['terminal','ports'].includes(row.kind)?[]:[['save','Save'],['files','Files'],['changes','Changes'],['open','Open file…'],['upload','Upload…'],['new-file','New file'],['new-folder','New folder'],['extensions','Extensions'],['theme','Theme'],['selection','Add selection to chat']];
-    return `<details class="editor-panel-handle"><summary ${floating?'data-window-drag':'data-tile-grip'}="${esc(row.id)}" draggable="${!floating&&!options.readOnly()}" aria-label="Move ${esc(label)}" title="Drag to move or snap. Click for panel actions.">⠿</summary><div class="editor-panel-actions"><strong>${esc(label)}</strong><code class="editor-panel-path"></code>${actions.map(([kind,text])=>`<button type="button" data-editor-panel-command="${kind}" data-editor-panel-kind="${row.kind}">${text}</button>`).join('')}${space}${windowButton}<button type="button" data-panel-fullscreen>Full screen</button>${draft()&&!draft().automatic?`<select data-tile-placement="${esc(row.id)}" aria-label="Place ${esc(label)}">${[['main','Page'],['left','Left sidebar'],['right','Right sidebar']].map(([value,text])=>`<option value="${value}" ${place(row)===value?'selected':''}>${text}</option>`).join('')}</select><button data-tile-remove="${esc(row.id)}">Remove panel</button>`:''}</div></details>`;
+    return `<details class="editor-panel-handle"><summary ${floating?'data-window-drag':'data-tile-grip'}="${esc(row.id)}" draggable="${!floating&&!options.readOnly()}" aria-label="Move ${esc(label)}" title="Drag to move or snap. Click for panel actions.">⠿</summary><div class="editor-panel-actions"><strong>${esc(label)}</strong><code class="editor-panel-path"></code>${actions.map(([kind,text])=>`<button type="button" data-editor-panel-command="${kind}" data-editor-panel-kind="${row.kind}">${text}</button>`).join('')}${space}${windowButton}<button type="button" data-panel-fullscreen>Full screen</button><button type="button" data-tile-remove="${esc(row.id)}" ${options.readOnly()||draft()?.saving?'disabled':''}>Remove block</button>${draft()&&!draft().automatic?`<select data-tile-placement="${esc(row.id)}" aria-label="Place ${esc(label)}">${[['main','Page'],['left','Left sidebar'],['right','Right sidebar']].map(([value,text])=>`<option value="${value}" ${place(row)===value?'selected':''}>${text}</option>`).join('')}</select>`:''}</div></details>`;
   }
   if(!draft()||draft().automatic)return `${grip}<span ${floating?`data-window-drag="${esc(row.id)}"`:""}>${esc(label)}</span>${space}${windowButton}<button type="button" data-panel-fullscreen aria-label="Full screen" title="Full screen">⤢</button>`;
   const disabled=!enabled();
@@ -74,7 +82,7 @@ export function createTileLayout(options){
       options.resize?.(page);if(draft().automatic)void save();else changed();}}
 if(command==='files-left'){start();if(enabled()){const existing=draft().page.tiles.find(row=>row.kind==='file_explorer');if(existing)move(existing.id,'left');else add('file_explorer','left');}}if(command==='cancel')cancel();if(command==='save')void save();
   if(button.dataset.addTile==='html'){void addHtml();return;}if(button.dataset.addTile){if(!draft())start(true);add(button.dataset.addTile);if(draft()?.automatic)void save();}
-  if(enabled()&&button.dataset.tileRemove){draft().page.tiles=draft().page.tiles.filter(row=>row.id!==button.dataset.tileRemove);changed();}
+  if(button.dataset.tileRemove)void remove(button.dataset.tileRemove);
   if(enabled()&&button.dataset.tileUp){const row=tile(button.dataset.tileUp),rows=draft().page.tiles.filter(item=>place(item)===place(row)),i=rows.indexOf(row);if(i>0)move(row.id,place(row),rows[i-1].id);}
  },true);
  document.addEventListener('change',event=>{const id=event.target.dataset.tilePlacement;if(id&&enabled()){event.stopImmediatePropagation();move(id,event.target.value);}},true);
@@ -149,5 +157,5 @@ if(command==='files-left'){start();if(enabled()){const existing=draft().page.til
   options.resize?.(draft().page);if(draft()?.automatic)void save();
  });
  let topWindow=10;document.addEventListener('pointerdown',event=>{const window=event.target.closest('.window-canvas>.page-tile');if(window)window.style.zIndex=String(++topWindow);},true);
- return {page:page=>page?(draft()?.page||page):undefined,editing:()=>!!draft()&&!draft().automatic,toolbar,decorate,palette(){return `<summary>Blocks</summary><div class="tile-palette">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="true" ${options.readOnly()||row.kind!=='html'&&options.page()?.tiles.some(tile=>tile.kind===row.kind)?'disabled':''}>${esc(row.label)}</button>`).join('')}</div>`;},active:()=>!!resizing||!!windowMove||!!splitResize, resizeSidebar(width){if(!draft())start(true);if(enabled()){draft().page.left_width=clamp(width,160,600);options.resize?.(draft().page);}},resizeDock(width){if(!draft())start(true);if(enabled()){draft().page.right_width=clamp(width,280,760);options.resize?.(draft().page);}},commitResize(){if(draft()?.automatic)void save();},start};
+ return {page:page=>page?(draft()?.page||page):undefined,editing:()=>!!draft()&&!draft().automatic,saving:()=>!!draft()?.saving,toolbar,decorate,palette(){return `<summary>Blocks</summary><div class="tile-palette">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="true" ${options.readOnly()||row.kind!=='html'&&options.page()?.tiles.some(tile=>tile.kind===row.kind)?'disabled':''}>${esc(row.label)}</button>`).join('')}</div>`;},active:()=>!!resizing||!!windowMove||!!splitResize, resizeSidebar(width){if(!draft())start(true);if(enabled()){draft().page.left_width=clamp(width,160,600);options.resize?.(draft().page);}},resizeDock(width){if(!draft())start(true);if(enabled()){draft().page.right_width=clamp(width,280,760);options.resize?.(draft().page);}},commitResize(){if(draft()?.automatic)void save();},start};
 }

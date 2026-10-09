@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.39. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.40. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -206,3 +206,14 @@ explicit Save is still separate from checks, commits and launch authorization.
 Workspace Settings exposes all three permission defaults independently of the
 current provider. Cursor/Claude resolve an inherited Approve for me to Ask;
 workflow gates and saved action receipts remain unchanged.
+
+User page/tab removal preserves content, agents and jobs; it neither satisfies
+a deliverable nor disables a task's workflow. Requested configured-page/block
+edits use existing versioned layout tools in the owning scope. Do not invent
+account sign-out or utility-tab visibility tools.
+
+An enabled Research Results block may expose `check_experiment_results` and seed
+a required review after launched attempts. It uses existing measured evidence or
+explicit unavailable entries and exact report/attempt revisions, not another run.
+Held-only drafts and nonresearch boards do not force that checkpoint; read
+[Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).

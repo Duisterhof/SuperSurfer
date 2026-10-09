@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.39. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.40. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -306,3 +306,15 @@ explicit Save is still separate from checks, commits and launch authorization.
 Workspace Settings keeps Ask, Approve for me and YOLO defaults independently
 of the selected chat provider. Cursor/Claude inherit Approve for me as Ask; do
 not change worker ownership or infer a launch grant from that fallback.
+
+Settings → Accounts shows all three providers. Account sign-in/out requires
+that provider's active turns to finish or stop, and is a user GUI action, not a
+manager tool. Removing a page or block does not cancel jobs or transfer workers;
+inspect their existing records rather than recreating hidden work.
+
+When explicitly assigned a research Results review, use enabled
+`check_experiment_results` with `experiment_id`, preserve the worker owner and
+inspect all attempts before completing the current comparison. The tool can
+archive redundant owned reports as bounded completion cleanup, not reorder or
+unarchive them. It grants no launch authority. Follow
+[Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).

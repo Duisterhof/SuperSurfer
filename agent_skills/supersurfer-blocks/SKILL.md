@@ -2,12 +2,12 @@
 name: supersurfer-blocks
 description: Publish requested reusable HTML views with copied project assets, then place their durable identities on scoped SuperSurfer pages without changing execution authority.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # Reusable HTML blocks
 
-Reviewed for SuperSurfer 0.1.39. Use for a user-requested persistent custom view,
+Reviewed for SuperSurfer 0.1.40. Use for a user-requested persistent custom view,
 such as a failure-video comparison, GIF gallery or interactive explanation.
 The library is workspace-wide: already-published views can be reused across
 projects, independently of a Results block's experiment data-sharing selection.
@@ -109,3 +109,8 @@ Desktop page tabs and Activity remain below the native drag strip. Sidebar edge 
 Workspace defaults remain separate from the current chat provider's controls.
 An Ask fallback does not widen block-publication scope or permit credentials
 inside HTML; preserve existing block IDs when changing Settings.
+
+Removing an HTML block tile or its configured page leaves the workspace library
+publication and copied assets intact. Re-add the same durable block ID when
+requested; do not publish a duplicate merely to restore its view. Tab visibility
+and account actions remain user-only, separate from scoped publication tools.

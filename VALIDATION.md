@@ -1,3 +1,53 @@
+# SuperSurfer 0.1.40 — October 9, 2026
+
+Full backend regression: **710 Python tests** pass. The final focused Results
+review run passes all five cases, including one additional CRLF case; the suite
+now contains 711 tests. **33 enabled Node tests** pass;
+five optional real-SSH integration checks remain skipped. All twelve release
+skills were substantively reviewed against current capabilities and permissions,
+including the final scoped Results checkpoint, and the release checker passes.
+
+Real-service browser fixtures cover first-machine provider choice, synthetic
+signed-out/sign-in transitions, all three Settings account rows, native sign-out,
+persistent defaults, retained thread/history and first software project/task
+creation without entering Surfboard. Cursor-only and Claude-only fixtures omit
+the other two executables and complete manager/lead/worker turns. Fake protocols
+and synthetic authentication do not claim an actual new-account OAuth callback
+or real paid model inference.
+
+View-removal browser tests cover compact editor removal outside Rearrange,
+split-tree reflow, unchanged source, retained unsaved Monaco model and re-add;
+scoped page/Markdown/utility removal, reload persistence, utility restore and
+last-page empty state. Real Results report drag/drop, move, remove/restore and
+reload retain report content. Stale revisions, foreign IDs, read-only actions,
+archived publication behavior and exact presentation-ID sets are backend-tested.
+
+Research-checkpoint tests use actual imported/durable attempt bindings and verify
+held-draft exemption, context seeding, all-attempt report references, comment-only
+false coverage rejection, current report SHA and attempt version, cleanup scope,
+status/revision reopen and no premature task completion. A fake native Codex
+turn verifies one durable required checkpoint is reused and retained on restart.
+Full task logs reject before reserving a turn; Results bookkeeping failures never
+turn a released run into an apparent queue error. The coverage check verifies
+identity/evidence freshness, not scientific truth;
+measured curve quality remains role-skill/completion-review work.
+
+Settings refresh/scroll/draft/extension-search and reconnect grace regressions
+pass. Desktop navigation keeps page tabs/Activity and both sidebar controls
+interactive, including expanded chats. Native Electron lifecycle passes isolated
+multi-host restore, menu accelerators, separate-panel lifetime, port credential
+boundaries, cancellation and main-frame-only IPC.
+
+Preflight tests execute the local read-only requirement probe and cover banners,
+old/missing Python, manager Python 3.11+, SSH authentication/identity guidance and
+progress/traceback sanitization. Existing isolated installer tests cover empty
+local setup, missing manager installation, occupied-port ownership and concurrent
+connections. No real research jobs or live account logouts were used for QA.
+
+Mac arm64/x64 and Linux x64 package/source-byte and archive checks are performed
+by the release verifier. Actual unsigned macOS launch/Gatekeeper and a fresh real
+provider sign-in callback remain external-platform validation.
+
 # SuperSurfer 0.1.39 — October 9, 2026
 
 The Settings browser regression passes rendering, periodic refresh, scroll and

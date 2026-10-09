@@ -23,6 +23,23 @@ class ViewLayoutToolTests(unittest.TestCase):
         self.service.codex.busy.add(scope)
         self.service.turn_origins[scope] = 'user'
 
+    def test_removing_utility_and_markdown_tabs_is_scoped_and_preserves_content(self):
+        note = self.service.results.publish_page(self.exp['id'], {'title': 'Protocol', 'markdown': '# Evidence\nMeasured results.'})
+        scope = {'project_id': 'p1', 'experiment_id': self.exp['id']}
+        for tab in ('_todos', 'page:' + note['id']):
+            value = self.service.action('view-tab.hide', {**scope, 'tab': tab, 'hidden': True})
+            self.assertIn(tab, value['hidden_tabs'])
+        self.assertEqual('# Evidence\nMeasured results.', self.service.results.page(self.exp['id'], note['id'])['markdown'])
+        self.assertEqual([], self.service.view_layout('p1')['hidden_tabs'])
+        restored = self.service.action('view-tab.hide', {**scope, 'tab': '_todos', 'hidden': False})
+        self.assertNotIn('_todos', restored['hidden_tabs'])
+        for tab in ('page:foreign', 'overview', {}):
+            with self.assertRaises(SurfboardError):
+                self.service.action('view-tab.hide', {**scope, 'tab': tab, 'hidden': True})
+        self.service.read_only = True
+        with self.assertRaises(Exception):
+            self.service.action('view-tab.hide', {**scope, 'tab': '_todos', 'hidden': True})
+
     def test_every_role_arranges_its_scope_and_preserves_policy(self):
         original = self.service.boards.get('p1')['compiled']
         page = {'id': 'review', 'title': 'Review', 'left_width': 310, 'right_width': 420, 'tiles': [

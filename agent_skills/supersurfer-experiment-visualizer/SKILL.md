@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.39. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.40. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -128,3 +128,20 @@ Desktop tabs and Activity sit below the native drag area. Sidebar edge arrows re
 A Settings rendering failure is separate from report rendering or source access.
 Keep this visualizer's inputs and report identity while restoring Settings;
 permission defaults do not broaden the selected data.
+
+Removing a visualization tab/block preserves its report and underlying inputs.
+Restore the intended layout without widening its cohort or republishing evidence.
+User-only account/utility visibility controls add no visualization MCP capability.
+
+The user can reorder Results report tabs and archive/restore them through their
+menus and Removed dropdown. This organizes presentation without deleting HTML,
+W&B sources or measured evidence. Publishing a revision preserves that report's
+archive state; this visualizer has no reorder/unarchive MCP capability. Preserve
+the report ID rather than creating another publication to make it visible.
+
+Enabled research `check_experiment_results` verifies the current comparison covers
+all released/started attempts with measured curves or explicit unavailable
+entries. Keep earlier useful methods, not merely the first recovery's curves.
+Its completion can archive redundant other reports while retaining their source;
+this is bounded cleanup, not general report reorder or unarchive. Read
+[Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).

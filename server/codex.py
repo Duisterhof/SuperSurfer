@@ -211,6 +211,18 @@ class CodexBridge(ConversationBridge):
                 safe["login"] = copy.deepcopy(self._login_status)
         return safe
 
+    @staticmethod
+    def installed():
+        binary = os.environ.get("SUPERSURFER_CODEX") or shutil.which("codex")
+        return bool(binary and Path(binary).is_file() and os.access(binary, os.X_OK))
+
+    def logout(self):
+        self._rpc("account/logout", {})
+        with self._lock:
+            self._login_status = None
+            self._authentication_error = None
+        return {"logout_completed": True}
+
     def require_chatgpt(self):
         if self.account(refresh=True)["login_required"]:
             raise CodexError("Sign in to ChatGPT on this workspace host before starting agent work. Use the SuperSurfer sign-in screen.", status=403)

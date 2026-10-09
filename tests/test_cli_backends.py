@@ -17,12 +17,18 @@ FAKE = r'''
 import json,os,sys,time
 from pathlib import Path
 backend=os.environ['SS_TEST_PROVIDER']; log=Path(os.environ['SS_TEST_WIRE'])
+auth=Path(os.environ['SS_TEST_AUTH']) if os.environ.get('SS_TEST_AUTH') else None
+logged=(json.loads(auth.read_text()).get(backend,True) if auth and auth.exists() else not os.environ.get('SS_TEST_SIGNED_OUT'))
 def emit(value): print(json.dumps(value),flush=True)
 def record(value):
  with log.open('a') as f:f.write(json.dumps(value)+'\n')
 if ('auth' in sys.argv and 'status' in sys.argv) or sys.argv[-1]=='status':
- if backend=='claude':emit({'loggedIn':not os.environ.get('SS_TEST_SIGNED_OUT'),'authMethod':'claude.ai','email':'test@example.com','accessToken':'NEVER_CAPTURE_AUTH_TOKEN'})
- else:print('Not authenticated' if os.environ.get('SS_TEST_SIGNED_OUT') else 'Authenticated as test@example.com')
+ if backend=='claude':emit({'loggedIn':bool(logged),'authMethod':'claude.ai','email':'test@example.com','accessToken':'NEVER_CAPTURE_AUTH_TOKEN'})
+ else:print('Authenticated as test@example.com' if logged else 'Not authenticated')
+ sys.exit(0)
+if sys.argv[-1]=='logout':
+ if auth:
+  saved=json.loads(auth.read_text()) if auth.exists() else {};saved[backend]=False;auth.write_text(json.dumps(saved))
  sys.exit(0)
 if '--list-models' in sys.argv:print('Available models\nauto\nmodel-test Test model');sys.exit(0)
 session=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--resume=')), 'session-'+backend)

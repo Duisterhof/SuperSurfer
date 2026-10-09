@@ -13,6 +13,7 @@ class BackendRouter:
         self.context_provider, self.scope_provider = context_provider, scope_provider
         self.action_handler = action_handler
         self.lock = threading.RLock()
+        self.account_locks = {name: threading.RLock() for name in PROVIDERS}
         self.bridges = {"codex": CodexBridge(directory / "codex", context_provider, action_handler)}
         self.bindings = store.get("backend_bindings", {})
         with store.lock:
@@ -46,11 +47,39 @@ class BackendRouter:
                 raise BridgeError("This conversation belongs to " + PROVIDERS[pinned]["label"] + ". Create a new conversation to use a different backend; its native session cannot be transferred.", 409)
 
     def account(self, backend="codex", refresh=False):
-        result = self.provider(backend).account(refresh=refresh)
-        return {**result, "backend": backend, "capabilities": PROVIDERS[backend]}
+        backend = provider_name(backend)
+        bridge = self.provider(backend)
+        try:
+            if backend == "codex" and not bridge.installed():
+                result = {"account": None, "installed": False, "login_required": True,
+                          "error": "Codex CLI is not installed on this workspace host."}
+            else:
+                result = {"installed": True, **bridge.account(refresh=refresh)}
+        except BridgeError as error:
+            result = {"account": None, "installed": True, "login_required": True, "error": str(error)}
+        with bridge._lock:
+            busy = sum(bool(chat.get("busy")) for chat in bridge._chats.values())
+        return {**result, "backend": backend, "active_turns": busy, "capabilities": PROVIDERS[backend]}
+
+    def _require_account_idle(self, backend):
+        bridge = self.provider(backend)
+        with bridge._lock:
+            if any(chat.get("busy") for chat in bridge._chats.values()):
+                raise BridgeError("Finish or stop this provider's active agent turns before changing its account.", 409)
+        return bridge
 
     def login(self, backend="codex"):
-        return self.provider(backend).login()
+        backend = provider_name(backend)
+        with self.account_locks[backend]:
+            return self._require_account_idle(backend).login()
+
+    def logout(self, backend="codex"):
+        backend = provider_name(backend)
+        with self.account_locks[backend]:
+            self._require_account_idle(backend).logout()
+            account = self.account(backend, refresh=True)
+        return {**account, "logout_completed": True,
+                "note": "CLI sign-out completed, but this host still supplies credentials through external configuration." if account.get("account") and not account.get("login_required") else None}
 
     def models(self, backend="codex"):
         return {**self.provider(backend).models(), "backend": backend, "capabilities": PROVIDERS[backend]}
@@ -68,7 +97,10 @@ class BackendRouter:
         # Do not hold the router lock while acquiring service/store locks in
         # context construction or authentication. Reserve ownership first.
         try:
-            result = bridge.send(scope, text, **kwargs)
+            # Sign-out and new sends for the same provider cannot race. Other
+            # providers keep their own locks and continue independently.
+            with self.account_locks[backend]:
+                result = bridge.send(scope, text, **kwargs)
             self.store.put("backend_binding:" + scope, backend)
             return result
         except Exception:
@@ -108,7 +140,7 @@ class BackendRouter:
             bridge.sync_wakeups(rules)
 
     def __getattr__(self, name):
-        if name not in {"changes", "review_change", "decide_change", "update_task", "rename", "ask_user", "answer", "stop", "steer", "approve", "set_approval_mode"}:
+        if name not in {"changes", "review_change", "decide_change", "update_task", "set_required_task", "rename", "ask_user", "answer", "stop", "steer", "approve", "set_approval_mode"}:
             raise AttributeError(name)
         return lambda scope, *args, **kwargs: getattr(self.provider(self.backend_for(scope)), name)(scope, *args, **kwargs)
 

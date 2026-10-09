@@ -398,6 +398,29 @@ class ConversationBridge:
             self._save(chat)
             return {"task": copy.deepcopy(task), "tasks": copy.deepcopy(chat["tasks"])}
 
+    def _required_task(self, chat, requirement):
+        ids = chat.setdefault("required_tasks", {})
+        task_id = ids.get(requirement["key"])
+        if not any(task["id"] == task_id for task in chat.get("tasks", [])):
+            task_id = None
+        fields = {key: requirement[key] for key in ("title", "status", "summary")}
+        if task_id:
+            fields["task_id"] = task_id
+        result = task_log.update(chat.setdefault("tasks", []), fields)
+        ids[requirement["key"]] = result["id"]
+        task = next(task for task in chat["tasks"] if task["id"] == result["id"])
+        self._bind_task_assignment(chat, task)
+        return result
+
+    def set_required_task(self, scope, requirement):
+        with self._lock:
+            chat = self._chats.get(scope)
+            if not chat or not chat.get("busy"):
+                raise BridgeError("Results checkpoints require an active conversation", 409)
+            result = self._required_task(chat, requirement)
+            self._save(chat)
+            return result
+
 
     def rename(self, scope, name):
         self.chat(scope)
@@ -492,6 +515,11 @@ class ConversationBridge:
             chat = self._chats.setdefault(scope, self._new_chat(scope, context))
             if chat["busy"]:
                 raise BridgeError("This agent is already working. Wait for it to finish or stop the current turn.", status=409)
+            requirements = context.get("required_tasks", [])
+            known = {task["id"] for task in chat.get("tasks", [])}
+            new_keys = {row["key"] for row in requirements if chat.get("required_tasks", {}).get(row["key"]) not in known}
+            if len(chat.get("tasks", [])) + len(new_keys) > 200:
+                raise BridgeError("This conversation's task log is full. Create a new conversation for this work; no turn was started.", 409)
             chat.update(busy=True, status="starting", error=None, turn_id=None, cancel_requested=False, stalled_turns=0, continuation_progress=None, continuation_note=None)
             chat["agent"].update(name=context.get("name", chat["agent"]["name"]), role=context.get("role", chat["agent"]["role"]))
             chat["agent"].update(approval_mode=approval_mode, runtime_approval_mode=None, active_sandbox=None)
@@ -510,6 +538,8 @@ class ConversationBridge:
             for task in chat.get("tasks", []):
                 self._bind_task_assignment(chat, task)
             chat["work_request"] = {"message_id": user_message["id"], "created": user_message["created"], "baseline": self._task_revisions(chat), "checks": []}
+            for requirement in requirements:
+                self._required_task(chat, requirement)
             chat["request_id"] = user_message["id"]
             self._save(chat)
             worker = threading.Thread(target=self._run, args=(scope, user_message["id"], text.strip(), context, model, reasoning, fast_mode, approval_mode), daemon=True, name="supersurfer-" + self.backend + "-turn")

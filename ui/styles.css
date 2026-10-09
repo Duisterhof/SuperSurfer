@@ -303,3 +303,27 @@
 .chat-composer .composer-notices{grid-row:4}
 .account-gate pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.6;padding:12px;background:var(--soft);border-radius:6px}
 @container(max-width:620px){.chat-composer .composer-settings-grid .composer-permission-field,.chat-composer .composer-footer{grid-row:4}.chat-composer .composer-notices{grid-row:5}}
+
+/* Provider accounts share one compact, stable Settings surface. */
+.workspace-account-row{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.workspace-account-row>div{flex:1;min-width:0}.provider-account-status{display:block;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.workspace-account-row button{flex-shrink:0}.provider-install{font-size:12px}.account-gate .modal-footer{flex-wrap:wrap}
+@media(max-width:650px){.workspace-account-row{flex-wrap:wrap}.workspace-account-row>div{flex-basis:100%}}
+
+/* Compact page menus expose removal without entering the workflow editor. */
+.page-tab{display:inline-flex;align-items:center;flex:0 0 auto;gap:0}
+.page-tab-options{width:20px!important;min-width:20px!important;padding:2px!important;background:transparent!important;border:0!important;opacity:.45;font-size:12px!important}
+.page-tab:hover .page-tab-options,.page-tab:focus-within .page-tab-options{opacity:1}
+
+.result-tab{display:inline-flex;align-items:center;gap:0;cursor:grab}
+.result-tab .page-tab-options{opacity:.6}
+.result-archive>summary{font-size:11px;padding:4px;cursor:pointer}
+.result-archive>div{max-height:240px;overflow:auto}
+
+.results-attempts{font-size:11px;border-bottom:1px solid var(--border);margin:0 0 6px}
+.results-attempts>summary{display:list-item;cursor:pointer;padding:4px 8px}
+.results-attempts>summary span{margin-left:8px;color:var(--muted)}
+.results-attempts>summary small{margin-left:8px;color:var(--accent)}
+.results-attempts>div{max-height:180px;overflow:auto;padding:4px 8px}
+.results-attempts>div>div{display:flex;gap:12px;align-items:center;padding:2px 0}
+.results-attempts button{background:transparent;border:0;text-align:left;flex:1;font:inherit;color:inherit;cursor:pointer}

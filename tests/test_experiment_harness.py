@@ -36,6 +36,28 @@ class ExperimentHarnessTests(unittest.TestCase):
         self.assertNotEqual(read['version'],saved['version'])
         with self.assertRaises(KeyError):self.service.results.page(self.exp['id'],'../../token')
 
+    def test_report_order_archive_and_restore_preserve_html_and_reject_stale_layout(self):
+        results = self.service.results
+        a = results.publish(self.exp['id'], {'title': 'Training', 'html': '<h1>Training evidence</h1>'})
+        b = results.publish(self.exp['id'], {'title': 'Evaluation', 'html': '<h1>Evaluation evidence</h1>'})
+        initial = results.presentation(self.exp['id'])['version']
+        fields = {'experiment_id': self.exp['id'], 'version': initial, 'order': [b['id'], a['id']]}
+        changed = self.service.action('experiment.results.manage', fields)
+        self.assertEqual([b['id'], a['id']], [row['id'] for row in results.list(self.exp['id'])])
+        with self.assertRaises(Conflict):self.service.action('experiment.results.manage', fields)
+        with self.assertRaises(ValueError):results.manage(self.exp['id'], {'version': changed['version'], 'order': [a['id'], a['id']]})
+        preview = results.list(self.exp['id'])[0]['preview_url'].rsplit('/', 1)[1]
+        hidden = self.service.action('experiment.results.manage', {'experiment_id': self.exp['id'], 'version': changed['version'], 'result_id': b['id'], 'archived': True})
+        self.assertEqual([a['id']], [row['id'] for row in results.list(self.exp['id'])])
+        self.assertEqual(b'<h1>Evaluation evidence</h1>', results.preview(preview))
+        self.assertEqual(b['id'], hidden['archived'][0]['id'])
+        results.publish(self.exp['id'], {'result_id': b['id'], 'title': 'Revised', 'html': '<h1>Revised evaluation</h1>'})
+        self.assertEqual(1, len(results.list(self.exp['id'])))  # Publishing never silently restores visibility.
+        self.service.action('experiment.results.manage', {'experiment_id': self.exp['id'], 'version': hidden['version'], 'result_id': b['id'], 'archived': False})
+        self.assertEqual(2, len(results.list(self.exp['id'])))
+        self.service.read_only = True
+        with self.assertRaises(APIError):self.service.action('experiment.results.manage', fields)
+
     def test_role_tools_are_scoped_and_read_only_blocks_publishing(self):
         scope='experiment:'+self.exp['id'];self.service.codex.busy.add(scope)
         html=self.service.agent_action(scope,'supersurfer_publish_result',{'title':'Plots','html':'<h1>Measured results</h1>'})

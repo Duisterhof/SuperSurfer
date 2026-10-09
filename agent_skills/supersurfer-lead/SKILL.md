@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.39. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.40. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -299,5 +299,18 @@ a draft choice as a durable agent-patch receipt or saved source. A successful
 explicit Save is still separate from checks, commits and launch authorization.
 
 Use Settings to choose the provider default for new lead conversations, or the
-chat selector before work starts. Codex remains the initial default. This choice
+chat selector before work starts. Fresh setup explicitly records the chosen
+provider for all three roles. This choice
 does not transfer an existing session or change a worker's authorization.
+
+Fresh unconfigured workspaces ask the user to choose a signed-in provider and
+persist it for manager, lead and worker defaults. Existing sessions remain pinned.
+A newly connected project opens its overview/task list, not Task defaults; no
+workflow edit or automatic task launch follows from that navigation.
+
+For a requested review in this project, use enabled `check_experiment_results`
+with `experiment_id`. Revisit the existing comparison across every observed
+released/started attempt; preserve failed/pending evidence and the worker owner.
+Complete with current attempt version and exact report SHA, never a status-only
+handoff. Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md);
+its bounded archive cleanup is separate from human reorder/Restore controls.

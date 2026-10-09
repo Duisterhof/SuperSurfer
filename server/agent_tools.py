@@ -335,6 +335,16 @@ PAGE_TOOL = {
         "markdown": {"type": "string", "minLength": 1, "maxLength": 100000}}},
 }
 PROJECT_PAGE_TOOL = {**PAGE_TOOL, "inputSchema": {**PAGE_TOOL["inputSchema"], "required": ["experiment_id"], "properties": {**PAGE_TOOL["inputSchema"]["properties"], "experiment_id": {"type": "string", "minLength": 1, "maxLength": 180}}}}
+RESULTS_CHECK_TOOL = {
+    "name": "check_experiment_results",
+    "description": "Inspect the research task's observed attempts and existing Results before reporting completion. Default action inspect lists all attempts, review version and report revisions; result_id also reads that owned report's HTML. Revisit the existing comparison, preserve earlier useful attempts, overlay measured train/validation curves between methods and add requested domain visualizations. Pending/failed/unreachable attempts need explicit unavailable entries, never invented measurements. Complete with action complete, current version, result_id, sha256 and summary after the report includes every observed attempt by run ID or W&B source/link. Optionally supply archive_result_ids to hide redundant reports from this task while keeping their HTML and W&B data; never archive the reviewed comparison or useful unique evidence. New attempts or status/report changes reopen the checkpoint. This grants no launch authority.",
+    "inputSchema": {"type": "object", "additionalProperties": False, "properties": {
+        "action": {"type": "string", "enum": ["inspect", "complete"]},
+        "result_id": {"type": "string", "maxLength": 100}, "version": {"type": "string", "maxLength": 100},
+        "sha256": {"type": "string", "maxLength": 100}, "summary": {"type": "string", "maxLength": 2000},
+        "archive_result_ids": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 100}}}},
+}
+PROJECT_RESULTS_CHECK_TOOL = {**RESULTS_CHECK_TOOL, "inputSchema": {**RESULTS_CHECK_TOOL["inputSchema"], "required": ["experiment_id"], "properties": {**RESULTS_CHECK_TOOL["inputSchema"]["properties"], "experiment_id": {"type": "string", "maxLength": 180}}}}
 MESSAGE_TOOL = {
     "name": "message_agent",
     "description": "Coordinate only when your own tools and records cannot resolve a concrete dependency or scope misalignment. kind=request asks one specific question or bounded action and wakes the recipient; kind=answer replies once with reply_to; kind=update records material progress without waking anyone (the default). Updates remain in list_agent_messages; do not use requests for routine reports or acknowledgements. Use project peers for missing research/artifacts. The workspace manager handles actual shared-resource conflicts and cross-project decisions; it cannot release SuperSurfer app fixes or supervise every research step. Continue independent work. Reuse request_id on retry. Direct user instructions and stopped chats retain priority; messages add no research, launch or budget authority.",
@@ -382,6 +392,7 @@ for _tools in ROLE_TOOLS.values():
     _tools.extend([MESSAGE_TOOL, MESSAGES_TOOL, NODE_CHECK_TOOL, ACQUIRE_NODE_TOOL, RECOVER_RUN_TOOL])
 for _role, _tools in ROLE_TOOLS.items():
     _tools.extend([TRAINING_RESULT_TOOL if _role == 'worker' else PROJECT_TRAINING_RESULT_TOOL,
+                   RESULTS_CHECK_TOOL if _role == 'worker' else PROJECT_RESULTS_CHECK_TOOL,
                    MANAGER_LIMITS_TOOL if _role == 'manager' else LIMITS_TOOL, STOP_RUN_TOOL])
 
 

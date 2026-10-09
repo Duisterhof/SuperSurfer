@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.39'
+  supersurfer-version: '0.1.40'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.39. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.40. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -263,3 +263,28 @@ On desktop, page tabs and Activity remain below the native drag area. Collapsing
 Restoring Settings access does not require republishing this report or changing
 its live sources. Workspace permission defaults and per-chat provider controls
 remain separate; preserve the same runs and scientific evidence.
+
+Removing a Results page/block changes this project/task's presentation only;
+the report, measured curves, artifacts, writers and running work remain. Re-add
+the intended view through enabled scoped layout tools instead of republishing
+data or inventing a utility-tab visibility tool.
+
+Results report tabs are separate from configured page tabs. The user can drag
+reports, choose Move earlier/later or Remove in their tab menu, then Restore
+through Removed. Removal archives the report's presentation; saved HTML, declared
+W&B sources and measurements remain. Standalone organization controls use a presentation revision
+check and are human-only; the research checkpoint below separately permits
+bounded archive cleanup, not general reorder or Restore. `publish_result` can
+revise the same stored report but preserves its archived state; do not publish a
+duplicate or claim an update unarchives it. Ordinary report listings omit
+archived reports, so absence from that list does not prove content was deleted.
+
+Use enabled `check_experiment_results` to verify one current research comparison
+against all returned attempts, not only the first training run or an earlier
+baseline. Inspect may read an owned report's HTML; complete binds the current
+attempt version, visible report ID/SHA and concrete summary. Missing/pending/failed
+measurements remain explicit entries. Optional archive_result_ids can hide only
+redundant other owned reports, keeping their source and unique evidence. Follow
+[Results checkpoint guidance](references/results-checkpoint.md) for scope, exact
+fields and the required task's reopen behavior. Nonresearch work and held-only
+drafts do not acquire this launch-related reporting checkpoint.
