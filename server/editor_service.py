@@ -2,7 +2,7 @@
 from copy import deepcopy
 import json
 import hashlib
-from .agent_diff_review import undo
+from .agent_diff_review import undo, hunks
 import uuid
 from pathlib import Path
 
@@ -228,37 +228,82 @@ class EditorService:
             raise
 
     def decide_agent_change(self, project, fields):
-        if set(fields) != {"project_id","scope","change_id","decision","revision"} or fields["decision"] not in {"accept","reject"}:
+        # Serialize receipts for the same file/change; the source writer still
+        # checks its revision atomically against independent editor writes.
+        with self.store.lock:
+            return self._decide_agent_change(project, fields)
+
+    @staticmethod
+    def _chunk_decisions(change, count):
+        prior = change.get('review_decision') or {}
+        if 'chunks' in prior:
+            return dict(prior['chunks'])
+        if prior.get('state') in {'accepted','rejected'}:
+            return {str(index):prior['state'] for index in range(count)}
+        return {}
+
+    @staticmethod
+    def _review_state(chunks, count):
+        if len(chunks) != count:
+            return 'partial'
+        states = set(chunks.values())
+        return next(iter(states)) if len(states) == 1 else 'mixed'
+
+    def _decide_agent_change(self, project, fields):
+        required = {"project_id","scope","change_id","decision","revision"}
+        if not required <= set(fields) or set(fields)-required-{'hunk'} or fields["decision"] not in {"accept","reject"}:
             raise SurfboardError("Choose accept/reject for a scoped agent edit and its current file revision")
         change = self.agent_change(project, fields["scope"], fields["change_id"])
-        decision = fields["decision"]
-        prior = change.get("review_decision")
-        if prior and prior.get("state") in {"accepted","rejected"}:
-            if prior['decision'] != decision: raise SurfboardError("This edit already has a final review decision",409)
-            return {"decision":prior['state'],"path":change['path'],"already_decided":True}
+        rows = hunks(change)
+        index = fields.get('hunk')
+        if 'hunk' in fields and (type(index) is not int or not 0 <= index < len(rows)):
+            raise SurfboardError("Choose a recorded chunk")
+        decision = fields['decision']
+        final = 'accepted' if decision == 'accept' else 'rejected'
+        prior = change.get('review_decision') or {}
+        chunks = self._chunk_decisions(change, len(rows))
+        selected = [index] if 'hunk' in fields else [i for i in range(len(rows)) if str(i) not in chunks]
+        if index is not None and str(index) in chunks:
+            if chunks[str(index)] != final:
+                raise SurfboardError("This chunk already has a final review decision",409)
+            return {"decision":final,"path":change['path'],"already_decided":True}
+        if not selected:
+            if set(chunks.values()) != {final}:
+                raise SurfboardError("This edit already has final chunk decisions",409)
+            return {"decision":final,"path":change['path'],"already_decided":True}
         current = self.change_current_file(project, change['path'])
-        if current.get('read_only'): raise SurfboardError("This file cannot be changed safely by the editor",403)
+        if current.get('read_only'):
+            raise SurfboardError("This file cannot be changed safely by the editor",403)
         revision = current['revision']
-        if prior and prior.get('state') == 'applying':
-            if prior['decision'] != decision: raise SurfboardError("A different review decision is pending; retry that decision first",409)
+        if prior.get('state') == 'applying':
+            # Only replay the exact pending operation. Never include new chunks
+            # in a retry after a lost response.
+            pending = prior.get('selected', list(range(len(rows))))
+            if prior['decision'] != decision or selected != pending:
+                raise SurfboardError("A different review decision is pending; retry that decision first",409)
             if revision == prior['after_revision']:
-                prior['state'] = 'accepted' if decision == 'accept' else 'rejected'
+                chunks.update({str(i):final for i in selected})
+                prior.update(chunks=chunks,state=self._review_state(chunks,len(rows)))
                 self.codex.decide_change(fields['scope'],fields['change_id'],prior)
-                return {"decision":prior['state'],"path":change['path'],"reconciled":True}
-            if revision != prior['before_revision']: raise SurfboardError("The file changed during review. Newer work was preserved.",409)
+                return {"decision":final,"path":change['path'],"reconciled":True}
+            if revision != prior['before_revision']:
+                raise SurfboardError("The file changed during review. Newer work was preserved.",409)
         elif fields['revision'] != revision:
             raise SurfboardError("The file changed after opening this diff. Reload it before deciding; newer work was preserved.",409)
-        operation,content = ('keep', current.get('content')) if decision == 'accept' else undo(change,current.get('content'))
+        operation,content = ('keep',current.get('content')) if decision == 'accept' else undo(change,current.get('content'),selected)
         target_revision = hashlib.sha256(content.encode()).hexdigest() if content is not None else None
-        receipt = {"decision":decision,"state":"applying","before_revision":revision,"after_revision":target_revision,"operation":operation}
-        if prior and target_revision != prior['after_revision']: raise SurfboardError("The recorded edit changed during review",409)
+        if prior.get('state') == 'applying' and target_revision != prior['after_revision']:
+            raise SurfboardError("The recorded edit changed during review",409)
+        receipt = {"decision":decision,"state":"applying","chunks":chunks,"selected":selected,
+                   "before_revision":revision,"after_revision":target_revision,"operation":operation}
         self.codex.decide_change(fields['scope'],fields['change_id'],receipt)
         if operation == 'delete': self.code.delete(project,change['path'],revision)
         if operation == 'save': self.code.save(project,change['path'],content,revision)
-        receipt['state'] = 'accepted' if decision == 'accept' else 'rejected'
+        chunks.update({str(i):final for i in selected})
+        receipt['state'] = self._review_state(chunks,len(rows))
         self.codex.decide_change(fields['scope'],fields['change_id'],receipt)
         if hasattr(self,'latex') and decision == 'reject': self.latex.invalidate(project['id'],repo=project['repo'])
-        return {"decision":receipt['state'],"path":change['path']}
+        return {"decision":final,"path":change['path'],"review_state":receipt['state']}
 
     def _change_scope(self, project_id, scope, experiment_id=None):
         if scope == "manager":
@@ -320,17 +365,38 @@ class EditorService:
         path = self._change_path(project, row)
         if not path:
             raise SurfboardError("The change is outside this project repository", 403)
-        review = {"can_accept":True,"can_reject":False,"revision":None,"reason":""}
+        review = {"can_accept":True,"can_reject":False,"revision":None,"reason":"","chunks":[]}
         try:
             current = self.change_current_file(project,path)
             review["revision"] = current['revision']
             if current.get('read_only'):
                 review['can_accept'] = False
                 raise SurfboardError("Binary or unsupported file; review it manually",409)
-            undo(row,current.get('content'));review['can_reject'] = True
+            rows = hunks(row)
+            decisions = self._chunk_decisions(row,len(rows))
+            for index,hunk in enumerate(rows):
+                chunk = {key:hunk[key] for key in ('old_start','old_count','new_start','new_count','patch_line')}
+                chunk.update(index=index,state=decisions.get(str(index)),can_reject=False,reason='')
+                if not chunk['state']:
+                    try:
+                        undo(row,current.get('content'),[index]);chunk['can_reject'] = True
+                    except SurfboardError as error:
+                        chunk['reason'] = str(error)
+                prior = row.get('review_decision') or {}
+                if prior.get('state') == 'applying' and current['revision'] in {prior.get('before_revision'),prior.get('after_revision')} and index in prior.get('selected',list(range(len(rows)))):
+                    chunk['can_reject'] = prior.get('decision') == 'reject'
+                    chunk['reason'] = ''
+                review['chunks'].append(chunk)
+            pending = [i for i in range(len(rows)) if str(i) not in decisions]
+            if pending:
+                undo(row,current.get('content'),pending);review['can_reject'] = True
         except SurfboardError as error:
             review['reason'] = str(error)
+            if not review['chunks']:review['can_accept'] = False
             if error.status in {403,404}: review['can_accept'] = False
+        prior = row.get('review_decision') or {}
+        if prior.get('state') == 'applying' and review['revision'] in {prior.get('before_revision'),prior.get('after_revision')} and prior.get('decision') == 'reject':
+            review['can_reject'] = True;review['reason'] = ''
         # A patch is exact evidence of this agent's edit. We do not fabricate a
         # full before/after file from today's potentially overlapping worktree.
         return {**row, "path": path, "agent_name": self.store.get("chat_name:" + scope) or row.get("agent_name") or scope,

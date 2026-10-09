@@ -17,3 +17,10 @@
 
 /* Native Explorer owns navigation; SuperSurfer owns the PDF overlay and chat. */
 .workbench-frame{position:relative}.native-pdf-overlay{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--background,#fff);min-width:0;overflow:hidden}.native-pdf-overlay .native-pdf-view{flex:1;min-height:0;overflow:auto}
+
+.native-changes-drawer{flex:0 0 min(260px,35%);min-width:150px;border-right:1px solid var(--line);overflow:auto;display:flex;flex-direction:column}.native-changes-drawer .code-tile-list{flex:1;overflow:auto}.native-changes-drawer .code-tile-heading{font-size:11px}.native-changes-drawer .code-coverage{font-size:10px}
+
+.agent-chunk-controls{display:flex;align-items:center;gap:8px;font:12px var(--font-ui,sans-serif);background:var(--panel-bg,#f8f8f8);padding:2px 12px;box-sizing:border-box}.agent-chunk-controls button{border:1px solid var(--border,#ddd);border-radius:4px;background:var(--surface,#fff);color:inherit;font:inherit;padding:2px 8px;cursor:pointer}.agent-chunk-controls button:disabled{opacity:.5;cursor:default}.agent-chunk-controls span{margin-right:4px}
+
+.agent-chunk-controls{z-index:10;pointer-events:auto}
+.monaco-editor .view-zones:has(.agent-chunk-controls){z-index:4}

@@ -10,7 +10,7 @@ export function createTileLayout(options){
  const key=()=>options.key(),draft=()=>drafts.get(key());
  const enabled=()=>!!draft()&&!draft().saving&&!options.readOnly();
  const changed=()=>{options.render();};
- function start(automatic=false){const page=options.page();if(!page||options.readOnly())return;if(!draft()){drafts.set(key(),{base:copy(page),page:copy(page),automatic,error:''});ensureDockLayout(draft().page);}else if(!automatic)draft().automatic=false;if(!automatic)changed();}
+ function start(automatic=false){const page=options.page();if(options.readOnly())return;if(!page){options.configure?.();return;}if(!draft()){drafts.set(key(),{base:copy(page),page:copy(page),automatic,error:''});ensureDockLayout(draft().page);}else if(!automatic)draft().automatic=false;if(!automatic)changed();}
  function cancel(){if(draft()?.saving)return;drafts.delete(key());changed();}
  function tile(id){return draft()?.page.tiles.find(row=>row.id===id);}
  function move(id,placement,before){if(!enabled())return;const row=tile(id);if(!row||id===before)return;row.placement=placement;const rows=draft().page.tiles.filter(item=>item!==row),index=rows.findIndex(item=>item.id===before);rows.splice(index<0?rows.length:index,0,row);draft().page.tiles=rows;changed();}
@@ -19,13 +19,13 @@ export function createTileLayout(options){
   const row={id:'tile_'+crypto.randomUUID().replaceAll('-','').slice(0,12),kind,span:kind==='file_explorer'?3:6,height:kind==='pdf'?600:400,placement};page.tiles.push(row);move(row.id,placement,before);
  }
  async function save(){
-  if(!enabled())return;const id=key(),value=draft();value.saving=true;value.error='';changed();
+  if(!enabled())return;const id=key(),value=draft(),baseline=copy(value.base);ensureDockLayout(baseline);if(JSON.stringify(baseline)===JSON.stringify(value.page)){drafts.delete(id);changed();return;}value.saving=true;value.error='';changed();
   try{await options.save(copy(value.page),copy(value.base));drafts.delete(id);}
   catch(error){value.error=error.message;value.saving=false;value.automatic=false;}
   changed();
  }
  function toolbar(){const value=draft();if(!value||value.automatic)return '';const disabled=value.saving||options.readOnly();
-  return `<div class="tile-arrange-toolbar"><span class="arrange-label" title="Drag tiles into the page or either sidebar; drag corners to resize.">Arranging ${esc(value.page.title)}</span><details class="tile-palette-menu"><summary class="button small-button">Add tile</summary><div class="tile-palette" aria-label="Add a page tile">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="${!disabled}" ${disabled||value.page.tiles.some(tile=>tile.kind===row.kind)||value.page.tiles.length>=16?'disabled':''}>+ ${esc(row.label)}</button>`).join('')}</div></details><button class="button small-button" data-tile-command="cancel" ${disabled?'disabled':''}>Cancel</button><button class="button small-button primary" data-tile-command="save" ${disabled?'disabled':''}>${value.saving?'Saving…':'Save layout'}</button>${value.error?`<p class="notice error arrange-error" role="alert">${esc(value.error)} Your layout draft is kept.</p>`:''}</div>`;
+  return `<div class="tile-arrange-toolbar"><span class="arrange-label">Rearrange · ${esc(value.page.title)}</span><button class="button small-button" data-tile-command="cancel" ${disabled?'disabled':''}>Cancel</button><button class="button small-button primary" data-tile-command="save" ${disabled?'disabled':''}>${value.saving?'Saving…':'Done'}</button>${value.error?`<p class="notice error arrange-error" role="alert">${esc(value.error)} Your layout draft is kept.</p>`:''}</div>`;
  }
  function controls(row,label){
     const floating=(draft()?.page||options.page())?.arrangement==='windows'&&place(row)==='main';
@@ -61,7 +61,7 @@ export function createTileLayout(options){
   const button=event.target.closest('[data-tile-command],[data-add-tile],[data-tile-remove],[data-tile-up],[data-tile-space],[data-dock-close]');if(!button||button.disabled)return;event.preventDefault();event.stopImmediatePropagation();
   if(button.hasAttribute('data-dock-close')){if(!draft())start(true);if(enabled()){const path=button.dataset.dockClose,parts=path.split('.'),side=parts.pop(),parentPath=parts.join('.'),parent=dockNode(draft().page.layout,parentPath);if(parent?.axis)draft().page.layout=replaceDock(draft().page.layout,parentPath,parent[side==='first'?'second':'first']);if(draft().automatic)void save();else changed();}return;}
   if(button.dataset.tileSpace){if(!draft())start(true);if(enabled()){reserveDockSpace(draft().page,button.dataset.tileSpace,button.dataset.spaceEdge);if(draft().automatic)void save();else changed();}return;}
-  const command=button.dataset.tileCommand;if(command==='start')start();if(command==='windows'||command==='docked'){
+  const command=button.dataset.tileCommand;if(command==='start')start();if(command==='pages'||command==='workflow'||command==='addpage'){void(async()=>{if(draft()){await save();if(draft())return;}if(command==='workflow')options.workflow?.();else options.configure?.({addPage:command==='addpage'});})();return;}if(command==='windows'||command==='docked'){
       if(!draft())start(true);if(enabled()){const page=draft().page;page.arrangement=command;
       if(command==='windows')for(const row of page.tiles){if(place(row)!=='main'||row.bounds)continue;const element=[...document.querySelectorAll('[data-live-tile]')].find(el=>el.dataset.tileId===row.id),area=element?.parentElement,a=area?.getBoundingClientRect(),r=element?.getBoundingClientRect();row.bounds={x:Math.max(0,Math.round((r?.left||0)-(a?.left||0))),y:Math.max(0,Math.round((r?.top||0)-(a?.top||0))),width:Math.max(200,Math.round(r?.width||500)),height:Math.max(160,Math.round(r?.height||row.height))};}
       options.resize?.(page);if(draft().automatic)void save();else changed();}}
@@ -126,5 +126,5 @@ if(command==='files-left'){start();if(enabled()){const existing=draft().page.til
   options.resize?.(draft().page);if(draft()?.automatic)void save();
  });
  let topWindow=10;document.addEventListener('pointerdown',event=>{const window=event.target.closest('.window-canvas>.page-tile');if(window)window.style.zIndex=String(++topWindow);},true);
- return {page:page=>page?(draft()?.page||page):undefined,editing:()=>!!draft()&&!draft().automatic,toolbar,decorate,palette(){return `<summary>＋ Panel</summary><div class="tile-palette">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="true" ${options.readOnly()||options.page()?.tiles.some(tile=>tile.kind===row.kind)?'disabled':''}>${esc(row.label)}</button>`).join('')}</div>`;},active:()=>!!resizing||!!windowMove||!!splitResize, resizeSidebar(width){if(!draft())start(true);if(enabled()){draft().page.left_width=clamp(width,160,600);options.resize?.(draft().page);}},resizeDock(width){if(!draft())start(true);if(enabled()){draft().page.right_width=clamp(width,280,760);options.resize?.(draft().page);}},commitResize(){if(draft()?.automatic)void save();},start};
+ return {page:page=>page?(draft()?.page||page):undefined,editing:()=>!!draft()&&!draft().automatic,toolbar,decorate,palette(){return `<summary>Blocks</summary><div class="tile-palette">${options.catalog().map(row=>`<button type="button" class="button small-button" data-add-tile="${esc(row.kind)}" draggable="true" ${options.readOnly()||options.page()?.tiles.some(tile=>tile.kind===row.kind)?'disabled':''}>${esc(row.label)}</button>`).join('')}</div>`;},active:()=>!!resizing||!!windowMove||!!splitResize, resizeSidebar(width){if(!draft())start(true);if(enabled()){draft().page.left_width=clamp(width,160,600);options.resize?.(draft().page);}},resizeDock(width){if(!draft())start(true);if(enabled()){draft().page.right_width=clamp(width,280,760);options.resize?.(draft().page);}},commitResize(){if(draft()?.automatic)void save();},start};
 }

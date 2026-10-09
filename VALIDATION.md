@@ -1,6 +1,14 @@
 # SuperSurfer 0.1.35 nested desktops — October 8, 2026
 
-The full backend suite passes **652 Python tests**. All **24 enabled Node checks**
+Both the built-in Monaco editor and pinned native Code OSS exercise real per-chunk
+Accept/Reject. Mixed decisions preserve accepted chunks and unrelated source; stale
+revisions and dirty native buffers block reversal. Tests cover interrupted receipts,
+ambiguous context and scoped/read-only extension events. The native Changes drawer
+works inside one editor tile. The public walkthrough passes layout controls,
+surfboard gates, E15 comparison curves, integrated coding review, proposal writing
+and mobile overflow checks.
+
+The full backend suite passes **657 Python tests**. All **24 enabled Node checks**
 pass; four optional localhost SSH checks were skipped. The native Electron lifecycle
 regression passes host isolation, detached-panel close notifications, restored window
 preferences, main-frame credentials and denied untrusted IPC. Nested layout validation rejects
@@ -8,7 +16,8 @@ missing/duplicate/foreign leaves, sidebar leaves, invalid ratios and oversized t
 Native trust tests cover exact-project consent, unrelated/relocated projects and
 revocation. Watcher tests preserve custom and explicitly disabled exclusions.
 
-Real browser fixtures verify nested mixed-axis panels, independent divider changes,
+Real browser fixtures verify the single top-row Rearrange control, overlay palette,
+Done/Cancel, folded page controls and nested mixed-axis panels, independent divider changes,
 reserved space receiving another app and retained unsaved source. Existing page CRUD,
 scoped defaults, live results reloading and task navigation pass. Returning to a task
 restores its last custom page before and after reload. The writing regression compiles

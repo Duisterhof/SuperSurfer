@@ -62,7 +62,7 @@ PDFs), and optional `placement`
 (`main`, `left`, `right`). Left means the navigation sidebar. Pages may specify
 `left_width` (160–600 px) or `right_width` (280–760 px), independently of the
 window's ordinary navigation width. Moving Repository files left reuses its tile
-ID; the UI shortcut prepares an Arrange draft, while the scoped agent layout
+ID; the UI shortcut prepares a Rearrange draft, while the scoped agent layout
 tool applies the requested page edit with both current versions. PDF tiles can also
 specify a repository-relative `.pdf` `path` or a returned `artifact:` PDF identity
 from this project's artifact library. Keep one of each tile kind per page,
@@ -105,9 +105,13 @@ they neither satisfy checks nor alter data sharing, budgets, launch authority or
 source files. Temporary fullscreen/restore is a viewing action, not a reason to
 save another board or duplicate a tile. Editor sidebar width, file selection and
 attachment chips likewise add no agent tools or launch authority. Preserve dirty
-buffers and existing iframe/report identities when revising a layout. Arrange
-controls live in the global top bar; verify its page identity before Save layout
-or Cancel. An uploaded local file is a project artifact, not a new workflow node,
+buffers and existing iframe/report identities when revising a layout. The compact
+top row exposes **Rearrange** beside workspace status. Its overlay contains Blocks,
+Windows/Dock, Pages…, + Page and Surfboard…, with **Done** to save the explicit
+layout draft and **Cancel** to discard it. Pages…, + Page and Surfboard… first
+save that draft safely; a conflict keeps the overlay open and blocks navigation.
+These controls do not apply an unreviewed workflow policy. Verify the page identity
+before saving or cancelling. An uploaded local file is a project artifact, not a new workflow node,
 permission or executable action. Preserve its artifact identity when arranging
 an existing preview rather than duplicating the upload.
 A direct project-page edit increments the board version and retains

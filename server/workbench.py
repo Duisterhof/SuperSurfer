@@ -350,7 +350,7 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files"}:
+            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files", "changes"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
@@ -369,7 +369,7 @@ class Workbench:
                     result.update(title=fields.get("title") or "Revision comparison", data=data)
                 else:
                     data = self.service.agent_change(project, fields.get("scope"), fields.get("change_id"))
-                    result.update(title="Agent changes", data=data)
+                    result.update(title="Agent changes", data=data, scope=fields.get("scope"))
             row["commands"].append(result)
             row["commands"] = row["commands"][-20:]
             return {"accepted": True}
@@ -399,7 +399,7 @@ class Workbench:
                 ack = fields.get("ack", [])
                 row["commands"] = [command for command in row["commands"] if command["id"] not in ack]
                 return {"commands": row["commands"]}
-            if fields.get("operation") not in {"selection", "saved", "error", "open_pdf", "open_source"}:
+            if fields.get("operation") not in {"selection", "saved", "error", "open_pdf", "open_source", "chunk_decision"}:
                 raise SurfboardError("Unknown editor bridge event")
             event = {"kind": fields["operation"], "sequence": (row["events"][-1]["sequence"] if row["events"] else 0) + 1}
             project = self.service.lookup("projects", row["project_id"])
@@ -417,6 +417,14 @@ class Workbench:
                              label=str(fields.get("label", path.name))[:300])
             else:
                 event["error"] = str(fields.get("error", "Editor command failed"))[:2000]
+            if event['kind'] == 'chunk_decision':
+                if self.service.read_only:
+                    raise SurfboardError('Read-only workspace',403)
+                change = self.service.agent_change(project,fields.get('scope'),fields.get('change_id'))
+                index = fields.get('hunk')
+                if change['path'] != event['path'] or type(index) is not int or not 0 <= index < len(change['review']['chunks']) or fields.get('decision') not in {'accept','reject'}:
+                    raise SurfboardError('Choose a recorded chunk in this project')
+                event.update(scope=fields['scope'],change_id=fields['change_id'],hunk=index,decision=fields['decision'],revision=fields.get('revision'))
             if event["kind"] == "saved":
                 self.service.latex.invalidate(project["id"], repo=project["repo"])
             row["events"].append(event)

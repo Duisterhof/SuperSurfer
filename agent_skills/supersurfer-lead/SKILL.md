@@ -166,7 +166,7 @@ relay is needed, and presentation edits grant no execution tools. Nested dock
 splits and reserved empty drop space use those same version-checked page tools;
 preserve every main tile exactly once without changing worker ownership. A requested
 left-side file browser should reuse the existing `file_explorer` tile on that
-page, preserving its ID and other content. A visible Arrange draft is not proof
+page, preserving its ID and other content. A visible Rearrange draft is not proof
 that its layout was saved.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
@@ -187,6 +187,10 @@ changes. Never alter board state to grant yourself a denied capability.
 Use `present_code` for a requested file view or actual Git revision comparison;
 use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
+Integrated Changes can record per-chunk accept/reject and a final mixed review
+outcome; these user decisions never become a new PR, check or deliverable gate.
+Preserve final chunk decisions and unrelated source; do not infer full acceptance
+from a mixed Reviewed receipt or use a whole-file rollback to bypass a conflict.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
 retains its original authority. Task right-click Archive/Restore and the Archived

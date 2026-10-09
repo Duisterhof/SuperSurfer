@@ -25,6 +25,14 @@ Send both exact versions and the **full preserved pages list** to the update;
 change only the requested page/tiles. Stable IDs preserve view identity. A 409
 means someone changed the layout or board: reread and reconcile, never retry an
 old full list blindly. Read the returned saved layout before claiming success.
+The Coding preset is a single full-width editor tile; native/built-in file browsing
+and Changes are inside it, while separate explorer/review tiles remain optional.
+Do not add mandatory duplicate tiles to imitate its existing controls. Each window
+remembers the last selected valid page per project/work item. Returning to it
+restores that page without sending work; detached panel navigation does not
+replace the original window's remembered page. Removed/unavailable pages fall
+back to a currently available view rather than creating a replacement page.
+
 A project-page edit increments the board version; any retained workflow draft
 needs reconciliation. An item edit changes only that item's override. These tools
 do not edit default layouts for every item; use a reviewed Surfboard proposal
@@ -102,18 +110,23 @@ instance. The editor's internal file-sidebar width is separate from page tile
 
 The main navigation divider supports drag, Left/Right arrows and Home/End, with
 a 160 px minimum and an upper limit bounded by the window (at most 600 px).
-Outside Arrange, without an explicit page `left_width`, this adjusts the ordinary
+Outside Rearrange, without an explicit page `left_width`, this adjusts the ordinary
 window/workspace width. Page-specific dividers and tile edges resize directly;
-the automatic page change saves when dragging ends. During explicit Arrange,
-changes stay in its draft: **Save layout** persists, **Cancel** discards. A failed
+the automatic page change saves when dragging ends. During explicit Rearrange,
+changes stay in its draft: **Done** persists, **Cancel** discards. A failed
 save retains a visible draft/error instead of claiming the size persisted.
-Arrange controls are grouped in the global top bar with the current page identity
-and Add tile dropdown; verify that identity before saving or cancelling. The
+The compact top row has **Rearrange** beside workspace status. Its overlay groups
+the current page identity, Blocks palette, Windows/Dock, Pages…, + Page,
+Surfboard… and other window/view controls. Verify that identity before Done or
+Cancel. Pages…, + Page and Surfboard… safely save the pending layout draft before
+opening their editor; a save failure or conflict leaves Rearrange open and blocks
+that navigation. Surfboard policy changes still require their reviewed proposal;
+a successful layout save does not apply them. The
 editor's internal file-column divider is separate, as is the vertical divider
 between Projects and sidebar files. Agent tools change scoped page fields,
 not the client's ordinary window preference.
 
-**Add file browser** and **Move file browser here** start an Arrange draft for
+**Add file browser** and **Move file browser here** start a Rearrange draft for
 the current page. Reuse the existing `file_explorer` tile and set its placement
 to `left`; add one only when that page has none. Preserve its ID, the other tiles
 and their order unless requested. The shortcut itself does not save, copy files

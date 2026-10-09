@@ -6,7 +6,7 @@ function activate(context) {
   const endpoint=process.env.SUPERSURFER_EDITOR_ENDPOINT,token=process.env.SUPERSURFER_EDITOR_TOKEN;
   require('./spelling.cjs').activateSpelling(vscode,context);
   if(!session||!endpoint||!token)return;
-  const documents=new Map();let sequence=0,ack=[];
+  const documents=new Map(),reviews=new Map(),documentChanges=new vscode.EventEmitter(),lensChanges=new vscode.EventEmitter();let sequence=0,ack=[];
   const request=fields=>new Promise((resolve,reject)=>{
     const bytes=Buffer.from(JSON.stringify({session,...fields}));
     const req=http.request(endpoint,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json','Content-Length':bytes.length}},response=>{
@@ -15,8 +15,21 @@ function activate(context) {
     });req.setTimeout(10000,()=>req.destroy(new Error('Editor bridge timed out')));req.on('error',reject);req.end(bytes);
   });
   function virtual(name,text){const uri=vscode.Uri.parse('supersurfer-diff:/'+(++sequence)+'/'+encodeURIComponent(name));documents.set(uri.toString(),text);return uri;}
-  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('supersurfer-diff',{provideTextDocumentContent:uri=>documents.get(uri.toString())||''}));
-  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc=>documents.delete(doc.uri.toString())));
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('supersurfer-diff',{onDidChange:documentChanges.event,provideTextDocumentContent:uri=>documents.get(uri.toString())||''}));
+  context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc=>{documents.delete(doc.uri.toString());reviews.delete(doc.uri.toString());}));
+  context.subscriptions.push(vscode.languages.registerCodeLensProvider({scheme:'supersurfer-diff'},{onDidChangeCodeLenses:lensChanges.event,provideCodeLenses(document){
+    const review=reviews.get(document.uri.toString());if(!review)return [];
+    return (review.data.review?.chunks||[]).flatMap(chunk=>{
+      const range=new vscode.Range(Math.max(0,chunk.patch_line-1),0,Math.max(0,chunk.patch_line-1),0);
+      if(chunk.state)return [new vscode.CodeLens(range,{title:chunk.state==='accepted'?'Accepted':'Rejected',command:''})];
+      return ['accept',...(chunk.can_reject?['reject']:[])].map(decision=>new vscode.CodeLens(range,{title:decision==='accept'?'Accept':'Reject',command:'supersurfer.decideChunk',arguments:[review,chunk.index,decision]}));
+    });
+  }}));
+  context.subscriptions.push(vscode.commands.registerCommand('supersurfer.decideChunk',async(review,hunk,decision)=>{
+    if(![...reviews.values()].includes(review))return;
+    try{await request({operation:'chunk_decision',scope:review.scope,change_id:review.data.id,path:path.join(vscode.workspace.workspaceFolders[0].uri.fsPath,review.data.path),hunk,decision,revision:review.data.review.revision});}
+    catch(error){vscode.window.showErrorMessage(error.message);}
+  }));
   async function selection(){
     const editor=vscode.window.activeTextEditor;if(!editor)return;
     const doc=editor.document;if(doc.uri.scheme!=='file'){vscode.window.showInformationMessage('Select text in a project source file to add it to chat.');return;}
@@ -29,6 +42,7 @@ function activate(context) {
   context.subscriptions.push(vscode.window.registerCustomEditorProvider('supersurfer.pdf',{async openCustomDocument(uri){return {uri,dispose(){}};},async resolveCustomEditor(document,panel){panel.webview.html='<!doctype html><html><body>Opening SuperSurfer PDF viewer…</body></html>';panel.onDidChangeViewState(event=>{if(event.webviewPanel.active)request({operation:'open_pdf',path:document.uri.fsPath}).catch(()=>{});});await request({operation:'open_pdf',path:document.uri.fsPath});}},{supportsMultipleEditorsPerDocument:false}));
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor=>{if(editor?.document.uri.scheme==='file')request({operation:'open_source',path:editor.document.uri.fsPath}).catch(()=>{});}));
   async function command(item){
+    if(item.kind==='changes')return vscode.commands.executeCommand('workbench.action.closeSidebar');
     if(item.kind==='files')return vscode.commands.executeCommand('workbench.view.explorer');
     if(item.kind==='selection')return selection();
     if(item.kind==='trust')return vscode.commands.executeCommand('workbench.trust.manage');
@@ -45,7 +59,7 @@ function activate(context) {
       if(item.range){const r=item.range,start=new vscode.Position(Math.max(0,(r.line||1)-1),Math.max(0,(r.column||1)-1)),end=new vscode.Position(Math.max(0,(r.endLine||r.line||1)-1),Math.max(0,(r.endColumn||r.column||1)-1));editor.selection=new vscode.Selection(start,end);editor.revealRange(editor.selection,vscode.TextEditorRevealType.InCenter);}return;
     }
     if(item.kind==='agent_diff'){
-      const row=item.data;if(typeof row.original==='string'&&typeof row.modified==='string')return vscode.commands.executeCommand('vscode.diff',virtual('Before-'+row.path,row.original),virtual('After-'+row.path,row.modified),item.title+' · '+row.path,{preview:false});const uri=virtual(row.path+'.patch',row.patch||row.diff||'No patch recorded.');const doc=await vscode.workspace.openTextDocument(uri);await vscode.languages.setTextDocumentLanguage(doc,'diff');return vscode.window.showTextDocument(doc,{preview:false});
+      const row=item.data;if(typeof row.original==='string'&&typeof row.modified==='string')return vscode.commands.executeCommand('vscode.diff',virtual('Before-'+row.path,row.original),virtual('After-'+row.path,row.modified),item.title+' · '+row.path,{preview:false});const uri=vscode.Uri.parse('supersurfer-diff:/review/'+encodeURIComponent(item.scope)+'/'+encodeURIComponent(row.id)+'/'+encodeURIComponent(row.path+'.patch'));documents.set(uri.toString(),row.patch||row.diff||'No patch recorded.');reviews.set(uri.toString(),{data:row,scope:item.scope});documentChanges.fire(uri);lensChanges.fire();const doc=await vscode.workspace.openTextDocument(uri);await vscode.languages.setTextDocumentLanguage(doc,'diff');return vscode.window.showTextDocument(doc,{preview:false});
     }
     if(item.kind==='comparison'){
       let data=item.data;

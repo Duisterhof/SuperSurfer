@@ -1,5 +1,11 @@
 ## Completed in 0.1.35
 
+- Integrated Changes drawer and inline chunk Accept/Reject in both editor engines.
+- Remaining-chunk bulk decisions, conflict detection and durable interrupted review.
+- Full-width editor Coding preset and lightweight reduced-motion-aware surfboard cue.
+- Scrollable Light Modern public walkthrough with realistic workflow examples.
+
+- Single Rearrange control and overlay with blocks, layout modes and page controls.
 - Nested horizontal/vertical splits with independent divider resizing.
 - Always-available panel dragging, edge preview, palette and reservable empty space.
 - Move separate panels out of their original view and restore them on closure.

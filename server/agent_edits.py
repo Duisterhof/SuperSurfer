@@ -115,7 +115,7 @@ def review(db, scope, change_id, reviewed):
 def decide(db, scope, change_id, decision):
     row = get_change(db, scope, change_id)
     row['review_decision'] = decision
-    row['reviewed'] = decision.get('state') in {'accepted','rejected'}
+    row['reviewed'] = decision.get('state') in {'accepted','rejected','mixed'}
     body = json.dumps(row, ensure_ascii=False)
     db.execute("UPDATE agent_edits SET body=?,size=? WHERE scope=? AND id=?", (body,len(body.encode('utf-8')),scope,change_id))
     db.commit()

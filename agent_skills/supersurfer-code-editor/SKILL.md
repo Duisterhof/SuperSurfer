@@ -37,7 +37,10 @@ sidebar when a separate explorer is present. The selected Code OSS engine uses i
 Explorer; do not mistake that filesystem view for a second checkout. Opening a
 file preserves the browser; it
 does not switch to the workflow diagram. If the page lacks an editor, the app
-reuses an existing editor page or creates a File viewer page. Page arrangement is a presentation choice,
+reuses an existing editor page or creates a File viewer page. Returning to a
+project/work item restores its remembered page in this window when that page
+still exists, without resuming or duplicating work. Detached panels do not rewrite
+the original window's page memory. Page arrangement is a presentation choice,
 not a new source owner or permission. Use enabled `read_view_layout` and
 `update_view_layout` tools for requested page composition, resizing/reordering or
 sidebar placement within your role scope. Preserve stable tile IDs and dirty
@@ -63,8 +66,9 @@ The editor's internal file column and the main left navigation sidebar have
 separate dividers. The latter supports dragging or keyboard width changes down
 to 160 px, with a responsive upper limit of 600 px. Its ordinary width is a saved
 window/workspace preference. Direct page-divider and tile-edge drags persist the
-page size when released; an explicit Arrange session retains Save layout/Cancel. **Add file browser** or **Move file browser here** starts an
-Arrange draft and reuses the page's existing Repository files tile when present.
+page size when released; the top-row **Rearrange** opens an overlay whose
+**Done** saves the explicit layout draft and **Cancel** discards it. **Add file
+browser** or **Move file browser here** starts a Rearrange draft and reuses the page's existing Repository files tile when present.
 It does not copy files or duplicate an explorer. For an agent-requested page edit,
 use the existing scoped layout tools directly; see the layout reference above.
 Use the visible connected-workspace
@@ -165,23 +169,37 @@ original position without rewriting the saved layout. It does not silently trans
 or synchronize dirty text across windows. Re-read saved source before subsequent
 edits; closing a panel view does not stop the worker or save its editor buffer.
 
-**Agents** shows exact recorded Codex file-change patches attributed to a named
-conversation, with time and turn provenance. Patches may contain partial hunks or
-be truncated; they are not reconstructed full files. Historical changes without
-recorded patches and shell-only edits may be unattributed. **Git** shows repository
-changes separately, including staged changes; never label all of that diff as the
-selected agent's work. Re-read the current file because later edits can supersede
-a recorded patch. **Accept edit** records the user's decision and keeps the
-current saved source; it does not reapply the patch or prove that no later edits
-exist. **Reject edit** reverses only complete text hunks that still match uniquely,
-with revision/conflict checks; it can remove a fully recorded unchanged added file
-or restore a fully recorded deleted file that has not been recreated. Unrelated
-edits are preserved. Partial, renamed, missing-context or ambiguous patches require
-manual comparison rather than a whole-file rollback. Save dirty editor buffers
-before rejection. Pending/final decision receipts survive lost replies, so inspect
-and retry that same edit/decision instead of applying another reverse patch.
-These are user review controls, not agent tools. A Reviewed marker alone remains
-inspection only; neither marker nor Accept edit satisfies a PR/check requirement.
+The editor's **Changes** view groups actual recorded agent edits inside the
+workspace; a separate Agent changes tile remains optional. The Coding preset is
+one full-width editor, with its native Explorer or built-in tree and Changes
+controls rather than mandatory separate explorer/review tiles. Changes retain the
+named conversation, time and turn provenance; Git comparisons remain separate.
+Never attribute all repository changes to the selected agent. Recorded patches
+can be partial or truncated and are not reconstructed full before/after files;
+shell-only edits and historical changes may be unattributed.
+
+Each complete recorded chunk has inline **Accept**/**Reject** controls: Monaco
+view zones or native CodeLens in the patch view. **Accept** records the decision
+and keeps current saved source; it does not reapply the agent's edit or prove
+that later work is absent. **Reject** reverses only that still-unique complete
+chunk using the current file revision, preserving unrelated changes. Fully
+recorded unchanged added files can be removed, and fully recorded deleted files
+restored only if not recreated. Renamed, truncated, incomplete, overlapping or
+ambiguous patches need manual comparison, not a whole-file rollback. A conflict
+in one chunk does not block a different chunk whose recorded context still
+matches; inspect each chunk's actual controls and evidence.
+
+**Accept all**/**Reject all** act only on undecided chunks and never overturn a
+prior final chunk decision. Partial decisions persist; when every chunk is decided,
+the durable state is Accepted, Rejected, or Reviewed for a mixed outcome. A mixed
+receipt does not mean all edits were accepted or all requested work is complete.
+Dirty user buffers block rejection, and revision conflicts preserve newer work;
+save and reread before retrying. Pending receipts survive lost replies: retry
+only the same selected chunk set and decision before starting another operation.
+These are user review controls, not agent tools. A manual Reviewed badge remains
+inspection only, distinct from the final mixed receipt; neither Accept nor review
+state satisfies a PR/check requirement. Follow
+[review details](references/review-and-todos.md) when explaining these controls.
 
 Use existing authorized file-editing tools for the requested implementation.
 Validate the changed source through the active workflow; code changes invalidate

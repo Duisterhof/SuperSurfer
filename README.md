@@ -1,11 +1,21 @@
 # SuperSurfer 0.1.35 — a desktop for your task
 
+**Changes** is part of each code editor. Open an agent patch there and use inline
+**Accept / Reject** for each chunk, or **Accept all / Reject all** for the remaining
+chunks. Accepted chunks and unrelated source edits survive later rejection. A
+changed file requires reloading the review; save source drafts before undoing edits.
+The Coding preset gives the editor the whole page. A small surfboard animation
+plays while editing a workflow and respects reduced-motion preferences.
+
 Drag a panel grip to any panel edge to nest horizontal and vertical splits. Drag
-the divider to resize only that branch. **＋ Panel** brings another view into the
-page; drag it into a reserved space or onto an existing panel. The panel header’s
-**⋯** menu reserves space on any side. Close unused space with **×**. Named project
-and task pages use the same layout controls. **Windows** retains freely positioned
-windows, and **Dock** returns to splits. Layout changes preserve source drafts.
+the divider to resize only that branch. **Rearrange** opens an overlay of available
+blocks and layout options. Drag a block into reserved space or onto an existing
+panel. The panel header’s
+**⋯** menu reserves space on any side. Close unused space with **×**. Use **Done** to
+save or **Cancel** to restore the layout. Named project and task pages use the same
+controls. **Windows**, **Dock**, page creation and Surfboard editing are folded
+into Rearrange. Moving or adding presentation panels does not grant new agent tools;
+connection and permission changes use Surfboard review. Layout changes preserve source drafts.
 
 Opening a panel in a separate window moves it out of the original page until its
 window closes, then restores it. Desktop reloads retain that separation. Save

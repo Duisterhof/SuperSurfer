@@ -73,6 +73,13 @@ through their returned paths; uploading code does not run it or make it checked
 source. Incorporate an imported file into the repository only as needed for the
 requested task, preserving the original artifact and normal source checks.
 
+The Coding page preset uses a full-width editor with integrated **Changes**;
+standalone explorer or Agent changes tiles are optional. Per-chunk Accept/Reject
+and remaining-chunk Accept all/Reject all are user review controls, not task
+completion or check receipts. Preserve final chunk decisions and conflicts; use
+the editor guidance instead of issuing a whole-file rollback. Returning to a task
+restores its remembered valid page without starting another action or agent turn.
+
 Use `present_code` to show an actual file or frozen Git revision comparison, and
 `manage_todos` to read/save the requested Markdown checklist with its revision.
 Follow [review and checklist guidance](../supersurfer-code-editor/references/review-and-todos.md).

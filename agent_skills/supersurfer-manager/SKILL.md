@@ -192,6 +192,10 @@ changes. Never alter board state to grant yourself a denied capability.
 Use `present_code` for a requested file view or actual Git revision comparison;
 use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
+Integrated Changes can record per-chunk accept/reject and a final mixed review
+outcome; these user decisions never become a new PR, check or deliverable gate.
+Preserve final chunk decisions and unrelated source; do not infer full acceptance
+from a mixed Reviewed receipt or use a whole-file rollback to bypass a conflict.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
 retains its original authority. Task right-click Archive/Restore and the Archived

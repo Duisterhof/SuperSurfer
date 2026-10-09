@@ -409,7 +409,7 @@ function renderMain(){
  if(state.data)ensureLayoutTab();
  const archiveItem=$('#archive-item'),item=state.experiment||experiment();archiveItem.hidden=state.view!=='workspace'||!state.experimentId;archiveItem.disabled=readOnly();archiveItem.setAttribute('aria-label',item?.archived?'Restore work item':'Archive work item');archiveItem.title=(item?.archived?'Restore':'Archive')+' '+itemLabel()+' · existing work continues';archiveItem.innerHTML=icon(item?.archived?'history':'archive');
  for(const id of ['window-layout-toggle','dock-layout-toggle'])$('#'+id).hidden=!savedActivePage()||panelWindows.detached;
- const arrange=$('#arrange-page');arrange.hidden=!savedActivePage()||tileLayout.editing();arrange.disabled=readOnly();
+ const arrange=$('#arrange-page');arrange.hidden=state.view!=='workspace'||!state.projectId||panelWindows.detached;arrange.disabled=readOnly()||tileLayout.editing()||!!state.experimentId&&!state.experiment;arrange.setAttribute('aria-expanded',String(tileLayout.editing()));$('#rearrange-overlay').hidden=!tileLayout.editing();
  const arrangeControls=$('#tile-arrange-controls'),arrangeMarkup=tileLayout.toolbar();if(arrangeControls.innerHTML!==arrangeMarkup)arrangeControls.innerHTML=arrangeMarkup;
  const filesButton=$('#sidebar-add-files'),fileTile=activePage()?.tiles.find(tile=>tile.kind==='file_explorer');
  filesButton.hidden=!savedActivePage()||fileTile?.placement==='left'||!pageTileCatalog().some(tile=>tile.kind==='file_explorer');
@@ -538,7 +538,7 @@ function layoutTabsMarkup(active=state.tab){
  const documents=state.experiment?.pages||[],pages=currentPages();
  const main=pages?.map(page=>({id:page.id,label:page.title}))||rows.filter(row=>row.placement==='main');main.push({id:'_todos',label:'To-dos'});if(fileViewerScopes.has(chatLayoutKey())||state.tab==='_files')main.push({id:'_files',label:'File viewer'});
  const hasDocuments=pages?pages.some(page=>page.tiles.some(tile=>tile.kind==='documents')):main.some(row=>row.id==='documents');
- return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}<button class="tab" data-tab="surfboard">${state.experimentId?'Surfboard':'Task defaults'}</button><button class="tab add-page-tab" data-action="add-view-page" title="Add a page of tiles"${disabled()}>${icon('plus')}Add page</button><button class="tab layout-tab" data-action="configure-layout" title="Configure pages and tiles">${icon('panel')}Layout</button></div>`;
+ return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}<button class="tab" data-tab="surfboard">${state.experimentId?'Surfboard':'Task defaults'}</button></div>`;
 }
 function ensureLayoutTab(){
  if(['_files','_todos'].includes(state.tab))return;
@@ -690,6 +690,7 @@ function renderTilePage(){
   if(editing){const label=document.createElement('div');label.className='tile-drop-placeholder';label.textContent=placement==='main'?'Drop tiles on the page':placement==='left'?'Drop in the left sidebar':'Drop in the right sidebar';grid.append(label);}
   else if(placement==='main'&&!positions.main)grid.innerHTML=empty('This page uses its sidebars','Choose Arrange to move tiles onto the page.');
  }
+ document.documentElement.style.setProperty('--rearrange-height',editing?$('#rearrange-overlay').getBoundingClientRect().height+'px':'0px');
  applyPageTileSizes(page);
  if(pageHasTile('results')&&state.experimentId&&!resultPages.has(state.experimentId))queueMicrotask(()=>loadResultPages().then(()=>{if(!chosenResultPage())loadMetrics();}));
  renderProjectSlots();bindMain();syncConfiguredEditors();renderPending=false;
@@ -697,8 +698,9 @@ function renderTilePage(){
 function pageTileCatalog(){return (state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];}
 const tileLayout=createTileLayout({
  key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly:()=>readOnly()||panelWindows.detached,render:()=>renderMain(),resize:applyPageTileSizes,
- save:savePageLayout
+ save:savePageLayout,configure:fields=>showViewLayout(fields),workflow:()=>navigate({projectId:state.projectId,experimentId:state.experimentId,tab:'surfboard'})
 });
+const rearrangeSize=new ResizeObserver(()=>{const overlay=$('#rearrange-overlay');document.documentElement.style.setProperty('--rearrange-height',overlay.hidden?'0px':overlay.getBoundingClientRect().height+'px');});rearrangeSize.observe($('#rearrange-overlay'));
 async function savePageLayout(page,base){
  if(page.layout)ensureDockLayout(page);
   const projectId=state.projectId,experimentId=state.experimentId;
