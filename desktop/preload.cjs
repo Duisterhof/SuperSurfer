@@ -1,6 +1,8 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('superSurferDesktop', {
+  listPanels: () => ipcRenderer.invoke('panel:list'),
+  onPanelClosed: callback => { const listener = (_, message) => callback(message); ipcRenderer.on('panel-closed', listener); return () => ipcRenderer.removeListener('panel-closed', listener); },
   openPanel: fields => ipcRenderer.invoke('panel:open', fields),
   newWindow: () => ipcRenderer.invoke('window:new'),
   configuration: () => ipcRenderer.invoke('configuration'),

@@ -13,6 +13,32 @@ roles use their fixed project. An active user task and the board's tool permissi
 are required. Presentation does not transfer scope to a pinned chat's neighboring
 page.
 
+Recorded edits are reviewed through **Changes** inside the editor, or an optional
+Agent changes tile. Native CodeLens and Monaco inline zones expose each complete
+chunk's **Accept**/**Reject**. This is actual recorded patch evidence, distinct from
+a frozen Git comparison made by `present_code`. Review controls are user GUI
+operations; the presentation tool does not make a review decision for the user.
+
+Accepting a chunk keeps current saved source and records a final decision. It
+never reapplies a patch. Rejecting undoes only that uniquely matching complete
+chunk against the current revision; partial, truncated, renamed or ambiguous
+patches need manual comparison. An unsupported/conflicting chunk remains blocked
+without requiring a rollback of unrelated safe chunks. Save dirty buffers before
+rejection; conflicts preserve newer source instead of forcing an undo.
+
+**Accept all** and **Reject all** select only still-undecided chunks. A final chunk
+decision cannot be changed by an all action. The saved receipt can remain Partial
+until all chunks are decided, then is Accepted, Rejected or mixed Reviewed. Mixed
+means some chunks accepted and others rejected, not full acceptance. A manually
+toggled Reviewed badge is separate inspection metadata. Neither is PR approval,
+a successful check, task completion, publication or launch authorization.
+
+Lost replies preserve the exact pending selected chunk set, before/after revisions
+and decision. Inspect the same receipt and retry that operation before another
+review action; do not broaden an uncertain retry to newly undecided chunks. Once
+a rejection succeeds, inspect current source because later edits and other owners'
+changes can supersede its original patch context.
+
 Use `manage_todos` with `operation: read` before saving a plain Markdown checklist.
 The response supplies `markdown`, `revision` and its artifact/editor path. Save
 the complete preserved Markdown with that revision (`null` only for a new file).

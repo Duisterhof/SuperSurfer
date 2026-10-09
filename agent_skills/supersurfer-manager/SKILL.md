@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.34. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.35. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -150,6 +150,11 @@ uses the same repository as its agents; preserve concurrent user/worker edits. I
 record that a patch was read, not scientific approval, a verified PR or launch
 authorization. Use the [editor guidance](../supersurfer-code-editor/SKILL.md) when
 an assigned task concerns source edits or reviewing a named agent's changes.
+A native editor trust decision grants no manager release capability or agent
+permission. File-watcher quota warnings concern the
+workspace host, not scheduler admission. Diagnose the affected runtime without
+killing unrelated IDEs or relaying ordinary source work through this manager;
+report an administrator dependency only when the host-wide limit needs changing.
 File, diff and PDF attachments belong to the selected conversation and enter its
 context only when the user sends. Preserve the connected workspace path, selection
 provenance and unsaved warning; adding context does not assign a new manager task
@@ -162,7 +167,9 @@ Custom pages compose existing views into tiles. An Agent changes tile is a revie
 surface for recorded edits, not a new coordination channel or approval assignment.
 Keep ordinary page composition with its current scoped agent. Use the
 configurator only for requested workflow policy, capabilities or data-flow changes;
-presentation tools do not change resource allocations. Moving Repository files
+presentation tools do not change resource allocations. Nested horizontal/vertical
+dock splits and reserved empty drop space are part of that same scoped page layout;
+reuse its tile IDs rather than assigning new owners or creating new sources. Moving Repository files
 left reuses that page's existing `file_explorer` tile; it does not need a new agent
 or file copy. Preserve the target project/item and unrelated pages, and use the
 version-checked layout tool for an assigned page change.
@@ -185,6 +192,10 @@ changes. Never alter board state to grant yourself a denied capability.
 Use `present_code` for a requested file view or actual Git revision comparison;
 use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
+Integrated Changes can record per-chunk accept/reject and a final mixed review
+outcome; these user decisions never become a new PR, check or deliverable gate.
+Preserve final chunk decisions and unrelated source; do not infer full acceptance
+from a mixed Reviewed receipt or use a whole-file rollback to bypass a conflict.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
 retains its original authority. Task right-click Archive/Restore and the Archived
@@ -196,8 +207,9 @@ A requested movable-panel arrangement is workspace presentation work, not an
 assignment to supervise the panel's owner. Use scoped `update_view_layout` with
 `arrangement: windows` and tile bounds after reading both versions; preserve the
 project/item, file, report and task identities. The app's separate-window control
-opens another client view; no manager tool detaches a panel, and closing that view
-does not stop its remote work. Do not message each owner to confirm a layout change.
+opens another client view and temporarily hides the original panel until the
+child closes. No manager tool detaches a panel, and closing that view restores
+its position without stopping remote work. Do not message each owner to confirm a layout change.
 
 ## Tool index
 

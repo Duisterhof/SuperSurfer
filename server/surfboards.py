@@ -577,7 +577,7 @@ def validate_pages(pages, board, level="item"):
     page_ids, result = set(), []
     for index, page in enumerate(pages):
         at = f"{path}[{index}]"
-        _fields(page, {"id", "title", "tiles", "left_width", "right_width", "arrangement"}, at)
+        _fields(page, {"id", "title", "tiles", "left_width", "right_width", "arrangement", "layout"}, at)
         page_id = _page_identifier(page.get("id"), at + ".id")
         if page_id in page_ids:
             _fail(at + ".id", "page IDs must be unique within a scope")
@@ -631,6 +631,37 @@ def validate_pages(pages, board, level="item"):
             if page["arrangement"] not in ("docked", "windows"):
                 _fail(at + ".arrangement", "choose docked panels or movable windows")
             result[-1]["arrangement"] = page["arrangement"]
+        if "layout" in page:
+            main_ids = {tile["id"] for tile in normalized if tile.get("placement", "main") == "main"}
+            seen = set()
+            nodes = [0]
+            def split(node, field, depth=0):
+                nodes[0] += 1
+                if depth > 16 or nodes[0] > 63:
+                    _fail(field, "split tree is too large")
+                if not isinstance(node, dict):
+                    _fail(field, "choose a tile, empty space or split")
+                if "tile" in node:
+                    _fields(node, {"tile"}, field)
+                    value = node["tile"]
+                    if not isinstance(value, str) or value not in main_ids or value in seen:
+                        _fail(field, "each main tile must appear exactly once")
+                    seen.add(value)
+                    return {"tile": value}
+                if "empty" in node:
+                    _fields(node, {"empty"}, field)
+                    if node["empty"] is not True:
+                        _fail(field, "empty space must be true")
+                    return {"empty": True}
+                _fields(node, {"axis", "ratio", "first", "second"}, field)
+                if node.get("axis") not in ("x", "y"):
+                    _fail(field + ".axis", "choose x or y")
+                return {"axis": node["axis"], "ratio": _number(node.get("ratio", .5), field + ".ratio", .05, .95),
+                        "first": split(node.get("first"), field + ".first", depth + 1),
+                        "second": split(node.get("second"), field + ".second", depth + 1)}
+            result[-1]["layout"] = split(page["layout"], at + ".layout")
+            if seen != main_ids:
+                _fail(at + ".layout", "each main tile must appear exactly once")
         for field, minimum, maximum in (("left_width", 160, 600), ("right_width", 280, 760)):
             if field in page:
                 result[-1][field] = _number(page[field], at + "." + field, minimum, maximum, True)

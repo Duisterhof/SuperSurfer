@@ -10,3 +10,5 @@ test('custom experiment tabs survive native preference round trips',()=>{
  for(const tab of ['page:../../secret','page:page_','javascript:alert(1)',{}])assert.equal(workspacePreference({...value,tab}).tab,'overview');
  for(const value of [null,[],42])assert.throws(()=>workspacePreference(value));
 });
+
+test('task tabs survive native persistence and reject foreign values',()=>{const value=workspacePreference({taskTabs:{'vla/E15':'results','vla/E12':'runs','vla/_project':'compute','../bad':'editor','vla/E17':{},'vla/E18':'javascript:alert(1)'}});assert.deepEqual(value.taskTabs,{'vla/E15':'results','vla/E12':'runs','vla/_project':'compute'});});

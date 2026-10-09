@@ -2,7 +2,7 @@
   "name": "workspace",
   "displayName": "SuperSurfer workspace",
   "publisher": "supersurfer",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -68,7 +68,19 @@
           "description": "Use the compact editor surface inside SuperSurfer."
         }
       }
-    }
+    },
+    "customEditors": [
+      {
+        "viewType": "supersurfer.pdf",
+        "displayName": "SuperSurfer PDF viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
   },
   "extensionKind": [
     "workspace"

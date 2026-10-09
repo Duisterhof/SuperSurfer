@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.34. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.35. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -49,13 +49,23 @@ view is presentation only. Compilation still requires a connected LaTeX block an
 its existing tool permissions; a tile never grants execution.
 
 For a requested source/PDF arrangement, the layout tool can select docked panels
-or movable windows and save their independent sizes and positions. Keep the PDF
+or movable windows and save their independent sizes and positions. Docked pages
+can nest source/PDF panels in mixed horizontal and vertical splits, with reserved
+empty drop space, through the same scoped layout tool. Preserve the existing
+tile IDs and the validated tree instead of creating another paper build. Keep the PDF
 path or exact compiler build when changing that arrangement. The app's separate-
 window button can show the existing PDF in another client view; it does not compile,
 publish, transfer the build's ownership or let the agent open a native window.
-PDF display is SuperSurfer's own viewer, so installing a desktop-only VS Code PDF
+The original panel hides until that child closes, then restores in place without
+creating another build. The compact extension editor retains the native Explorer;
+selecting a repository PDF uses SuperSurfer's multi-page overlay while keeping
+the Explorer available. PDF display is SuperSurfer's own viewer, so installing a desktop-only VS Code PDF
 extension is unnecessary. A connected extension editor still honors native
 workspace trust; trusting a folder adds no compiler or research-launch authority.
+A watcher warning does not prove a LaTeX build failed: inspect the recorded build
+and saved source separately. Auto compile is triggered by the supported
+editor-save path; do not promise arbitrary external writes are detected when host
+watch capacity is unavailable.
 
 A PDF dragged from the user's computer becomes a project artifact and may have no
 compiler build ID. Inspect its actual file/pages through the returned artifact

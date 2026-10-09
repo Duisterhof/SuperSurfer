@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.34. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.35. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -147,6 +147,11 @@ carry an unsaved warning; do not assume it is committed or deploy it as if it we
 Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
 agent patches versus repository Git changes. A local review marker does not satisfy
 the exact-source PR requirement, and editing a file never launches a run by itself.
+Native editor trust does not change your agent permissions or exact-source
+launch contract. If a file-watch
+warning appears, verify the saved source independently instead of assuming an
+edit was observed or a run failed. Diagnose host watch capacity without stopping
+other IDEs, repeating launches or discarding the user's dirty buffer.
 File/selection attachments arrive only with the user's explicit send and may be
 snapshots of unsaved source or one side of a diff. Resolve their exact workspace
 path and provenance before editing; do not replace current files with an attached
@@ -169,9 +174,12 @@ For requested changes to this work item's pages, tile sizes/order or pane placem
 use `read_view_layout` then `update_view_layout` directly with current versions.
 Your scope does not permit editing another item or project defaults. Follow
 [layout editing](../supersurfer-surfboard/references/view-layout.md); do not relay
-ordinary presentation work to the lead or manager. For a left-side file browser,
+ordinary presentation work to the lead or manager. Nested horizontal/vertical
+dock splits and reserved empty drop space use that same page layout tool;
+preserve each main tile exactly once and keep source/report bindings unchanged.
+For a left-side file browser,
 move this page's existing `file_explorer` tile rather than creating a duplicate.
-Keep its ID and distinguish an unsaved Arrange draft from the returned saved
+Keep its ID and distinguish an unsaved Rearrange draft from the returned saved
 layout; changing width or placement never completes the underlying experiment.
 
 `inspect_board_data` resolves a configured input's experiment/run/artifact sources.
@@ -192,6 +200,10 @@ changes. Never alter board state to grant yourself a denied capability.
 Use `present_code` for a requested file view or actual Git revision comparison;
 use `manage_todos` for a requested plain Markdown checklist. These scoped tools
 require existing user work for changes and do not launch jobs or finish goals.
+Integrated Changes can record per-chunk accept/reject and a final mixed review
+outcome; these user decisions never become a new PR, check or deliverable gate.
+Preserve final chunk decisions and unrelated source; do not infer full acceptance
+from a mixed Reviewed receipt or use a whole-file rollback to bypass a conflict.
 Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
 for exact revision handling and the difference from `update_task`. A pinned chat
 retains its original authority. Task right-click Archive/Restore and the Archived
@@ -203,7 +215,9 @@ A user request to place source and PDF/Results panels freely can be completed
 through this item's `update_view_layout`: read first, set the page's arrangement
 and individual bounds, and retain stable tile IDs. Use the layout reference for
 sizes and conflicts. Opening a separate native panel window is a user GUI action,
-not a worker tool or another execution owner. A closed or detached view does not
+not a worker tool or another execution owner. The original panel hides until the
+child closes, then restores without changing the saved layout. A closed or
+detached view does not
 complete your deliverable, cancel a run or transfer your saved recovery grant.
 
 ## Tool index

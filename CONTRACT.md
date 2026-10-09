@@ -1,3 +1,39 @@
+## 0.1.35 nested desktop layout and editor recovery
+
+Chunk review uses recorded unified hunks and the current file revision, not Git
+reset. Decisions are serialized, durable and final per chunk. Whole-file shortcuts
+apply only undecided chunks. Reverse patches require unique matching line context;
+conflicts, ambiguous context and dirty source buffers preserve newer work. Pending
+receipts reconcile interrupted writes without applying an undo twice. Native
+CodeLens sends scoped authenticated review events; only the user action API writes
+source. Read-only workspaces cannot decide or dispatch these events.
+
+A page may contain a bounded binary `layout` tree. Leaves are `{tile: id}` or
+`{empty: true}`; branches contain `axis` (`x` or `y`), `ratio` (.05–.95), `first`
+and `second`. Each main tile appears exactly once; sidebar tiles do not appear.
+Depth is limited to 16 and nodes to 63. The single Rearrange overlay owns palette, layout options, Done and Cancel.
+Opening page/workflow configuration saves the valid layout draft first; conflicts
+keep the draft and block navigation. Geometry is presentation only and grants
+no execution or source-write capability. Existing page proportions derive initial
+splits without a saved migration. Dragging and resizing keep live editor DOM intact.
+
+Detachment visibility is a per-window presentation overlay. The saved tile remains
+in its page. Closing the child restores it; no remote work stops. Native panel
+identities are returned only to their trusted originating main frame. Per-task page
+memory is bounded, validated, retained in the host’s window preferences and ignored
+by detached views. Missing pages fall back through normal layout validation.
+
+Native Explorer remains visible inside compact Code OSS. Its PDF custom editor
+hands off only scoped PDF paths through the authenticated extension bridge; the
+application owns the PDF overlay. Source selection, PDF selection, source save and
+source-open events retain project identity. Workspace trust is never disabled.
+Only a native-observed approval of an exact canonical repository is remembered;
+its reconnect restore adds that repo and its owned workspace URI to the pinned
+native trust store. New/relocated projects stay restricted; native revocation clears
+remembered approval. Idempotent activation keeps activity/status/title chrome hidden.
+Watcher excludes cover generated dependencies and caches, preserve explicit user
+choices and never blanket-disable source watching.
+
 ## 0.1.34 panel windows and editor surface
 
 Page arrangement is presentation: docked rows/splits or windows with validated

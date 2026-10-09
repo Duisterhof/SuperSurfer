@@ -233,11 +233,20 @@ class Workbench:
         except (ValueError, OSError) as exc:
             raise SurfboardError("Existing VS Code settings could not be read; preserve and repair settings.json before syncing") from exc
         current.setdefault("files.autoSave", "off")
+        # Track source, not generated environments, agent worktrees or artifacts.
+        # Existing user choices (including False overrides) win.
+        exclusions = current.setdefault("files.watcherExclude", {})
+        if not isinstance(exclusions, dict):
+            raise SurfboardError("Existing files.watcherExclude must be an object; preserve and repair settings.json")
+        for pattern in ("**/node_modules/**", "**/.git/objects/**", "**/.git/subtree-cache/**",
+                        "**/.venv/**", "**/venv/**", "**/__pycache__/**", "**/.worktrees/**",
+                        "**/.SuperSurfer/**"):
+            exclusions.setdefault(pattern, True)
         current.update({"editor.fontSize": settings["font_size"], "editor.tabSize": settings["tab_size"],
             "editor.minimap.enabled": settings["minimap"], "editor.wordWrap": "off" if settings["word_wrap"] == "auto" else settings["word_wrap"],
             "chat.disableAIFeatures": True, "workbench.secondarySideBar.defaultVisibility": "hidden",
             "telemetry.telemetryLevel": "off", "workbench.startupEditor": "none", "window.menuBarVisibility": "compact",
-            "workbench.layoutControl.enabled": False, "window.customTitleBarVisibility": "never", "zenMode.hideLineNumbers": False, "zenMode.silentNotifications": False, "zenMode.fullScreen": False, "zenMode.centerLayout": False, "zenMode.hideActivityBar": True, "zenMode.hideStatusBar": True, "zenMode.showTabs": "multiple", "zenMode.restore": False, "window.commandCenter": False,
+            "workbench.activityBar.location": "hidden", "workbench.statusBar.visible": False, "workbench.layoutControl.enabled": False, "window.customTitleBarVisibility": "never", "zenMode.hideLineNumbers": False, "zenMode.silentNotifications": False, "zenMode.fullScreen": False, "zenMode.centerLayout": False, "zenMode.hideActivityBar": True, "zenMode.hideStatusBar": True, "zenMode.showTabs": "multiple", "zenMode.restore": False, "window.commandCenter": False,
             "supersurfer.latexSpellcheck": settings["latex_spellcheck"], "supersurfer.dictionary": settings["dictionary"],
             "cSpell.enabledLanguageIds": ["latex"] if settings["latex_spellcheck"] else [], "cSpell.words": settings["dictionary"]})
         for language in ("latex", "markdown"):
@@ -313,13 +322,16 @@ class Workbench:
             workspace.parent.mkdir(exist_ok=True, mode=0o700)
             atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": True, "window.title": project["name"] + " · SuperSurfer"}}))
             row = {"id": identity, "client_id": client, "token": token, "project_id": project["id"],
-                   "experiment_id": fields.get("experiment_id"), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
+                   "experiment_id": fields.get("experiment_id"), "repo": str(Path(project["repo"]).resolve()), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
             self.sessions[identity] = row
             return self.public(row)
 
     def public(self, row):
+        consent = self.service.store.get("editor_project_trust:" + row["project_id"], {})
+        approved = row.get("repo") and consent.get("repo") == row["repo"]
         return {"id": row["id"], "url": "/workbench/" + row["token"] + "/?" + urlencode({"workspace": row["workspace"]}),
-                "events": row["events"], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "trusted": row.get("trusted")}
+                "events": row["events"], "dirty": row["dirty"], "connected": row["connected_at"] is not None, "trusted": row.get("trusted"),
+                "approved_trust_paths": [row["repo"], str(Path(row["workspace"]).resolve())] if approved else []}
 
     def session(self, identity):
         row = self.sessions.get(identity)
@@ -338,7 +350,7 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust"}:
+            if kind not in {"file", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files", "changes"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
@@ -357,7 +369,7 @@ class Workbench:
                     result.update(title=fields.get("title") or "Revision comparison", data=data)
                 else:
                     data = self.service.agent_change(project, fields.get("scope"), fields.get("change_id"))
-                    result.update(title="Agent changes", data=data)
+                    result.update(title="Agent changes", data=data, scope=fields.get("scope"))
             row["commands"].append(result)
             row["commands"] = row["commands"][-20:]
             return {"accepted": True}
@@ -370,13 +382,24 @@ class Workbench:
                 project = self.service.lookup("projects", row["project_id"])
                 return self.service.code.comparison(project, fields.get("base"), fields.get("head"), fields.get("path"))
             if fields.get("operation") == "poll":
+                previous_trust = row.get("trusted")
                 row["trusted"] = fields.get("trusted") if type(fields.get("trusted")) is bool else None
+                # Remember only trust actually granted in the native UI. Restore
+                # the same canonical project after a new window/tunnel origin.
+                if row.get("repo") and not self.service.read_only:
+                    key = "editor_project_trust:" + row["project_id"]
+                    if row["trusted"] is True and previous_trust is not True:
+                        self.service.store.put(key, {"repo": row["repo"]})
+                    elif previous_trust is True and row["trusted"] is False:
+                        consent = self.service.store.get(key, {})
+                        if consent.get("repo") == row["repo"]:
+                            self.service.store.put(key, {})
                 row["dirty"] = fields.get("dirty") is True
                 row["dirty_observed_at"] = time.time()
                 ack = fields.get("ack", [])
                 row["commands"] = [command for command in row["commands"] if command["id"] not in ack]
                 return {"commands": row["commands"]}
-            if fields.get("operation") not in {"selection", "saved", "error"}:
+            if fields.get("operation") not in {"selection", "saved", "error", "open_pdf", "open_source", "chunk_decision"}:
                 raise SurfboardError("Unknown editor bridge event")
             event = {"kind": fields["operation"], "sequence": (row["events"][-1]["sequence"] if row["events"] else 0) + 1}
             project = self.service.lookup("projects", row["project_id"])
@@ -388,10 +411,20 @@ class Workbench:
                     raise SurfboardError("This file belongs outside the selected project", 403) from exc
                 from .code_editor import _parts
                 _parts(relative)
+                if event["kind"] == "open_pdf" and path.suffix.lower() != ".pdf":
+                    raise SurfboardError("Choose a PDF file")
                 event.update(path=relative, project_id=project["id"], text=str(fields.get("text", ""))[:16000],
                              label=str(fields.get("label", path.name))[:300])
             else:
                 event["error"] = str(fields.get("error", "Editor command failed"))[:2000]
+            if event['kind'] == 'chunk_decision':
+                if self.service.read_only:
+                    raise SurfboardError('Read-only workspace',403)
+                change = self.service.agent_change(project,fields.get('scope'),fields.get('change_id'))
+                index = fields.get('hunk')
+                if change['path'] != event['path'] or type(index) is not int or not 0 <= index < len(change['review']['chunks']) or fields.get('decision') not in {'accept','reject'}:
+                    raise SurfboardError('Choose a recorded chunk in this project')
+                event.update(scope=fields['scope'],change_id=fields['change_id'],hunk=index,decision=fields['decision'],revision=fields.get('revision'))
             if event["kind"] == "saved":
                 self.service.latex.invalidate(project["id"], repo=project["repo"])
             row["events"].append(event)

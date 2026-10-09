@@ -1,3 +1,4 @@
+import {ensureDockLayout,renderDockLayout} from './dock-layout.js';
 import {createPanelWindows} from './panel-windows.js';
 import {createTodos} from './todos.js';
 import {createFileUploads} from './file-uploads.js';
@@ -35,7 +36,8 @@ const active = new Set(['running','launching','starting','stopping']);
 const modelRoles = ['manager','lead','worker'];
 const state = {data:null,view:'workspace',runFilter:'active',queuePriority:false,projectId:null,experimentId:null,tab:'overview',experiment:null,edit:false,scope:null,pinnedAgent:null,chat:null,models:[],account:null,chatVisible:true,chatWidth:390,sidebarWidth:null,sidebarCollapsed:false,projectTreeHeight:null,chatMaximized:false,loading:false,modalKind:null,stateSignature:'',sidebarSignature:'',chatSignature:'',experimentRequest:0};
 const metricsCache = new Map();
-let savedNavigation = null, navigationRestored = false;
+let savedNavigation = null, navigationRestored = false, taskTabs={};
+const taskTabKey=(projectId,experimentId)=>projectId+'/'+(experimentId||'_project');
 let stateWaiters = [];
 let selectedMetric = null;
 let modelCatalogPromise = null, modelCatalogLoadedAt = 0, chatPreferenceSaveScope = null;
@@ -52,6 +54,7 @@ async function readNavigation() {
   }
   if (!savedNavigation || typeof savedNavigation !== 'object' || Array.isArray(savedNavigation)) savedNavigation = {};
   if(panelWindows.detached)savedNavigation={...savedNavigation,...panelWindows.navigation};
+  taskTabs=Object.fromEntries(Object.entries(savedNavigation.taskTabs||{}).filter(([key,value])=>/^[A-Za-z0-9_:-]{1,200}\/[A-Za-z0-9_:-]{1,200}$/.test(key)&&typeof value==='string'&&/^(?:page:page_[a-f0-9]+|[A-Za-z0-9_][A-Za-z0-9_-]{0,63})$/.test(value)).slice(-512));
   state.view = ['workspace', 'compute', 'settings'].includes(savedNavigation.view) ? savedNavigation.view : 'workspace';
   state.tab = ['_files', '_todos', 'overview', 'runs', 'results', 'compute', 'surfboard', 'artifacts', 'activity', 'editor', 'chat', 'documents', 'preview'].includes(savedNavigation.tab)||/^(?:page:page_[a-f0-9]+|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.test(savedNavigation.tab||'') ? savedNavigation.tab : 'overview';
   state.chatVisible = typeof savedNavigation.chatVisible === 'boolean' ? savedNavigation.chatVisible : true;
@@ -87,7 +90,8 @@ function restoreNavigation(data) {
 }
 function persistNavigation() {
   if(panelWindows.detached)return;
-  const value = { view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, sidebarWidth: state.sidebarWidth, sidebarCollapsed:state.sidebarCollapsed, projectTreeHeight:state.projectTreeHeight, chatMaximized: state.chatMaximized, pinnedAgent:state.pinnedAgent };
+  if(state.view==='workspace'&&state.projectId){const key=taskTabKey(state.projectId,state.experimentId);delete taskTabs[key];taskTabs[key]=state.tab;taskTabs=Object.fromEntries(Object.entries(taskTabs).slice(-512));}
+  const value = { taskTabs, view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, sidebarWidth: state.sidebarWidth, sidebarCollapsed:state.sidebarCollapsed, projectTreeHeight:state.projectTreeHeight, chatMaximized: state.chatMaximized, pinnedAgent:state.pinnedAgent };
   try { localStorage.setItem('supersurfer-workspace', JSON.stringify(value)); } catch {}
   savedNavigation = value;
   if (window.superSurferDesktop?.setWorkspace) window.superSurferDesktop.setWorkspace(value).catch(() => {});
@@ -217,7 +221,7 @@ const pluralItems = (p=project()) => itemLabel(p)+'s';
 const leadLabel = (p=project()) => ({research:'Research lead',software:'Technical lead',web:'Design lead',writing:'Writing lead'}[projectWorkflow(p)]||'Project lead');
 const surfboardEditor=createSurfboardEditor({api,action,readOnly:()=>readOnly(),experiments:id=>(state.data?.experiments||[]).filter(x=>x.project_id===id),models:()=>state.models,onChat:scope=>selectConversation(scope,{persist:false}),onApplied:()=>refreshState(true)});
 const filePicker=createFilePicker({api}),panelFocus=createPanelFocus();
-const panelWindows=createPanelWindows({capture:()=>({projectId:state.projectId,experimentId:state.experimentId,page:state.tab}),hasUnsaved:()=>codeEditor.hasUnsaved(state.projectId),presentation:()=>codeEditor.presentation(),prepareEditor:()=>codeEditor.prepareDetach?.(),onError:error=>toast(error.message,true)});
+const panelWindows=createPanelWindows({capture:()=>({projectId:state.projectId,experimentId:state.experimentId,page:state.tab}),hasUnsaved:()=>codeEditor.hasUnsaved(state.projectId),presentation:()=>codeEditor.presentation(),prepareEditor:()=>codeEditor.prepareDetach?.(),onChange:()=>renderMain(),onError:error=>toast(error.message,true)});
 function pickWorkspaceFile(onChoose,{pdfOnly=false,title='Open file',uploadTarget='editor'}={}){const p=project();if(!p)return;filePicker.open({projectId:p.id,repo:p.repo,pdfOnly,title,onChoose,onUpload:readOnly()?null:()=>fileUploads.pick(uploadTarget),onError:error=>toast(error.message,true)});}
 async function loadWorkspacePdf(url,{signal}={}){const response=await fetch(url,{signal,headers:sessionStorage.getItem('supersurfer-token')?{Authorization:'Bearer '+sessionStorage.getItem('supersurfer-token')}:{}});if(!response.ok)throw new Error('PDF could not be loaded ('+response.status+').');return new Uint8Array(await response.arrayBuffer());}
 const editorSettings=createEditorSettings({api,action,readOnly:()=>readOnly(),hasUnsaved:()=>codeEditor.hasUnsaved(),onConfigureExtension:configureEditorExtension});
@@ -394,7 +398,8 @@ async function refreshState(force=false){if(stateBusy){if(force){await new Promi
  if(force||sig!==state.stateSignature){state.stateSignature=sig;if(!state.edit&&!$('#modal').open&&!(state.view==='settings'&&($('#settings-form')?.dataset.dirty==='true'||editorSettings.dirty()||workspacePermissionSaving))&&!$('#project-compute-form')?.dataset.dirty)renderMain();else renderPending=true;}
  if(!state.edit&&!$('#modal').open)await Promise.all([state.experimentId?fetchExperiment():Promise.resolve(),loadAgentDirectory({initial:!currentAgentDirectory()})]);
  }catch(error){connectionStatus(error);if(!state.data){$('#main').innerHTML=empty('Connect your research workspace',error.message,`<button class="button primary" data-action="${error.status===401?'auth':'refresh'}">${error.status===401?'Enter connection token':'Try again'}</button>`);if(error.status===401&&!$('#modal').open)showAuth();}}finally{stateBusy=false;const waiting=stateWaiters;stateWaiters=[];waiting.forEach(resolve=>resolve());}}
-async function navigate({view='workspace',projectId=state.projectId,experimentId=null,tab='overview'}={}){
+async function navigate({view='workspace',projectId=state.projectId,experimentId=null,tab}={}){
+ persistNavigation();tab=tab??taskTabs[taskTabKey(projectId,experimentId)]??'overview';
  panelFocus.close();const wasBoard=!!isSurfboard();stashMessageDraft();scopeSelectionRevision++;if(isSurfboard()&&tab!=='surfboard'&&surfboardPreviousChatVisible!==null){state.chatVisible=surfboardPreviousChatVisible;surfboardPreviousChatVisible=null;applyChatLayout();}if(state.edit){stashEditor();}state.view=view;state.projectId=projectId;state.experimentId=experimentId;state.tab=tab;if(isSurfboard()&&!wasBoard&&!state.pinnedAgent){surfboardPreviousChatVisible=state.chatVisible;state.chatVisible=false;state.chatMaximized=false;applyChatLayout();}state.edit=false;state.experiment=null;state.experimentRequest++;state.scope=state.pinnedAgent?.scope||null;if(!state.pinnedAgent){state.chat=null;state.chatSignature='';}state.sidebarSignature='';persistNavigation();syncNavigation();renderMain();syncAgentChooser();restoreMessageDraft();refreshChat(true);await Promise.all([experimentId?fetchExperiment(true):Promise.resolve(),!experimentId&&tab==='compute'?loadProjectCompute(projectId,{force:true}).catch(()=>{}):Promise.resolve(),loadAgentDirectory({initial:true})]);}
 async function fetchExperiment(force=false){const id=state.experimentId;if(!id)return;const request=++state.experimentRequest;try{const data=await api('experiment?id='+encodeURIComponent(id));if(id!==state.experimentId||request!==state.experimentRequest)return;const firstLoad=!state.experiment;const changed=!state.experiment||data.version!==state.experiment.version||data.status!==state.experiment.status||data.archived!==state.experiment.archived||data.status_detail!==state.experiment.status_detail||JSON.stringify(data.brief)!==JSON.stringify(state.experiment.brief)||JSON.stringify(data.pages)!==JSON.stringify(state.experiment.pages)||JSON.stringify(data.view_layout)!==JSON.stringify(state.experiment.view_layout)||data.markdown!==state.experiment.markdown||data.wandb_url!==state.experiment.wandb_url||JSON.stringify(data.wandb_sync)!==JSON.stringify(state.experiment.wandb_sync)||data.review_interval_minutes!==state.experiment.review_interval_minutes||data.work_scope!==state.experiment.work_scope||data.work_state!==state.experiment.work_state||data.work_error!==state.experiment.work_error;let pageCacheChanged=false;for(const page of data.pages||[]){const key=data.id+':'+page.id,cached=markdownPages.get(key);if(cached?.data&&page.version&&cached.data.version!==page.version&&!cached.loading){markdownPages.delete(key);pageCacheChanged=true;}}
  state.experiment=data;if((changed||force||pageCacheChanged)&&!state.edit&&!$('#modal').open)renderMain();if(pageHasTile('results')){loadResultPages(force||firstLoad).then(()=>{if(!chosenResultPage())loadMetrics(force||firstLoad);});}if(pageHasTile('overview'))loadWorkerWakeups(id);}catch(error){if(force)toast(error.message,true);}}
@@ -404,7 +409,7 @@ function renderMain(){
  if(state.data)ensureLayoutTab();
  const archiveItem=$('#archive-item'),item=state.experiment||experiment();archiveItem.hidden=state.view!=='workspace'||!state.experimentId;archiveItem.disabled=readOnly();archiveItem.setAttribute('aria-label',item?.archived?'Restore work item':'Archive work item');archiveItem.title=(item?.archived?'Restore':'Archive')+' '+itemLabel()+' · existing work continues';archiveItem.innerHTML=icon(item?.archived?'history':'archive');
  for(const id of ['window-layout-toggle','dock-layout-toggle'])$('#'+id).hidden=!savedActivePage()||panelWindows.detached;
- const arrange=$('#arrange-page');arrange.hidden=!savedActivePage()||tileLayout.editing();arrange.disabled=readOnly();
+ const arrange=$('#arrange-page');arrange.hidden=state.view!=='workspace'||!state.projectId||panelWindows.detached;arrange.disabled=readOnly()||tileLayout.editing()||!!state.experimentId&&!state.experiment;arrange.setAttribute('aria-expanded',String(tileLayout.editing()));$('#rearrange-overlay').hidden=!tileLayout.editing();
  const arrangeControls=$('#tile-arrange-controls'),arrangeMarkup=tileLayout.toolbar();if(arrangeControls.innerHTML!==arrangeMarkup)arrangeControls.innerHTML=arrangeMarkup;
  const filesButton=$('#sidebar-add-files'),fileTile=activePage()?.tiles.find(tile=>tile.kind==='file_explorer');
  filesButton.hidden=!savedActivePage()||fileTile?.placement==='left'||!pageTileCatalog().some(tile=>tile.kind==='file_explorer');
@@ -527,13 +532,13 @@ function currentPages(){
 function savedActivePage(){return currentPages()?.find(page=>page.id===state.tab);}
 function activePage(){return tileLayout.page(savedActivePage());}
 function pageHasTile(kind){return state.view==='workspace'&&(activePage()?.tiles.some(tile=>tile.kind===kind)??state.tab===kind);}
-function isTilePage(){const page=activePage();return page&&(tileLayout.editing()||page.tiles.some(tile=>tile.placement&&tile.placement!=='main'||tile.path)||!(page.tiles.length===1&&!['file_explorer','agent_changes','pdf'].includes(page.tiles[0].kind)&&page.tiles[0].kind===page.id&&page.tiles[0].span===12&&page.tiles[0].height===400));}
+function isTilePage(){return !!activePage();}
 function layoutTabsMarkup(active=state.tab){
  const rows=currentLayout();if(!rows)return '';
  const documents=state.experiment?.pages||[],pages=currentPages();
  const main=pages?.map(page=>({id:page.id,label:page.title}))||rows.filter(row=>row.placement==='main');main.push({id:'_todos',label:'To-dos'});if(fileViewerScopes.has(chatLayoutKey())||state.tab==='_files')main.push({id:'_files',label:'File viewer'});
  const hasDocuments=pages?pages.some(page=>page.tiles.some(tile=>tile.kind==='documents')):main.some(row=>row.id==='documents');
- return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}<button class="tab" data-tab="surfboard">${state.experimentId?'Surfboard':'Task defaults'}</button><button class="tab add-page-tab" data-action="add-view-page" title="Add a page of tiles"${disabled()}>${icon('plus')}Add page</button><button class="tab layout-tab" data-action="configure-layout" title="Configure pages and tiles">${icon('panel')}Layout</button></div>`;
+ return `<div class="tabs configured-tabs">${main.map(row=>`<button class="tab ${active===row.id?'active':''}" data-tab="${e(row.id)}">${e(row.label)}</button>`).join('')}${hasDocuments?documents.map(page=>`<button class="tab ${active==='page:'+page.id?'active':''}" data-tab="page:${e(page.id)}">${e(page.title)}</button>`).join(''):''}<button class="tab" data-tab="surfboard">${state.experimentId?'Surfboard':'Task defaults'}</button></div>`;
 }
 function ensureLayoutTab(){
  if(['_files','_todos'].includes(state.tab))return;
@@ -636,8 +641,9 @@ function clearPageTileDocks(){
  standalonePdf.unmount();$('.app-shell').classList.remove('has-page-left','arranging-page');applySidebarLayout();
 }
 function applyPageTileSizes(page){
- const canvas=$('#page-tile-grid'),floating=page.arrangement==='windows'&&!panelWindows.detached;canvas?.classList.toggle('window-canvas',floating);if(canvas)canvas.style.minHeight=floating?Math.max(500,...page.tiles.filter(t=>(t.placement||'main')==='main').map(t=>(t.bounds?.y||0)+(t.bounds?.height||t.height)+24))+'px':'';
+ const canvas=$('#page-tile-grid'),floating=page.arrangement==='windows'&&!panelWindows.detached;canvas?.classList.toggle('window-canvas',floating);if(canvas)canvas.style.minHeight=floating?Math.max(500,...page.tiles.filter(t=>(t.placement||'main')==='main').map(t=>(t.bounds?.y||0)+(t.bounds?.height||t.height)+24))+'px':'';canvas?.classList.toggle('dock-canvas',!floating&&!panelWindows.detached);
  for(const element of $$('[data-live-tile]')){const tile=page.tiles.find(tile=>tile.id===element.dataset.tileId);if(tile){element.style.setProperty('--tile-span',tile.span);element.style.setProperty('--tile-height',tile.height+'px');const bounds=tile.bounds;if(floating&&(tile.placement||'main')==='main'&&bounds){Object.assign(element.style,{left:bounds.x+'px',top:bounds.y+'px',width:bounds.width+'px',height:bounds.height+'px'});}else for(const field of ['left','top','width','height'])element.style[field]='';}}
+ if(canvas&&!floating&&!panelWindows.detached)renderDockLayout(canvas,page);else if(canvas){canvas.style.minWidth='';canvas.querySelectorAll('[data-dock-key]').forEach(el=>el.remove());}
  const shell=$('.app-shell');shell.classList.toggle('has-page-left',page.tiles.some(tile=>tile.placement==='left')||tileLayout.editing());
  applySidebarLayout(page);applyChatLayout();
 }
@@ -651,6 +657,7 @@ function renderTilePage(){
   main.dataset.tilePageKey=key;delete main.dataset.viewKey;
  }
  const editing=tileLayout.editing();$('.app-shell').classList.toggle('arranging-page',editing);
+ const palette=$('#panel-palette');if(palette){const content=tileLayout.palette();if(palette.innerHTML!==content)palette.innerHTML=content;palette.hidden=panelWindows.detached;}
  const heading=$('.tile-page-title',main);
  const headingMarkup=`<h1 title="${e((state.experiment||experiment())?.name||project()?.name)}">${e(page.title)}</h1>`;
  if(heading.innerHTML!==headingMarkup)heading.innerHTML=headingMarkup;
@@ -683,6 +690,7 @@ function renderTilePage(){
   if(editing){const label=document.createElement('div');label.className='tile-drop-placeholder';label.textContent=placement==='main'?'Drop tiles on the page':placement==='left'?'Drop in the left sidebar':'Drop in the right sidebar';grid.append(label);}
   else if(placement==='main'&&!positions.main)grid.innerHTML=empty('This page uses its sidebars','Choose Arrange to move tiles onto the page.');
  }
+ document.documentElement.style.setProperty('--rearrange-height',editing?$('#rearrange-overlay').getBoundingClientRect().height+'px':'0px');
  applyPageTileSizes(page);
  if(pageHasTile('results')&&state.experimentId&&!resultPages.has(state.experimentId))queueMicrotask(()=>loadResultPages().then(()=>{if(!chosenResultPage())loadMetrics();}));
  renderProjectSlots();bindMain();syncConfiguredEditors();renderPending=false;
@@ -690,9 +698,11 @@ function renderTilePage(){
 function pageTileCatalog(){return (state.experimentId?state.experiment?.view_layout?.available_tiles:project()?.surfboard?.available_tiles?.project)||[];}
 const tileLayout=createTileLayout({
  key:()=>chatLayoutKey()+':'+state.tab,page:savedActivePage,catalog:pageTileCatalog,readOnly:()=>readOnly()||panelWindows.detached,render:()=>renderMain(),resize:applyPageTileSizes,
- save:savePageLayout
+ save:savePageLayout,configure:fields=>showViewLayout(fields),workflow:()=>navigate({projectId:state.projectId,experimentId:state.experimentId,tab:'surfboard'})
 });
+const rearrangeSize=new ResizeObserver(()=>{const overlay=$('#rearrange-overlay');document.documentElement.style.setProperty('--rearrange-height',overlay.hidden?'0px':overlay.getBoundingClientRect().height+'px');});rearrangeSize.observe($('#rearrange-overlay'));
 async function savePageLayout(page,base){
+ if(page.layout)ensureDockLayout(page);
   const projectId=state.projectId,experimentId=state.experimentId;
   const record=await api('view-layout?'+new URLSearchParams({project_id:projectId,...(experimentId?{experiment_id:experimentId}:{})}));
   const original=record.pages.find(row=>row.id===base.id);
@@ -1540,6 +1550,7 @@ for(const name of ['pointerup','pointercancel','lostpointercapture'])projectDivi
 projectDivider.addEventListener('keydown',event=>{const bounds=projectTreeBounds(),height=Number(projectDivider.getAttribute('aria-valuenow'));if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();resizeProjectTree(event.key==='Home'?bounds.min:event.key==='End'?bounds.max:height+(event.key==='ArrowUp'?-20:20));persistNavigation();});
 projectDivider.addEventListener('dblclick',()=>{state.projectTreeHeight=null;applyProjectTreeHeight();persistNavigation();});
 window.addEventListener('resize',()=>{if(!resizingChat&&!sidebarDrag)applyChatLayout();});
+new ResizeObserver(()=>{const canvas=$('#page-tile-grid'),page=activePage();if(canvas?.classList.contains('dock-canvas')&&page)renderDockLayout(canvas,page);}).observe($('#main'));
 $('#chat-questions').addEventListener('input',updateQuestionDraft);
 $('#chat-questions').addEventListener('change',updateQuestionDraft);
 $('#chat-questions').addEventListener('submit',answerQuestion);

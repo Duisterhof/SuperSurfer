@@ -150,3 +150,24 @@
 .detached-panel.detached-chat #chat-panel:not([hidden]){display:flex!important}
 .detached-panel.detached-chat #chat-resizer:not([hidden]){display:block!important}
 .detached-panel #view-dock>#project-view-panels,.detached-panel #page-right-tiles{display:none!important}
+
+/* Desktop tiling uses nested splits; every leaf fills its region. */
+#main.tiled-page-main>.tile-page{height:100%;display:flex;flex-direction:column;gap:8px;padding:8px 10px}
+.dock-canvas{position:relative;display:block!important;flex:1;min-height:320px}
+.dock-canvas>.page-tile,.dock-empty{position:absolute!important;margin:0!important;max-width:none!important}
+.dock-canvas>.page-tile{flex:none!important}
+.dock-canvas>.page-tile>.tile-edge,.dock-canvas>.page-tile>.tile-resize{display:none}
+.dock-divider{position:absolute;padding:0;border:0;background:transparent;touch-action:none;z-index:5;border-radius:3px}
+.dock-divider[data-axis=x]{cursor:col-resize}.dock-divider[data-axis=y]{cursor:row-resize}
+.dock-divider:hover,.dock-divider:focus-visible{background:var(--green)}
+.dock-empty{display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:10px;color:var(--muted);font-size:12px;min-width:0;min-height:0}
+.dock-drop-preview{position:fixed;pointer-events:none;z-index:10000;border:2px solid var(--green);border-radius:10px;background:color-mix(in srgb,var(--green) 15%,transparent)}
+.dragging-page-tile iframe{pointer-events:none!important}
+.panel-palette-menu{position:relative;font-size:11px}.panel-palette-menu>summary{cursor:pointer;padding:5px 9px;border:1px solid var(--line);border-radius:7px;list-style:none;white-space:nowrap}
+.panel-palette-menu>.tile-palette{position:absolute;right:0;top:100%;z-index:30;display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:8px;min-width:280px;border:1px solid var(--line);border-radius:10px;background:var(--bg);box-shadow:var(--panel-shadow)}
+.tile-space-menu{position:relative;margin-left:auto}.tile-space-menu>summary{cursor:pointer;font-size:14px;list-style:none}
+.tile-space-menu>div{position:fixed;z-index:60;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px;display:grid;gap:3px}
+.dock-canvas>.page-tile:has(.tile-space-menu[open]){overflow:visible;z-index:20}.tile-space-menu button{font:inherit;padding:5px 9px;text-align:left;color:var(--text);white-space:nowrap}
+.topbar:has(.panel-palette-menu[open]){position:relative;z-index:50;overflow:visible}
+
+.dock-empty>button{position:absolute;right:8px;top:6px;color:var(--muted);font-size:16px;padding:4px;line-height:1}

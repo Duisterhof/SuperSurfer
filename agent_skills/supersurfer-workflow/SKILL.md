@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.34'
+  supersurfer-version: '0.1.35'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.34. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.35. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -62,11 +62,23 @@ adding one does not send work. After the user sends, follow the actual request a
 its unsaved/provenance warnings. Monaco navigation and shared-file editing do not
 supply an extension host. The separately installed and selected Code OSS workbench
 can run compatible extensions; follow the editor skill for its Open VSX limits.
-Editor or extension changes do not widen the agent's managed-tool authority.
+Native project trust and read-only workspace restrictions remain independent of
+the applied board's checks. Editor or extension changes do not widen the agent's
+managed-tool authority. Diagnose a
+watcher warning as a workspace-host observation problem, not a failed check or
+new task blocker. Re-read saved source and preserve dirty buffers before a reload;
+do not stop unrelated IDEs to reclaim a shared inotify quota.
 Local file imports are saved in this project's artifact library. Inspect them
 through their returned paths; uploading code does not run it or make it checked
 source. Incorporate an imported file into the repository only as needed for the
 requested task, preserving the original artifact and normal source checks.
+
+The Coding page preset uses a full-width editor with integrated **Changes**;
+standalone explorer or Agent changes tiles are optional. Per-chunk Accept/Reject
+and remaining-chunk Accept all/Reject all are user review controls, not task
+completion or check receipts. Preserve final chunk decisions and conflicts; use
+the editor guidance instead of issuing a whole-file rollback. Returning to a task
+restores its remembered valid page without starting another action or agent turn.
 
 Use `present_code` to show an actual file or frozen Git revision comparison, and
 `manage_todos` to read/save the requested Markdown checklist with its revision.
@@ -84,11 +96,16 @@ source browser is needed. Configure checks/previews through the surfboard only
 when execution behavior is part of the request.
 
 Pages support docked panels and freely movable windows with saved tile bounds.
+A docked page's optional `layout` tree can combine horizontal and vertical splits
+and reserve empty drop space. Reuse its main tile identities exactly once and
+preserve sidebar placement; the layout reference defines the validated schema.
+This is page presentation, not another source owner, action or workflow gate.
 Use the scoped layout tool for a requested arrangement; keep source and check
 records attached to their original project/item. Separate native panel windows are
 user GUI controls, not managed agent actions. A detached editor is another client
 with its own draft buffers, so save the current draft before opening it and re-read
-saved source before editing. Do not claim cross-window buffer synchronization or
+saved source before editing. The original panel hides while the child is open and
+restores on child close; the saved page and underlying task remain unchanged. Do not claim cross-window buffer synchronization or
 create a second task merely to open a panel elsewhere.
 
 When verifying a UI change, exercise the actual controls at a narrow pane width

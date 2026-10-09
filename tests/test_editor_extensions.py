@@ -88,6 +88,26 @@ class ExtensionAPItests(unittest.TestCase):
         self.assertEqual('example.custom',bindings[0]['command'])
         self.assertEqual(1,sum(row['command']=='-workbench.action.toggleZenMode' for row in bindings))
 
+    def test_watcher_exclusions_preserve_source_and_user_overrides(self):
+        workbench=self.service.workbench
+        folder=workbench.root/'user-data/User';folder.mkdir(parents=True)
+        (folder/'settings.json').write_text(json.dumps({'files.watcherExclude':{'**/.venv/**':False,'**/local-output/**':True}}))
+        workbench.sync_settings()
+        exclusions=json.loads((folder/'settings.json').read_text())['files.watcherExclude']
+        self.assertFalse(exclusions['**/.venv/**'])
+        self.assertTrue(exclusions['**/local-output/**'])
+        self.assertTrue(exclusions['**/.SuperSurfer/**'])
+        self.assertTrue(exclusions['**/node_modules/**'])
+        self.assertNotIn('**',exclusions)
+        self.assertNotIn('**/src/**',exclusions)
+
+    def test_malformed_watcher_exclusions_are_preserved(self):
+        workbench=self.service.workbench
+        folder=workbench.root/'user-data/User';folder.mkdir(parents=True)
+        path=folder/'settings.json';path.write_text('{"files.watcherExclude":"invalid"}')
+        with self.assertRaises(SurfboardError):workbench.sync_settings()
+        self.assertEqual('{"files.watcherExclude":"invalid"}',path.read_text())
+
     def test_invalid_keybindings_are_preserved_instead_of_overwritten(self):
         workbench=self.service.workbench
         folder=workbench.root/'user-data/User';folder.mkdir(parents=True)

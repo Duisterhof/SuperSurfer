@@ -8,10 +8,10 @@ def hunks(change):
     if change.get('truncated') or change.get('move_path'):
         raise SurfboardError('This edit is partial or renamed; compare and edit it manually before accepting.', 409)
     answer=[];current=None;previous=None
-    for line in change.get('diff','').splitlines(keepends=True):
+    for line_number,line in enumerate(change.get('diff','').splitlines(keepends=True),1):
         match=_HEADER.match(line)
         if match:
-            current={'old_start':int(match[1]),'old_count':int(match[2] or 1),'new_start':int(match[3]),'new_count':int(match[4] or 1),'old':[],'new':[]};answer.append(current);previous=None
+            current={'patch_line':line_number,'old_start':int(match[1]),'old_count':int(match[2] or 1),'new_start':int(match[3]),'new_count':int(match[4] or 1),'old':[],'new':[]};answer.append(current);previous=None
             if len(answer)>200:raise SurfboardError('Too many hunks to reject automatically',413)
         elif current and line[:1] in {' ','+','-'}:
             tag=line[0];text=line[1:]
@@ -27,10 +27,22 @@ def hunks(change):
             raise SurfboardError('This recorded edit has no complete unified patch to undo.',409)
     if not answer or any(len(row['old'])!=row['old_count'] or len(row['new'])!=row['new_count'] for row in answer):
         raise SurfboardError('The recorded patch is incomplete; it cannot safely restore the file.',409)
+    for side in ('old','new'):
+        end = 0
+        for row in answer:
+            start,count = row[side+'_start'],row[side+'_count']
+            if (count and start < 1) or start < end:
+                raise SurfboardError('Recorded hunks overlap or are out of order; review this edit manually.',409)
+            end = start+count
     return answer
 
-def undo(change, content):
-    rows=hunks(change);kind=change.get('kind','update').lower()
+def undo(change, content, selected=None):
+    rows=hunks(change)
+    if selected is not None:
+        if not selected or any(type(index) is not int or index < 0 or index >= len(rows) for index in selected):
+            raise SurfboardError("Choose a recorded chunk",400)
+        rows=[rows[index] for index in selected]
+    kind=change.get('kind','update').lower()
     if kind in {'add','create'}:
         if len(rows)!=1 or rows[0]['old_count'] or rows[0]['old_start']!=0 or content!=''.join(rows[0]['new']):
             raise SurfboardError('The added file has newer content. Rejecting it would remove another edit.',409)
