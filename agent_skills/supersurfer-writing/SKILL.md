@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.36. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.37. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -110,9 +110,23 @@ LaTeX `node_id` when ambiguous. `main_file` is a repository-relative `.tex` path
 Optional `source_dir` is the repository-relative compilation root containing that
 file; inputs, figures and BibTeX files resolve from this root. The default root is
 the project repository. Keep figures/bibliography inside it, with ordinary files
-rather than symbolic or hard links. Only saved, tracked and nonignored untracked
-source is copied. Save missing editor files or explain ignored inputs; do not
-silently substitute another document.
+rather than symbolic or hard links. Saved tracked and nonignored untracked source is copied by default. To include
+Git-ignored paper inputs, explicitly pass `extra_source_files`: at most 64
+project-relative file paths within `source_dir`, including the ignored main file
+and each intended dependency. This adds only the selected ordinary files, never
+whole ignored folders, credentials, links or paths outside the selected root.
+It changes neither Git ignore rules nor the repository. Save missing editor files
+and preserve the intended document rather than silently substituting another one.
+
+Use the PDF panel's **Fix build settings** after a missing-main or source-root
+error: select the main TeX file, source folder and explicit Additional build files
+(one project-relative path per line). These choices persist for the task in that
+client and are reused by supported compile-on-save. The applied LaTeX block can
+supply defaults through `main_file`, `source_dir` and `extra_source_files`; agent
+compile requests should pass the intended values explicitly. A settings edit
+neither saves dirty text nor proves a corrected build succeeded. Additional ignored
+inputs still must satisfy any committed/reviewed-source requirement; inclusion is
+not a bypass. Inspect the new build receipt and PDF.
 
 The tested engine is `pdflatex`. The service runs the needed bounded pdfLaTeX
 passes and BibTeX when requested by the generated auxiliary file. It does not
@@ -189,3 +203,11 @@ Read an owned block's HTML and asset names using `list_view_blocks` with
 `block_id` before revising it. An HTML-only revision omits `assets` to retain its
 copied media; an explicit asset map replaces the whole set. Preserve unrelated
 content and its current version rather than guessing lost source mappings.
+
+Desktop tabs and Activity remain below the native drag area. Either sidebar can collapse and restore through its edge arrow, including a maximized conversation, without stopping a remote build. Keep the selected source and exact last-good PDF identity when reclaiming screen space.
+
+Monaco and the optional native editor can merge disjoint incoming edits into the
+source draft without saving the
+paper. Inline draft decisions do not compile it. Preserve overlapping user text
+for explicit review, then verify supported Save and its actual build receipt
+before claiming the PDF reflects that draft.

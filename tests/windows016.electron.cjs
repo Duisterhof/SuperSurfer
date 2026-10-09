@@ -46,6 +46,8 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
  const probe=page=>page.evaluate(async()=>fetch('/api/probe').then(r=>r.json()));
  try{
   app=await launch();let a=await app.firstWindow();await connect(a,'tulip');
+  await a.evaluate(()=>{window.__workspaceCommands=[];superSurferDesktop.onWorkspaceCommand(command=>window.__workspaceCommands.push(command));});
+  const shortcut=await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(item=>item.label==='Rearrange').submenu.items.find(item=>item.label==='Toggle agent panel').accelerator);assert.equal(shortcut,'CmdOrCtrl+Shift+B');await menu('Toggle agent panel');await a.waitForFunction(()=>window.__workspaceCommands.includes('chat'));console.log('PASS agent-sidebar accelerator is exposed in the native menu and routes to the connected workspace');
   await a.evaluate(()=>superSurferDesktop.setWorkspace({projectId:'vla',tab:'page:page_abcdef',chatWidth:510}));
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setBounds({x:40,y:50,width:1120,height:740}));
   const newFromHeader=app.waitForEvent('window');await a.evaluate(()=>superSurferDesktop.newWindow());let b=await newFromHeader;await connect(b,'trinity');

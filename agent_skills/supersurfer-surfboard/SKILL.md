@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.36. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.37. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
@@ -32,7 +32,13 @@ not impose them on a local website preview or ordinary software check.
 The Writing starter puts source, PDF and conversation in one working surface:
 paper brief → source → LaTeX compilation → PDF review/artifact. LaTeX blocks use
 the fixed `compile_latex` capability with a configured main file and timeout;
-they are not arbitrary shell-command blocks. Other workflows can add the same
+they are not arbitrary shell-command blocks. Defaults can include `source_dir`
+and `extra_source_files` (up to 64 project-relative file paths). All selected
+inputs must stay inside the chosen source folder. The PDF panel saves explicit
+main/root/input choices for the task in that client; updating defaults does not
+rewrite another task or silently replace its saved choice. Explicit ignored
+inputs do not change Git ignore rules or bypass committed/reviewed-source gates.
+Use [writing guidance](../supersurfer-writing/SKILL.md) for the supported repair flow. Other workflows can add the same
 compiler capability. A PDF tile alone is available on every board and can display
 an existing repository PDF; it grants no compilation permission. An arrow can
 declare a dependency but does not auto-save source, compile on every keystroke,
@@ -199,3 +205,5 @@ closes the workspace. Existing command/board-action authorization still governs
 starting a server. Do not use code-server proxy routes, broaden app CORS or relay
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
+
+Desktop page tabs and Activity use native-safe click areas below a thin drag strip; the in-app topbar stays hidden. Sidebar edge arrows collapse or restore views without changing the saved board, layout or agent work. Keep these window controls separate from workflow edits.

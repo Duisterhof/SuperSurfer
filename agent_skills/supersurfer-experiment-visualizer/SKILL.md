@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.36. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.37. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -113,3 +113,5 @@ A reusable 3D view can load its copied local module/model/data assets through it
 own publication capability. Declare those assets explicitly; it cannot fetch live
 W&B, another block's data or app APIs. Preserve snapshot provenance and verify
 the actual widget rather than promising unrestricted library compatibility.
+
+Desktop tabs and Activity sit below the native drag area. Sidebar edge arrows reclaim or restore report space without changing the visualizer input selection. Preserve the existing report and its sources when switching views; a hidden pane does not imply unavailable measurements.

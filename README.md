@@ -1,3 +1,23 @@
+# SuperSurfer 0.1.37 — edit together without losing your draft
+
+Incoming agent or external edits appear as reviewable chunks in the file you are
+already editing, in both native VS Code and the built-in editor. Unrelated unsaved
+changes stay intact. **Accept / Reject** changes the draft; only **Save** writes
+that draft. When both sides changed the same lines, choose **Use incoming / Keep
+mine** before saving. These changes are identified as incoming edits; recorded
+agent patches retain their separate provenance and durable review receipts.
+
+**Cmd/Ctrl+Shift+B** hides or restores the right agent sidebar; **Cmd/Ctrl+B**
+toggles the left sidebar. Both edge chevrons reclaim the space, including from an
+expanded chat. Page tabs and Activity sit below the native desktop titlebar's hit
+area, without restoring the removed application toolbar.
+
+For a missing or ignored TeX main file, use **Fix build settings** to choose the
+main file and source folder, or list specific **Additional build files**. Choices
+are remembered for this task in the client; Surfboard settings provide shared
+block defaults. The compiler includes only selected files, retains its sandbox,
+and continues enforcing committed/reviewed source requirements where configured.
+
 # SuperSurfer 0.1.36 — more room for your work
 
 The desktop's application toolbar is gone. Use the native **Rearrange** menu to

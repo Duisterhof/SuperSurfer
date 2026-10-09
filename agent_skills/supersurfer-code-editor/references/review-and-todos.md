@@ -13,6 +13,20 @@ roles use their fixed project. An active user task and the board's tool permissi
 are required. Presentation does not transfer scope to a pinned chat's neighboring
 page.
 
+Both Monaco and the optional native editor review source buffers using the
+captured saved baseline, current draft and current disk source. Monaco inline
+zones track chunk ranges as the draft changes; native CodeLens supplies the same
+draft choices. Disjoint incoming changes merge into the draft with inline
+Accept/Reject; overlap retains user text for Use incoming/Keep mine. These may be
+agent or other-client changes, not a named agent's recorded patch. Decisions
+change only the draft, never implicitly save or create a durable patch receipt.
+Supported Save in both editors checks the disk revision; changed/stale chunks require
+inspection rather than automatic reversal. Edited incoming chunks expose Keep
+current to resolve deliberately without reversing user text; unresolved overlaps
+continue to block Save even after an edit. Native Save queues a follow-up when
+another explicit Save arrives during an in-flight write, retaining revision and
+overlap checks. Preserve all unsaved work.
+
 Recorded edits are reviewed through **Changes** inside the editor, or an optional
 Agent changes tile. Native CodeLens and Monaco inline zones expose each complete
 chunk's **Accept**/**Reject**. This is actual recorded patch evidence, distinct from
@@ -23,7 +37,7 @@ Accepting a chunk keeps current saved source and records a final decision. It
 never reapplies a patch. Rejecting undoes only that uniquely matching complete
 chunk against the current revision; partial, truncated, renamed or ambiguous
 patches need manual comparison. An unsupported/conflicting chunk remains blocked
-without requiring a rollback of unrelated safe chunks. Save dirty buffers before
+without requiring a rollback of unrelated safe chunks. For this durable saved-source review, save dirty buffers before
 rejection; conflicts preserve newer source instead of forcing an undo.
 
 **Accept all** and **Reject all** select only still-undecided chunks. A final chunk
@@ -61,3 +75,10 @@ ongoing deliverable and completion evidence; a checkbox does not replace that
 record, enable monitoring, satisfy a workflow check or authorize execution. Keep
 an existing list when the user asks to update it; do not create a parallel list
 merely to mirror every agent progress event.
+
+If a pre-existing native whole-file Save conflict appears, the compact surface
+exposes **Keep editor changes** and **Use disk version**. Each requires explicit
+confirmation: the former replaces the disk file with the editor version; the
+latter discards that unsaved draft. Compare both versions first. These fallback
+choices are distinct from per-chunk review and must not be used to silently
+overwrite another owner's work or bypass an unresolved source requirement.

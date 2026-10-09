@@ -15,7 +15,7 @@ export function createLatexAutoCompile(options){
     // Coalesce all saves received before launch into one build. A subsequent
     // save waits for this build and launches exactly one follow-up.
     row.pending=false;
-    await options.action('latex.action',{project_id:row.projectId,...(row.experimentId?{experiment_id:row.experimentId}:{}),operation:'start',node_id:block.node_id,main_file:row.main||block.main_file||'main.tex',source_dir:row.sourceDir||'',request_id:'latex_'+crypto.randomUUID().replaceAll('-','')});
+    await options.action('latex.action',{project_id:row.projectId,...(row.experimentId?{experiment_id:row.experimentId}:{}),operation:'start',node_id:block.node_id,main_file:row.main||block.main_file||'main.tex',source_dir:row.sourceDir??block.source_dir??'',extra_source_files:row.extraSourceFiles||block.extra_source_files||[],request_id:'latex_'+crypto.randomUUID().replaceAll('-','')});
    }
   }finally{row.running=false;if(!row.pending)pending.delete(row.key);}
  }

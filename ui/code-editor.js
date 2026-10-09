@@ -36,7 +36,7 @@ const writingLanguage=path=>/\.(tex|latex|sty|cls)$/i.test(path||'')?'latex':/\.
 function createMonacoEditor(options) {
   const instance = ++nextEditorId, projects = new Map();
   let root, context, state, monaco, editor, editorFile, selectionEditor, diffEditor, diffModels = [], observer, poll, epoch = 0, navigation = 0;
-  let spelling,sidebarDrag=null,fontSize=options.editorSettings?.get().font_size||13;
+  let draftZones=[],spelling,sidebarDrag=null,fontSize=options.editorSettings?.get().font_size||13;
   const defaults=()=>options.editorSettings?.get()||{font_size:13,theme:'match',tab_size:4,word_wrap:'auto',minimap:false,latex_spellcheck:true,dictionary:[]};
 
   function setFontSize(value){fontSize=Math.max(8,Math.min(32,Math.round(value)));editor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});const control=root?.querySelector('[data-code="zoom-reset"]');if(control)control.textContent=fontSize+'px';options.editorSettings?.save({font_size:fontSize}).catch(tell);}
@@ -82,6 +82,7 @@ function createMonacoEditor(options) {
     if (editor && editorFile) editorFile.viewState = editor.saveViewState();
   }
   function disposeView() {
+    draftZones=[];
     media.unmount();
     root?.querySelector(".agent-review-actions")?.remove();
     pdf.unmount();rememberView(); editor?.dispose(); editor = null; editorFile = null; selectionEditor=null;diffEditor?.dispose(); diffEditor = null;
@@ -94,7 +95,7 @@ function createMonacoEditor(options) {
     const details = [file?.path || 'Choose a file', dirty(file)?'Unsaved changes':'', readonly()?'Read-only workspace':''].filter(Boolean).join(' · ');
     status.textContent = message || details;
     status.classList.toggle('error', Boolean(message));
-    root.querySelector('[data-code="save"]').disabled = view!=='file' || readonly() || !file?.model || file.readOnly || !dirty(file) || Boolean(file.remote) || file.saving;
+    root.querySelector('[data-code="save"]').disabled = view!=='file' || readonly() || !file?.model || file.readOnly || !dirty(file) || Boolean(file.remote) || file.draftChunks?.some(chunk=>chunk.conflict) || file.saving;
     root.querySelector('[data-code="ask"]').disabled = !file || !options.onAskAgent;
     for (const action of ['new-file','new-folder']) root.querySelector(`[data-code="${action}"]`).disabled = readonly();
     for(const control of root.querySelectorAll('[data-code-review]'))control.disabled=readonly();
@@ -148,7 +149,7 @@ function createMonacoEditor(options) {
 
   function modelFor(file, projectId) {
     file.model = monaco.editor.createModel(file.content ?? '', writingLanguage(file.path) || file.language || undefined, fileURI(projectId,file.path));
-    file.listener = file.model.onDidChangeContent(() => {if (state?.projectId === projectId) renderStatus();});
+    file.listener = file.model.onDidChangeContent(() => {if (state?.projectId === projectId){renderStatus();renderDraftChunks();}});
     file.base = file.content ?? '';
     spelling?.watch(file.model,file.path);
     return file;
@@ -204,7 +205,7 @@ function createMonacoEditor(options) {
     if (file.viewState) editor.restoreViewState(file.viewState);
     editor.addAction({id:'supersurfer-save',label:'Save file',keybindings:[monaco.KeyMod.CtrlCmd|monaco.KeyCode.KeyS],run:()=>save()});
     selectionAction([editor]);
-    renderStatus(); theme();
+    renderDraftChunks();renderStatus(); theme();
   }
   async function showDiff(path, staged = false, conflict = false) {
     const token = epoch, projectId = context.projectId, project=state, nav=++navigation;
@@ -291,6 +292,45 @@ function createMonacoEditor(options) {
     }catch(error){if(current(token))tell(error);return false;}
   }
 
+  function renderDraftChunks(){
+    if(!editor||!editorFile?.model||view!=='file')return;
+    const file=editorFile;
+    editor.changeViewZones(accessor=>{
+      for(const id of draftZones)accessor.removeZone(id);draftZones=[];
+      for(const chunk of file.draftChunks||[]){
+        const range=file.model.getDecorationRange(chunk.marker);if(!range)continue;
+        const node=document.createElement('div');node.className='agent-chunk-controls';
+        const text=file.model.getValueInRange(range),edited=text!==(chunk.conflict?chunk.before:chunk.after);
+        const label=document.createElement('span');label.textContent=edited?'Edited incoming chunk':chunk.conflict?'Overlapping incoming edit':'Incoming edit';node.append(label);
+        for(const accept of edited?[true]:[true,false]){
+          const button=document.createElement('button');button.type='button';button.textContent=edited?'Keep current':chunk.conflict?(accept?'Use incoming':'Keep mine'):(accept?'Accept':'Reject');button.disabled=readonly();
+          button.onclick=()=>{
+            const at=file.model.getDecorationRange(chunk.marker);if(!at||readonly())return;
+            const actual=file.model.getValueInRange(at),expected=chunk.conflict?chunk.before:chunk.after;
+            if(!edited&&actual!==expected){renderDraftChunks();return;}
+            const replacement=edited?null:chunk.conflict?(accept?chunk.after:null):(!accept?chunk.before:null);
+            if(replacement!==null)file.model.pushEditOperations([],[{range:at,text:replacement}],()=>null);
+            file.model.deltaDecorations([chunk.marker],[]);file.draftChunks=file.draftChunks.filter(row=>row!==chunk);renderDraftChunks();renderStatus();
+          };node.append(button);
+        }
+        if(chunk.conflict){const details=document.createElement('details');details.innerHTML='<summary>Incoming text</summary>';const pre=document.createElement('pre');pre.textContent=chunk.after;details.append(pre);node.append(details);}
+        draftZones.push(accessor.addZone({afterLineNumber:Math.max(0,range.startLineNumber-1),heightInPx:30,domNode:node,suppressMouseDown:false}));
+      }
+    });
+  }
+  async function mergeDraft(file,remote,project,read){
+    const model=file.model,version=model.getVersionId(),base=file.base,content=model.getValue();
+    const result=await call('code.merge-draft',{path:file.path,base,content,revision:remote.revision},project.projectId);
+    if(model.isDisposed()||version!==model.getVersionId()||file.saving||file.diskRead!==read)return false;
+    const range=(start,end)=>{const a=model.getPositionAt(start),b=model.getPositionAt(end);return new monaco.Range(a.lineNumber,a.column,b.lineNumber,b.column);};
+    const applied=result.chunks.filter(chunk=>!chunk.conflict&&!chunk.already_applied);
+    if(applied.length)model.pushEditOperations([],[...applied].reverse().map(chunk=>({range:range(chunk.start,chunk.end),text:chunk.after})),()=>null);
+    let shift=0;file.draftChunks||=[];
+    for(const chunk of result.chunks){const start=chunk.start+shift;if(!chunk.conflict&&!chunk.already_applied)shift+=chunk.after.length-(chunk.end-chunk.start);const end=start+(chunk.conflict?chunk.before.length:chunk.after.length);chunk.marker=model.deltaDecorations([],[{range:range(start,end),options:{isWholeLine:true,className:'draft-incoming-line',stickiness:monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges}}])[0];file.draftChunks.push(chunk);}
+    file.base=result.content;file.revision=result.revision;file.remote=null;file.exists=result.exists;
+    if(editorFile===file){renderDraftChunks();renderStatus();}return true;
+  }
+
   async function checkDisk(file, project = state) {
     if(file.pdf)return;
     if (!file.model || file.saving) return;
@@ -303,6 +343,7 @@ function createMonacoEditor(options) {
     }
     if(file.model.isDisposed() || project.files.get(file.path)!==file || file.saving || file.diskRead!==read)return;
     if (same(remote.revision,file.revision)) {file.remote = null; return;}
+    if(remote.exists!==false&&typeof remote.content==='string'&&!remote.binary&&!remote.too_large&&typeof file.base==='string'){try{if(await mergeDraft(file,remote,project,read))return;}catch{/* Older services and unsafe plans retain the ordinary conflict view. */}}
     if (dirty(file)) file.remote = remote;
     else if(remote.content !== null && !remote.binary && !remote.too_large) {
       file.model.setValue(remote.content ?? ''); file.base = remote.content ?? ''; file.revision=remote.revision; file.exists=remote.exists; file.remote=null;
@@ -310,7 +351,7 @@ function createMonacoEditor(options) {
   }
   async function save() {
     const file = active(), project = state, experimentId=context.experimentId;
-    if (!file?.model || readonly() || file.readOnly || file.remote || file.saving || !dirty(file)) return;
+    if (!file?.model || readonly() || file.readOnly || file.remote || file.draftChunks?.some(chunk=>chunk.conflict) || file.saving || !dirty(file)) return;
     const content = file.model.getValue(); file.saving = true;file.diskRead=(file.diskRead||0)+1; message=''; renderStatus();
     try {
       const saved = await call('code.save',{path:file.path,content,revision:file.revision},project.projectId);

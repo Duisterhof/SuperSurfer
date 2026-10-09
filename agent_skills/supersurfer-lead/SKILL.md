@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.36. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.37. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -278,3 +278,11 @@ closes the workspace. Existing command/board-action authorization still governs
 starting a server. Do not use code-server proxy routes, broaden app CORS or relay
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
+
+Desktop page tabs and Activity remain clickable below the native title area. Use the edge arrows to restore hidden project or agent sidebars; collapsing a conversation leaves its work and ownership intact. A page switch preserves its remembered view rather than requesting another handoff.
+
+Both Monaco and the optional native editor use source-buffer Accept/Reject for
+external edits merged into an
+unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
+a draft choice as a durable agent-patch receipt or saved source. A successful
+explicit Save is still separate from checks, commits and launch authorization.

@@ -117,3 +117,23 @@
 .opening-source .workbench-frame iframe{pointer-events:none;opacity:.7}
 
 #ports-block-root{padding:16px;font-size:12px;overflow:auto}.port-add,.port-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}.port-add input{width:120px;font:inherit;padding:6px}.port-row code{flex:1}.port-status{margin-bottom:10px;color:var(--muted)}
+
+/* Hidden-inset native title bars reserve a non-client hit area on macOS.
+   Keep content controls below it; the empty strip remains draggable. */
+.desktop-app .app-shell{padding-top:44px}
+.desktop-app .app-shell::before{content:"";position:fixed;top:0;left:0;right:0;height:38px;-webkit-app-region:drag}
+.desktop-app .sidebar{padding-top:18px}
+.desktop-app .rearrange-overlay{top:44px}
+.desktop-app :is(button,a,input,textarea,select,summary){-webkit-app-region:no-drag}
+
+.left-sidebar-toggle{position:fixed;left:3px;top:45%;z-index:45;width:20px;height:32px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--muted);font-size:17px}
+.latex-settings textarea{width:100%;font:11px/1.5 ui-monospace,monospace;resize:vertical}.latex-status.error .button{margin:4px 0 4px 8px}
+
+/* Collapse the conversation wherever the active layout places it. */
+.right-sidebar-collapsed #chat-panel{display:none!important}
+.right-sidebar-collapsed .page-tile[data-tile-kind=chat]{display:none!important}
+
+.native-save-conflict{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid var(--line);font-size:11px;background:var(--soft);flex:none}
+.native-save-conflict[hidden]{display:none}.native-save-conflict>span{flex:1;min-width:0}.native-save-conflict>button{font:inherit;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--text);padding:3px 6px}
+
+.draft-incoming-line{background:var(--green-bg)}.agent-chunk-controls details pre{max-height:140px;overflow:auto;font-size:11px;white-space:pre-wrap}

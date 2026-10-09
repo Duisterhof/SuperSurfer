@@ -45,6 +45,28 @@ class WritingServiceTests(unittest.TestCase):
             bad=deepcopy(board);next(row for row in bad['nodes'] if row['kind']=='latex')['config']['main_file']=path
             with self.assertRaises(SurfboardError):validate(bad)
 
+    def test_latex_block_defaults_pass_explicit_ignored_sources_to_compiler(self):
+        project=self.paper();pid=project['id'];board=template('writing')
+        block=next(row for row in board['nodes'] if row['kind']=='latex')
+        block['config'].update(main_file='draft/main.tex', source_dir='draft', extra_source_files=['draft/main.tex', 'draft/body.tex'])
+        self.apply(board,pid)
+        with patch.object(self.service.latex,'action',return_value={}) as compiler:
+            self.service.action('latex.action',{'project_id':pid,'request_id':'writing-selected-source'})
+            fields=compiler.call_args.args[2]
+            self.assertEqual(fields['source_dir'],'draft');self.assertEqual(fields['extra_source_files'],['draft/body.tex','draft/main.tex'])
+        for path in ('../draft', '/tmp/draft', 'draft//sub'):
+            bad=deepcopy(board);next(row for row in bad['nodes'] if row['kind']=='latex')['config']['source_dir']=path
+            with self.assertRaises(SurfboardError):validate(bad)
+
+    def test_ignored_extra_files_do_not_bypass_committed_source_gates(self):
+        project=self.paper();pid=project['id'];repo=Path(project['repo'])
+        (repo/'.gitignore').write_text('draft/\n');(repo/'draft').mkdir();(repo/'draft/body.tex').write_text('Unreviewed source')
+        board=template('writing');board['nodes'].append({'id':'commit','kind':'approval','label':'Committed source','x':500,'y':400,'config':{'requirements':['exact_commit']}})
+        board['edges'].append({'id':'commit-paper','source':'commit','target':'latex','relation':'requires','description':''});self.apply(board,pid)
+        with patch.object(self.service.latex,'action',return_value={}) as compiler, self.assertRaisesRegex(APIError,'tracked by Git'):
+            self.service.action('latex.action',{'project_id':pid,'request_id':'writing-unreviewed-extra','extra_source_files':['draft/body.tex']})
+        compiler.assert_not_called()
+
     def test_new_writing_project_has_own_skill_no_wandb_and_no_default_caps(self):
         self.manager.fail=True;project=self.paper();scope='project:'+project['id']
         context=self.service.context_provider(scope)

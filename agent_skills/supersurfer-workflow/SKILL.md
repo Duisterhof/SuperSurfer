@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.36. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.37. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -189,3 +189,11 @@ closes the workspace. Existing command/board-action authorization still governs
 starting a server. Do not use code-server proxy routes, broaden app CORS or relay
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
+
+Desktop page tabs and Activity remain below the native title area; the native Rearrange command remains the layout entry point. Edge arrows hide or restore either sidebar without altering the task board, action receipts or ongoing work. Do not treat pane visibility as a workflow state.
+
+Both Monaco and the optional native editor use source-buffer Accept/Reject for
+external edits merged into an
+unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
+a draft choice as a durable agent-patch receipt or saved source. A successful
+explicit Save is still separate from checks, commits and launch authorization.

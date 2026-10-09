@@ -1,3 +1,15 @@
+# Completed in 0.1.37
+
+- Inline incoming edit Accept/Reject in existing native and built-in source drafts.
+- Preserve concurrent typing; require explicit decisions for overlapping chunks.
+- Revision-checked rebased saves, safe in-flight typing and queued repeated saves.
+- Visible labeled fallback controls for existing whole-file native conflicts.
+- Both sidebar chevrons, expanded-chat collapse, and Cmd/Ctrl+Shift+B agent toggle.
+- Keep page tabs and Activity clear of native macOS titlebar hit regions.
+- Repair missing/ignored TeX source through saved task choices and block defaults.
+- Preserve source gates, safe file exclusions, bounded builds and source freshness.
+- Review and revise all twelve agent skills for this release.
+
 ## Completed in 0.1.36
 
 - Compact native desktop: remove application toolbar; Rearrange in the menu bar.

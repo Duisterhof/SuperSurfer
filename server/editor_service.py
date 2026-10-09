@@ -198,6 +198,18 @@ class EditorService:
         if self.read_only:
             raise SurfboardError("Read-only workspace: source files cannot be changed", 403)
         project = self.lookup("projects", fields.get("project_id"))
+        if operation == "code.merge-draft":
+            if set(fields) != {"project_id", "path", "base", "content", "revision"}:
+                raise SurfboardError("Draft review requires the saved baseline, current draft and disk revision")
+            from .draft_merge import plan
+            mapped, relative = self.code_file_target(project, fields["path"])
+            result = self.code.read(mapped, relative)
+            if result.get("read_only") or "content" not in result:
+                raise SurfboardError("This file cannot be reviewed as editable text", 409)
+            if fields["revision"] != result["revision"]:
+                raise SurfboardError("Disk source changed during draft review; retry from the current file", 409)
+            result.update(plan(fields["base"], fields["content"], result["content"]))
+            return result
         if operation == "code.save":
             if set(fields) != {"project_id", "path", "content", "revision"}:
                 raise SurfboardError("Saving requires path, content and the revision read from this file")

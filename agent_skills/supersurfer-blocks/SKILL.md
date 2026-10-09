@@ -2,12 +2,12 @@
 name: supersurfer-blocks
 description: Publish requested reusable HTML views with copied project assets, then place their durable identities on scoped SuperSurfer pages without changing execution authority.
 metadata:
-  supersurfer-version: '0.1.36'
+  supersurfer-version: '0.1.37'
 ---
 
 # Reusable HTML blocks
 
-Reviewed for SuperSurfer 0.1.36. Use for a user-requested persistent custom view,
+Reviewed for SuperSurfer 0.1.37. Use for a user-requested persistent custom view,
 such as a failure-video comparison, GIF gallery or interactive explanation.
 The library is workspace-wide: already-published views can be reused across
 projects, independently of a Results block's experiment data-sharing selection.
@@ -96,3 +96,5 @@ new W&B writer, fresh measurement or shared execution gate. Keep Code, Full VS
 Code, Terminal, Ports, PDFs and Results separate where their existing views
 satisfy the request. Reuse the block only when its content and publication scope
 match the user's intended view.
+
+Desktop page tabs and Activity remain below the native drag strip. Sidebar edge arrows hide and restore workspace panes without revising a publication or its tile. Preserve the durable block ID when changing views; a hidden frame is not a request to publish another version.
