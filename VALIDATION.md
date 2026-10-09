@@ -778,3 +778,13 @@ The unsigned Mac arm64 0.1.38 archive was rebuilt after these fixes and inspecte
 for version, backend modules and exclusion of state/credential directories. Native
 macOS launch/Gatekeeper remains untested. Installing the desktop does not restart
 or upgrade a currently running workspace service automatically.
+
+PR integration recheck on October 9: the provider/browser regression also holds
+both new adapters in a busy turn and verifies the composer does not promise
+in-flight steering. Stop restores sending without replaying the held request.
+
+Integration checks also pass the preserved 0.1.37 native and built-in unsaved
+draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
+delayed save, repeated Save and ordinary native saving. Account reconnect and
+desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
+rerun locally; no live provider inference was repeated for this integration pass.

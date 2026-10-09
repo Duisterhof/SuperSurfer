@@ -8,7 +8,11 @@ one failed run or idle chat does not make the experiment failed or complete.
 Each owned SuperSurfer conversation uses Codex, Cursor or Claude Code and retains
 that provider's native session. A role default selects the backend for new work;
 it does not transfer an existing session. Start a new conversation to use another
-provider, carrying only the explicitly intended task/context. Never recreate an
+provider, carrying only the explicitly intended task/context. Provider selection
+is pinned once work starts; an unsuccessful sign-in before any message/session
+starts does not move an existing owner. If Cursor cannot resume its saved native
+session, update its CLI rather than substituting a fresh session or replaying
+history. Never recreate an
 owner to recover an uncertain submission. All three providers use the same
 server-enforced scoped MCP tools: changing backend changes neither project/task
 boundaries nor preparation, queue, recovery or delegation authority.
@@ -93,13 +97,21 @@ automatic approval review, reasoning-effort and Fast controls are unavailable
 on those adapters. Ask uses the provider's native permissions/sandbox, which
 differs from Codex containment; it is not a promise of identical OS isolation.
 The managed MCP scope is enforced separately from native shell/file access.
+An inherited workspace default of Approve for me becomes Ask on Cursor/Claude;
+explicitly requesting that unsupported mode is rejected. Their approval-mode
+changes apply on the next turn, except reducing a running YOLO turn to Ask stops
+it. Switching to YOLO does not resolve the current turn's pending approval.
 YOLO and model changes take full effect on the next turn; read the actual runtime
 state rather than assuming a broader active turn gained a new sandbox. Reducing
 a broad CLI turn to Ask stops it. Honor denials and never infer research/launch
 authorization from permissions. Codex can steer its active turn; Cursor and Claude
 Code cannot. Answer live questions/approvals, await completion, or stop before a
 new instruction. Codex effort and Fast changes also apply on the next turn.
-Do not replay a message or approval after uncertain delivery.
+Do not replay a message or approval after uncertain delivery. Use the selected
+provider's returned model catalog for per-chat changes. Workspace role model and
+effort fields configure Codex; Cursor defaults to auto and Claude to sonnet unless
+the conversation overrides its model. Do not pass Codex effort or Fast values to
+a different provider.
 
 Desktop SSH setup shows upload, installation and service-start stages instead of
 one indefinite connecting message. Its framed bundle upload has a 30-second remote

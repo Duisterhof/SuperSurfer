@@ -239,9 +239,11 @@ shell-only edits and historical changes may be unattributed.
 
 Codex, Cursor and Claude Code conversations can edit the same registered source
 through their own native tools while sharing scoped SuperSurfer MCP capabilities.
-Cursor/Claude native activity may omit structured file patches: an empty Changes
+The Cursor/Claude adapters report native tool activity, not structured file-change
+patches. Native file edits can therefore remain unattributed: an empty Changes
 view is not proof that the repository stayed unchanged. Inspect actual saved
-source/Git differences before claiming attribution or completion. Backend defaults
+source/Git differences before claiming completion; a Git difference or native
+tool title alone does not establish which agent produced that patch. Backend defaults
 do not transfer an existing native session, and editor trust does not authenticate
 a provider. Follow [conversation guidance](../supersurfer-worker/references/conversations.md)
 for official CLI-owned login in the user's trusted workspace-host terminal; never
