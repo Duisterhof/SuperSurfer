@@ -1,7 +1,9 @@
 # SuperSurfer 0.1.40 — accounts, onboarding and research Results
 
-Settings shows Codex, Cursor and Claude together, with status, official CLI sign-in
-and sign-out. The chosen workspace host owns its account, not the Mac client.
+Settings groups Codex, Cursor and Claude in one Coding backends section, with
+status, official CLI sign-in/sign-out and compact defaults for each agent role.
+Provider, model and effort align within the available panel width. Cursor and
+Claude use chat model selection; hidden Codex defaults and drafts are retained. The chosen workspace host owns its account, not the Mac client.
 Fresh workspaces ask for an explicit signed-in provider before sending; it persists
 all three new-agent defaults. Existing bindings are never migrated. Sign-out uses
 the provider's native operation, preserves history, rejects active owned turns and

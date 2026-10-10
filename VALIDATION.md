@@ -1,3 +1,14 @@
+# Compact coding backend Settings — October 9, 2026
+
+Accounts and role defaults share one Coding backends section. Browser checks
+cover all three provider rows, aligned controls at wide widths, adaptive layout
+with the agent sidebar open, provider switching without losing Codex drafts,
+persisted defaults and reload. The Settings refresh/scroll/editor draft check
+also passes. Full regression: 711 Python tests and 33 enabled Node tests pass;
+five optional SSH tests are skipped. Linux packaging and isolated native
+Electron startup/persistence pass. These checks use synthetic accounts; no live
+sign-ins, sign-outs, agent turns or research launches are used for testing.
+
 # SuperSurfer 0.1.40 — October 9, 2026
 
 Full backend regression: **710 Python tests** pass. The final focused Results

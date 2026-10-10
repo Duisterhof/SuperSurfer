@@ -327,3 +327,17 @@
 .results-attempts>div{max-height:180px;overflow:auto;padding:4px 8px}
 .results-attempts>div>div{display:flex;gap:12px;align-items:center;padding:2px 0}
 .results-attempts button{background:transparent;border:0;text-align:left;flex:1;font:inherit;color:inherit;cursor:pointer}
+
+/* Accounts and defaults are one compact provider section, with explicit grid cells. */
+.coding-backends{container-type:inline-size}
+.coding-backends .workspace-account-row{padding:7px 0;border-color:var(--line)}
+.coding-backends>p{margin-bottom:8px}
+.agent-defaults{margin-top:18px}.agent-defaults h3{font-size:13px;margin:0 0 4px;font-weight:600}
+.agent-defaults>p{margin:0 0 8px;line-height:1.5}
+.agent-default-row{display:grid;grid-template-columns:minmax(130px,1fr) minmax(100px,140px) minmax(130px,200px) minmax(90px,110px);gap:10px;align-items:center;padding:6px 0}
+.agent-default-row>strong{font-size:12px;font-weight:500}
+.agent-default-row .field{min-width:0;gap:3px;font-size:10px}
+.agent-default-row .control{width:100%;min-width:0;height:32px;padding:5px 8px;font-size:12px}
+.agent-default-row [hidden]{display:none!important}.agent-default-chat{grid-column:3/-1}
+@container(max-width:760px){.agent-default-row{grid-template-columns:minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.3fr) minmax(85px,1fr)}}
+@container(max-width:600px){.agent-default-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}.agent-default-row>strong{grid-column:1/-1}.agent-default-model{grid-column:1}.agent-default-chat{grid-column:2;grid-row:2}.agent-default-effort{grid-column:2}}
