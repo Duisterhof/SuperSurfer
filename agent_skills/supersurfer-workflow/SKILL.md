@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.41. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.42. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -215,6 +215,19 @@ a required review after launched attempts. It uses existing measured evidence or
 explicit unavailable entries and exact report/attempt revisions, not another run.
 Held-only drafts and nonresearch boards do not force that checkpoint; read
 [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
+
+## Chat-first setup and saved Surfboards
+
+A user can describe the desired work in the workflow builder, review a compact
+schematic and view preview, and save a named Surfboard for reuse. Configuration
+and execution remain distinct: starting a coding assignment still needs the
+actual user request and applied capabilities. Reusing a template copies neither
+repository source nor checks/PR receipts, provider logins or running processes.
+For a requested workflow-wide policy change use the configurator and reviewed
+exact-target rollout; existing linked tasks may have local overrides. Keep ordinary
+view edits within this task's layout tools and preserve its dirty editor buffers.
+See [saved workflows](../supersurfer-surfboard/references/saved-workflows.md).
+
 
 For provider connection issues, use Settings → Coding backends on the connected
 workspace host and its host-specific official sign-in action. Account status,

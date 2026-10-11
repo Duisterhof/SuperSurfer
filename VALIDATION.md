@@ -1,3 +1,37 @@
+# SuperSurfer 0.1.42 — October 11, 2026
+
+Workflow checks cover chat-first entry, the real chat composer, saved Unicode
+names, selecting/refining a version, preview/apply/link, current-vs-future scope,
+linked batch updates, preserving overrides, stale-source/library rejection,
+atomic failure, undo, invalid input and no execution effects. Browser checks
+create research, software and LaTeX writing tasks through the new dialog, and
+preserve a chat draft across Advanced navigation. Provider responses are fixtures;
+no live agent inference, scheduling or research jobs are used.
+
+Detached PDF tests measure the remaining editor through typing, save, file changes,
+refresh, resize, local text zoom and global zoom. Docked and floating layouts
+retain >95% width, preserve drafts and restore the split on reattachment. Real
+Code OSS checks focused text zoom/reset without changing pane width, a shell
+starting in the absolute project directory, retained unsaved buffers, extensions
+settings, and selection-to-chat (~100 ms in this run). Chrome 132 cannot support
+iframe-preserving moves; Code OSS checks use bundled Chromium 149 instead.
+Folder expansion confirms an unrelated stalled directory does not block another,
+with cached reopening issuing no extra request.
+
+PR #34 is included: authenticated 33 MiB PDF browser delivery renders first/last
+pages, selectable text and exact downloads; file-boundary/oversize tests pass.
+Its attachment-format CI check remains red despite the committed reviewed report;
+the GitHub credential cannot push the workflow fix without workflow scope.
+
+Full regression: 739 Python tests and 36 enabled Node tests pass; five optional
+SSH checks are skipped. Skill validation and whitespace checks pass. The Linux
+x64 package opens in an isolated native Electron profile. Pointer/keyboard sidebar
+resizing, persisted Files height, detached-PDF zoom, and the native View menu
+changing only focused editor text all pass. Apple Silicon and Intel Mac ZIPs are
+cross-built on Linux and therefore are not Apple-signed or notarized. Native macOS
+input/Gatekeeper cannot be validated on this Linux host. No live service, agents
+or jobs are restarted.
+
 # Large repository PDF previews — October 11, 2026
 
 The authenticated repository PDF reader now accepts up to 512 MiB, matching

@@ -330,7 +330,7 @@ class Workbench:
             token = secrets.token_urlsafe(32)
             workspace = self.root / "workspaces" / (identity + ".code-workspace")
             workspace.parent.mkdir(exist_ok=True, mode=0o700)
-            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": view_kind!="vscode", "files.autoSave":"off", "workbench.activityBar.location":"default" if view_kind=="vscode" else "hidden", "workbench.statusBar.visible":view_kind=="vscode", "workbench.panel.opensMaximized":"always" if view_kind in {"terminal","ports"} else "preserve", "window.title": project["name"] + " · SuperSurfer"}}))
+            atomic_write(workspace, json.dumps({"folders": [{"path": project["repo"]}], "settings": {"supersurfer.session": identity, "supersurfer.editorOnly": view_kind!="vscode", "files.autoSave":"off", "terminal.integrated.cwd":str(Path(project["repo"]).resolve()), "workbench.activityBar.location":"default" if view_kind=="vscode" else "hidden", "workbench.statusBar.visible":view_kind=="vscode", "workbench.panel.opensMaximized":"always" if view_kind in {"terminal","ports"} else "preserve", "window.title": project["name"] + " · SuperSurfer"}}))
             row = {"id": identity, "client_id": client, "token": token, "project_id": project["id"],
                    "experiment_id": fields.get("experiment_id"), "view_kind":view_kind, "repo": str(Path(project["repo"]).resolve()), "workspace": str(workspace), "events": [], "commands": [], "dirty": False, "connected_at": None}
             self.sessions[identity] = row
@@ -385,7 +385,7 @@ class Workbench:
             if self.service.read_only:
                 raise SurfboardError("Read-only workspace", 403)
             kind = fields.get("kind")
-            if kind not in {"file", "save", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files", "changes"}:
+            if kind not in {"file", "save", "comparison", "agent_diff", "extensions", "theme", "selection", "settings", "terminal", "ports", "trust", "files", "changes", "zoom-in", "zoom-out", "zoom-reset"}:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}

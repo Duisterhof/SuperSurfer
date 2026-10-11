@@ -248,6 +248,7 @@ class Service(SurfboardService, EditorService, WritingService):
         return snapshot, error, updated_at
 
     def project_view(self, project):
+        project["name"] = self.store.get("project_display_name:" + project["id"], project["name"])
         project["archived"] = bool(self.store.get("project_archived:" + project["id"], False))
         board = self.boards.get(project["id"])
         project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
@@ -1662,6 +1663,9 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.save_view_layout(params)
         if op == "view-tab.hide":
             return self.hide_view_tab(params)
+        if op.startswith("workflow."):
+            from .workflow_library import WorkflowLibrary
+            return WorkflowLibrary(self).action(op, params)
         if op.startswith("surfboard."):
             return self.surfboard_action(op, params)
         if op == "settings.save":
@@ -1923,7 +1927,9 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Invalid project limit fields")
             return self.project_limits.set(text_field(params, "project_id", 150), {key: value for key, value in params.items() if key != "project_id"})
         if op == "project.add":
-            payload = {"name_": scheduler_name(params, "Project"), "repo": text_field(params, "repo", 4096), "gpu_limit": encode_limit("gpu_limit", params.get("gpu_limit", "unlimited")), "run_limit": encode_limit("run_limit", params.get("run_limit", "unlimited")), "goal": text_field(params, "goal", required=False)}
+            display_name = text_field(params, "name", 160)
+            internal_name = display_name if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", display_name) and len(display_name) <= 64 else "project-" + uuid.uuid4().hex[:12]
+            payload = {"name_": internal_name, "repo": text_field(params, "repo", 4096), "gpu_limit": encode_limit("gpu_limit", params.get("gpu_limit", "unlimited")), "run_limit": encode_limit("run_limit", params.get("run_limit", "unlimited")), "goal": text_field(params, "goal", required=False)}
             payload["repo"] = prepare_project_repository(payload["repo"])
             workflow = params.get("surfboard_template", "research")
             board = board_template(workflow)  # Validate before registering anything.
@@ -1941,6 +1947,8 @@ class Service(SurfboardService, EditorService, WritingService):
                 self.store.put("local_projects", projects)
                 draft = self.boards.save_draft(project["id"], board, 0)
                 self.boards.apply(project["id"], 0, draft["draft"]["draft_version"])
+            self.store.put("project_display_name:" + project["id"], display_name)
+            project["name"] = display_name
             try:
                 initialized = self.store.initialize(project)
             except (OSError, ValueError) as exc:
@@ -2186,6 +2194,9 @@ class Handler(BaseHTTPRequestHandler):
                     result = self.server.service.workbench.catalog.search(query.get("query", [""])[0], query.get("offset", [0])[0])
                 elif path == "/api/editor/session":
                     result = self.server.service.workbench.poll(query.get("id", [""])[0], query.get("after", [0])[0], wait=query.get("wait", [0])[0])
+                elif path == "/api/workflow":
+                    from .workflow_library import WorkflowLibrary
+                    result = WorkflowLibrary(self.server.service).read(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/surfboard":
                     result = self.server.service.surfboard(query.get("project_id", [""])[0], query.get("experiment_id", [None])[0])
                 elif path == "/api/view-layout":

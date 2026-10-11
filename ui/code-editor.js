@@ -36,11 +36,11 @@ const writingLanguage=path=>/\.(tex|latex|sty|cls)$/i.test(path||'')?'latex':/\.
 function createMonacoEditor(options) {
   const instance = ++nextEditorId, projects = new Map();
   let root, context, state, monaco, editor, editorFile, selectionEditor, diffEditor, diffModels = [], observer, poll, epoch = 0, navigation = 0;
-  let draftZones=[],spelling,sidebarDrag=null,fontSize=options.editorSettings?.get().font_size||13;
+  let draftZones=[],spelling,sidebarDrag=null,localFontSize=false,fontSize=options.editorSettings?.get().font_size||13;
   const defaults=()=>options.editorSettings?.get()||{font_size:13,theme:'match',tab_size:4,word_wrap:'auto',minimap:false,latex_spellcheck:true,dictionary:[]};
 
-  function setFontSize(value){fontSize=Math.max(8,Math.min(32,Math.round(value)));editor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});const control=root?.querySelector('[data-code="zoom-reset"]');if(control)control.textContent=fontSize+'px';options.editorSettings?.save({font_size:fontSize}).catch(tell);}
-  const unsubscribe=options.editorSettings?.subscribe(settings=>{fontSize=settings.font_size;theme();editor?.updateOptions(editorOptions());diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});spelling?.refresh();const select=root?.querySelector('.code-theme');if(select)select.value=settings.theme;const zoom=root?.querySelector('[data-code="zoom-reset"]');if(zoom)zoom.textContent=fontSize+'px';});
+  function setFontSize(value){localFontSize=true;fontSize=Math.max(8,Math.min(32,Math.round(value)));editor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});const control=root?.querySelector('[data-code="zoom-reset"]');if(control)control.textContent=fontSize+'px';}
+  const unsubscribe=options.editorSettings?.subscribe(settings=>{if(!localFontSize)fontSize=settings.font_size;theme();editor?.updateOptions(editorOptions());diffEditor?.updateOptions({fontSize,lineHeight:Math.round(fontSize*1.6)});spelling?.refresh();const select=root?.querySelector('.code-theme');if(select)select.value=settings.theme;const zoom=root?.querySelector('[data-code="zoom-reset"]');if(zoom)zoom.textContent=fontSize+'px';});
 
 
   const media=createMediaPreview({api:options.api});
@@ -514,7 +514,7 @@ function createMonacoEditor(options) {
       case 'copy-path':try{await navigator.clipboard.writeText(fullPath(active()?.path||''));}catch{tell('Select the displayed workspace path to copy it.');}break;
       case 'next-diff':diffEditor?.goToDiff('next');break;
       case 'previous-diff':diffEditor?.goToDiff('previous');break;
-      case 'zoom-in':setFontSize(fontSize+1);break;case 'zoom-out':setFontSize(fontSize-1);break;case 'zoom-reset':setFontSize(13);break;
+      case 'zoom-in':setFontSize(fontSize+1);break;case 'zoom-out':setFontSize(fontSize-1);break;case 'zoom-reset':setFontSize(defaults().font_size);localFontSize=false;break;
       case 'files':if(context.mode==='editor'&&options.onToggleFiles){options.onToggleFiles();break;}sidebarOpen=sidebar!=='files'||!sidebarOpen;sidebar='files';state.sidebarOpen=sidebarOpen;renderTree();break;
       case 'changes':sidebarOpen=sidebar!=='changes'||!sidebarOpen;sidebar='changes';state.sidebarOpen=sidebarOpen;renderTree();if(sidebarOpen)await changes();break;
       case 'agents':sidebarOpen=sidebar!=='agents'||!sidebarOpen;sidebar='agents';state.sidebarOpen=sidebarOpen;renderTree();if(sidebarOpen)await agentChanges();break;

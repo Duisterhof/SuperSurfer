@@ -1,7 +1,8 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('superSurferDesktop', {
-  onWorkspaceCommand: callback => {const listener=(_,command)=>{if(['rearrange','sidebar','chat'].includes(command))callback(command);};ipcRenderer.on('workspace-command',listener);return ()=>ipcRenderer.removeListener('workspace-command',listener);},
+  onWorkspaceCommand: callback => {const listener=(_,command)=>{if(['rearrange','sidebar','chat','zoom-in','zoom-out','zoom-reset'].includes(command))callback(command);};ipcRenderer.on('workspace-command',listener);return ()=>ipcRenderer.removeListener('workspace-command',listener);},
+  zoomWorkspace: delta => ipcRenderer.invoke('workspace:zoom',delta),
   listPanels: () => ipcRenderer.invoke('panel:list'),
   onPanelClosed: callback => { const listener = (_, message) => callback(message); ipcRenderer.on('panel-closed', listener); return () => ipcRenderer.removeListener('panel-closed', listener); },
   openProviderLogin: backend => ipcRenderer.invoke('provider:login',backend),

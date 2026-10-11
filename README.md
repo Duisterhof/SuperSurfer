@@ -9,9 +9,10 @@ experiments and GPUs together—and shape the workspace around how you actually 
 ## What can it do?
 
 - **Build your own workflow.** Connect agents, instructions, checks, compute and
-  results on a **Surfboard**. Start with research, software, web or writing, then
-  customize each task. Choose requirements before execution, set resource limits
-  and decide what your agents should bring back.
+  results on a **Surfboard**. Start by telling an agent what you want to build,
+  or choose a saved workflow. Review its views and steps, refine them in chat,
+  and save a named version. Apply changes to one task, selected linked tasks,
+  or future tasks; the detailed graph remains available under **Advanced**.
 - **Bring your agents.** Work with **Codex, Cursor or Claude Code** through
   persistent project leads and task workers. Give each a role, share context,
   ask questions and follow their progress across projects.
@@ -43,6 +44,8 @@ experiments and GPUs together—and shape the workspace around how you actually 
 **Connecting Cursor:** install its CLI on the computer running the workspace; the Cursor desktop app alone is insufficient. On Mac, choose **Cursor → Set up → Install Cursor CLI in Terminal**, finish installation, then **Check again → Sign in**. For a remote workspace, open the sign-in link printed in Terminal in your Mac’s browser. If Terminal cannot open, SuperSurfer shows the complete command for the correct host. Other platforms show that command and the official installation guide.
 
 Use a page tab’s **⋯** menu or right-click → **Remove page**. Each block’s handle/menu offers **Remove block**, including outside Rearrange. Source files, notes, results and running work are kept. Utility/Markdown tabs can be restored from the page menu; removed blocks can be added again through Rearrange. Drag Results report tabs to reorder; their menu removes a report into the recoverable **Removed** list.
+
+Cmd/Ctrl +/− changes text size in the focused editor or panel; outside a panel it zooms the app. Detaching a PDF leaves the remaining editor at full width. New project terminals start in the project folder. Repository PDFs up to 512 MiB can be previewed.
 
 Research Results show all task attempts immediately. Workers use `check_experiment_results` to compare new attempts with earlier evidence, update an existing report and record a revision-checked review. Released attempts, status/source changes or a changed report reopen that checkpoint. Pending and failed measurements stay explicit; a review never authorizes another run.
 

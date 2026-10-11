@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.41. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.42. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -74,6 +74,12 @@ and saved source separately. Auto compile is triggered by the supported
 editor-save path; do not promise arbitrary external writes are detected when host
 watch capacity is unavailable.
 
+Cmd/Ctrl+Plus, Minus and Zero resize the focused source text or PDF view instead
+of rearranging the page; PDF reset returns to fit width. Repository PDFs up to
+512 MiB can be opened, but that allowance does not change the smaller local-file
+upload limit or compiler output limits. Keep the same source/build identity when
+adjusting scale rather than compiling again to repair display size.
+
 A PDF dragged from the user's computer becomes a project artifact and may have no
 compiler build ID. Inspect its actual file/pages through the returned artifact
 path, preserve provenance and never invent a source mapping. Uploaded `.tex` or
@@ -92,6 +98,18 @@ in paper text, agent chat or pasted passwords/codes/tokens. Follow
 [conversation guidance](../supersurfer-worker/references/conversations.md) for
 backend capabilities; Cursor/Claude have no active-turn steering, Codex auto-review,
 effort or Fast controls. None of these settings authorizes a paper submission.
+
+## Reusing a writing Surfboard
+
+The workflow builder can propose a source/PDF/chat arrangement and compiler rules
+without starting a build. A named template does not contain paper source, compiled
+PDFs or the destination host's LaTeX installation. Verify the destination task's
+main file, source root and real compiler capabilities before its first authorized
+build; preserve explicit task overrides during a reviewed multi-task update.
+Changing views, saving a template or renaming the task does not save dirty text,
+compile a paper, activate monitoring or authorize submission. Keep the exact
+last-good PDF and outstanding writing deliverables across those changes.
+
 
 ## Compile and inspect
 
@@ -113,7 +131,11 @@ Code OSS workbench, controlled by the workspace LaTeX spelling setting. They che
 LaTeX prose, excluding commands, equations, labels, citation keys and code.
 Preserve technical terms and proper names; do not change meaning merely to satisfy
 a spelling suggestion. Source-code spell-checking and Grammarly integration must
-not be inferred from these LaTeX diagnostics.
+not be inferred from these LaTeX diagnostics. Grammarly is not integrated. An
+optional LTeX+ extension can be searched in Open VSX for the separate Code OSS
+editor; it is neither bundled nor tested as part of this release. Verify its own
+runtime requirements and real activation before promising grammar suggestions.
+Preserve scientific terminology and source commands regardless of checker choice.
 
 Use `compile_latex` with `operation: start`, a stable `request_id` and the connected
 LaTeX `node_id` when ambiguous. `main_file` is a repository-relative `.tex` path.

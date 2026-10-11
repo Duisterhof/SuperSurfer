@@ -1,8 +1,9 @@
 # Task workflows and shared project resources
 
 A project supplies the default surfboard for new tasks. Creating a task snapshots
-that applied definition; later changes to the project default do not replace
-existing task boards. A requested task can instead choose `surfboard_template`:
+that applied definition; later changes to the project default alone do not replace
+existing task boards. Named saved Surfboards add explicit lineage and a reviewed
+existing-task rollout; see [saved workflows](saved-workflows.md). A requested task can instead choose `surfboard_template`:
 `research`, `software`, `web` or `writing`, through `create_experiment` or
 `create_work_item`. Preserve this field and the other creation fields on an
 idempotent retry. Creation prepares the task and its initial conversation; it
@@ -47,3 +48,7 @@ start collapsed. The app controls change organization only; restoring does not
 dispatch a new assignment. It does not complete deliverables, cancel runs or
 revoke a recovery grant. Use the explicit stop/cancel operation for requested
 cancellation, and read its resulting state.
+
+Task display names accept ordinary Unicode text. Right-click Rename changes the
+label while retaining the task ID, source path, history, jobs and agent ownership.
+Use identities rather than titles to select saved-workflow rollout targets.

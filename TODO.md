@@ -1,37 +1,23 @@
-# Post-0.1.41 fixes
+# Completed in 0.1.42
 
-- Preview repository PDFs up to the existing 512 MiB artifact allowance, including image-rich dissertations.
-- Restore desktop left-sidebar dragging after removing the browser header row.
-- Resize Files and Projects vertically with visible dividers and persistent sizes.
-- Keep detached-panel space reclaimed during zoom/resize; distinguish clicks from floating-panel drags.
-- Right-click task Rename, including archived tasks, with free-form names and conflict-safe retry.
+- Chat-first workflow setup with existing provider controls and a compact view/step preview.
+- Named, versioned Surfboards; reuse or refine a saved version and keep Advanced graph editing optional.
+- Review/apply to the current task, selected linked tasks or the project's future default; preserve local changes, reject conflicting/stale/busy targets atomically, and undo a batch.
+- Free-form project names with stable internal identities; goal-first task creation.
+- Restore desktop sidebar width and Files/Projects height adjustment; right-click task rename.
+- Keep detached-panel space reclaimed during editing, save, file changes, zoom and resize.
+- Focused-panel zoom; global zoom only outside a panel.
+- Load only the folder being expanded; coalesce requests and reuse recent folder contents.
+- New project terminals start at the absolute repository path without taking over another terminal.
+- Repository PDF previews up to 512 MiB (PR #34).
 
-# Planned: customization-first workflow setup
+# Next: community contribution setup
 
-- Default to a full-width agent conversation beside workspace navigation, asking
-  “What do you want to build today?” Offer saved Surfboards without requiring one.
-- From the user's goal and the actual capability catalog, propose a small workflow:
-  visible pages/blocks, agents, tools, rules, data sharing, and away/stop behavior.
-  Show a compact schematic plus a view preview inline; refine either through chat.
-- Keep detailed graph editing under Advanced. Chat and schematic edit the same
-  versioned draft; Use applies that exact proposal without starting unrequested work.
-- Add a named Surfboard library: save, rename, duplicate, select and restore
-  versions. Tasks retain independent applied snapshots; projects retain shared
-  resources and defaults. Templates bind paths/accounts/resources locally rather
-  than copying credentials, run IDs or previous conversation history.
-- Track template identity/version and local overrides. For “change Research,”
-  offer current task, selected existing tasks of this kind, and future-task default.
-  Preview exact targets and changes; preserve overrides with a three-way comparison,
-  surface conflicts, check versions and apply the reviewed batch atomically within
-  one workspace. Provide rollback; never silently change running work or duplicate
-  periodic jobs. Legacy boards need explicit reviewed association, not name matching.
-- Separate human project/task/Surfboard names from immutable internal IDs and
-  filesystem paths. Remove project slug restrictions from the setup UI and bridge
-  scheduler identifiers behind display labels; renaming must not move repositories.
-- Implement in order: chat-first entry/proposal preview; named library and safe
-  scoped/bulk edits; advanced-editor parity and existing-board migration. Validate
-  research, code/PR and LaTeX/PDF workflows from fresh profiles, with current-task
-  versus bulk edits, custom overrides, interrupted setup and concurrent edits.
+- Apply the selected GPLv2-or-later license, preserve third-party notices and document GPLv3 compatibility for bundled Apache-licensed components.
+- Contributor quickstart and a small, reproducible test/build workflow for PRs.
+- Automated unit, workflow/browser and package smoke checks without live accounts or jobs.
+- Allow reviewed diagnostic excerpts committed with a PR; current attachment-only check rejects them.
+- GitHub credential needs workflow scope before workflow changes can be pushed.
 
 # Completed in 0.1.41
 

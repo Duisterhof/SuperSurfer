@@ -37,6 +37,13 @@ const root=path.resolve(__dirname,'..'),{_electron:electron}=require('playwright
   await page.mouse.move(filesBar.x+filesBar.width/2,filesBar.y+4);await page.mouse.down();await page.mouse.move(filesBar.x+filesBar.width/2,filesBar.y+39,{steps:8});await page.mouse.up();
   assert.equal((await files.boundingBox()).height,filesBefore.height+35);const filesHeight=(await files.boundingBox()).height;await page.reload();await page.locator('#workspace-files-tree [data-tile-file="main.py"]').waitFor();assert.equal((await files.boundingBox()).height,filesHeight);
   const pdf=page.locator('[data-tile-kind=pdf]'),opened=app.waitForEvent('window');await pdf.locator('.editor-panel-handle>summary').click();await pdf.getByRole('button',{name:/separate window/}).click();const panel=await opened;await panel.locator('body.detached-panel').waitFor();await pdf.waitFor({state:'detached'});await page.waitForTimeout(300);
+  await page.bringToFront();await page.locator('#workspace-files-tree [data-tile-file="main.py"]').click();await page.locator('.code-monaco .view-lines').first().click();
+  const font=await page.locator('.code-monaco .view-lines').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
+  await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(item=>item.label==='View').submenu.items.find(item=>item.label==='Zoom In').click());
+  await page.waitForFunction(font=>parseFloat(getComputedStyle(document.querySelector('.code-monaco .view-lines')).fontSize)>font,font);
+  assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getFocusedWindow().webContents.getZoomLevel()),0);
+  await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(item=>item.label==='View').submenu.items.find(item=>item.label==='Reset Zoom').click());
+  console.log('PASS native menu zoom changes focused editor text without scaling the app');
   await page.evaluate(()=>{window.zoomRatios=[];const editor=document.querySelector('[data-tile-kind=editor]'),canvas=document.querySelector('#page-tile-grid');window.zoomProbe=new ResizeObserver(()=>zoomRatios.push(editor.getBoundingClientRect().width/canvas.getBoundingClientRect().width));zoomProbe.observe(editor);});
   for(const zoom of [1.1,.9,1]){await app.evaluate(({BrowserWindow},{origin,zoom})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin+'/')&&!w.webContents.getURL().includes('panel_tile=')).webContents.setZoomFactor(zoom),{origin,zoom});await page.waitForTimeout(100);}
   const ratios=await page.evaluate(()=>{zoomProbe.disconnect();return zoomRatios;});assert.ok(ratios.length>=3,JSON.stringify(ratios));assert.ok(ratios.every(r=>r>.95),JSON.stringify(ratios));await panel.close();await pdf.waitFor();

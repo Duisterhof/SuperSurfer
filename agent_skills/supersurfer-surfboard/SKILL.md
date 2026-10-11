@@ -2,18 +2,38 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.41. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.42. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
 Follow [task scope](references/task-scope.md) before choosing which configurator
 or version to edit. The applied board, available catalog and actual tools are
 the authority. A diagram label or Markdown instruction cannot grant a capability.
+
+## Start with the user's goal
+
+Use the chat-first builder to propose the smallest useful workflow and views.
+Show a compact schematic alongside a view preview, describe each agent's job,
+and state what work continues while the user is away and what stops it. Reuse
+catalog capabilities and saved Surfboard versions from `read_surfboard`; do not
+present the full graph editor as a prerequisite. The same draft remains available
+under **Advanced** when the user wants direct graph control.
+
+Name and save reusable definitions through the user's library controls. For “apply
+this change to all workflows of this kind,” propose `rollout` with the requested
+`scope` (`current`, `existing` or `future`) and exact `task_ids` for existing
+linked tasks, alongside both current version numbers in `propose_surfboard`.
+Read `template_link` and `workflow_tasks`; labels are not membership evidence.
+Explain the intended targets and local override conflicts. Saving, previewing,
+applying and undoing the library change are user UI actions, not configurator
+execution tools. Follow [saved workflows](references/saved-workflows.md) for the
+scope and revision contract. No new work starts merely because the user applies
+an example workflow, and a drawn monitoring rule is not an active schedule.
 
 Desktop connection/setup now has progress stages and bounded upload waits.
 Failure to connect is not an invalid workflow graph. Preserve the applied board,
@@ -217,8 +237,8 @@ Provider and permission defaults live in workspace Settings; a board proposal
 does not select another provider or grant unsupported chat controls. Settings
 retains all three defaults even when the selected chat supports only Ask/YOLO.
 
-New projects open the overview/task list; Task defaults and task Surfboards
-remain explicit configuration choices. Page/block removal is presentation only,
+New workflow setup starts with a goal conversation and optional saved Surfboards;
+advanced task graphs and future-task defaults remain explicit configuration choices. Page/block removal is presentation only,
 with version checks for configured pages, and does not apply a policy proposal.
 Utility/Markdown tab visibility and account actions are user GUI controls, not
 new managed tools; agents retain read/update_view_layout for enabled scopes.

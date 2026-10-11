@@ -2,12 +2,12 @@
 name: supersurfer-experiment-visualizer
 description: Turn a surfboard's selected experiment data into measured, live comparisons in Results, starting with overlaid training and held-out curves and requested domain visuals.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Experiment visualizer block
 
-Reviewed for SuperSurfer 0.1.41. Resolve this visualizer's incoming data with
+Reviewed for SuperSurfer 0.1.42. Resolve this visualizer's incoming data with
 `inspect_board_data`; honor its project's data-sharing selection. Do not silently
 widen a current-experiment or selected-experiment view. A project-wide input makes
 sources available, but does not make every run scientifically comparable.
@@ -145,6 +145,17 @@ entries. Keep earlier useful methods, not merely the first recovery's curves.
 Its completion can archive redundant other reports while retaining their source;
 this is bounded cleanup, not general report reorder or unarchive. Read
 [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
+
+## Visualizer templates are not result snapshots
+
+The chat-first builder can propose this visualizer and its data connection before
+measurements exist. Show what the view will contain without inventing curves or
+publishing a placeholder as scientific evidence. A reviewed saved-Surfboard update
+may change several tasks' layouts; resolve each task's own applied input and retain
+its existing report identities. Moving or reusing the visualizer does not copy
+source-project measurements, authorize cross-project comparisons or create an
+agent polling loop. Use the declared live-source refresh for real data updates.
+
 
 For provider connection issues, use Settings → Coding backends on the connected
 workspace host and its host-specific official sign-in action. Account status,

@@ -6,6 +6,7 @@ function activate(context) {
   const endpoint=process.env.SUPERSURFER_EDITOR_ENDPOINT,token=process.env.SUPERSURFER_EDITOR_TOKEN;
   require('./spelling.cjs').activateSpelling(vscode,context);
   if(!session||!endpoint||!token)return;
+  const openProjectTerminal=require('./terminal.cjs').projectTerminal(vscode);
   const documents=new Map(),reviews=new Map(),openingReviews=new Set(),documentChanges=new vscode.EventEmitter(),lensChanges=new vscode.EventEmitter();let sequence=0,ack=[],folderRepair=false,registeredFolder,purposeReady=false,activeEvents=Promise.resolve();
   const request=fields=>new Promise((resolve,reject)=>{
     const bytes=Buffer.from(JSON.stringify({session,...fields}));
@@ -50,14 +51,14 @@ function activate(context) {
     if(fields)activeEvents=activeEvents.catch(()=>{}).then(()=>request(fields)).catch(()=>{});
   }));
   async function command(item){
+    if(['zoom-in','zoom-out','zoom-reset'].includes(item.kind))return vscode.commands.executeCommand({'zoom-in':'editor.action.fontZoomIn','zoom-out':'editor.action.fontZoomOut','zoom-reset':'editor.action.fontZoomReset'}[item.kind]);
     if(item.kind==='changes')return vscode.commands.executeCommand('workbench.action.closeSidebar');
     if(item.kind==='files')return vscode.commands.executeCommand('workbench.view.explorer');
     if(item.kind==='selection')return selection();
     if(item.kind==='save')return drafts.save();
     if(item.kind==='trust')return vscode.commands.executeCommand('workbench.trust.manage');
     if(item.kind==='terminal'){
-      const terminal=vscode.window.activeTerminal||vscode.window.createTerminal({name:'Terminal',cwd:vscode.workspace.workspaceFolders?.[0]?.uri});
-      terminal.show();return;
+      openProjectTerminal(registeredFolder);return;
     }
     if(item.kind==='ports')return vscode.commands.executeCommand('~remote.forwardedPorts.focus');
     if(item.kind==='extensions')return vscode.commands.executeCommand('workbench.view.extensions');

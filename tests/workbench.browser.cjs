@@ -19,6 +19,14 @@ try{await frame.locator('.monaco-workbench').waitFor();console.log('workbench DO
 await frame.getByRole('button',{name:/trust.*authors|Yes, I trust/i}).click({timeout:5000}).catch(()=>{});
 console.log('trust handled');await page.waitForFunction(()=>document.querySelector('.workbench-status')?.hidden===true,{},{timeout:60000});
 console.log('bridge ready');await page.locator('#workspace-files-tree [data-tile-file="main.py"]').click();await frame.locator('.monaco-editor').first().waitFor();
+const nativeFont=()=>frame.locator('.view-lines').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
+await frame.locator('.view-lines').first().waitFor();const startFont=await nativeFont(),beforeWidth=(await page.locator('[data-tile-kind=editor]').boundingBox()).width;
+await frame.locator('.view-lines').first().click();await page.keyboard.press('Control+=');
+await page.waitForFunction(({startFont})=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.view-lines')).fontSize)>startFont,{startFont});
+assert.equal((await page.locator('[data-tile-kind=editor]').boundingBox()).width,beforeWidth);
+await page.keyboard.press('Control+0');await page.waitForFunction(({startFont})=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.view-lines')).fontSize)===startFont,{startFont});
+console.log('PASS real VS Code focused font zoom and reset, with unchanged panel width');
+
 await page.screenshot({path:path.resolve(root,'../../work/release031-workbench.png')});
 const session=JSON.parse(fs.readFileSync(fs.readdirSync(path.join(service.directory,'editor/workspaces')).map(name=>path.join(service.directory,'editor/workspaces',name))[0],'utf8')).settings['supersurfer.session'];
 await request('action',{op:'editor.command',params:{id:session,kind:'file',path:'main.py'}});await page.waitForTimeout(1100);await frame.locator('.view-line').first().dblclick();await page.locator('.workbench-toolbar button').getByText('Ask agent',{exact:true}).click();await page.locator('.chat-context-chip').waitFor({timeout:10000});assert.match(await page.locator('.chat-context-chip').textContent(),/main.py/);
@@ -29,6 +37,12 @@ const identity=await page.locator('.workbench-frame iframe').getAttribute('src')
 await page.locator('#project-tree [data-project="'+service.projects.research+'"]').click();await page.locator('#project-tree [data-project="'+pid+'"]').click();await page.locator('#main [data-tab="desk"]').click();await page.locator('.workbench-frame iframe').waitFor();
 assert.equal(await page.locator('.workbench-frame iframe').getAttribute('src'),identity);assert.equal(await originalFrame.evaluate(()=>window.__paneIdentity),'keep-me');assert.equal((await request('editor/session?id='+session)).dirty,true);console.log('PASS extension editor retains its iframe, unsaved file and session across page navigation');
 
+await request('action',{op:'editor.command',params:{id:session,kind:'terminal'}});
+await frame.locator('.xterm-helper-textarea').first().waitFor({state:'attached'});await frame.locator('.xterm-helper-textarea').first().focus();
+await page.keyboard.type('pwd > .terminal-cwd-test');await page.keyboard.press('Enter');
+const repo=(await request('state')).projects.find(p=>p.id===pid).repo,cwdFile=path.join(repo,'.terminal-cwd-test');
+for(let n=0;n<50&&!fs.existsSync(cwdFile);n++)await page.waitForTimeout(100);
+assert.equal(fs.readFileSync(cwdFile,'utf8').trim(),repo);console.log('PASS real terminal starts in the project absolute directory');
 await request('action',{op:'editor.command',params:{id:session,kind:'settings',extension_id:'vscodevim.vim'}});await frame.locator('.settings-editor').waitFor();if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1')await frame.getByText('Argument Object Closing Delimiters',{exact:false}).first().waitFor();console.log('PASS native Configure opens settings; extension-specific controls are checked when installed');
 if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
  await request('action',{op:'editor.extension',params:{operation:'uninstall',extension_id:'vscodevim.vim'}});

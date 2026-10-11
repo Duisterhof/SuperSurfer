@@ -180,7 +180,7 @@ function connectionSettings() {
   if (context.attempt) cancelConnection(context);
   sendStatus(context,'idle','');void showSetup(context);
 }
-function workspaceCommand(command){const context=focused();if(context?.connection&&context.window.webContents.getURL().startsWith(context.connection.origin+'/'))context.window.webContents.send('workspace-command',command);}
+function workspaceCommand(command){const context=contexts().find(row=>row.window===BrowserWindow.getFocusedWindow())||focused();if(context?.connection&&context.window.webContents.getURL().startsWith(context.connection.origin+'/'))context.window.webContents.send('workspace-command',command);else if(command.startsWith('zoom-')){const win=BrowserWindow.getFocusedWindow();if(win)win.webContents.setZoomLevel(command==='zoom-reset'?0:Math.max(-3,Math.min(4,win.webContents.getZoomLevel()+(command==='zoom-in'?.5:-.5))));}}
 function updateMenu() {
   const recent=store.recent().map(record => ({label:windowLabel(record)+(record.config.remoteRoot !== '~/.local/share/supersurfer' ? ' · '+record.config.remoteRoot : ''),click:() => makeWindow(record)}));
   if (app.dock) app.dock.setMenu(Menu.buildFromTemplate([{label:'New Window',click:() => makeWindow()}]));
@@ -189,7 +189,7 @@ function updateMenu() {
     {label:'File',submenu:[{label:'New Window',accelerator:'CmdOrCtrl+Shift+N',click:() => makeWindow()},{label:'Open Recent',submenu:recent.length?recent:[{label:'No recent workspaces',enabled:false}]},{label:'Connection Settings…',click:connectionSettings},{type:'separator'},{role:'close'},...(process.platform === 'darwin' ? [] : [{role:'quit'}])]},
     {label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},
     {label:'Rearrange',submenu:[{label:'Rearrange current page…',accelerator:'CmdOrCtrl+Alt+Shift+R',click:()=>workspaceCommand('rearrange')},{label:'Toggle workspace sidebar',click:()=>workspaceCommand('sidebar')},{label:'Toggle agent panel',accelerator:'CmdOrCtrl+Shift+B',click:()=>workspaceCommand('chat')}]},
-    {label:'View',submenu:[{role:'reload'},{role:'togglefullscreen'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'},{type:'separator'},{label:'Connection Settings…',click:connectionSettings}]},
+    {label:'View',submenu:[{role:'reload'},{role:'togglefullscreen'},{label:'Reset Zoom',accelerator:'CmdOrCtrl+0',click:()=>workspaceCommand('zoom-reset')},{label:'Zoom In',accelerator:'CmdOrCtrl+Plus',click:()=>workspaceCommand('zoom-in')},{label:'Zoom Out',accelerator:'CmdOrCtrl+-',click:()=>workspaceCommand('zoom-out')},{type:'separator'},{label:'Connection Settings…',click:connectionSettings}]},
     {label:'Window',submenu:[{role:'minimize'},{role:'zoom'},{type:'separator'},...[...windows.values()].map(context => ({label:windowLabel(context.record),click:() => focus(context)}))]},
   ]));
 }
@@ -204,6 +204,7 @@ else {
     ipcMain.handle('panel:open',(event,fields)=>openPanel(ownWindow(event),fields));
     ipcMain.handle('window:new',event => { ownWindow(event);makeWindow();return {opened:true}; });
     ipcMain.handle('configuration',event => ownWindow(event,true).record.config || {});
+    ipcMain.handle('workspace:zoom',(event,delta)=>{const context=ownWindow(event);if(![-1,0,1].includes(delta))throw new Error('Invalid zoom direction');const wc=context.window.webContents;wc.setZoomLevel(delta===0?0:Math.max(-3,Math.min(5,wc.getZoomLevel()+delta*.5)));return wc.getZoomLevel();});
     ipcMain.handle('panel:list',event=>{const parent=ownWindow(event);return [...panelWindows.values()].filter(panel=>panel.parent===parent).map(panel=>({id:panel.window.webContents.id,...panel.fields}));});
     ipcMain.handle('hosts:list',event => { ownWindow(event,true);return knownHosts(); });
     ipcMain.handle('connection:ready',event => {
