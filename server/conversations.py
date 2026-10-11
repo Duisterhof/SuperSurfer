@@ -109,6 +109,8 @@ class ConversationBridge:
         self._question_requests = {}
         self._sequence = 0
         self._workers = set()
+        self._stream_timers = {}
+        self._stream_saved = {}
         self._closed = False
         self._db_closed = False
         self._login_status = None
@@ -211,8 +213,36 @@ class ConversationBridge:
     def _save(self, chat):
         if self._db_closed:
             return
+        scope = chat["scope"]
+        timer = self._stream_timers.pop(scope, None)
+        if timer:
+            timer.cancel()
         self._db.execute("INSERT INTO chats(scope,body) VALUES(?,?) ON CONFLICT(scope) DO UPDATE SET body=excluded.body", (chat["scope"], json.dumps(chat, ensure_ascii=False)))
         self._db.commit()
+        self._stream_saved[scope] = time.monotonic()
+
+    def _save_stream(self, chat):
+        """Persist text at most every 150 ms; decisions and turn ends save now."""
+        scope = chat["scope"]
+        delay = .15 - (time.monotonic() - self._stream_saved.get(scope, 0))
+        if delay <= 0:
+            self._save(chat)
+        elif scope not in self._stream_timers:
+            def flush():
+                with self._lock:
+                    if self._stream_timers.get(scope) is timer:
+                        self._stream_timers.pop(scope, None)
+                        if not self._closed and not self._db_closed:
+                            self._save(chat)
+            timer = threading.Timer(delay, flush)
+            timer.daemon = True
+            self._stream_timers[scope] = timer
+            timer.start()
+
+    def _flush_streams(self):
+        """Called under the bridge lock before a graceful database close."""
+        for scope in list(self._stream_timers):
+            self._save(self._chats[scope])
 
 
     def _message(self, chat, role, text, message_id=None):
@@ -448,24 +478,27 @@ class ConversationBridge:
                     self._save(chat)
 
 
-    def chat(self, scope):
+    def _public_chat(self, chat, message_limit=None):
+        visible = chat if message_limit is None else {**chat, "messages": chat["messages"][-message_limit:], "message_count": len(chat["messages"])}
+        result = copy.deepcopy(visible)
+        result["task_state"] = task_log.state(result.get("tasks", []))
+        result["steerable"] = self._steerable(chat)
+        return result
+
+    def chat(self, scope, message_limit=None):
         self._validate_scope(scope)
+        if message_limit is not None and (type(message_limit) is not int or not 1 <= message_limit <= 100000):
+            raise ValueError("Choose a chat history size between 1 and 100000")
         with self._lock:
             if scope in self._chats:
                 self._expire_parked_question(self._chats[scope])
-                result = copy.deepcopy(self._chats[scope])
-                result["task_state"] = task_log.state(result.get("tasks", []))
-                result["steerable"] = self._steerable(self._chats[scope])
-                return result
+                return self._public_chat(self._chats[scope], message_limit)
         context = self._context(scope)
         with self._lock:
             if scope not in self._chats:
                 self._chats[scope] = self._new_chat(scope, context)
                 self._save(self._chats[scope])
-            result = copy.deepcopy(self._chats[scope])
-            result["task_state"] = task_log.state(result.get("tasks", []))
-            result["steerable"] = self._steerable(self._chats[scope])
-            return result
+            return self._public_chat(self._chats[scope], message_limit)
 
 
     def _expire_parked_question(self, chat):

@@ -29,7 +29,7 @@ def decoded(value, fallback):
 
 
 class AMLClient:
-    def __init__(self, home, rpc=None, cache_seconds=5):
+    def __init__(self, home, rpc=None, cache_seconds=2):
         self.home = Path(home).expanduser().resolve()
         self._rpc = rpc
         self.cache_seconds = cache_seconds
@@ -38,14 +38,20 @@ class AMLClient:
         self.updated_at = None
         self.last_attempt = 0
         self.error = None
+        self._status_cache = None
         self.transcripts = {}
+
+    def restore_snapshot(self, snapshot, updated_at):
+        with self.lock:
+            self.snapshot, self.updated_at = snapshot, updated_at
+            self._status_cache = (snapshot, self.error, updated_at)
 
     def call(self, operation, params=None):
         if self._rpc:
             return self._rpc(operation, params or {})
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                client.settimeout(120 if operation in {"run.ready", "run.review", "run.submit"} else 25)
+                client.settimeout(120 if operation in {"run.ready", "run.review", "run.submit"} else 5 if operation == "status" else 25)
                 client.connect(str(self.home / "manager.sock"))
                 client.sendall((json.dumps({"op": operation, "params": params or {}}) + "\n").encode())
                 with client.makefile("rb") as stream:
@@ -60,9 +66,14 @@ class AMLClient:
             raise ManagerError(f"AutoML manager unavailable at {self.home}: {exc}") from exc
 
     def status(self, force=False):
-        with self.lock:
-            if force or time.monotonic() - self.last_attempt >= self.cache_seconds:
-                self.last_attempt = time.monotonic()
+        # Display readers can use timestamped cached evidence while another
+        # request refreshes it. Explicit fresh checks still wait and fail closed.
+        acquired = self.lock.acquire(blocking=force or self._status_cache is None)
+        if not acquired:
+            return self._status_cache
+        try:
+            interval = max(self.cache_seconds, 5) if self.error else self.cache_seconds
+            if force or time.monotonic() - self.last_attempt >= interval:
                 try:
                     snapshot = self.call("status")
                     if not isinstance(snapshot, dict) or "projects" not in snapshot:
@@ -70,7 +81,14 @@ class AMLClient:
                     self.snapshot, self.updated_at, self.error = snapshot, time.time(), None
                 except Exception as exc:
                     self.error = str(exc)
-            return self.snapshot or {}, self.error, self.updated_at
+                finally:
+                    self.last_attempt = time.monotonic()
+            # Publish data, error and observation time together. An unlocked
+            # display reader must never pair old data with a new timestamp.
+            self._status_cache = (self.snapshot or {}, self.error, self.updated_at)
+            return self._status_cache
+        finally:
+            self.lock.release()
 
     def invalidate(self):
         self.last_attempt = 0

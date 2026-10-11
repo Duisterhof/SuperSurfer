@@ -341,3 +341,5 @@
 .agent-default-row [hidden]{display:none!important}.agent-default-chat{grid-column:3/-1}
 @container(max-width:760px){.agent-default-row{grid-template-columns:minmax(100px,1fr) minmax(90px,1fr) minmax(110px,1.3fr) minmax(85px,1fr)}}
 @container(max-width:600px){.agent-default-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}.agent-default-row>strong{grid-column:1/-1}.agent-default-model{grid-column:1}.agent-default-chat{grid-column:2;grid-row:2}.agent-default-effort{grid-column:2}}
+
+.chat-earlier{display:block;margin:8px auto 16px;color:var(--muted)}

@@ -2,12 +2,12 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.40. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.41. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.
@@ -111,12 +111,17 @@ Read an owned block's HTML and asset names using `list_view_blocks` with
 copied media; an explicit asset map replaces the whole set. Preserve unrelated
 content and its current version rather than guessing lost source mappings.
 
-Desktop page tabs and Activity remain accessible below the native drag strip. Sidebar collapse is reversible through edge arrows and changes no W&B sharing policy, writer or fetch state. Inspect the same data source after reopening a hidden view instead of creating another tracking run.
-
 Workspace Settings and provider choice do not change W&B credentials, sharing
 or writer identities. A provider-specific Ask fallback does not authorize a new
 tracking run or a broader data selection.
 
-Settings → Accounts manages provider CLI accounts, independently of W&B
+Settings → Coding backends manages provider CLI accounts, independently of W&B
 authentication and writers. Sign-out or removing a data-view block does not erase
 tracking history, change sharing selection or authorize another writer.
+
+For provider connection issues, use Settings → Coding backends on the connected
+workspace host and its host-specific official sign-in action. Account status,
+model catalogs and native-session availability are separate capabilities; a
+successful login does not prove this block's tools, extensions or data sources
+are ready. Preserve existing native ownership and uncertain action identities.
+See [conversation continuity](../supersurfer-worker/references/conversations.md).

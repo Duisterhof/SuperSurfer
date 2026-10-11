@@ -2,6 +2,7 @@
 import json
 import os
 import subprocess
+import shlex
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -29,7 +30,7 @@ class ProviderServiceTests(unittest.TestCase):
         with self.assertRaises(BridgeError):self.service.action('chat.settings',{'scope':self.scope,'backend':'cursor'})
     def test_login_rejects_credentials_and_only_returns_official_terminal_command(self):
         with self.assertRaises(ValueError):self.service.action('account.login',{'backend':'claude','token':'SECRET'})
-        value=self.service.action('account.login',{'backend':'claude'});self.assertEqual('claude auth login',value['command']);self.assertEqual('terminal',value['type'])
+        value=self.service.action('account.login',{'backend':'claude'});self.assertEqual([str(self.cli.binary.resolve()),'auth','login'],shlex.split(value['command']));self.assertEqual('terminal',value['type'])
 
     def test_first_machine_choice_requires_signin_and_persists_all_roles(self):
         self.assertTrue(self.service.account_setup()['required'])

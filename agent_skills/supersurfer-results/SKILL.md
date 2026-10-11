@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.40. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.41. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -69,49 +69,13 @@ the live comparison and label the paper's measured snapshot; do not invent updat
 values from the PDF. Use the writing workflow for compilation, without adding a
 GPU launch or turning every paper revision into a new results-publishing loop.
 
-Project and experiment layouts can place Results in the main pane or either
-sidebar independently. Repositioning that view does not require copying or
-republishing reports, changing W&B writers, or scheduling a new agent. Keep the
-existing live source bindings and verify the requested view at its actual size.
-HTML edited in the Code editor is a shared source file; unsaved text or a reviewed
-agent patch does not mean the report was published. Preserve concurrent edits and
-use the normal versioned publishing tool when publication was requested.
-A managed-editor watcher warning is not evidence that W&B fetching or the report
-failed. Live measurement refresh uses its declared source bridge, not the editor's
-file-watch quota; diagnose those paths independently. Editor trust does not
-publish changed HTML; use the normal versioned publication call.
-Fullscreen and restore change the view, not its report identity or evidence. Keep
-existing interactive chart/media state instead of republishing to enlarge it.
-A source/diff/PDF attachment can describe a requested revision; preserve its
-selection provenance and check the actual measured writers before changing claims.
-A narrower navigation sidebar changes available chart space, not the comparison
-cohort or report identity. Preserve responsive legends and held-out curves; do not
-republish or recreate sources merely to make room for Repository files.
-An uploaded PDF, image, video or data file is already a project artifact. Inspect
-that exact file, preserve its source and measurement provenance, and distinguish
-a fixed uploaded snapshot from live W&B history. An upload alone does not add a
-measured writer, refresh curves or require another publication.
-
-Results can also be a tile on a custom page beside notes, source or agent changes.
-Reuse the existing live report instead of republishing it for each tile. Honor the
-page's experiment/source scope and test the actual tile size. For requested
-resize/reorder, page creation or pane placement, use enabled `read_view_layout`
-and `update_view_layout` tools within your role scope; preserve current versions
-and unrelated views. Follow [layout editing](../supersurfer-surfboard/references/view-layout.md).
-This does not authorize altering metric keys, comparison cohorts or scientific
-content, and it does not require republishing the report.
-
-Docked and movable-window layouts keep the same report and declared sources.
-A docked page's nested split tree can place an existing report beside source or
-above notes and reserve empty drop space without another publication. Preserve
-each main tile exactly once and the other pages when changing that tree.
-Use the scoped layout tool to set geometry rather than publishing an HTML wrapper
-to imitate draggable panels. The user's separate-window control opens another view
-of that report; the original panel hides until the child closes and restores to
-its saved position; other panels reflow while it is absent. The child may refetch
-sources and initialize its own chart interaction.
-Do not promise synchronized zoom across windows or treat a reopened view as a new
-scientific sample. No result-publication tool opens native desktop windows.
+Use the existing report identity and live bindings in every layout or window.
+For requested tile/page changes, use enabled `read_view_layout` / `update_view_layout`
+and [layout editing](../supersurfer-surfboard/references/view-layout.md) within
+role scope; this never changes writers, evidence or reporting authority.
+Uploaded fixed artifacts and unsaved report HTML are not live measurements or
+published revisions. Follow [editor collaboration](../supersurfer-code-editor/SKILL.md)
+when reporting intersects shared source or attachments.
 
 When a live comparison is empty, distinguish a successful fetch with no numeric
 history from an authentication or transport error. Check each declared writer's
@@ -238,31 +202,9 @@ hover/scroll zoom/pan, requested EEF/domain evidence, and fresh/partial/stale st
 Returning from fullscreen should restore the report without republishing. State
 which rendering checks were actually performed and any missing evidence.
 
-For a requested persistent HTML view, use enabled `list_view_blocks` /
-`publish_view_block`, then place an `html` tile with its durable `block_id` through
-scoped layout tools. The workspace library stores copied immutable publication
-assets; editing original files does not refresh that snapshot. Only its publishing
-project can revise it with the current version, and publication requires active
-user work rather than a scheduled poll. Keep source identities and scientific
-provenance; never embed temporary preview capabilities or credentials. Follow
-[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
-not new execution authority or an automatic live W&B connection.
-
-Read an owned block's HTML and asset names using `list_view_blocks` with
-`block_id` before revising it. An HTML-only revision omits `assets` to retain its
-copied media; an explicit asset map replaces the whole set. Preserve unrelated
-content and its current version rather than guessing lost source mappings.
-
-Reusable HTML blocks can request only their own declared copied local assets,
-including modules or 3D models; external live fetches are unavailable. Their local
-asset access is separate from Results' declared live-data bridge, and does not
-make an exported fixed visualization update with W&B.
-
-On desktop, page tabs and Activity remain below the native drag area. Collapsing either sidebar leaves more space for the report and can be reversed with its edge arrow. This changes presentation only: retain live source identities, measurement ages and errors rather than republishing results to restore a hidden view.
-
-Restoring Settings access does not require republishing this report or changing
-its live sources. Workspace permission defaults and per-chat provider controls
-remain separate; preserve the same runs and scientific evidence.
+Use [reusable blocks guidance](../supersurfer-blocks/SKILL.md) when a requested
+view should be a persistent reusable HTML publication. Such copied assets are
+snapshots, not this Results live-data bridge; preserve their provenance.
 
 Removing a Results page/block changes this project/task's presentation only;
 the report, measured curves, artifacts, writers and running work remain. Re-add

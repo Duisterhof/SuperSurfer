@@ -270,6 +270,11 @@ class Workbench:
             raise SurfboardError("Existing editor keybindings could not be read; preserve and repair keybindings.json") from exc
         removal = {"key": "escape escape", "command": "-workbench.action.toggleZenMode"}
         owned=[removal,*[{"key":key,"command":"workbench.action.closeSidebar","when":"config.supersurfer.editorOnly"} for key in ("ctrl+b","cmd+b")]]
+        # User-level bindings outrank extension bindings, including Vim's Ctrl+L.
+        # Keep selection-to-chat consistent inside a SuperSurfer editor session.
+        owned.extend({"key": key, "command": "supersurfer.askAgent",
+                      "when": "editorTextFocus && config.supersurfer.session"}
+                     for key in ("ctrl+l", "cmd+l"))
         changed=False
         for rule in owned:
             if rule not in rules:rules.append(rule);changed=True

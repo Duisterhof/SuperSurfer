@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('superSurferDesktop', {
   listPanels: () => ipcRenderer.invoke('panel:list'),
   onPanelClosed: callback => { const listener = (_, message) => callback(message); ipcRenderer.on('panel-closed', listener); return () => ipcRenderer.removeListener('panel-closed', listener); },
   openProviderLogin: backend => ipcRenderer.invoke('provider:login',backend),
+  installCursor: () => ipcRenderer.invoke('provider:install-cursor'),
   openPort: fields => ipcRenderer.invoke('port:open',fields),
   openPanel: fields => ipcRenderer.invoke('panel:open', fields),
   newWindow: () => ipcRenderer.invoke('window:new'),

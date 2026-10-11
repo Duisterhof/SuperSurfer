@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.40. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.41. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -25,47 +25,11 @@ a requested board change through the configurator. Existing queued/running
 contracts retain their source, resource and review evidence; a later graph edit
 cannot retroactively prove missing readiness or erase a stop.
 
-The workspace Code editor shows the shared working repository, not a compute
-node's sealed checkout. Unsaved editor text and a patch's Reviewed badge are not
-committed source or PR evidence. Resolve the run's exact recorded revision before
-checking or staging a node; preserve concurrent working-tree edits instead of
-copying them into an existing reviewed run. Moving/hiding Compute in a project
-layout changes presentation only, not readiness, reservations or setup authority.
-The editor's visible absolute path belongs to the connected workspace host. An
-attached file or PDF does not establish that the same path exists on a compute
-node; continue to resolve that node's own repository, environment and data paths
-against the saved run contract. Local uploads initially live in the selected
-project's artifact library, not on each compute node. An uploaded dataset or
-checkpoint is not node-readiness evidence; only stage it when needed for the
-authorized task and verify node paths through existing checks.
-
-The same compute/run view can appear on a custom page beside source or agent-change
-tiles. Its presence, absence or dimensions do not register a host, acquire a node
-or alter the candidate pool. Continue to use the exact-run readiness and acquisition
-records; never interpret a page rearrangement as permission to move source or data.
-Requested Compute tile resize/reorder or sidebar placement uses the scoped
-`read_view_layout` / `update_view_layout` presentation tools when enabled. Keep the
-existing run and candidate identities; a layout edit neither registers a node nor
-changes its readiness. The main navigation divider is independent of compute
-registration and the editor's internal file column. Do not onboard another host
-because a narrow sidebar hides a path; inspect the existing node's saved contract.
-See [layout editing](../supersurfer-surfboard/references/view-layout.md).
-A docked page may have nested horizontal/vertical splits and reserved empty drop
-space. Preserve main tile identities when arranging Compute; an empty leaf is not
-missing host registration or unavailable GPU evidence.
-
-Movable or separately opened Compute panels still show workspace observations;
-they are not a new compute host or fresh capacity check. Detachment hides the
-original panel until the child closes; it never removes the registered resources
-or stops their remote work. Remaining panels reflow; optional Terminal/Ports or
-Full VS Code tiles belong to the connected workspace host, not a selected compute
-node or an automatic node-acquisition command. A compact editor's native
-workspace-trust decision controls extensions, not this node's Python/data readiness
-or the worker's shell permissions. An editor watcher warning can reflect the
-workspace host's shared inotify quota, not this compute node's readiness. Preserve
-unrelated IDEs and use the normal host-administrator route for a system-wide quota
-change. Keep candidate validation on the registered target; neither rearranging a
-panel nor trusting an editor checks a run.
+Workspace source and a compute node's sealed checkout are distinct. Use the
+run's exact commit and per-node paths, preserving dirty user buffers and shared
+source. An editor review, trust choice, upload or layout change does not satisfy
+compute readiness or alter ownership. See [editor collaboration](../supersurfer-code-editor/SKILL.md)
+for source conflicts; page geometry is covered by [layout editing](../supersurfer-surfboard/references/view-layout.md).
 
 ## Separate the causes of a queue wait
 
@@ -245,9 +209,9 @@ and starting the bundled manager needs installed Python 3.11+. Existing managers
 are reused without changing queue settings. Ordinary state reads start no manager.
 A workspace host needs the selected backend's official CLI and its own account
 sign-in; compute-only nodes do not. Codex uses the app's ChatGPT flow. Cursor
-uses `agent login` and Claude Code uses `claude auth login` in the user's trusted
-terminal on the workspace host, with the official provider browser flow and an
-account recheck afterward. The CLI owns login output and credential storage.
+uses the host-specific official sign-in action shown in Settings → Coding
+backends, in the user's trusted terminal on the workspace host. Recheck the
+account after the official provider flow; do not assume a CLI binary alias exists. The CLI owns login output and credential storage.
 Never collect pasted passwords, login codes or tokens in agent chat/`ask_user`,
 capture authentication output, inspect account files or copy secrets across hosts.
 If the official CLI needs a code, the user enters it directly in that terminal.
@@ -263,32 +227,6 @@ suggestions into authorization. Cursor/Claude Ask and YOLO use their provider's
 native permissions/sandbox; Codex auto-review, effort, Fast and active-turn
 steering are unavailable. A backend session cannot transfer to another provider.
 See [conversation guidance](../supersurfer-worker/references/conversations.md).
-
-For a requested persistent HTML view, use enabled `list_view_blocks` /
-`publish_view_block`, then place an `html` tile with its durable `block_id` through
-scoped layout tools. The workspace library stores copied immutable publication
-assets; editing original files does not refresh that snapshot. Only its publishing
-project can revise it with the current version, and publication requires active
-user work rather than a scheduled poll. Keep source identities and scientific
-provenance; never embed temporary preview capabilities or credentials. Follow
-[reusable blocks guidance](../supersurfer-blocks/SKILL.md). This is presentation,
-not new execution authority or an automatic live W&B connection.
-
-Read an owned block's HTML and asset names using `list_view_blocks` with
-`block_id` before revising it. An HTML-only revision omits `assets` to retain its
-copied media; an explicit asset map replaces the whole set. Preserve unrelated
-content and its current version rather than guessing lost source mappings.
-
-Ports is an app-owned user GUI block: after exact-project consent, desktop opens
-one explicitly selected localhost development port in an isolated preview window.
-It is not a native VS Code forwarding view or an agent tool. Closing the preview
-releases only that temporary listener; it neither stops the remote server nor
-closes the workspace. Existing command/board-action authorization still governs
-starting a server. Do not use code-server proxy routes, broaden app CORS or relay
-arbitrary localhost services to bypass these boundaries. Browser-only access
-starts no forwarding; use the desktop flow.
-
-Desktop tabs and Activity are below the native drag strip. Restore a hidden sidebar with its edge arrow before diagnosing missing compute UI; view collapse does not disconnect a host, stop an installer or change node readiness. Inspect the actual node receipt separately.
 
 A workspace can use Cursor or Claude without Codex installed after the user
 selects that provider; fresh setup explicitly records the user's choice. Install/sign in

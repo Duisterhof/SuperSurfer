@@ -112,9 +112,9 @@ class BackendRouter:
                     self.bindings.pop(scope, None)
             raise
 
-    def chat(self, scope):
+    def chat(self, scope, message_limit=None):
         backend = self.backend_for(scope)
-        return {**self.provider(backend).chat(scope), "backend": backend, "capabilities": PROVIDERS[backend]}
+        return {**self.provider(backend).chat(scope, message_limit=message_limit), "backend": backend, "capabilities": PROVIDERS[backend]}
 
     def list_chats(self):
         # Load existing databases without starting any provider CLI.

@@ -38,7 +38,9 @@ experiments and GPUs together—and shape the workspace around how you actually 
 3. Open the app and choose **This machine** or connect to a **remote machine over SSH**. The workspace host needs **Python 3.11+, Git and one AI provider’s CLI**.
 4. Choose **Codex**, **Cursor** or **Claude** on the first-machine screen and sign in on that computer. This choice becomes the default for new agents. Connect a project, then create its first task. SuperSurfer creates its service and workspace data folders automatically.
 
-**Settings → Accounts** shows all three providers with sign-in and sign-out. You only need one. Existing conversations stay with their original provider; sign-out keeps their history and requires that provider’s turns to be idle.
+**Settings → Coding backends** shows all three providers with sign-in and sign-out. You only need one. Existing conversations stay with their original provider; sign-out keeps their history and requires that provider’s turns to be idle.
+
+**Connecting Cursor:** install its CLI on the computer running the workspace; the Cursor desktop app alone is insufficient. On Mac, choose **Cursor → Set up → Install Cursor CLI in Terminal**, finish installation, then **Check again → Sign in**. For a remote workspace, open the sign-in link printed in Terminal in your Mac’s browser. If Terminal cannot open, SuperSurfer shows the complete command for the correct host. Other platforms show that command and the official installation guide.
 
 Use a page tab’s **⋯** menu or right-click → **Remove page**. Each block’s handle/menu offers **Remove block**, including outside Rearrange. Source files, notes, results and running work are kept. Utility/Markdown tabs can be restored from the page menu; removed blocks can be added again through Rearrange. Drag Results report tabs to reorder; their menu removes a report into the recoverable **Removed** list.
 

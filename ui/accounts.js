@@ -9,12 +9,12 @@ export function createWorkspaceAccounts({api,action,gate,readOnly,onError}){
   row.querySelector('.provider-account-status').textContent=working?'Signing out…':!value?'Checking…':value.error||value.note||(connected?['Signed in',value.account.email||value.account.authMethod,active?value.active_turns+' active turn'+(value.active_turns===1?'':'s'):''].filter(Boolean).join(' · '):'Signed out');
   row.querySelector('.provider-install').hidden=value?.installed!==false;
   const login=row.querySelector('[data-account-login]'),logout=row.querySelector('[data-account-logout]');login.hidden=connected;logout.hidden=!connected;
-  login.disabled=readOnly()||working||loading||value?.installed===false;logout.disabled=readOnly()||working||active;logout.title=active?'Finish or stop this provider’s active turns before signing out.':'Sign out on this machine';row.querySelector('[data-account-refresh]').disabled=working||loading;
+  login.disabled=readOnly()||working||loading;login.textContent=value?.installed===false?'Set up':'Sign in';logout.disabled=readOnly()||working||active;logout.title=active?'Finish or stop this provider’s active turns before signing out.':'Sign out on this machine';row.querySelector('[data-account-refresh]').disabled=working||loading;
  }}
  function observe(value){records.set(value.backend||'codex',{value,at:Date.now()});paint();}
  async function refresh(id,force=false){
   if(inflight.has(id))return inflight.get(id);if(!force&&records.has(id)&&Date.now()-records.get(id).at<30000)return;
-  const revision=revisions.get(id)||0;const task=(async()=>{try{let value=await api(id==='codex'?'account':'account?backend='+id);if(revision!==(revisions.get(id)||0))return;if(value.backend&&value.backend!==id)throw new Error('This machine returned a different provider account. Refresh the workspace.');value={...value,backend:id};observe(value);gate.observe(value);}catch(error){if(revision===(revisions.get(id)||0))observe({backend:id,login_required:true,error:error.message});}finally{inflight.delete(id);paint();}})();inflight.set(id,task);paint();return task;
+  const revision=revisions.get(id)||0;const task=(async()=>{try{let value=await api('account?'+new URLSearchParams({backend:id,...(force?{refresh:'1'}:{})}));if(revision!==(revisions.get(id)||0))return;if(value.backend&&value.backend!==id)throw new Error('This machine returned a different provider account. Refresh the workspace.');value={...value,backend:id};observe(value);gate.observe(value);}catch(error){if(revision===(revisions.get(id)||0))observe({backend:id,login_required:true,error:error.message});}finally{inflight.delete(id);paint();}})();inflight.set(id,task);paint();return task;
  }
  async function logout(id){
   if(readOnly()||busy.has(id))return;revisions.set(id,(revisions.get(id)||0)+1);busy.add(id);paint();

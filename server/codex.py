@@ -636,12 +636,10 @@ class CodexBridge(ConversationBridge):
                 return
             else:
                 return
-            self._save(chat)
-
-
-
-
-
+            if method == "item/agentMessage/delta":
+                self._save_stream(chat)
+            else:
+                self._save(chat)
 
 
     def set_approval_mode(self, scope, mode):
@@ -885,6 +883,7 @@ class CodexBridge(ConversationBridge):
         with self._lock:
             if self._closed:
                 return
+            self._flush_streams()
             self._closed = True
             proc = self._proc
         self._abort(proc, "The remote service stopped during this turn. Its outcome is unknown; the message was not replayed.")
@@ -899,5 +898,6 @@ class CodexBridge(ConversationBridge):
                 if stream:
                     stream.close()
         with self._lock:
+            self._flush_streams()
             self._db.close()
             self._db_closed = True

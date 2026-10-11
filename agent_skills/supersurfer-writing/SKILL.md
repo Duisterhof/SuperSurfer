@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.40. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.41. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -214,8 +214,6 @@ Read an owned block's HTML and asset names using `list_view_blocks` with
 copied media; an explicit asset map replaces the whole set. Preserve unrelated
 content and its current version rather than guessing lost source mappings.
 
-Desktop tabs and Activity remain below the native drag area. Either sidebar can collapse and restore through its edge arrow, including a maximized conversation, without stopping a remote build. Keep the selected source and exact last-good PDF identity when reclaiming screen space.
-
 Monaco and the optional native editor can merge disjoint incoming edits into the
 source draft without saving the
 paper. Inline draft decisions do not compile it. Preserve overlapping user text
@@ -230,3 +228,10 @@ Removing a writing page or compiler/PDF block preserves saved source, PDFs and
 remote builds. Keep the last-good build identity and any dirty editor draft;
 view removal is not compile cancellation, source Save or paper submission.
 Account sign-out changes provider access, not the compiler's containment or ownership.
+
+For provider connection issues, use Settings → Coding backends on the connected
+workspace host and its host-specific official sign-in action. Account status,
+model catalogs and native-session availability are separate capabilities; a
+successful login does not prove this block's tools, extensions or data sources
+are ready. Preserve existing native ownership and uncertain action identities.
+See [conversation continuity](../supersurfer-worker/references/conversations.md).
