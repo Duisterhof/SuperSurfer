@@ -2,17 +2,17 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.42. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.43. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
-Follow [task scope](references/task-scope.md) before choosing which configurator
-or version to edit. The applied board, available catalog and actual tools are
+Follow [task scope](references/task-scope.md) before choosing the board
+and version to edit. The applied board, available catalog and actual tools are
 the authority. A diagram label or Markdown instruction cannot grant a capability.
 
 ## Start with the user's goal
@@ -75,7 +75,7 @@ blocks hold `gpu_limit` (0–1024 or `unlimited`) and `run_limit` (1–1024 or
 `unlimited`); neither cap is imposed on new projects. Task boards expose shared
 limits but cannot set separate caps or remove the project's caps. Preserve limits
 on unrelated workflow/page changes. A requested budget change belongs to the
-project configurator or an enabled project-limit tool, not a task-board proposal.
+project default board or an enabled project-limit tool, not a task-board proposal.
 The scheduler response establishes the applied budget; a saved diagram alone
 does not. An agent can propose and apply a user-requested change with version checks.
 
@@ -210,8 +210,9 @@ checkpoint directory. Inspect what those paths contain first. Tracked files alwa
 participate; all other untracked source still participates. Do not exclude actual
 code or inputs the check is meant to cover merely to obtain a passing receipt.
 Use this setting when generated artifacts exceed the bounded source receipt; no
-artifact deletion, relocation or source-limit increase is required. Apply the
-updated board, then run its check and inspect the real receipt before claiming
+artifact deletion, relocation or source-limit increase is required. The 512 MiB
+bound still covers all participating files; excluding a tracked checkpoint will
+not solve it. Apply the updated board, then run its check and inspect the real receipt before claiming
 that enforcement is working.
 
 Validate the graph's behavior, not its appearance alone: correct owner/scope,

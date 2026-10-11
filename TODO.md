@@ -1,4 +1,4 @@
-# Agent workflow control (after 0.1.42)
+# Completed in 0.1.43 — agent workflow control
 
 - [x] Direct scoped Surfboard proposal/apply tools for requested edits, with version checks.
 - [x] Configurable untracked-output exclusions for native source checks; all tracked files remain checked.

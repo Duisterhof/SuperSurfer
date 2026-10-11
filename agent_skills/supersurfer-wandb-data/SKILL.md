@@ -2,12 +2,12 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.42. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.43. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.

@@ -33,7 +33,8 @@ or overrides budgets.
 | Worker user task | Check/acquire/recover within its experiment; pooled queueing saves its recovery owner | Actual user request and existing resource/protocol limits |
 | Lead user task | Check/acquire and explicitly enable recovery of an existing project run | Cannot initially prepare/queue a run; do not take over another recovery owner |
 | Manager user task | Same existing-run tools across the workspace; explicit manager-assigned queueing | Broader scope does not transfer an owner's recovery grant |
-| Dedicated recovery wakeup | Check/acquire, register necessary hosts, pause/retry its saved latest run | Specific owner and lineage; never generic user-origin authority |
+| Dedicated recovery wakeup | Check/acquire, register necessary hosts, pause/retry its saved latest run | Specific owner and lineage; alone it never grants generic user-origin authority |
+| Accepted human steer or question answer during a wakeup | Resume the actual user instruction using the role's scoped tools | Delivery must succeed; keep existing receipts, ownership and resource limits |
 | Ordinary scheduled check | Inspection and the saved observation/analysis | No acquisition, retry, budget changes or new launch |
 
 Run tools use `run_id`; they do not take `project_id`/`experiment_id`. A recovery

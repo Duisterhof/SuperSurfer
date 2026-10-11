@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.42. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.43. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -38,9 +38,10 @@ request passwords, login codes or tokens in agent chat or `ask_user`.
 A saved Surfboard supplies configuration, not another goal or execution grant.
 Continue using this task's applied board and existing deliverable/run identities;
 renaming the task or opening the chat-first builder does not replace its owner.
-Requested policy changes belong to the task configurator, while enabled layout
-tools can still arrange this task directly. Cross-task rollouts use exact linked
-task IDs and a user-reviewed preview, not repeated worker handoffs. After an
+Apply requested policy changes to this task with `propose_surfboard` and
+`apply_surfboard`; no configurator click is required. Enabled layout tools arrange
+its views directly. Cross-task changes need the lead/manager's appropriate scope
+or the user's batch configurator, not repeated worker handoffs. After an
 applied change, reread capabilities before the next managed action; preserve user
 stops, preparation-only intent and already admitted run contracts. Saving a
 monitoring rule in a template does not activate a wakeup or recovery grant.
@@ -207,6 +208,7 @@ All worker experiment/project targets are fixed by this conversation; omit
 | Tools | Use |
 |---|---|
 | `read_surfboard`, `inspect_board_data`, `run_board_action` | Applied graph, scoped data inputs and permitted configured commands. |
+| `propose_surfboard`, `apply_surfboard` | Requested scoped configuration edits with exact versions; no new action, check receipt or launch. |
 | `read_view_layout`, `update_view_layout` | Versioned scoped pages, placement and geometry; no policy change. |
 | `present_code`, `manage_todos` | Requested source/diff view or versioned Markdown checklist. |
 | `list_view_blocks`, `publish_view_block` | Scoped reusable HTML library and copied assets. |

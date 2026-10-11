@@ -2,12 +2,12 @@
 name: supersurfer-blocks
 description: Publish requested reusable HTML views with copied project assets, then place their durable identities on scoped SuperSurfer pages without changing execution authority.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # Reusable HTML blocks
 
-Reviewed for SuperSurfer 0.1.42. Use for a user-requested persistent custom view,
+Reviewed for SuperSurfer 0.1.43. Use for a user-requested persistent custom view,
 such as a failure-video comparison, GIF gallery or interactive explanation.
 The library is workspace-wide: already-published views can be reused across
 projects, independently of a Results block's experiment data-sharing selection.
@@ -24,7 +24,7 @@ user's trusted workspace-host terminal. See
 
 ## Use published blocks in saved workflows
 
-The chat-first configurator can include an already-published HTML block by its
+A requested scoped Surfboard proposal can include an already-published HTML block by its
 durable `block_id` when the user wants that shared publication. Saving or applying
 a Surfboard does not clone the HTML/assets or change the publishing project;
 reused tiles still resolve that same publication. Explain this shared identity

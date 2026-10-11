@@ -11,9 +11,9 @@ from server.agent_tools import ROLE_TOOLS, COMPUTE_TOOLS, QUESTION_TOOL, RESULT_
 
 CAPABILITY_GUIDANCE = {
     "blocks": ("list_view_blocks","publish_view_block","read_view_layout","update_view_layout"),
-    "surfboard": ("read_view_layout", "update_view_layout", "read_surfboard", "propose_surfboard", "ask_user"),
+    "surfboard": ("read_view_layout", "update_view_layout", "read_surfboard", "propose_surfboard", "apply_surfboard", "ask_user"),
     "workflow": ("read_view_layout", "update_view_layout", "read_surfboard", "inspect_board_data", "run_board_action", "update_task", "handoff_work_item", "create_work_item", "create_work_item_agent", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"),
-    "wandb-data": ("read_surfboard", "inspect_board_data", "propose_surfboard"),
+    "wandb-data": ("read_surfboard", "inspect_board_data", "propose_surfboard", "apply_surfboard"),
     "experiment-visualizer": ("inspect_board_data", "publish_training_results", "publish_result", "publish_markdown_tab"),
     "code-editor": (),  # Visual collaboration guidance; this block grants no MCP tool.
     "writing": ("compile_latex", "read_surfboard", "update_task", "publish_artifact"),

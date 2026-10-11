@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.42. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.43. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
 to be installed and selected. The default Code block is a clean editing surface:
@@ -153,7 +153,9 @@ selection-to-chat, fullscreen and separate-window actions. Save writes the activ
 file through the existing editor save behavior, not the page layout; Cmd/Ctrl+S
 remains available. Add Terminal or Ports as their own optional blocks. Missing
 toolbar strips do not remove those capabilities or require a second editor.
-Default Code startup closes native sidebars before revealing the editor.
+Default Code startup waits for the compact editor surface to be ready and closes
+native sidebars before revealing it. A startup placeholder is not an extra file
+browser to dismiss or a reason to recreate the task.
 Cmd/Ctrl+B while typing toggles SuperSurfer’s sidebar; Cmd/Ctrl+Shift+B toggles
 the agent sidebar. These shortcuts do not reveal a second Explorer. Optional Full VS Code retains native navigation
 instead. Extension-host restarts after trust approval must not toggle the default

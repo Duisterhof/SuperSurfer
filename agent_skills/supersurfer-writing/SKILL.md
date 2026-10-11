@@ -2,12 +2,12 @@
 name: supersurfer-writing
 description: Write and revise a project's LaTeX paper, compile saved source to a verified PDF, resolve compiler diagnostics, and preserve scientific and citation provenance in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # Research writing
 
-Reviewed for SuperSurfer 0.1.42. Work from the paper brief, current source and the
+Reviewed for SuperSurfer 0.1.43. Work from the paper brief, current source and the
 user's requested section or outcome. Use `read_surfboard` for this task's applied
 writing workflow and configured compiler, even inside a research/software project.
 See [task scope](../supersurfer-surfboard/references/task-scope.md). Record actionable deliverables with `update_task`
@@ -106,6 +106,9 @@ without starting a build. A named template does not contain paper source, compil
 PDFs or the destination host's LaTeX installation. Verify the destination task's
 main file, source root and real compiler capabilities before its first authorized
 build; preserve explicit task overrides during a reviewed multi-task update.
+For requested compiler/workflow rules, use scoped `propose_surfboard` and
+`apply_surfboard` after reading current versions; layout-only edits use layout
+tools. Applying a rule does not certify a compiler check or start a build.
 Changing views, saving a template or renaming the task does not save dirty text,
 compile a paper, activate monitoring or authorize submission. Keep the exact
 last-good PDF and outstanding writing deliverables across those changes.
