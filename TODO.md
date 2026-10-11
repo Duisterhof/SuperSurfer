@@ -1,3 +1,37 @@
+# Post-0.1.41 fixes
+
+- Restore desktop left-sidebar dragging after removing the browser header row.
+- Resize Files and Projects vertically with visible dividers and persistent sizes.
+- Keep detached-panel space reclaimed during zoom/resize; distinguish clicks from floating-panel drags.
+- Right-click task Rename, including archived tasks, with free-form names and conflict-safe retry.
+
+# Planned: customization-first workflow setup
+
+- Default to a full-width agent conversation beside workspace navigation, asking
+  “What do you want to build today?” Offer saved Surfboards without requiring one.
+- From the user's goal and the actual capability catalog, propose a small workflow:
+  visible pages/blocks, agents, tools, rules, data sharing, and away/stop behavior.
+  Show a compact schematic plus a view preview inline; refine either through chat.
+- Keep detailed graph editing under Advanced. Chat and schematic edit the same
+  versioned draft; Use applies that exact proposal without starting unrequested work.
+- Add a named Surfboard library: save, rename, duplicate, select and restore
+  versions. Tasks retain independent applied snapshots; projects retain shared
+  resources and defaults. Templates bind paths/accounts/resources locally rather
+  than copying credentials, run IDs or previous conversation history.
+- Track template identity/version and local overrides. For “change Research,”
+  offer current task, selected existing tasks of this kind, and future-task default.
+  Preview exact targets and changes; preserve overrides with a three-way comparison,
+  surface conflicts, check versions and apply the reviewed batch atomically within
+  one workspace. Provide rollback; never silently change running work or duplicate
+  periodic jobs. Legacy boards need explicit reviewed association, not name matching.
+- Separate human project/task/Surfboard names from immutable internal IDs and
+  filesystem paths. Remove project slug restrictions from the setup UI and bridge
+  scheduler identifiers behind display labels; renaming must not move repositories.
+- Implement in order: chat-first entry/proposal preview; named library and safe
+  scoped/bulk edits; advanced-editor parity and existing-board migration. Validate
+  research, code/PR and LaTeX/PDF workflows from fresh profiles, with current-task
+  versus bulk edits, custom overrides, interrupted setup and concurrent edits.
+
 # Completed in 0.1.41
 
 - Accessible Cursor CLI installation and host-bound sign-in with Terminal fallback.

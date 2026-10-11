@@ -133,6 +133,25 @@ window strip is draggable; buttons, links, inputs, selectors and summaries remai
 interactive. Cmd/Ctrl+Shift+B and the right chevron use the same sidebar toggle,
 including maximized/focused chats; restoring it also opens a previously closed
 chat. Neither toggle interrupts agents, changes permissions or writes source.
+The navigation resize separator occupies the same content row as the sidebar
+in both browser and desktop layouts. Dragging it needs no Rearrange mode; widths
+persist in navigation preferences or the selected page's saved dock layout.
+Files and Projects have separate vertical dividers. Files height sizes its outer
+section, keeping the divider visible outside the file scroller. Both heights
+persist in native window preferences; shorter windows clamp the displayed sizes
+while retaining preferred heights. Collapsing Files returns its space to the
+other sidebar sections.
+
+Detached panels remain excluded from visible dock geometry on resize and zoom;
+their saved placement returns when the separate window closes. Clicking a
+floating panel's handle opens its actions; movement starts after a small drag
+threshold rather than saving a layout for an ordinary click.
+
+Task context menus offer Rename alongside Archive/Restore, including archived
+tasks. Names allow spaces, punctuation and Unicode, up to 160 characters.
+Renaming uses the current task version, preserves identity, source paths,
+documents, conversations and execution state, and rejects stale changes. The
+dialog keeps the typed name and shows the latest title before an explicit retry.
 
 LaTeX's extra_source_files is an explicit bounded list of safe project-relative
 files within the selected source folder. It never includes all ignored files.

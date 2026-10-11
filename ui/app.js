@@ -40,7 +40,7 @@ const active = new Set(['running','launching','starting','stopping']);
 const modelRoles = ['manager','lead','worker'];
 const backendLabels={codex:'Codex',cursor:'Cursor',claude:'Claude Code'};
 const currentBackend=()=>state.chat?.preferences?.backend||state.data?.settings?.backends?.[state.scope==='manager'?'manager':state.experimentId?'worker':'lead']||'codex';
-const state = {data:null,view:'workspace',runFilter:'active',queuePriority:false,projectId:null,experimentId:null,tab:'overview',experiment:null,edit:false,scope:null,pinnedAgent:null,chat:null,models:[],account:null,chatVisible:true,chatWidth:390,sidebarWidth:null,sidebarCollapsed:false,projectTreeHeight:null,chatMaximized:false,loading:false,modalKind:null,stateSignature:'',sidebarSignature:'',chatSignature:'',experimentRequest:0};
+const state = {data:null,view:'workspace',runFilter:'active',queuePriority:false,projectId:null,experimentId:null,tab:'overview',experiment:null,edit:false,scope:null,pinnedAgent:null,chat:null,models:[],account:null,chatVisible:true,chatWidth:390,sidebarWidth:null,sidebarCollapsed:false,projectTreeHeight:null,filesHeight:null,chatMaximized:false,loading:false,modalKind:null,stateSignature:'',sidebarSignature:'',chatSignature:'',experimentRequest:0};
 const metricsCache = new Map();
 let savedNavigation = null, navigationRestored = false, taskTabs={};
 const taskTabKey=(projectId,experimentId)=>projectId+'/'+(experimentId||'_project');
@@ -69,6 +69,8 @@ async function readNavigation() {
   state.sidebarWidth = Number.isFinite(savedNavigation.sidebarWidth) ? Math.min(600,Math.max(160,savedNavigation.sidebarWidth)) : null;
   state.sidebarCollapsed=savedNavigation.sidebarCollapsed===true;
   state.projectTreeHeight=Number.isFinite(savedNavigation.projectTreeHeight)?Math.max(60,Math.min(1200,savedNavigation.projectTreeHeight)):null;
+  state.filesHeight=Number.isFinite(savedNavigation.filesHeight)?Math.max(60,Math.min(1200,savedNavigation.filesHeight)):null;
+  if(!Object.hasOwn(savedNavigation,'filesHeight'))try{const old=Number(localStorage.getItem('supersurfer-files-height'));if(old>0&&Number.isFinite(old))state.filesHeight=Math.max(60,Math.min(1200,old+37));}catch{}
   state.chatMaximized = savedNavigation.chatMaximized === true;
   const pin=savedNavigation.pinnedAgent;
   if(pin&&typeof pin.scope==='string'&&/^(manager|(?:project|experiment|conversation|surfboard):[A-Za-z0-9_:-]+)$/.test(pin.scope))state.pinnedAgent=pin;
@@ -98,18 +100,36 @@ function restoreNavigation(data) {
 function persistNavigation() {
   if(panelWindows.detached)return;
   if(state.view==='workspace'&&state.projectId){const key=taskTabKey(state.projectId,state.experimentId);delete taskTabs[key];taskTabs[key]=state.tab;taskTabs=Object.fromEntries(Object.entries(taskTabs).slice(-512));}
-  const value = { taskTabs, view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, sidebarWidth: state.sidebarWidth, sidebarCollapsed:state.sidebarCollapsed, projectTreeHeight:state.projectTreeHeight, chatMaximized: state.chatMaximized, pinnedAgent:state.pinnedAgent };
+  const value = { taskTabs, view: state.view, projectId: state.projectId, experimentId: state.experimentId, tab: state.tab, chatVisible: state.chatVisible, chatWidth: state.chatWidth, sidebarWidth: state.sidebarWidth, sidebarCollapsed:state.sidebarCollapsed, projectTreeHeight:state.projectTreeHeight, filesHeight:state.filesHeight, chatMaximized: state.chatMaximized, pinnedAgent:state.pinnedAgent };
   try { localStorage.setItem('supersurfer-workspace', JSON.stringify(value)); } catch {}
   savedNavigation = value;
   if (window.superSurferDesktop?.setWorkspace) window.superSurferDesktop.setWorkspace(value).catch(() => {});
 }
+function sidebarSectionBudget(){
+ const sidebar=$('.sidebar'),css=getComputedStyle(sidebar),sections=new Set(['workspace-files-section','project-tree','page-left-tiles']);
+ let available=sidebar.clientHeight-(parseFloat(css.paddingTop)||0)-(parseFloat(css.paddingBottom)||0);
+ for(const el of sidebar.children){const style=getComputedStyle(el);if(style.display==='none')continue;available-=(parseFloat(style.marginTop)||0)+(parseFloat(style.marginBottom)||0);if(!sections.has(el.id))available-=el.getBoundingClientRect().height;}
+ available=Math.max(0,available);
+ return {available,projectMin:Math.min(60,available*.25),dockMin:$('.app-shell').classList.contains('has-page-left')?Math.min(140,available*.35):0};
+}
+function filesHeightBounds(){
+ const {available,projectMin,dockMin}=sidebarSectionBudget(),max=Math.max(37,Math.floor(available-projectMin-dockMin));
+ return {min:Math.min(120,max),max};
+}
+function applyFilesHeight(){
+ const section=$('#workspace-files-section'),divider=$('#workspace-files-divider');divider.hidden=section.hidden||!section.open;
+ if(section.hidden||!section.open)return;
+ const bounds=filesHeightBounds(),height=Math.round(Math.max(bounds.min,Math.min(bounds.max,state.filesHeight??260)));
+ section.style.setProperty('--files-section-height',height+'px');
+ divider.setAttribute('aria-valuemin',bounds.min);divider.setAttribute('aria-valuemax',bounds.max);divider.setAttribute('aria-valuenow',height);
+}
 function projectTreeBounds(){
- const sidebar=$('.sidebar'),tree=$('#project-tree'),dock=$('#page-left-tiles');
- const fixed=[...sidebar.children].filter(el=>el!==tree&&el!==dock).reduce((total,el)=>{const css=getComputedStyle(el);return total+el.getBoundingClientRect().height+(parseFloat(css.marginTop)||0)+(parseFloat(css.marginBottom)||0);},0);
- return {min:60,max:Math.max(60,sidebar.clientHeight-fixed-170)};
+ const {available,projectMin,dockMin}=sidebarSectionBudget(),files=$('#workspace-files-section');
+ return {min:projectMin,max:Math.max(projectMin,available-(files.hidden?0:files.getBoundingClientRect().height)-dockMin)};
 }
 function applyProjectTreeHeight(){
- const divider=$('#sidebar-projects-resizer'),show=$('.app-shell').classList.contains('has-page-left');divider.hidden=!show;if(!show)return;
+ const divider=$('#sidebar-projects-resizer'),show=$('.app-shell').classList.contains('has-page-left');divider.hidden=!show;
+ applyFilesHeight();const budget=sidebarSectionBudget();$('.sidebar').style.setProperty('--project-tree-min-height',budget.projectMin+'px');$('.sidebar').style.setProperty('--sidebar-dock-min-height',budget.dockMin+'px');if(!show)return;
  const bounds=projectTreeBounds(),height=Math.round(Math.max(bounds.min,Math.min(bounds.max,state.projectTreeHeight||Math.min(230,$('.sidebar').clientHeight*.3))));
  $('.sidebar').style.setProperty('--project-tree-height',height+'px');divider.setAttribute('aria-valuenow',height);divider.setAttribute('aria-valuemin',bounds.min);divider.setAttribute('aria-valuemax',Math.floor(bounds.max));
 }
@@ -402,6 +422,17 @@ function archivedItemsToggle(projectId){const count=(state.data?.experiments||[]
 function sidebarTaskRow(x){return `<button class="experiment-row ${state.experimentId===x.id?'selected':''}" data-experiment="${e(x.id)}"><span class="status-dot ${e(x.status||'unknown')}"></span><span class="exp-name">${e(x.name)}</span></button>`;}
 function archivedProjectFolder(id){const rows=(state.data?.experiments||[]).filter(item=>item.project_id===id&&item.archived);return rows.length?`<details class="archived-task-folder" data-archived-project="${e(id)}" ${archivedItemProjects.has(id)?'open':''}><summary>${icon('folder')}<span>Archived</span><small>${rows.length}</small></summary><div>${rows.map(sidebarTaskRow).join('')}</div></details>`:'';}
 async function archiveTask(id,archived){await action('experiment.archive',{id,archived});await refreshState(true);toast(archived?'Archived. Existing work continues.':'Restored.');}
+async function renameTask(id){
+ let current=await api('experiment?id='+encodeURIComponent(id));
+ openModal('Rename task',`<form>${field('Task name','name',{value:current.name,required:true,maxlength:160})}${formFooter('Rename')}</form>`,'rename-task');
+ const input=$('#modal input[name=name]');input.focus();input.select();
+ bindModalForm(async fd=>{
+  const name=fd.get('name').trim();
+  try{await action('experiment.rename',{id,name,version:current.version});}
+  catch(error){if(error.status!==409)throw error;current=await api('experiment?id='+encodeURIComponent(id));throw new Error(`This task changed. Its current name is “${current.name}”. Your new name is kept; review it and press Rename again.`);}
+  closeModal();await refreshState(true);toast('Task renamed.');
+ });
+}
 let archivedProjectsExpanded=false;
 function projectTreeGroup(p){return `<div class="project-group"><button class="project-row ${state.projectId===p.id&&!state.experimentId?'selected':''}" data-project="${e(p.id)}">${icon('folder')}<span class="project-name">${e(p.name)}</span><span class="chevron">${icon(state.projectId===p.id?'chevronDown':'chevron')}</span></button>${state.projectId===p.id?(state.data?.experiments||[]).filter(x=>x.project_id===p.id&&!x.archived).map(sidebarTaskRow).join('')+`<button class="new-experiment" data-action="add-experiment"${disabled()}>${icon('plus')}New ${e(itemLabel(p))}</button>${archivedProjectFolder(p.id)}`:''}</div>`;}
 async function archiveProject(id,archived){await action('project.archive',{id,archived});await refreshState(true);toast(archived?'Project archived. Existing work continues.':'Project restored.');}
@@ -847,6 +878,7 @@ function syncConfiguredEditors(){
  const portsRoot=$('#ports-block-root');if(portsRoot)portsPanel.mount(portsRoot,{projectId:state.projectId});else portsPanel.unmount();
  for(const [kind,editor]of Object.entries(extraEditors)){const element=$('#'+kind+'-block-root');if(element)editor.mount(element,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,viewKind:kind}).catch(error=>toast(error.message,true));else editor.unmount();}
  const root=$('#code-editor-root'),filesSection=$('#workspace-files-section');filesSection.hidden=!root;if(root)workspaceFiles.mount($('#workspace-files-tree'),{projectId:state.projectId,repo:project()?.repo});else workspaceFiles.unmount();
+ applyProjectTreeHeight();
  if(root)codeEditor.mount(root,{projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId,nodeId:currentLayout()?.find(row=>row.id==='editor')?.node_id||'editor',mode:'editor'}).catch(error=>toast(error.message,true));else codeEditor.unmount();
  const context={projectId:state.projectId,repo:project()?.repo,experimentId:state.experimentId};
  const pdfTile=activePage()?.tiles.find(tile=>tile.kind==='pdf'),pdfViewer=$('#standalone-pdf-tile');
@@ -1630,7 +1662,7 @@ for(const name of ['pointerup','pointercancel','lostpointercapture'])projectDivi
 projectDivider.addEventListener('keydown',event=>{const bounds=projectTreeBounds(),height=Number(projectDivider.getAttribute('aria-valuenow'));if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();resizeProjectTree(event.key==='Home'?bounds.min:event.key==='End'?bounds.max:height+(event.key==='ArrowUp'?-20:20));persistNavigation();});
 projectDivider.addEventListener('dblclick',()=>{state.projectTreeHeight=null;applyProjectTreeHeight();persistNavigation();});
 window.addEventListener('resize',()=>{if(!resizingChat&&!sidebarDrag)applyChatLayout();});
-new ResizeObserver(()=>{const canvas=$('#page-tile-grid'),page=activePage();if(canvas?.classList.contains('dock-canvas')&&page)renderDockLayout(canvas,page);}).observe($('#main'));
+new ResizeObserver(()=>{const canvas=$('#page-tile-grid'),page=panelWindows.page(activePage());if(canvas?.classList.contains('dock-canvas')&&page)renderDockLayout(canvas,page);}).observe($('#main'));
 $('#chat-questions').addEventListener('input',updateQuestionDraft);
 $('#chat-questions').addEventListener('change',updateQuestionDraft);
 $('#chat-questions').addEventListener('submit',answerQuestion);
@@ -1720,7 +1752,15 @@ async function removeViewPage(scope,id,title){
 }
 document.addEventListener('click',event=>{const button=event.target.closest('[data-page-options]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();showPageOptions(button,button.dataset.pageOptions);},true);
 document.addEventListener('contextmenu',event=>{const button=event.target.closest('.page-tab [data-tab]');if(!button)return;event.preventDefault();event.stopImmediatePropagation();showPageOptions(button,button.dataset.tab);},true);
-document.addEventListener('contextmenu',event=>{const row=event.target.closest('[data-experiment],.project-row[data-project]'),isProject=!!row?.dataset.project,item=isProject?state.data?.projects.find(item=>item.id===row.dataset.project):state.data?.experiments.find(item=>item.id===row?.dataset.experiment);if(!item)return;event.preventDefault();taskContextMenu.innerHTML=`<button type="button" role="menuitem" ${readOnly()?'disabled':''}>${item.archived?'Restore':'Archive'} ${isProject?'project':'task'}</button>`;const button=taskContextMenu.querySelector('button');button.onclick=()=>{closeTaskContextMenu();(isProject?archiveProject:archiveTask)(item.id,!item.archived).catch(error=>toast(error.message,true));};taskContextMenu.hidden=false;const bounds=row.getBoundingClientRect();taskContextMenu.style.left=Math.max(4,Math.min(innerWidth-taskContextMenu.offsetWidth-4,event.clientX||bounds.left+12))+'px';taskContextMenu.style.top=Math.max(4,Math.min(innerHeight-taskContextMenu.offsetHeight-4,event.clientY||bounds.bottom))+'px';button.focus({preventScroll:true});});
+document.addEventListener('contextmenu',event=>{
+ const row=event.target.closest('[data-experiment],.project-row[data-project]'),isProject=!!row?.dataset.project,item=isProject?state.data?.projects.find(item=>item.id===row.dataset.project):state.data?.experiments.find(item=>item.id===row?.dataset.experiment);
+ if(!item)return;event.preventDefault();
+ taskContextMenu.innerHTML=`${!isProject?`<button type="button" role="menuitem" data-rename-task ${readOnly()?'disabled':''}>Rename task…</button>`:''}<button type="button" role="menuitem" data-archive-task ${readOnly()?'disabled':''}>${item.archived?'Restore':'Archive'} ${isProject?'project':'task'}</button>`;
+ const rename=taskContextMenu.querySelector('[data-rename-task]');if(rename)rename.onclick=()=>{closeTaskContextMenu();renameTask(item.id).catch(error=>toast(error.message,true));};
+ taskContextMenu.querySelector('[data-archive-task]').onclick=()=>{closeTaskContextMenu();(isProject?archiveProject:archiveTask)(item.id,!item.archived).catch(error=>toast(error.message,true));};
+ taskContextMenu.hidden=false;const bounds=row.getBoundingClientRect();taskContextMenu.style.left=Math.max(4,Math.min(innerWidth-taskContextMenu.offsetWidth-4,event.clientX||bounds.left+12))+'px';taskContextMenu.style.top=Math.max(4,Math.min(innerHeight-taskContextMenu.offsetHeight-4,event.clientY||bounds.bottom))+'px';taskContextMenu.querySelector('button:not(:disabled)')?.focus({preventScroll:true});
+});
+
 document.addEventListener('pointerdown',event=>{if(!taskContextMenu.contains(event.target))closeTaskContextMenu();});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!taskContextMenu.hidden){event.preventDefault();closeTaskContextMenu();}});document.addEventListener('scroll',closeTaskContextMenu,true);window.addEventListener('resize',closeTaskContextMenu);
 $('#project-tree').addEventListener('toggle',event=>{const id=event.target.dataset.archivedProject;if(!id||event.target.open===archivedItemProjects.has(id))return;if(event.target.open)archivedItemProjects.add(id);else archivedItemProjects.delete(id);state.sidebarSignature='';},true);
 
@@ -1728,4 +1768,14 @@ $('#project-tree').addEventListener('toggle',event=>{if(!event.target.classList.
 
 function chooseReusableBlock(){return new Promise(async resolve=>{try{const data=await api('view-blocks');if(!data.blocks.length){toast('Ask an agent to publish a custom HTML block first.');resolve(null);return;}openModal('Reusable blocks',`<p class=modal-description>Published views persist in this workspace. Adding one does not change agent permissions.</p><div class=block-library>${data.blocks.map(block=>`<button class=button data-pick-block="${e(block.id)}">${e(block.title)} <small>v${block.version}</small></button>`).join('')}</div>`,'blocks');const dialog=$('#modal');const done=()=>resolve(null);dialog.addEventListener('close',done,{once:true});for(const button of $$('[data-pick-block]',dialog))button.onclick=()=>{dialog.removeEventListener('close',done);resolve(button.dataset.pickBlock);closeModal();};}catch(error){toast(error.message,true);resolve(null);}});}
 
-{const handle=$('#workspace-files-divider'),tree=$('#workspace-files-tree');let drag;let height=240;try{height=Math.max(100,Math.min(600,Number(localStorage.getItem('supersurfer-files-height'))||240));}catch{}tree.style.height=height+'px';handle.addEventListener('pointerdown',event=>{if(event.button)return;event.preventDefault();drag={start:event.clientY,height:tree.getBoundingClientRect().height};handle.setPointerCapture(event.pointerId);});handle.addEventListener('pointermove',event=>{if(!drag)return;height=Math.max(100,Math.min(innerHeight*.6,drag.height+event.clientY-drag.start));tree.style.height=height+'px';});const finish=()=>{if(!drag)return;drag=null;try{localStorage.setItem('supersurfer-files-height',String(height));}catch{}};handle.addEventListener('pointerup',finish);handle.addEventListener('pointercancel',finish);handle.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();height=Math.max(100,Math.min(innerHeight*.6,height+(event.key==='ArrowDown'?20:-20)));tree.style.height=height+'px';try{localStorage.setItem('supersurfer-files-height',String(height));}catch{}});}
+{
+ const handle=$('#workspace-files-divider'),section=$('#workspace-files-section');let drag=null;
+ const resize=height=>{const bounds=filesHeightBounds();state.filesHeight=Math.round(Math.max(bounds.min,Math.min(bounds.max,height)));applyProjectTreeHeight();};
+ handle.addEventListener('pointerdown',event=>{if(event.button!==0)return;event.preventDefault();drag={y:event.clientY,height:section.getBoundingClientRect().height};handle.setPointerCapture(event.pointerId);document.body.classList.add('resizing-files');});
+ handle.addEventListener('pointermove',event=>{if(drag)resize(drag.height+event.clientY-drag.y);});
+ const finish=()=>{if(!drag)return;drag=null;document.body.classList.remove('resizing-files');persistNavigation();};
+ for(const name of ['pointerup','pointercancel','lostpointercapture'])handle.addEventListener(name,finish);
+ handle.addEventListener('keydown',event=>{if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;event.preventDefault();const bounds=filesHeightBounds(),height=section.getBoundingClientRect().height;resize(event.key==='Home'?bounds.min:event.key==='End'?bounds.max:height+(event.key==='ArrowUp'?-20:20));persistNavigation();});
+ handle.addEventListener('dblclick',()=>{state.filesHeight=null;applyProjectTreeHeight();persistNavigation();});
+ section.addEventListener('toggle',applyProjectTreeHeight);
+}

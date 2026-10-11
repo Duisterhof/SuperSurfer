@@ -1,3 +1,45 @@
+# Task rename and layout follow-ups — October 11, 2026
+
+Files resizing previously changed the inner scroller while the fixed outer section
+clipped its divider. Real pointer tests now cover Files and Projects growing and
+shrinking, keyboard adjustment, collapse, reload, page changes and short-window
+clamping in browser and desktop layouts. Native preferences preserve both sizes.
+
+Detached-panel resize reproduction measured the remaining editor at about 49.7%
+of the available width. The resize observer now uses only visible panels; docked
+and floating layouts retain full editor width and unsaved content on resize. The
+packaged Linux Electron check also passes real zoom changes with a detached PDF,
+then restores the PDF on close. Floating panel clicks open their action menu
+without accidentally committing a drag. Existing window drag/snap checks pass.
+
+Right-click Rename tests cover Unicode/punctuation, cancel, archived tasks,
+reload, chat draft retention and conflicting edits from another window. Backend
+tests verify version conflicts and read-only checks while preserving source paths,
+task identity, conversation settings, W&B references and manager state.
+
+Full regression: 730 Python and 35 enabled Node tests pass; five optional SSH
+checks are skipped. Linux x64 packaging, capability-skill validation and isolated
+native startup, horizontal/vertical resize persistence and zoom checks pass.
+No live service, agents or research jobs were restarted. This is an unreleased
+local fix build; native macOS input and packaging are not tested on this host.
+The customization-first workflow design in TODO.md remains a proposal.
+
+# Desktop sidebar resize fix — October 11, 2026
+
+The new sidebar regression passes in browser mode and fails in desktop mode
+before the CSS fix: the navigation divider was left in the removed header
+layout's second row, with no usable content-height hit area. After aligning
+the divider with the desktop sidebar row, real pointer dragging and shrinking,
+keyboard bounds, double-click reset, ordinary preference persistence, saved
+page dock widths and collapse/restore pass in both modes.
+
+Desktop navigation/Activity/sidebar regression passes. Full regression: 727
+Python and 35 enabled Node tests pass; five optional SSH checks remain skipped.
+Linux packaging and isolated native Electron pointer drag, reload persistence
+and keyboard resizing pass against a fixture workspace. No live service,
+agents or research jobs are restarted. Native macOS mouse input is not tested
+on this Linux host.
+
 # SuperSurfer 0.1.41 — October 10–11, 2026
 
 Cursor connection and performance review uses isolated fixture accounts, protocols,
