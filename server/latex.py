@@ -28,9 +28,9 @@ from .project_artifacts import _sensitive, PREVIEW_CSP
 from .surfboards import SurfboardError
 
 TERMINAL = {'succeeded', 'failed', 'cancelled', 'timed_out', 'interrupted'}
-MAX_SOURCE_BYTES = 100 * 1024 * 1024
+MAX_SOURCE_BYTES = 512 * 1024 * 1024
 MAX_SOURCE_FILES = 10000
-MAX_PDF_BYTES = 50 * 1024 * 1024
+MAX_PDF_BYTES = 512 * 1024 * 1024
 MAX_LOG_BYTES = 256 * 1024
 MAX_BUILDS = 20  # Recent builds per project/work-item/paper, plus last success.
 CAPABILITY_SECONDS = 3600
@@ -76,7 +76,7 @@ def _regular(fd, limit):
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         raise SurfboardError('LaTeX inputs and outputs must be ordinary files without symbolic or hard links', 403)
     if info.st_size > limit:
-        raise SurfboardError('LaTeX file exceeds its size limit', 413)
+        raise SurfboardError(f'LaTeX file exceeds the remaining {limit:,}-byte allowance', 413)
     return info
 
 
@@ -90,7 +90,7 @@ def _read(fd, limit, cancel=None, deadline=None):
             raise SurfboardError('Source freshness check exceeded its inspection deadline', 409)
         consumed += len(block)
         if consumed > limit:
-            raise SurfboardError('LaTeX source exceeds the 100 MiB build limit; use a smaller source_dir', 413)
+            raise SurfboardError(f'LaTeX file grew beyond its {limit:,}-byte allowance while being read', 413)
         blocks.append(block)
     if _stamp(before) != _stamp(os.fstat(fd)):
         raise SurfboardError('Source changed during snapshotting; retry after edits finish', 409)
@@ -194,7 +194,12 @@ def source_snapshot(project, source_dir='', destination=None, *, extra_source_fi
         except OSError as error:
             raise SurfboardError('LaTeX source paths cannot contain links: ' + name, 403) from error
         try:
-            body = _read(fd, MAX_SOURCE_BYTES - total, cancel, deadline)
+            try:
+                body = _read(fd, MAX_SOURCE_BYTES - total, cancel, deadline)
+            except SurfboardError as error:
+                if error.status == 413:
+                    raise SurfboardError(f'LaTeX source exceeds the {MAX_SOURCE_BYTES // (1024 * 1024)} MiB build limit at {name}; choose a smaller source folder', 413) from error
+                raise
         finally:
             os.close(fd)
         total += len(body)
@@ -682,7 +687,7 @@ class LatexCompiler:
                     info = (Path(directory) / filename).lstat()
                     total += info.st_size; count += 1
                     if total > 2 * MAX_PDF_BYTES or count > 2000:
-                        raise SurfboardError('LaTeX generated output exceeds its 100 MiB or 2,000-file build limit', 413)
+                        raise SurfboardError(f'LaTeX generated output exceeds its {2 * MAX_PDF_BYTES // (1024 * 1024)} MiB or 2,000-file build limit', 413)
 
     def _run(self, key, project):
         row = self.store.get('latex_build:' + key)

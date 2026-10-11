@@ -1,5 +1,7 @@
 """Disposable real service, Git source and contained compiler for browser workflows."""
 import json
+import os
+import shutil
 from pathlib import Path
 import sys
 import threading
@@ -35,6 +37,22 @@ Claims remain provisional until supported by measurements.
 (repo/'sections').mkdir();(repo/'sections/evaluation.tex').write_text(r'''\section{Evaluation}
 We compare methods under the same evaluation protocol and label held-out splits explicitly.
 Training and validation curves should be overlaid by method, with units and clear legends.
+''')
+if os.environ.get('SUPERSURFER_TEST_LATEX_REPO'):
+    from server.latex import source_snapshot
+    (repo/'main.tex').unlink()
+    shutil.rmtree(repo/'sections')
+    source_snapshot({'repo':os.environ['SUPERSURFER_TEST_LATEX_REPO']}, destination=repo)
+elif '--large-source' in sys.argv:
+    for name in ('embedded.bin', 'other-input.bin'):
+        with (repo/name).open('wb') as stream:
+            stream.truncate(55*1024*1024)
+    (repo/'main.tex').write_text(r'''\pdfcompresslevel=0
+\documentclass{article}
+\begin{document}
+\immediate\pdfobj stream file{embedded.bin}
+Large paper preview.
+\end{document}
 ''')
 if '--ignored-source' in sys.argv:
     (repo/'.gitignore').write_text('main.tex\nsections/\nignored-data/\n')

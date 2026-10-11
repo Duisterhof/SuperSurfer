@@ -1,5 +1,6 @@
 # Fixed after 0.1.42
 
+- Compile full image-rich papers with 512 MiB source/PDF allowances and actionable source-size errors.
 - Terminal Cmd/Ctrl +/−/0 changes terminal text in the focused pane, not source-editor text or shared font settings.
 - Cmd/Ctrl+B from Code OSS toggles SuperSurfer’s sidebar; Shift+B toggles the agent sidebar.
 - Compact code panes wait for native navigation to close before appearing; file creation does not reopen the embedded explorer.

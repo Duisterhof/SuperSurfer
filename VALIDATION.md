@@ -1,3 +1,25 @@
+# Full-document compile-on-save — October 11, 2026
+
+The compiler accepts 512 MiB of source and a 512 MiB PDF, with the existing
+1 GiB address-space, time, file-count, no-network and no-shell-escape boundaries.
+Source-size failures identify the file that exhausted the aggregate budget.
+
+Thirty compiler tests pass, including an actual isolated build with 110 MiB of
+input and a PDF larger than 50 MiB, plus exact source-budget acceptance/rejection.
+Full regression: 744 Python and 37 enabled Node tests pass; five optional SSH
+checks are skipped. The real-service browser regression in
+`tests/large-latex.browser.cjs` passes with both a generated large paper and a
+copy of the reported dissertation: 393,022,617 source bytes, 226 pages and an
+approximately 80 MB PDF. A real editor Save produces a different successful
+build/fingerprint, and the viewer fetches that exact new PDF with selectable text
+and no browser exceptions. The original dissertation source remains untouched.
+
+Linux x64 packaging and isolated native Electron launch, persistence and security
+checks pass. Capability-skill validation and diff checks pass. Native macOS
+packaging is not tested on this Linux host. These checks use temporary workspaces;
+live activation is a separate operation. A reviewed, public-safe diagnostic
+excerpt is in [the regression report](tests/reports/large-latex.md).
+
 # Terminal zoom and embedded editor shortcuts — October 11, 2026
 
 Real Code OSS browser checks cover Control and Meta +/−/0 in a terminal inside
