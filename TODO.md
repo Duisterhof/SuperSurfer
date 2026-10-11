@@ -1,3 +1,9 @@
+# Fixed after 0.1.42
+
+- Terminal Cmd/Ctrl +/−/0 changes terminal text in the focused pane, not source-editor text or shared font settings.
+- Cmd/Ctrl+B from Code OSS toggles SuperSurfer’s sidebar; Shift+B toggles the agent sidebar.
+- Compact code panes wait for native navigation to close before appearing; file creation does not reopen the embedded explorer.
+
 # Completed in 0.1.42
 
 - Chat-first workflow setup with existing provider controls and a compact view/step preview.

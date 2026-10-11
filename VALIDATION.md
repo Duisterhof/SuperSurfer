@@ -1,3 +1,22 @@
+# Terminal zoom and embedded editor shortcuts — October 11, 2026
+
+Real Code OSS browser checks cover Control and Meta +/−/0 in a terminal inside
+an editor, plus standalone Terminal zoom/reset. Rendered terminal cell height
+changes while source font and panel width remain unchanged; a second pane does
+not inherit the override. Reset restores the prior workspace value or inheritance.
+Control/Meta+B toggles SuperSurfer navigation from the iframe without revealing
+VS Code’s explorer. Compact startup waits for the bridge’s explicit surface-ready
+signal after sidebar closure. Existing editor font zoom, dirty-buffer retention,
+selection-to-chat, terminal cwd and extension-settings checks also pass.
+
+The unit suite passes 742 Python tests and 37 enabled Node tests (five optional
+SSH checks skipped). The Linux x64 package builds and opens in an isolated
+Electron profile; sandboxing, preferences and untrusted-page denial pass.
+
+Tests use isolated temporary workspaces and local Code OSS; no user files, provider
+sessions, GPU runs or live workspace services are changed. Meta keyboard events
+are tested in Linux Chromium, not a physical Mac keyboard.
+
 # Community contribution checks — October 11, 2026
 
 GPLv2-or-later is recorded in LICENSE, NOTICE and package metadata. Third-party

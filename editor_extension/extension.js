@@ -1,12 +1,13 @@
 'use strict';
 const vscode = require('vscode'), http = require('node:http'), path = require('node:path');
 let timer, stopped=false;
-function activate(context) {
+async function activate(context) {
   const session=vscode.workspace.getConfiguration('supersurfer').get('session');
   const endpoint=process.env.SUPERSURFER_EDITOR_ENDPOINT,token=process.env.SUPERSURFER_EDITOR_TOKEN;
   require('./spelling.cjs').activateSpelling(vscode,context);
   if(!session||!endpoint||!token)return;
   const openProjectTerminal=require('./terminal.cjs').projectTerminal(vscode);
+  const zoomFont=require('./font-zoom.cjs').fontZoom(vscode);
   const documents=new Map(),reviews=new Map(),openingReviews=new Set(),documentChanges=new vscode.EventEmitter(),lensChanges=new vscode.EventEmitter();let sequence=0,ack=[],folderRepair=false,registeredFolder,purposeReady=false,activeEvents=Promise.resolve();
   const request=fields=>new Promise((resolve,reject)=>{
     const bytes=Buffer.from(JSON.stringify({session,...fields}));
@@ -51,9 +52,9 @@ function activate(context) {
     if(fields)activeEvents=activeEvents.catch(()=>{}).then(()=>request(fields)).catch(()=>{});
   }));
   async function command(item){
-    if(['zoom-in','zoom-out','zoom-reset'].includes(item.kind))return vscode.commands.executeCommand({'zoom-in':'editor.action.fontZoomIn','zoom-out':'editor.action.fontZoomOut','zoom-reset':'editor.action.fontZoomReset'}[item.kind]);
+    if(['zoom-in','zoom-out','zoom-reset'].includes(item.kind))return zoomFont(item.kind,item.zoom_target);
     if(item.kind==='changes')return vscode.commands.executeCommand('workbench.action.closeSidebar');
-    if(item.kind==='files')return vscode.commands.executeCommand('workbench.view.explorer');
+    if(item.kind==='files')return vscode.commands.executeCommand(vscode.workspace.getConfiguration('supersurfer').get('editorOnly')?'workbench.action.closeSidebar':'workbench.view.explorer');
     if(item.kind==='selection')return selection();
     if(item.kind==='save')return drafts.save();
     if(item.kind==='trust')return vscode.commands.executeCommand('workbench.trust.manage');
@@ -92,13 +93,13 @@ function activate(context) {
   }
   async function poll(){
     if(stopped)return;
-    try{const received=await request({operation:'poll',wait:2,folders:(vscode.workspace.workspaceFolders||[]).map(folder=>folder.uri.fsPath),trusted:vscode.workspace.isTrusted,dirty:vscode.workspace.textDocuments.some(doc=>doc.isDirty),ack});ack=[];if(typeof received.workspace_folder==='string'&&path.isAbsolute(received.workspace_folder))registeredFolder=received.workspace_folder;
+    try{const received=await request({operation:'poll',surface_ready:true,wait:2,folders:(vscode.workspace.workspaceFolders||[]).map(folder=>folder.uri.fsPath),trusted:vscode.workspace.isTrusted,dirty:vscode.workspace.textDocuments.some(doc=>doc.isDirty),ack});ack=[];if(typeof received.workspace_folder==='string'&&path.isAbsolute(received.workspace_folder))registeredFolder=received.workspace_folder;
       if(!folderRepair&&!vscode.workspace.workspaceFolders?.length&&typeof received.workspace_folder==='string'&&path.isAbsolute(received.workspace_folder)){folderRepair=true;const accepted=vscode.workspace.updateWorkspaceFolders(0,0,{uri:vscode.Uri.file(received.workspace_folder)});if(!accepted)await request({operation:'error',error:'The native editor could not attach its registered project folder. Reopen this panel.'});return;}
       if(!purposeReady&&['terminal','ports'].includes(received.view_kind)&&vscode.workspace.workspaceFolders?.length){purposeReady=true;setTimeout(()=>{if(!stopped)command({kind:received.view_kind}).catch(error=>request({operation:'error',error:error.message}).catch(()=>{}));},300);}
       for(const item of received.commands){try{await command(item);}catch(error){await request({operation:'error',error:error.message}).catch(()=>{});}ack.push(item.id);}
     }catch{}finally{if(!stopped)timer=setTimeout(poll,30);}
   }
-  if(vscode.workspace.getConfiguration('supersurfer').get('editorOnly'))for(const command of ['workbench.action.closeSidebar','workbench.action.closeAuxiliaryBar'])vscode.commands.executeCommand(command).catch(()=>{});else vscode.commands.executeCommand('workbench.view.explorer').catch(()=>{});
+  if(vscode.workspace.getConfiguration('supersurfer').get('editorOnly'))for(const command of ['workbench.action.closeSidebar','workbench.action.closeAuxiliaryBar'])await vscode.commands.executeCommand(command);else await vscode.commands.executeCommand('workbench.view.explorer');
   stopped=false;poll();context.subscriptions.push({dispose(){stopped=true;clearTimeout(timer);}});
 }
 function deactivate(){stopped=true;clearTimeout(timer);}
