@@ -352,6 +352,25 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[1])), Handler).serve_forever()
         self.assertEqual("succeeded", result["status"])
         self.assertEqual("''\n", result["logs"])
 
+    def test_generated_output_exclusions_keep_tracked_and_new_source_in_receipt(self):
+        generated=self.repo/'outputs';generated.mkdir()
+        artifact=generated/'checkpoint.pt'
+        with artifact.open('wb') as stream:stream.truncate(513*1024*1024)
+        with self.assertRaisesRegex(SurfboardError,'512 MiB'):source_fingerprint(self.repo)
+        before=source_fingerprint(self.repo,['outputs/**'])
+        artifact.unlink();artifact.write_bytes(b'changed artifact')
+        self.assertEqual(before,source_fingerprint(self.repo,['outputs/**']))
+        source=generated/'tracked.py';source.write_text('one')
+        subprocess.run(['git','-C',str(self.repo),'add','outputs/tracked.py'],check=True)
+        before=source_fingerprint(self.repo,['outputs/**']);source.write_text('two')
+        self.assertNotEqual(before,source_fingerprint(self.repo,['outputs/**']))
+        before=source_fingerprint(self.repo,['outputs/**']);(self.repo/'new-source.py').write_text('new')
+        self.assertNotEqual(before,source_fingerprint(self.repo,['outputs/**']))
+        self.board['compiled']['actions']['check']['source_exclude']=['outputs/**']
+        receipt=self.finished(self.start());self.assertEqual('succeeded',receipt['status'])
+        artifact.write_text('more output')
+        self.assertTrue(self.runtime.check_passed(self.project['id'],2,'check','item-a',self.repo))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -17,7 +17,7 @@ the conversational proposal work on the same versioned draft.
 - `workflow_tasks`: task identities and their library links for selecting relevant
   existing targets. A similar title or project label is not a link.
 
-Only the configurator has `propose_surfboard`. Pass `board`, `expected_version`
+Owned agents have `propose_surfboard` and `apply_surfboard` for requested changes within their scope. Pass `board`, `expected_version`
 and `expected_draft_version`. Optionally add `rollout`:
 
 - `{scope: "current"}` proposes the current task's change.

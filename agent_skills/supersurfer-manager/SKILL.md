@@ -154,8 +154,11 @@ Use `read_surfboard` for this task's applied workflow. Tasks snapshot project
 fallbacks; research, software and writing tasks can share a project and source
 without sharing a workflow. Follow [task scope](../supersurfer-surfboard/references/task-scope.md).
 The board filters actual tools; presentation changes grant no execution authority.
-Only the configurator can propose policy changes for the user to apply. Never
-change a board to bypass a denied capability or an existing run contract.
+For user-requested workflow changes, read the current board, call
+`propose_surfboard`, then `apply_surfboard` with the returned versions. Workers
+change only their task; leads/managers select the requested task or future defaults.
+Suggestions remain drafts. Preserve unrelated requirements and existing run contracts;
+do not remove a gate merely because a run failed it. See the Surfboard skill for details.
 
 `inspect_board_data` resolves configured experiment/run/artifact inputs. Honor
 its source selection and provenance; shared research data does not permit

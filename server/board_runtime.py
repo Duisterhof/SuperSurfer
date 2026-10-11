@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from fnmatch import fnmatchcase
 import http.client
 import json
 import os
@@ -29,8 +30,8 @@ MAX_LOG = 128 * 1024
 MAX_PREVIEW = 8 * 1024 * 1024
 
 
-def source_fingerprint(cwd):
-    """Hash source contents, excluding only untracked generated Python bytecode."""
+def source_fingerprint(cwd, source_exclude=()):
+    """Hash all tracked source and nonexcluded untracked inputs."""
     cwd = Path(cwd).resolve()
     def git(*args):
         proc = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, timeout=30)
@@ -50,6 +51,9 @@ def source_fingerprint(cwd):
     # its own successful source check. Tracked bytecode and any actual source
     # under a cache-named directory still participate in the receipt.
     paths = tracked | {raw for raw in untracked if not (raw.endswith(b".pyc") and b"__pycache__" in raw.split(b"/")[:-1])}
+    # Configured exclusions are only for untracked generated outputs. A tracked
+    # file always participates, even under an excluded directory.
+    paths = tracked | {raw for raw in paths - tracked if not any(fnmatchcase(os.fsdecode(raw), pattern) for pattern in source_exclude)}
     if len(paths) > 50000:
         raise SurfboardError("Source receipt exceeds 50,000 files; ignore generated data before checking", 409)
     consumed = 0
@@ -73,7 +77,7 @@ def source_fingerprint(cwd):
         elif stat.S_ISREG(info.st_mode):
             consumed += info.st_size
             if consumed > 512 * 1024 * 1024:
-                raise SurfboardError("Source receipt exceeds 512 MiB; ignore datasets/build output before checking", 409)
+                raise SurfboardError("Source receipt exceeds 512 MiB; configure this block’s source_exclude for untracked generated outputs, or ignore those outputs in Git", 409)
             descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
             with os.fdopen(descriptor, "rb") as stream:
                 opened = os.fstat(stream.fileno())
@@ -212,7 +216,7 @@ class BoardRuntime:
             cwd = Path(project["repo"]).expanduser().resolve()
             if not cwd.is_dir():
                 raise SurfboardError("Project repository is unavailable", 409)
-            source = source_fingerprint(cwd)
+            source = source_fingerprint(cwd, action.get("source_exclude", []))
             identity = {"project_id": project["id"], "version": board_state["version"], "node_id": node_id,
                         "scope": scope, "experiment_id": item, "action": action, "cwd": str(cwd), "pr_url": args.get("pr_url")}
             signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -245,7 +249,7 @@ class BoardRuntime:
             row = {"id": "action_" + secrets.token_hex(12), "request_id": request_id, "request_fingerprint": signature,
                    "scope": scope, "project_id": project["id"], "experiment_id": item, "board_version": board_state["version"],
                    "node_id": node_id, "label": action.get("label", node_id), "kind": action["kind"], "argv": argv,
-                   "cwd": str(cwd), "timeout_seconds": timeout, "source_fingerprint": source, "status": "starting",
+                   "cwd": str(cwd), "timeout_seconds": timeout, "source_exclude": action.get("source_exclude", []), "source_fingerprint": source, "status": "starting",
                    "created": now, "started": None, "finished": None, "returncode": None, "logs": "", "logs_truncated": False}
             if args.get("pr_url"):
                 row["pr_url"] = args["pr_url"]
@@ -338,7 +342,7 @@ class BoardRuntime:
             if row["status"] == "timed_out":
                 row["error"] = "Configured action exceeded its timeout"
             if row["status"] == "succeeded":
-                row["source_fingerprint_after"] = source_fingerprint(row["cwd"])
+                row["source_fingerprint_after"] = source_fingerprint(row["cwd"], row.get("source_exclude", []))
                 row["source_unchanged"] = row["source_fingerprint_after"] == row["source_fingerprint"]
                 if not row["source_unchanged"]:
                     row["evidence_note"] = "Source changed during this action; it cannot satisfy a check prerequisite."
@@ -365,7 +369,7 @@ class BoardRuntime:
         if Path(row["cwd"]).resolve() != Path(cwd).resolve():
             return False
         try:
-            return source_fingerprint(cwd) == row["source_fingerprint"]
+            return source_fingerprint(cwd, row.get("source_exclude", [])) == row["source_fingerprint"]
         except (OSError, SurfboardError, subprocess.SubprocessError):
             return False
 

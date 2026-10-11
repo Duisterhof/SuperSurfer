@@ -68,16 +68,17 @@ class SurfboardServiceTests(unittest.TestCase):
             self.assertEqual(metadata['project_id'], project['id'])
         self.assertNotEqual(self.service.artifacts.root(first), self.service.artifacts.root(second))
 
-    def test_configurator_has_read_propose_and_questions_only(self):
+    def test_configurator_has_configuration_tools_without_execution(self):
         scope = 'surfboard:p1'
         self.service.agent_tool_endpoint = 'http://127.0.0.1:8765/api/agent-tool'
         context = self.service.context_provider(scope)
         self.assertEqual(context['agent_skill']['name'], 'supersurfer-surfboard')
         env = context['mcp_servers']['supersurfer']['env']
-        self.assertEqual(set(json.loads(env['SUPERSURFER_ALLOWED_TOOLS'])), {'list_view_blocks','publish_view_block','read_surfboard', 'propose_surfboard', 'read_view_layout', 'update_view_layout', 'present_code', 'manage_todos', 'ask_user'})
+        self.assertEqual(set(json.loads(env['SUPERSURFER_ALLOWED_TOOLS'])), {'list_view_blocks','publish_view_block','read_surfboard', 'propose_surfboard', 'apply_surfboard', 'read_view_layout', 'update_view_layout', 'present_code', 'manage_todos', 'ask_user'})
         with self.assertRaises(APIError):
             self.service.agent_action(scope, 'supersurfer_queue_run', {})
         state = self.service.agent_action(scope, 'supersurfer_read_surfboard', {})
+        self.service.action('chat.send', {'scope':scope, 'text':'Configure this workflow'})
         proposed = self.service.agent_action(scope, 'supersurfer_propose_surfboard', {'board': template('software'), 'expected_version':0, 'expected_draft_version':0})
         self.assertEqual(proposed['version'], 0)
         self.assertEqual(self.service.boards.get('p1')['compiled']['workflow'], 'research')
@@ -314,9 +315,10 @@ class SurfboardServiceTests(unittest.TestCase):
         self.assertEqual('yolo', self.service.chat_preferences(explicit)['effective']['approval_mode'])
         self.assertEqual('yolo', self.service.chat_preferences(outside)['effective']['approval_mode'])
 
-    def test_stdio_mcp_proposal_crosses_schema_and_http_without_applying(self):
+    def test_stdio_mcp_proposal_and_apply_cross_schema_and_http(self):
         from server import agent_tools
         scope = 'surfboard:p1'
+        self.service.action('chat.send', {'scope':scope, 'text':'Propose this requested workflow'})
         proposal = {'board': template('web'), 'expected_version': 0, 'expected_draft_version': 0}
         # The JSON graph is intentionally open to the service's graph validator;
         # treating it as an empty-object schema rejects every useful proposal.
@@ -328,7 +330,7 @@ class SurfboardServiceTests(unittest.TestCase):
             env = dict(os.environ, SUPERSURFER_AGENT_ENDPOINT=f'http://127.0.0.1:{server.server_port}/api/agent-tool',
                        SUPERSURFER_AGENT_CAPABILITY=self.service.agent_tool_capability(scope),
                        SUPERSURFER_AGENT_ROLE='configurator',
-                       SUPERSURFER_ALLOWED_TOOLS=json.dumps(['read_surfboard', 'propose_surfboard', 'ask_user']))
+                       SUPERSURFER_ALLOWED_TOOLS=json.dumps(['read_surfboard', 'propose_surfboard', 'apply_surfboard', 'ask_user']))
             request = {'jsonrpc': '2.0', 'id': 17, 'method': 'tools/call',
                        'params': {'name': 'propose_surfboard', 'arguments': proposal}}
             process = subprocess.run([sys.executable, str(Path(agent_tools.__file__))],
@@ -341,7 +343,7 @@ class SurfboardServiceTests(unittest.TestCase):
             self.assertGreater(proposed['draft']['draft_version'], 0)
             self.assertEqual('web', proposed['draft']['board']['workflow'])
             self.assertEqual('research', self.service.boards.get('p1')['compiled']['workflow'])
-            self.assertEqual([], self.service.codex.sent)
+            self.assertEqual(1, len(self.service.codex.sent))
             self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))
             # Arbitrary nested graph keys reach the graph validator and fail;
             # accepting object fields in MCP does not relax graph validation.
@@ -353,6 +355,15 @@ class SurfboardServiceTests(unittest.TestCase):
             failure = json.loads(rejected.stdout)
             self.assertTrue(failure['result']['isError'])
             self.assertEqual(proposed['draft']['draft_version'], self.service.boards.get('p1')['draft']['draft_version'])
+            request = {'jsonrpc': '2.0', 'id': 19, 'method': 'tools/call',
+                       'params': {'name': 'apply_surfboard', 'arguments': {
+                           'expected_version': 0, 'expected_draft_version': proposed['draft']['draft_version']}}}
+            applied = subprocess.run([sys.executable, str(Path(agent_tools.__file__))],
+                                     input=json.dumps(request)+'\n', capture_output=True, text=True, env=env, timeout=15)
+            success = json.loads(applied.stdout)
+            self.assertFalse(success['result']['isError'], success)
+            self.assertEqual('web', self.service.boards.get('p1')['compiled']['workflow'])
+            self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))
         finally:
             server.shutdown(); server.server_close(); thread.join()
 
@@ -424,3 +435,53 @@ class SurfboardServiceTests(unittest.TestCase):
         self.assertEqual([], self.service.codex.sent)
         self.assertEqual(saved, self.service.recovery.get('r1'))
         self.assertNotIn(scope, self.service.turn_origins)
+
+    def test_owned_worker_can_apply_requested_policy_with_versions_without_launching(self):
+        scope='experiment:'+self.exp['id']
+        self.service.action('chat.send',{'scope':scope,'text':'Add the required workflow check to this task'})
+        current=self.service.agent_action(scope,'supersurfer_read_surfboard',{})
+        board=deepcopy(current['board']);board['name']='Requested workflow'
+        board['nodes'].append({'id': 'required_check', 'kind': 'check', 'label': 'Required check', 'x': 340, 'y': 600,
+                               'config': {'argv': [sys.executable, '-c', 'print("verified")'], 'source_exclude': ['outputs/**']}})
+        board['edges'].extend([
+            {'id': 'code-check', 'source': 'code', 'target': 'required_check', 'relation': 'feeds'},
+            {'id': 'check-run', 'source': 'required_check', 'target': 'experiment', 'relation': 'requires'}])
+        draft=self.service.agent_action(scope,'supersurfer_propose_surfboard',{'board':board,'expected_version':current['version'],'expected_draft_version':0})
+        fields={'expected_version':current['version'],'expected_draft_version':draft['draft']['draft_version']}
+        self.service.turn_origins[scope]='schedule'
+        with self.assertRaises(APIError):self.service.agent_action(scope,'supersurfer_apply_surfboard',fields)
+        self.service.turn_origins[scope]='user'
+        foreign=self.service.action('experiment.create',{'project_id':'p1','name':'Other','summary':'Separate task'})
+        with self.assertRaises(APIError):self.service.agent_action(scope,'supersurfer_apply_surfboard',{**fields,'experiment_id':foreign['id']})
+        self.service.read_only=True
+        with self.assertRaises(APIError):self.service.agent_action(scope,'supersurfer_apply_surfboard',fields)
+        self.service.read_only=False
+        applied=self.service.agent_action(scope,'supersurfer_apply_surfboard',fields)
+        self.assertEqual('Requested workflow',applied['board']['name'])
+        self.assertEqual(current['version']+1,applied['version'])
+        self.assertIn('required_check', applied['compiled']['actions'])
+        with self.assertRaisesRegex(APIError, 'check'):
+            self.service.agent_action(scope, 'supersurfer_queue_run', {})
+        with self.assertRaises(APIError):self.service.agent_action(scope,'supersurfer_apply_surfboard',fields)
+        self.assertFalse(any(op.startswith('run.') for op,_ in self.manager.calls))
+        self.assertNotEqual('Requested workflow',self.service.board_record('p1')['board']['name'])
+
+    def test_lead_and_manager_can_select_requested_task_without_changing_default(self):
+        from server.agent_tools import PROPOSE_BOARD_TOOL, APPLY_BOARD_TOOL, validate_arguments
+        for scope in ('project:p1', 'manager'):
+            self.service.action('chat.send', {'scope': scope, 'text': 'Change this task workflow'})
+            target = {'experiment_id': self.exp['id']}
+            if scope == 'manager':
+                target['project_id'] = 'p1'
+            current = self.service.agent_action(scope, 'supersurfer_read_surfboard', target)
+            board = deepcopy(current['board'])
+            board['name'] = 'Requested by ' + scope
+            args = {**target, 'board': board, 'expected_version': current['version'], 'expected_draft_version': 0}
+            validate_arguments(PROPOSE_BOARD_TOOL, args)
+            draft = self.service.agent_action(scope, 'supersurfer_propose_surfboard', args)
+            fields = {**target, 'expected_version': current['version'], 'expected_draft_version': draft['draft']['draft_version']}
+            validate_arguments(APPLY_BOARD_TOOL, fields)
+            result = self.service.agent_action(scope, 'supersurfer_apply_surfboard', fields)
+            self.assertEqual(board['name'], result['board']['name'])
+            self.assertNotEqual(board['name'], self.service.board_record('p1')['board']['name'])
+        self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))

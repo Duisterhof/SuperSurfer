@@ -22,7 +22,7 @@ class SurfboardError(ValueError):
 
 ROLES = ("lead", "worker", "manager")
 WORKFLOWS = ("research", "software", "web", "writing")
-COMMON_TOOLS = {"list_view_blocks", "publish_view_block", "ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "export_diagnostics"}
+COMMON_TOOLS = {"list_view_blocks", "publish_view_block", "ask_user", "update_task", "message_agent", "list_agent_messages", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "export_diagnostics"}
 ITEM_TOOLS = {"create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item"}
 EXPERIMENT_TOOLS = {"create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment"}
 COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node",
@@ -97,7 +97,8 @@ def catalog():
                                  "description": "Optional restriction; omitted means inherit this role's connected capabilities."})
         if kind in ACTION_KINDS:
             fields.update(argv={"type": "array", "items": {"type": "string"}, "default": []},
-                          timeout_seconds={"type": "integer", "minimum": 1, "maximum": 3600, "default": 300})
+                          timeout_seconds={"type": "integer", "minimum": 1, "maximum": 3600, "default": 300},
+                          source_exclude={"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 1024}, "default": []})
         if kind == "preview":
             fields["port"] = {"type": "integer", "minimum": 1, "maximum": 65535, "description": "Optional local preview server port."}
         if kind in VIEW_KINDS:
@@ -324,6 +325,11 @@ def validate(board, *, allow_pending=False):
                     _fail(field_path, "must be an argument list with at most 1000 items")
                 for j, arg in enumerate(value):
                     _text(arg, f"{field_path}[{j}]", 8192, 1 if j == 0 else 0, False)
+            elif field == "source_exclude":
+                _strings(value, field_path, 64, 1024)
+                for pattern in value:
+                    if pattern.startswith("/") or ".." in pattern.split("/") or "\\" in pattern or any(c in pattern for c in "\0\r\n"):
+                        _fail(field_path, "use repository-relative patterns for untracked generated outputs")
             elif field == "extra_source_files":
                 _strings(value, field_path, 64, 1024)
             else:
@@ -782,6 +788,9 @@ def compile_board(board):
         for node in profiles:
             if "tools" in node["config"]:
                 allowed &= set(node["config"]["tools"]) | {"read_surfboard"}
+        # Configuration tools act only on explicit user turns and remain available
+        # even when the current workflow restricts the role's execution tools.
+        allowed.update({"read_surfboard", "propose_surfboard", "apply_surfboard"})
         tools_by_role[role] = sorted(allowed)
         if len(profiles) > 1:
             warnings.append(f"{len(profiles)} agent blocks share the {role} runtime role; their explicit tool restrictions are combined conservatively.")
@@ -794,7 +803,8 @@ def compile_board(board):
     for key, node in active.items():
         if node["kind"] in ACTION_KINDS:
             actions[key] = {"node_id": key, "kind": node["kind"], "label": node["label"],
-                            "argv": node["config"].get("argv", []), "timeout_seconds": node["config"].get("timeout_seconds", 300)}
+                            "argv": node["config"].get("argv", []), "timeout_seconds": node["config"].get("timeout_seconds", 300),
+                            "source_exclude": node["config"].get("source_exclude", [])}
             if "port" in node["config"]:
                 actions[key]["port"] = node["config"]["port"]
     def targets(node):

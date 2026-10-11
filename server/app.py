@@ -761,7 +761,7 @@ class Service(SurfboardService, EditorService, WritingService):
             self.guard_board_tool(scope, name, arguments)
             if self.read_only:
                 raise APIError("Read-only preview: agent tools are disabled", 403)
-            if name.removeprefix("supersurfer_") in {"list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+            if name.removeprefix("supersurfer_") in {"list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                 return self.board_tool(scope, name, arguments)
             alias = ALIASES.get(name.removeprefix("supersurfer_"))
             if alias:
@@ -1817,7 +1817,11 @@ class Service(SurfboardService, EditorService, WritingService):
             scope = text_field(params, "scope", 256)
             if "agent" in self._chat_scope(scope):
                 raise APIError("Answer existing AutoML conversations in their native console", 409)
-            return self.codex.answer(scope, text_field(params, "question_id", 256), params["answers"])
+            result = self.codex.answer(scope, text_field(params, "question_id", 256), params["answers"])
+            if result.get("status") == "answered" or result.get("accepted") is True:
+                self.turn_origins[scope] = "user"
+                self.turn_coordination.pop(scope, None)
+            return result
         if op == "chat.steer":
             if set(params) - {"scope", "text", "view", "attachments"} or not {"scope", "text"} <= set(params):
                 raise APIError("Steering accepts scope, text and optional view context")
@@ -1832,7 +1836,9 @@ class Service(SurfboardService, EditorService, WritingService):
             result = self.codex.steer(scope, content + view_context + attachment_context, **({"display_text": content} if view_context or attached else {}), **({"attachments": attached} if attached else {}))
             # Subsequent outgoing coordination must cite the direct user request,
             # rather than the unrelated peer request that began this turn.
-            self.turn_coordination.pop(scope, None)
+            if result.get("accepted") is True:
+                self.turn_origins[scope] = "user"
+                self.turn_coordination.pop(scope, None)
             return result
         if op == "experiment.start":
             if set(params) != {"id"}:
@@ -2354,7 +2360,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

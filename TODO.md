@@ -1,3 +1,9 @@
+# Agent workflow control (after 0.1.42)
+
+- [x] Direct scoped Surfboard proposal/apply tools for requested edits, with version checks.
+- [x] Configurable untracked-output exclusions for native source checks; all tracked files remain checked.
+- [x] Accepted user steering/answers restore direct-user authority during background recovery; preserve run receipts and handoff budgets.
+
 # Fixed after 0.1.42
 
 - Terminal Cmd/Ctrl +/−/0 changes terminal text in the focused pane, not source-editor text or shared font settings.
