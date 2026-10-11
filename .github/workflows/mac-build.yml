@@ -1,5 +1,11 @@
 name: Native Mac build
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/mac-build.yml'
+      - 'scripts/package.cjs'
+      - 'desktop/**'
+      - 'tests/mac-package.electron.cjs'
   workflow_dispatch:
   push:
     tags: ['v*']

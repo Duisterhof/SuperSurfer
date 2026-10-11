@@ -52,8 +52,8 @@ prepares these. Five optional SSH tests are skipped without a test host. Simulat
 provider tests do not prove new-account sign-in or paid inference works.
 
 PR CI runs unit tests on Python 3.11 and 3.13, browser workflows, and a Linux
-package smoke test. The native Mac check runs on demand and on release tags to
-keep ordinary PR feedback fast. CI uses read-only permissions and no provider or
+package smoke test. The native Mac check runs for desktop/packaging changes, on demand and on
+release tags; other PRs keep faster Linux-only feedback. CI uses read-only permissions and no provider or
 production secrets. It cancels superseded PR runs and retains failure logs.
 
 ## Find the code
