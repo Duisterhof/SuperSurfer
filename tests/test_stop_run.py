@@ -63,3 +63,31 @@ class StopRunTests(unittest.TestCase):
         self.assertTrue(self.service.agent_action(lead,'supersurfer_stop_run',{'run_id':'r1'})['terminal'])
         manager=self.start('manager')
         self.assertTrue(self.service.agent_action(manager,'supersurfer_stop_run',{'run_id':'r1'})['terminal'])
+
+    def test_user_steering_promotes_recovery_and_cancels_only_requested_queue(self):
+        self.rpc(); scope=self.start()
+        self.service.turn_origins[scope]='recovery'
+        self.service.turn_coordination[scope]={'message_id':'old-peer-request'}
+        self.manager.data['runs'][1]['status']='running'
+        self.service.action('chat.steer',{'scope':scope,'text':'Replace the queued eight-GPU run with seven. Leave the evaluator running.'})
+        self.assertEqual('user',self.service.turn_origins[scope])
+        self.assertNotIn(scope,self.service.turn_coordination)
+        self.assertTrue(self.service.agent_action(scope,'supersurfer_stop_run',{'run_id':'r1'})['terminal'])
+        self.assertEqual('running',self.manager.data['runs'][1]['status'])
+        self.assertEqual([('run.cancel',{'run':'r1'})],[(op,args) for op,args in self.manager.calls if op.startswith('run.')])
+
+    def test_answer_promotes_user_authority_but_rejected_input_does_not(self):
+        import threading
+        self.rpc(); scope=self.start(); self.service.turn_origins[scope]='recovery'
+        self.service.codex.questions[(scope,'confirmation')]={'event':threading.Event()}
+        self.service.action('chat.answer',{'scope':scope,'question_id':'confirmation','answers':{'replace':['Replace queued eight with seven']}})
+        self.assertEqual('user',self.service.turn_origins[scope])
+        self.assertTrue(self.service.agent_action(scope,'supersurfer_stop_run',{'run_id':'r1'})['terminal'])
+        self.service.turn_origins[scope]='schedule'
+        self.service.turn_coordination[scope]={'message_id':'preserve-me'}
+        with self.assertRaises(APIError):
+            self.service.action('chat.answer',{'scope':scope,'question_id':'expired','answers':{}})
+        self.service.codex.busy.discard(scope)
+        with self.assertRaises(APIError):self.service.action('chat.steer',{'scope':scope,'text':'Stop'})
+        self.assertEqual('schedule',self.service.turn_origins[scope])
+        self.assertEqual({'message_id':'preserve-me'},self.service.turn_coordination[scope])

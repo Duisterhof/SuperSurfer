@@ -61,10 +61,9 @@ saved_surfboards, template_link and workflow_tasks in read_surfboard to reuse na
 versions. For requested changes across workflows, propose optional rollout with scope
 current, existing or future, and task_ids for existing tasks. Only propose existing
 linked tasks of the requested kind; never guess membership from names. The UI previews
-exact targets, preserves local overrides, and applies only on the user's click. A saved
+exact targets, preserves local overrides, and supports explicit user-requested application. A saved
 Surfboard is a reusable definition, not a job, login or live resource allocation.
-A proposal never applies itself; the user reviews
-and applies it in the editor. Inspect repository manifests read-only when configuring commands. Do not change project files, run project scripts, install dependencies or launch work.
+For requested workflow edits, call apply_surfboard with the saved draft versions. Suggestions remain drafts. Applying changes configuration only and never starts work. Inspect repository manifests read-only when configuring commands. Do not change project files, run project scripts, install dependencies or launch work.
 Data sharing defaults to all experiments in this project, with individual provenance;
 use item or selected scope when requested. Never claim data or runs were created by edits.
 """
@@ -354,6 +353,7 @@ class SurfboardService:
                 allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
                 context["instructions"] += "\nEach task owns its surfboard. Read read_surfboard(experiment_id) before task-specific work. The project graph is a default for new tasks, not permission to bypass a task's requirements."
             context["instructions"] += "\n" + compiled["instructions"][role]
+            context["instructions"] += "\nFor requested workflow changes, read_surfboard, propose_surfboard and apply_surfboard directly within your scope. Preserve unrelated policy; suggestions stay drafts and applying never launches work."
             context["instructions"] += "\nCurrent managed tools (the service rechecks on every call): " + json.dumps(allowed)
             context["instructions"] += "\nConnected data sources and visualization scope: " + json.dumps({k: compiled.get(k, []) for k in ("data_sources", "visualizers", "views", "timers", "recovery")})
             if compiled.get("data_sources"):
@@ -487,10 +487,21 @@ class SurfboardService:
             library = WorkflowLibrary(self).read(project['id'], self.board_item(scope, arguments))
             result.update(saved_surfboards=library['library']['entries'], template_link=library['link'], workflow_tasks=[row for row in library['tasks'] if row['project_id'] == project['id'] and (not self.board_item(scope, arguments) or scope.startswith('surfboard:') or row['id'] == self.board_item(scope, arguments))])
             return result
-        if tool == "propose_surfboard":
-            if not scope.startswith("surfboard:") or set(fields) - {"board", "expected_version", "expected_draft_version", "rollout"} or not {"board", "expected_version", "expected_draft_version"} <= set(fields):
-                raise SurfboardError("Only the surfboard configurator can propose a versioned board.", 403)
-            return self._save_board_draft(project["id"], fields, self.board_item(scope))
+        if tool in {"propose_surfboard", "apply_surfboard"}:
+            if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+                raise SurfboardError("Workflow changes require an active user-requested conversation.", 403)
+            item = self.board_item(scope, arguments)
+            fields.pop("experiment_id", None)
+            if tool == "propose_surfboard":
+                if set(fields) - {"board", "expected_version", "expected_draft_version", "rollout"} or not {"board", "expected_version", "expected_draft_version"} <= set(fields):
+                    raise SurfboardError("Proposing requires a board and its current board/draft versions.")
+                if self._chat_scope(scope)["role"] == "worker" and fields.get("rollout", {}).get("scope", "current") != "current":
+                    raise SurfboardError("Select each requested task explicitly; use the project default for future tasks.")
+                return self._save_board_draft(project["id"], fields, item)
+            rollout = ((state.get("draft") or {}).get("rollout") or {}).get("scope", "current")
+            if rollout == "existing" or (rollout == "future" and item):
+                raise SurfboardError("This draft targets multiple workflows. Read, propose and apply each requested task explicitly, or select the project default for future tasks.", 409)
+            return self.surfboard_action("surfboard.apply", {"project_id": project["id"], "experiment_id": item, **fields})
         if tool == "inspect_board_data":
             return self.board_runtime.data(scope, project, state, fields)
         if tool == "compile_latex":

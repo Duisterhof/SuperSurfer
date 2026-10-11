@@ -11,7 +11,8 @@ experiments and GPUs together—and shape the workspace around how you actually 
 - **Build your own workflow.** Connect agents, instructions, checks, compute and
   results on a **Surfboard**. Start by telling an agent what you want to build,
   or choose a saved workflow. Review its views and steps, refine them in chat,
-  and save a named version. Apply changes to one task, selected linked tasks,
+  and save a named version. Ask an agent to apply a specific workflow change
+  directly, or review its proposal first. Apply changes to one task, selected linked tasks,
   or future tasks; the detailed graph remains available under **Advanced**.
 - **Bring your agents.** Work with **Codex, Cursor or Claude Code** through
   persistent project leads and task workers. Give each a role, share context,

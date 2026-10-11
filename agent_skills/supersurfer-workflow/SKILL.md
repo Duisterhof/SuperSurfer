@@ -156,10 +156,12 @@ credentials or private service state into them. `inspect_project_activity` shows
 actual background work. `export_diagnostics` prepares a redacted report for user
 review; creating that local artifact does not authorize sending it elsewhere.
 
-For a requested workflow policy or capability change, prepare the concrete change for the task
-configurator, or the project configurator for future-task defaults, and its [skill](../supersurfer-surfboard/SKILL.md). Only that conversation
-has `propose_surfboard`; it creates a reviewable draft that the user applies. Never expand your own tools or requirements
-by altering a board as a workaround for an action denial.
+For a requested workflow policy or capability change, use `read_surfboard`,
+`propose_surfboard` and `apply_surfboard` with the current versions. Follow the
+[Surfboard skill](../supersurfer-surfboard/SKILL.md). Workers edit their own task;
+leads/managers select the requested task or project defaults. Applying does not
+launch work or satisfy a check. Preserve unrelated requirements and leave suggestions
+as drafts; an action denial alone does not authorize removing its gate.
 
 The board restricts managed SuperSurfer tools identically for Codex, Cursor and
 Claude Code through scoped MCP access. Native shell/file access follows the

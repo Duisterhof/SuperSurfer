@@ -93,8 +93,9 @@ Feed the resolved sources to the
 [experiment visualizer](../supersurfer-experiment-visualizer/SKILL.md). If a source
 is inaccessible, report that source's error and retain available evidence. Fetching
 new values on Results open is handled by the live Results bridge; no agent wakeup
-or republishing loop is needed. A requested selection change belongs in the configurator, which can call
-`propose_surfboard`; current board permissions apply until the user applies it.
+or republishing loop is needed. For a requested data-selection change, use `read_surfboard`, `propose_surfboard`
+and `apply_surfboard` within your task/project scope. Current permissions apply
+until the exact draft is applied; applying does not run an experiment.
 
 For a requested persistent HTML view, use enabled `list_view_blocks` /
 `publish_view_block`, then place an `html` tile with its durable `block_id` through

@@ -116,8 +116,17 @@ class GraphTests(unittest.TestCase):
         board["nodes"].append(alternate)
         board["edges"].append({"id": "reader-brief", "source": "reader", "target": "brief", "relation": "owns"})
         compiled = compile_board(board)
-        self.assertEqual(["ask_user", "read_surfboard"], compiled["tools_by_role"]["worker"])
+        self.assertEqual(["apply_surfboard", "ask_user", "propose_surfboard", "read_surfboard"], compiled["tools_by_role"]["worker"])
         self.assertIn("share the worker runtime role", " ".join(compiled["warnings"]))
+
+    def test_action_source_exclusions_are_validated_and_compiled(self):
+        board = template('software')
+        node(board, 'checks')['config']['source_exclude'] = ['outputs/**', 'measurements/*.json']
+        self.assertEqual(['outputs/**', 'measurements/*.json'], compile_board(board)['actions']['checks']['source_exclude'])
+        for patterns in ('outputs/**', ['/tmp/**'], ['../source/**'], ['outputs/../**'], ['a\\b'], ['a\nb']):
+            with self.subTest(patterns=patterns), self.assertRaises(SurfboardError):
+                node(board, 'checks')['config']['source_exclude'] = patterns
+                validate(board)
 
     def test_unknown_or_role_foreign_tools_are_rejected(self):
         for role, tool in [("worker", "shell_admin"), ("lead", "queue_run"), ("worker", "register_compute_gpus")]:

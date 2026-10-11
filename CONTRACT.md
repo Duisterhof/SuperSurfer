@@ -1,3 +1,27 @@
+# Agent-applied workflow changes — October 11, 2026
+
+Owned workers, leads, managers and configurators can read, propose and apply a
+user-requested Surfboard edit directly. `apply_surfboard` requires the exact saved
+board/draft versions and an active user turn. Workers stay inside their task;
+leads stay inside their project; managers select a project/task explicitly.
+Configuration tools remain available even when the board restricts execution
+tools. Suggestions stay drafts. Applying validates existing graph/source/resource
+rules, preserves task ownership, and starts no work. Multi-task library receipts
+remain reviewed UI operations; agents can edit explicitly requested tasks one by
+one, preserving each task's local overrides and reporting partial progress.
+
+Action blocks accept `source_exclude`, up to 64 repository-relative glob patterns
+for untracked generated outputs. Tracked files always participate. These patterns
+are recorded with the check receipt and reused for completion/freshness checks;
+changing the board invalidates old receipts. Unexcluded source retains the
+512 MiB/50,000-file bounds. Exclude outputs, never actual inputs to the check.
+
+Accepted direct steering or answers promote a background turn to user-requested
+work and clear inherited peer lineage. Rejected input leaves authority unchanged;
+run request receipts and handoff budgets remain intact. Unattended wakeups still
+cannot cancel runs or reconfigure workflows. Existing ownership, PR, source and
+resource checks continue to apply.
+
 # Chat-first Surfboards and editor behavior (0.1.42)
 
 Task Workflow and project Task defaults open the actual provider conversation.
@@ -345,7 +369,7 @@ fingerprint before committing a remote response, preserving a concurrent correct
 - A task snapshots its Surfboard when created. Legacy tasks are frozen before
   project defaults change. Task configurators and workers cannot edit another
   task's workflow or checklist; task boards cannot change shared compute budgets.
-  Workflow proposals still require reviewed apply. Applying a board starts no work.
+  Requested workflow edits can be applied by the scoped agent with exact draft versions. Applying a board starts no work.
 - `present_code` requires active user-requested work. It resolves revisions to full
   commit IDs and records a scoped presentation; it never checks out or edits code.
 - To-do writes use a content revision check and retain Markdown prose. Uploaded
@@ -564,7 +588,8 @@ worker/experiment (the UI may label the item differently).
   relationship such as data input or prerequisite. Definitions are validated and
   compare-and-swapped against their base version; stale or invalid edits cannot
   replace the active board. Agent `read_surfboard` is scoped to the project and
-  `propose_surfboard` creates a proposal only. Application is a user action. Importing,
+  `propose_surfboard` creates a proposal only. `apply_surfboard` applies a requested
+  change during a user turn; suggestions remain drafts. Importing,
   duplicating or saving a board starts no inference, process, schedule or run.
 - **Authority:** the graph's capabilities and role tool selections narrow actual
   tools; the service also enforces them on calls. They cannot add a tool outside
@@ -922,7 +947,7 @@ The current implementation supports worker onboarding and prepared-node-first su
 
 Role instructions and messaging-tool guidance route domain research to project leads/workers. Workspace-manager escalation is for shared compute, queue/budget conflicts, cross-project dependencies or explicit manager-delegated tasks. This is model guidance, not semantic message-content enforcement; all permitted direct contacts remain available.
 
-A direct user send or steering input establishes `user_priority_since`, preserved across automatic goal continuations. While busy, unsolicited peer messages remain durable queued inbox entries. A peer reply may steer only when it references a request sent by this recipient to that sender at or after the latest direct user instruction. Explicit inbox reads remain available. Idle recipients accept mail automatically; each drain pass delivers at most one message per recipient. Stop, pending interactions, scheduled-origin restrictions and uncertain-delivery no-replay rules remain in force. Peer-started turns clear direct-user priority; successful direct steering clears inherited peer lineage without resetting action limits or widening scheduled permissions.
+A direct user send or steering input establishes `user_priority_since`, preserved across automatic goal continuations. While busy, unsolicited peer messages remain durable queued inbox entries. A peer reply may steer only when it references a request sent by this recipient to that sender at or after the latest direct user instruction. Explicit inbox reads remain available. Idle recipients accept mail automatically; each drain pass delivers at most one message per recipient. Stop, pending interactions, scheduled-origin restrictions and uncertain-delivery no-replay rules remain in force. Peer-started turns clear direct-user priority; successful direct steering clears inherited peer lineage and promotes the turn to user-requested authority without resetting action limits. Unattended scheduled turns retain their restrictions.
 
 An explicit `handoff_experiment.agent_scope` validates membership and checks only that selected agent's busy state, permitting requested parallel agents. Default starts without an explicit scope retain the experiment-wide busy guard. This grants no extra research launch authority.
 

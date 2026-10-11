@@ -30,8 +30,10 @@ this change to all workflows of this kind,” propose `rollout` with the request
 linked tasks, alongside both current version numbers in `propose_surfboard`.
 Read `template_link` and `workflow_tasks`; labels are not membership evidence.
 Explain the intended targets and local override conflicts. Saving, previewing,
-applying and undoing the library change are user UI actions, not configurator
-execution tools. Follow [saved workflows](references/saved-workflows.md) for the
+applying and undoing a library-wide batch remain UI actions. For direct agent
+edits across existing tasks, read, propose and apply each explicitly requested
+task separately, preserving its local overrides; report each result. Do not claim
+a multi-task rollout from one apply_surfboard call. Follow [saved workflows](references/saved-workflows.md) for the
 scope and revision contract. No new work starts merely because the user applies
 an example workflow, and a drawn monitoring rule is not an active schedule.
 
@@ -75,7 +77,7 @@ limits but cannot set separate caps or remove the project's caps. Preserve limit
 on unrelated workflow/page changes. A requested budget change belongs to the
 project configurator or an enabled project-limit tool, not a task-board proposal.
 The scheduler response establishes the applied budget; a saved diagram alone
-does not. A configurator proposes and the user applies.
+does not. An agent can propose and apply a user-requested change with version checks.
 
 Treat workflow and page arrangement separately. Use `read_view_layout` and
 `update_view_layout` to apply a requested project page or individual work-item
@@ -191,14 +193,26 @@ Changing a view's selection does not move data, grant access to another project,
 alter training, or authorize reusing held-out examples in training. Preserve source
 and experiment identities; see the W&B and visualizer skills attached to the blocks.
 
-For workflow policy, capabilities, data-flow or work-item defaults, call
-`propose_surfboard` with the revised definition and current base version.
-Explain the concrete change: affected roles/tools, added or removed requirements,
-data visibility and what remains an ongoing activity. The user reviews and applies
-the proposal in the configurator. Never apply your own proposal through another API,
-edit the active state file, or change permissions to obtain a tool denied by the
-current board. On a version conflict, reread and reconcile; do not overwrite the
-newer board. Do not execute an example action just because its block was added.
+For workflow policy, capabilities, data-flow or work-item defaults, read the
+current definition and both versions, then call `propose_surfboard`. If the user
+asked you to make the change, call `apply_surfboard` with the returned board and
+draft versions. Do not require a second user click or a manager relay. Workers
+can change their task; leads/managers select a task or the future project default.
+Explain changed roles/tools, requirements, data visibility and ongoing activity.
+Suggestions remain drafts. Preserve unrelated rules; a failing check alone does
+not authorize weakening it. Never edit active state files or bypass a denied tool.
+On a version conflict, reread and reconcile. Applying configuration does not start
+an action, certify a check, alter an existing run contract or launch a run.
+
+A check/code/preview block can set `source_exclude` to repository-relative glob
+patterns for untracked generated outputs, for example `outputs/**` or a specific
+checkpoint directory. Inspect what those paths contain first. Tracked files always
+participate; all other untracked source still participates. Do not exclude actual
+code or inputs the check is meant to cover merely to obtain a passing receipt.
+Use this setting when generated artifacts exceed the bounded source receipt; no
+artifact deletion, relocation or source-limit increase is required. Apply the
+updated board, then run its check and inspect the real receipt before claiming
+that enforcement is working.
 
 Validate the graph's behavior, not its appearance alone: correct owner/scope,
 required evidence, meaningful data inputs, and an explicit recovery/stop path where

@@ -71,8 +71,10 @@ and attempt. Choose scientifically compatible methods from the available inputs;
 sharing data does not make incompatible protocols comparable or authorize mixing
 held-out examples into training. The reusable W&B and Experiment visualizer block
 skills cover source resolution and publication. For a requested selection or graph
-change, the configurator uses `propose_surfboard`; only an applied proposal changes
-the active input.
+change, read the current board, use `propose_surfboard`, then `apply_surfboard`
+with the returned versions when the user requested the change. Preserve unrelated
+requirements and edit only your scope; suggestions remain drafts. Only an applied
+proposal changes the active input.
 Generic software/web artifacts need neither W&B nor training plots.
 For figures or claims going into a LaTeX paper, record the exact writer, split,
 protocol and measurement date used for the exported figure. A live Results page

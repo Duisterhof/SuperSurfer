@@ -1,3 +1,25 @@
+# Direct workflow changes and user steering — October 11, 2026
+
+The full suite passes 747 Python tests and 37 enabled Node tests (five optional
+SSH checks skipped). The subsequently added large-artifact regression passes in
+the 22-test board-runtime suite. Tests cover direct worker/lead/manager application,
+MCP schema and authenticated HTTP transport, scope/read-only/background/stale-version
+rejection, and enforcement of an agent-added check before queueing. Accepted user
+steering or answers authorize cancellation of the requested fixture queue entry;
+the independent evaluator remains running, with no duplicate launch.
+
+A sparse 513 MiB untracked artifact reproduces the receipt-size failure. Configured
+output exclusions permit the check, while tracked files (even under an excluded
+path) and unexcluded new source remain fingerprinted. Invalid exclusion patterns
+are rejected. Updated capability skills pass both repository and skill validation.
+
+The real-browser workflow check passes chat-first entry, saved definitions,
+review/apply and navigation with a retained draft. The Linux x64 package builds
+and opens with an isolated Electron profile; renderer isolation, preferences and
+untrusted-page denial pass. No real provider inference, GPU operations, live board
+edits or workspace restart was used. This is a local patch build, not a published
+replacement for 0.1.42; macOS packaging was not run on this Linux machine.
+
 # Terminal zoom and embedded editor shortcuts — October 11, 2026
 
 Real Code OSS browser checks cover Control and Meta +/−/0 in a terminal inside

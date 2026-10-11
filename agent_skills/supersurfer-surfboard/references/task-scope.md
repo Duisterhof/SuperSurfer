@@ -17,11 +17,12 @@ a different view or template never bypasses a current task's denied capability.
 `read_surfboard` resolves a worker's own task automatically. A lead can supply
 `experiment_id` to inspect a task within its project; the manager supplies the
 target project/item. Omit the item only when inspecting the project defaults.
-For a task-policy change, use that task's configurator conversation,
-`surfboard:experiment:<id>`. The project configurator edits project defaults.
-Each configurator reads its own versions and uses `propose_surfboard`; the user
-reviews and applies the proposal. Neither ordinary workers nor leads may grant
-themselves new tools by changing state or invoking another API.
+For a requested task-policy change, workers can propose and apply their own
+board directly with `propose_surfboard` and `apply_surfboard`. Leads and managers
+select `experiment_id`; omit it for future project defaults. Configurator chats
+use the same versioned tools. Suggestions stay drafts; requested edits need no
+additional UI approval. These tools preserve scope and do not launch work or
+rewrite existing run contracts. Never mutate service state through another API.
 
 Tasks in one project still share repository files, project data/artifacts and the
 compute pool. Their independent workflow does not create a checkout, isolated
