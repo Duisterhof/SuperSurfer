@@ -191,7 +191,8 @@ class Store:
         return data
 
     def _write_data(self, data):
-        self.db.execute("INSERT OR REPLACE INTO experiments VALUES(?,?)", (data["id"], json.dumps(data)))
+        self.db.execute("INSERT INTO experiments(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data WHERE experiments.data!=excluded.data",
+                        (data["id"], json.dumps(data)))
 
     def set_experiment_tracking(self, experiment_id, tracking):
         """Update integration metadata without overwriting a concurrent document edit."""

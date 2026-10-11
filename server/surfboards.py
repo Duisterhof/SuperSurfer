@@ -6,6 +6,7 @@ evidence receipts remain with the tools that consume the compiled definition.
 from __future__ import annotations
 
 from copy import deepcopy
+from functools import lru_cache
 import json
 import math
 import re
@@ -902,6 +903,12 @@ def diff_summary(before, after):
     return result or ["Update the diagram layout."]
 
 
+@lru_cache(maxsize=128)
+def _compiled_snapshot(serialized_board):
+    # Cache pure compilation by the complete definition, never by a stale version.
+    return compile_board(json.loads(serialized_board))
+
+
 class Surfboards:
     """Versioned workflows. Projects provide defaults; tasks own snapshots."""
     def __init__(self, store):
@@ -912,11 +919,12 @@ class Surfboards:
         return "surfboard:" + project_id
 
     def _record(self, project_id):
-        return self.store.get(self._key(project_id), {"version": 0, "board": template(), "draft": None, "next_draft_version": 0, "history": []})
+        record = self.store.get(self._key(project_id))
+        return record if record is not None else {"version": 0, "board": template(), "draft": None, "next_draft_version": 0, "history": []}
 
     def _public(self, project_id, record):
         return {"project_id": project_id, "version": record["version"], "board": deepcopy(record["board"]),
-                "compiled": compile_board(record["board"]), "implicit": record["version"] == 0,
+                "compiled": deepcopy(_compiled_snapshot(json.dumps(record["board"], sort_keys=True, separators=(",", ":")))), "implicit": record["version"] == 0,
                 "draft": deepcopy(record.get("draft"))}
 
     def get(self, project_id):
@@ -946,9 +954,19 @@ class Surfboards:
                 "next_draft_version": 0, "history": [],
                 "inherited_from": {"project_id": project_id, "version": source["version"]}}
 
-    def task(self, project_id, experiment_id, *, read_only=False):
+    def _task_record(self, project_id, experiment_id, *, read_only=False):
         identity = self.task_key(project_id, experiment_id, read_only=read_only)
-        record = self.store.get(self._key(identity)) or self.task_seed(project_id)
+        return self.store.get(self._key(identity)) or self.task_seed(project_id)
+
+    def summary(self, project_id, experiment_id, *, read_only=False):
+        """Return the current task label without copying its entire workflow."""
+        record = self._task_record(project_id, experiment_id, read_only=read_only)
+        compiled = _compiled_snapshot(json.dumps(record["board"], sort_keys=True, separators=(",", ":")))
+        return {"workflow": compiled["workflow"], "item_label": compiled["item_label"],
+                "name": record["board"]["name"], "version": record["version"]}
+
+    def task(self, project_id, experiment_id, *, read_only=False):
+        record = self._task_record(project_id, experiment_id, read_only=read_only)
         return {**self._public(project_id, record), "experiment_id": experiment_id,
                 "inherited_from": record.get("inherited_from")}
 

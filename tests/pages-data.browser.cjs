@@ -27,7 +27,7 @@ async function fixture(){
    sessionStorage.setItem('supersurfer-token',token);
    if(!localStorage.getItem('supersurfer-workspace'))localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId,tab:'overview',chatVisible:true}));
   },{token,projectId});
-  await page.goto(base);await page.locator('#main [data-action="add-view-page"]').waitFor();
+  await page.goto(base);await page.locator('#arrange-page').waitFor();
   const request=(route,body)=>page.evaluate(async({route,body})=>{
    const response=await fetch('/api/'+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+sessionStorage.getItem('supersurfer-token'),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
    const data=await response.json();if(!response.ok)throw new Error(JSON.stringify(data));return data;
@@ -96,7 +96,7 @@ async function fixture(){
   let documentVersion=1,documentError=true,holdDocument=false,documentCalls=0;
   const documentWaiters=[];
   await page.route('**/api/experiment?*',async route=>{
-   const response=await route.fetch(),data=await response.json();
+   const response=await route.fetch({headers:{...route.request().headers(),'if-none-match':''}}),data=await response.json();
    if(new URL(route.request().url()).searchParams.get('id')===itemId)data.pages=[{id:'protocol',title:'Method protocol',version:documentVersion}];
    await route.fulfill({response,json:data});
   });

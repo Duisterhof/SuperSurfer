@@ -1,3 +1,65 @@
+# SuperSurfer 0.1.41 — October 10–11, 2026
+
+Cursor connection and performance review uses isolated fixture accounts, protocols,
+workspaces and native editor runtimes. The friend’s exact failure and brand-new
+account authentication are unavailable. A real existing-login Cursor ACP handshake
+passes with both sandbox modes, without a prompt or paid inference. JSON/legacy
+status, explicit installation, host-bound Terminal fallback, fresh account checks,
+provider switching, delayed-provider races, expired-code retry and persistent
+connection errors after the reconnect grace period are regression-tested.
+
+Measured warm state refresh falls from 61.64 to 6.97 ms in the 40-task fixture;
+600-message full chat reads fall from 483.05 to 2.50 ms. Recent-history rendering
+reduces the browser update median from 427 to 94 ms, retaining older messages
+behind Show earlier. 200/1,000-task profiling keeps recent chat reads below 2 ms
+on this host. Native selection with Vim measures 58–97 ms; selection during pending
+autocompile and canceled-read dirty-state guards pass. See
+[the measurement report](tests/reports/performance041.md) for methods and limits.
+
+Browser fixtures cover provider-only startup; all three Settings accounts/defaults;
+reconnect grace; complete monitoring history; queues and idempotent retained drafts;
+conservative GPU counts and refresh; wakeups/questions; current Results/W&B refresh;
+file uploads, Markdown checklist conflicts, terminal/ports/media and page creation/removal; split and
+floating layouts, separate windows, expanded sidebars; native and built-in dirty
+buffers, chunk decisions, overlapping edits, repeated saves; real multi-file LaTeX
+compilation, PDF selections and last-good build recovery. Real Open VSX Vim install,
+configuration/removal and native iframe navigation/draft retention pass.
+
+Six consecutive native mixed-chunk Accept/Reject fixtures pass after removing
+redundant virtual-document reloads and adding the validated activation path.
+Linux packaging and isolated native Electron startup/persistence pass. All twelve
+skills receive the required substantive capability review and version check.
+Mac builds are cross-built on Linux: archive integrity/source bytes are checked,
+but actual macOS launch/signing/Gatekeeper and a brand-new OAuth callback remain
+external-platform checks. No live workspace restart or research launch is used.
+
+Final regression: **727 Python tests** and **35 enabled Node tests** pass; five optional real-SSH checks remain skipped. The final chat scope/history cancellation browser check also passes. A 60-minute fake-provider lifecycle run passes **1,678 checks** across streaming,
+scoped approvals/questions, concurrent scopes, stop ownership and restart without
+replay. Cleanup remains at one thread and four descriptors; observed peak RSS is
+31.49 MiB. A separate **90-minute** workspace/read run passes. Its final periodic sample
+records **19,023 authenticated reads**, including **13,948 unchanged 304 replies**,
+with 18.50 ms median and 100.43 ms maximum observed response time under concurrent
+QA load. Peak RSS is 49.02 MiB and the content cache remains at 128 entries.
+The run cycles 0–200 synthetic attempts, four workflows, external document edits
+and manager outages; fresh mutations reject stale/unavailable evidence and task
+lifecycle is not replaced by a failed attempt. It uses an earlier optimized read
+snapshot during sustained execution; the final suite covers subsequent guards.
+
+Final Mac arm64/x64 and Linux x64 archive/source-byte verification and native Linux
+startup are completed during packaging. These checks do not claim native Mac signing
+or a new real OAuth callback.
+
+# Compact coding backend Settings — October 9, 2026
+
+Accounts and role defaults share one Coding backends section. Browser checks
+cover all three provider rows, aligned controls at wide widths, adaptive layout
+with the agent sidebar open, provider switching without losing Codex drafts,
+persisted defaults and reload. The Settings refresh/scroll/editor draft check
+also passes. Full regression: 711 Python tests and 33 enabled Node tests pass;
+five optional SSH tests are skipped. Linux packaging and isolated native
+Electron startup/persistence pass. These checks use synthetic accounts; no live
+sign-ins, sign-outs, agent turns or research launches are used for testing.
+
 # SuperSurfer 0.1.40 — October 9, 2026
 
 Full backend regression: **710 Python tests** pass. The final focused Results

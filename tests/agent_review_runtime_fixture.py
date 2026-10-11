@@ -8,6 +8,18 @@ from test_editor_service import EditorServiceTests
 fixture=EditorServiceTests();fixture.setUp()
 fixture.service.codex.account=lambda:{'account':{'type':'chatgpt'},'login_required':False}
 fixture.service.codex.decide_change=lambda scope,key,receipt:agent_edits.decide(fixture.edits_db,scope,key,receipt)
+if '--debug-review' in sys.argv:
+    import threading
+    debug_lock = threading.Lock()
+    original_bridge = fixture.service.workbench.bridge
+    def debug_bridge(fields):
+        result = original_bridge(fields)
+        if fields.get('operation') in {'chunk_decision', 'review_active'}:
+            record = {key: fields.get(key) for key in ('operation', 'scope', 'change_id', 'path', 'hunk', 'decision', 'revision')}
+            with debug_lock, (fixture.service.directory / 'review-debug.jsonl').open('a') as stream:
+                stream.write(json.dumps(record) + '\n')
+        return result
+    fixture.service.workbench.bridge = debug_bridge
 scope='project:'+fixture.pid
 for name in ('main.py','accepted.py','conflict.py','native.py','native-dirty.py'):
     (fixture.repository/name).write_text('new\nuser tail\n')

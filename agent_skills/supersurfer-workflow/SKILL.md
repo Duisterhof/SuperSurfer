@@ -2,12 +2,12 @@
 name: supersurfer-workflow
 description: Complete software engineering or web design work in SuperSurfer using the task's applied surfboard, scoped agents, configured checks and published artifacts.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # Work from the task’s surfboard
 
-Reviewed for SuperSurfer 0.1.40. Read the resolved board and current goal supplied in
+Reviewed for SuperSurfer 0.1.41. Read the resolved board and current goal supplied in
 context. Use `read_surfboard` when you need its full graph, role policy or action
 configuration. Each task snapshots the project default or an explicitly selected
 `surfboard_template`; later default edits do not rewrite existing tasks. Read the
@@ -195,8 +195,6 @@ starting a server. Do not use code-server proxy routes, broaden app CORS or rela
 arbitrary localhost services to bypass these boundaries. Browser-only access
 starts no forwarding; use the desktop flow.
 
-Desktop page tabs and Activity remain below the native title area; the native Rearrange command remains the layout entry point. Edge arrows hide or restore either sidebar without altering the task board, action receipts or ongoing work. Do not treat pane visibility as a workflow state.
-
 Both Monaco and the optional native editor use source-buffer Accept/Reject for
 external edits merged into an
 unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
@@ -217,3 +215,10 @@ a required review after launched attempts. It uses existing measured evidence or
 explicit unavailable entries and exact report/attempt revisions, not another run.
 Held-only drafts and nonresearch boards do not force that checkpoint; read
 [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
+
+For provider connection issues, use Settings → Coding backends on the connected
+workspace host and its host-specific official sign-in action. Account status,
+model catalogs and native-session availability are separate capabilities; a
+successful login does not prove this block's tools, extensions or data sources
+are ready. Preserve existing native ownership and uncertain action identities.
+See [conversation continuity](../supersurfer-worker/references/conversations.md).

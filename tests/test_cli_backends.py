@@ -1,6 +1,7 @@
 """Exercise the provider wires and lifecycle without real accounts or model calls."""
 import json
 import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -22,8 +23,9 @@ logged=(json.loads(auth.read_text()).get(backend,True) if auth and auth.exists()
 def emit(value): print(json.dumps(value),flush=True)
 def record(value):
  with log.open('a') as f:f.write(json.dumps(value)+'\n')
-if ('auth' in sys.argv and 'status' in sys.argv) or sys.argv[-1]=='status':
+if ('auth' in sys.argv and 'status' in sys.argv) or 'status' in sys.argv:
  if backend=='claude':emit({'loggedIn':bool(logged),'authMethod':'claude.ai','email':'test@example.com','accessToken':'NEVER_CAPTURE_AUTH_TOKEN'})
+ elif '--format' in sys.argv:emit({'status':'authenticated' if logged else 'unauthenticated','isAuthenticated':bool(logged),'userInfo':{'email':'test@example.com'},'accessToken':'NEVER_CAPTURE_AUTH_TOKEN'})
  else:print('Authenticated as test@example.com' if logged else 'Not authenticated')
  sys.exit(0)
 if sys.argv[-1]=='logout':
@@ -40,7 +42,10 @@ for line in sys.stdin:
  v=json.loads(line);record(v)
  if backend=='cursor':
   method=v.get('method');p=v.get('params',{});key=v.get('id')
-  if method=='initialize':emit({'jsonrpc':'2.0','id':key,'result':{'protocolVersion':1,'agentCapabilities':{'loadSession':True}}})
+  if method=='initialize':
+   if os.environ.get('SS_TEST_UNSUPPORTED_ACP'):emit({'jsonrpc':'2.0','id':key,'error':{'code':-32601,'message':'ACP unsupported'}})
+   else:emit({'jsonrpc':'2.0','id':key,'result':{'protocolVersion':1,'agentCapabilities':{'loadSession':True},'authMethods':[{'id':'cursor_login'}]}})
+  elif method=='authenticate':emit({'jsonrpc':'2.0','id':key,'result':{}})
   elif method in ('session/new','session/load'):
    if method=='session/load':emit({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':p['sessionId'],'update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'HISTORICAL_REPLAY'}}}})
    emit({'jsonrpc':'2.0','id':key,'result':{'sessionId':session}})
@@ -101,11 +106,58 @@ class CliBackendTests(unittest.TestCase):
     def test_account_and_login_never_expose_or_collect_credentials(self):
         for backend in ('cursor','claude'):
             b=self.bridge(backend);account=b.account();self.assertFalse(account['login_required']);self.assertNotIn('NEVER_CAPTURE',json.dumps(account));self.assertEqual('terminal',b.login()['type']);self.assertFalse(self.log.exists())
+    def test_cursor_status_json_legacy_output_and_false_positive_are_handled(self):
+        bridge = self.bridge('cursor')
+        cases = [
+            ({'isAuthenticated': True, 'status': 'authenticated', 'userInfo': {'email': 'test@example.com'}, 'accessToken': 'DO_NOT_RETURN'}, True),
+            ({'isAuthenticated': False, 'status': 'unauthenticated'}, False),
+            ({'isAuthenticated': 'true', 'status': 'authenticated'}, False),
+            ({'isAuthenticated': True, 'status': 'unauthenticated'}, False),
+            ({'hasAccessToken': True}, False),
+            ('\x1b[32m✓ Logged in as test@example.com\x1b[0m', True),
+            ('Not authenticated. Run agent login to get authenticated.', False),
+        ]
+        for value, connected in cases:
+            output = json.dumps(value) if isinstance(value, dict) else value
+            with self.subTest(value=value), patch('server.cli_backends.subprocess.run', return_value=subprocess.CompletedProcess([], 0, output, '')):
+                account = bridge.account(refresh=True)
+                self.assertEqual(not connected, account['login_required'])
+                self.assertNotIn('DO_NOT_RETURN', json.dumps(account))
+        with patch('server.cli_backends.subprocess.run', side_effect=[subprocess.CompletedProcess([], 2, '', 'unknown option --format'), subprocess.CompletedProcess([], 0, 'Authenticated as test@example.com', '')]) as run:
+            self.assertFalse(bridge.account(refresh=True)['login_required'])
+            self.assertEqual(2, run.call_count)
+
+    def test_cached_account_is_shared_for_ui_but_cannot_authorize_a_signed_out_turn(self):
+        bridge = self.bridge('cursor')
+        signed_in = subprocess.CompletedProcess([], 0, json.dumps({'isAuthenticated': True, 'status': 'authenticated'}), '')
+        signed_out = subprocess.CompletedProcess([], 0, json.dumps({'isAuthenticated': False, 'status': 'unauthenticated'}), '')
+        with patch('server.cli_backends.subprocess.run', return_value=signed_in) as run:
+            first = bridge.account()
+            first['login_required'] = True
+            self.assertFalse(bridge.account()['login_required'])
+            self.assertEqual(1, run.call_count)
+        with patch('server.cli_backends.subprocess.run', return_value=signed_out) as run:
+            self.assertFalse(bridge.account()['login_required'])
+            with self.assertRaises(BridgeError):
+                bridge.send('manager', 'must not start')
+            self.assertEqual(1, run.call_count)
+            self.assertTrue(bridge.account()['login_required'])
+        self.assertEqual([], bridge.chat('manager')['messages'])
     def test_signed_out_send_records_no_message_or_model_call(self):
         b=self.bridge()
         with patch.dict(os.environ,{'SS_TEST_SIGNED_OUT':'1'}):
             with self.assertRaises(BridgeError):b.send('manager','hello')
         self.assertEqual([],b.chat('manager')['messages']);self.assertFalse(self.log.exists())
+    def test_cursor_connection_failure_has_setup_guidance_without_sending_a_prompt(self):
+        bridge = self.bridge('cursor')
+        with patch.dict(os.environ, {'SS_TEST_UNSUPPORTED_ACP': '1'}):
+            bridge.send('manager', 'Do the authorized task')
+            self.wait(lambda: not bridge.chat('manager')['busy'])
+        chat = bridge.chat('manager')
+        self.assertEqual('failed', chat['status'])
+        self.assertIn('Update the official Cursor CLI on this workspace computer', chat['error'])
+        self.assertIn('provider rejected this request', chat['error'])
+        self.assertFalse(any(row.get('method') in {'session/new', 'session/load', 'session/prompt'} for row in self.records()))
     def test_stream_resume_and_scoped_mcp_for_both_providers(self):
         for backend in ('cursor','claude'):
             b=self.bridge(backend);b.send('manager','hello');self.wait(lambda:not b.chat('manager')['busy']);chat=b.chat('manager')
@@ -116,7 +168,9 @@ class CliBackendTests(unittest.TestCase):
             if backend=='claude':
                 self.assertTrue(all(x['config_mode']=='0o600' for x in records if 'config_mode'in x));self.assertTrue(any('--resume=session-claude' in x.get('args',[]) for x in records));self.assertEqual([],list(b.state_dir.glob('turn-*')))
                 self.assertFalse(any('SCOPED_PRIVATE' in arg for row in records for arg in row.get('args',[])))
-            else:self.assertTrue(any(x.get('method')=='session/load' and x['params']['mcpServers'][0]['env'][0]['value'].endswith('manager') for x in records))
+            else:
+                self.assertTrue(any(x.get('method')=='authenticate' and x['params']['methodId']=='cursor_login' for x in records))
+                self.assertTrue(any(x.get('method')=='session/load' and x['params']['mcpServers'][0]['env'][0]['value'].endswith('manager') for x in records))
     def test_permission_is_once_scoped_and_redacts_sensitive_fields(self):
         for backend in ('cursor','claude'):
             b=self.bridge(backend);b.send('manager','approval');self.wait(lambda:bool(b.chat('manager')['approvals']));chat=b.chat('manager');approval=chat['approvals'][0]

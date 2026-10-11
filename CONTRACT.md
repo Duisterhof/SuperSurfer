@@ -1,7 +1,42 @@
-# SuperSurfer 0.1.40 — accounts, onboarding and research Results
+# SuperSurfer 0.1.41 — provider connection and responsive workspace
 
-Settings shows Codex, Cursor and Claude together, with status, official CLI sign-in
-and sign-out. The chosen workspace host owns its account, not the Mac client.
+Cursor account status uses the detected host CLI’s JSON status, with a bounded
+legacy text fallback. UI reads coalesce for at most ten seconds; explicit account
+checks and every new turn verify fresh native status. A cached login never
+provides turn authorization. Sign-out retains its per-provider idle/send lock.
+Cursor ACP authenticates with cursor_login when the CLI advertises that method.
+Initialization/authentication failures show workspace-host update/sign-in guidance
+before session creation or prompt delivery.
+On Mac, explicit CLI installation/sign-in uses a fixed official command bound to
+the current window’s host; remote login prints a browser link. Credentials and
+Terminal output remain outside the app. A failed Terminal launch preserves the
+complete host-bound command. Missing CLI setup remains accessible in Settings. Failed device codes show their
+reason and allow retry; persistent transport errors surface after the reconnect
+grace period. Dismissing the dialog never authorizes agent sends.
+
+Workspace reads skip unchanged SQLite writes, reuse at most 128 content-keyed
+compiled workflows and return current task summaries without full graph copies.
+Fresh checks still wait for the manager and fail closed. Display reads may use
+existing evidence with its original observation timestamp during another refresh; manager failures retain a
+five-second minimum retry backoff. Reading status does not add GPU probes.
+Authenticated conditional responses check ownership before returning 304; gzip
+covers textual responses, never artifact byte ranges. UI response memory is
+bounded and cleared when the workspace token changes. Decisions and provider
+status are excluded from this cache.
+
+Chat displays the latest 80 messages, with Show earlier retaining access to the
+complete saved conversation. Native history and provider sessions are preserved.
+Assistant text writes coalesce for up to 150 milliseconds; questions, approvals,
+state transitions, final turn outcomes and graceful shutdown save immediately. An abrupt process
+kill can lose that bounded text tail; uncertain work is still never replayed.
+Superseded chat/editor reads are canceled and their late responses are ignored.
+Save/autocompile callbacks do not block selection delivery. Session-scoped
+Cmd/Ctrl+L bindings outrank Vim’s defaults while preserving other user bindings.
+
+Settings groups Codex, Cursor and Claude in one Coding backends section, with
+status, official CLI sign-in/sign-out and compact defaults for each agent role.
+Provider, model and effort align within the available panel width. Cursor and
+Claude use chat model selection; hidden Codex defaults and drafts are retained. The chosen workspace host owns its account, not the Mac client.
 Fresh workspaces ask for an explicit signed-in provider before sending; it persists
 all three new-agent defaults. Existing bindings are never migrated. Sign-out uses
 the provider's native operation, preserves history, rejects active owned turns and

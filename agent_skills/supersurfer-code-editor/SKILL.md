@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.40. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.41. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
 to be installed and selected. The default Code block is a clean editing surface:
@@ -180,9 +180,10 @@ focus its composer. The built-in editor also supports Cmd/Ctrl+Shift+L; native
 Rearrange uses its separate Cmd/Ctrl+Alt+Shift+R shortcut. Context appears as compact expandable/removable chips and
 is preserved per conversation while navigating in the current window. Adding,
 expanding or removing a chip does not send work, create an agent or save a file;
-only the user's explicit send delivers it with the request. Native selection
-handoff uses a bounded server-notified event wait, with cached scoped agent
-directory data when valid. A briefly pending attachment is not a sent message;
+only the user's explicit send delivers it with the request. In a SuperSurfer-managed native editor session, Cmd/Ctrl+L takes priority over
+Vim to attach the selection; this session binding does not modify unrelated
+native user keybindings. Native selection handoff uses a bounded server-notified
+event wait, with cached scoped agent directory data when valid. A briefly pending attachment is not a sent message;
 do not retry by sending the same request or creating a new conversation.
 
 When the user sends an attachment, preserve its captured path, range and text.
@@ -287,7 +288,8 @@ can operate without saving. Revision conflicts preserve newer work;
 save and reread before retrying. Pending receipts survive lost replies: retry
 only the same selected chunk set and decision before starting another operation.
 Native chunk actions keep stable recorded-diff identities and review state when
-its language changes. Event-driven command waits and late source/diff refreshes
+its language changes. Refresh keeps unchanged virtual diff documents rather than
+reopening equivalent content; a refresh alone never replays a chunk decision. Event-driven command waits and late source/diff refreshes
 must preserve the user's newer file selection; a delayed review response is not
 permission to switch the editor back or overwrite its current source. Inspect the
 actual receipt after uncertainty rather than repeating an undo against stale data.
@@ -343,3 +345,10 @@ remaining docked panels; inside Rearrange, Done/Cancel still controls its draft.
 Dirty Monaco models/native parked frames survive view removal in the current
 window session, not as a promise of durability after closing/reloading the app.
 Save intended source before ending that session; removal neither saves nor deletes it.
+
+For provider connection issues, use Settings → Coding backends on the connected
+workspace host and its host-specific official sign-in action. Account status,
+model catalogs and native-session availability are separate capabilities; a
+successful login does not prove this block's tools, extensions or data sources
+are ready. Preserve existing native ownership and uncertain action identities.
+See [conversation continuity](../supersurfer-worker/references/conversations.md).

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import gzip
 import hmac
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -182,6 +183,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.action_lock = threading.RLock()
         self.project_limits = ProjectLimits(self)
         self.model_lock = threading.RLock()
+        self.provider_model_locks = {name: threading.RLock() for name in ("cursor", "claude")}
         self._models_cache = None
         self._models_checked_at = 0
         self._models_error = None
@@ -197,8 +199,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.turn_queue_requests = {}
         snapshot = self.store.get("last_snapshot")
         if snapshot and self.aml.snapshot is None:
-            self.aml.snapshot = snapshot["data"]
-            self.aml.updated_at = snapshot["updated_at"]
+            self.aml.restore_snapshot(snapshot["data"], snapshot["updated_at"])
         self._snapshot_saved = None
         token_path = self.directory / "token"
         if token_path.is_symlink():
@@ -239,11 +240,23 @@ class Service(SurfboardService, EditorService, WritingService):
             self.monitor_thread = threading.Thread(target=self._monitor_loop, name="supersurfer-monitor", daemon=True)
             self.monitor_thread.start()
 
-    def state(self, force=False):
+    def manager_snapshot(self, force=False):
         snapshot, error, updated_at = self.aml.status(force)
         if updated_at is not None and updated_at != self._snapshot_saved:
             self.store.put("last_snapshot", {"data": snapshot, "updated_at": updated_at})
             self._snapshot_saved = updated_at
+        return snapshot, error, updated_at
+
+    def project_view(self, project):
+        project["archived"] = bool(self.store.get("project_archived:" + project["id"], False))
+        board = self.boards.get(project["id"])
+        project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
+        project["surfboard"]["hidden_tabs"] = self.store.get("hidden_view_tabs:" + project["id"] + ":", [])
+        project["initialized"] = bool(self.store.get("initialized:" + project["id"]))
+        return project
+
+    def state(self, force=False):
+        snapshot, error, updated_at = self.manager_snapshot(force)
         state = normalize(snapshot)
         state.update(connected=error is None and bool(snapshot), error=error, updated_at=updated_at, read_only=self.read_only)
         known = {project["id"] for project in state["projects"]}
@@ -252,16 +265,12 @@ class Service(SurfboardService, EditorService, WritingService):
         if self.store.get("local_projects", []):
             state["connected"] = True
         for project in state["projects"]:
-            project["archived"] = bool(self.store.get("project_archived:"+project["id"],False))
-            board = self.boards.get(project["id"])
-            project["surfboard"] = {**{key: board["compiled"].get(key) for key in ("workflow", "item_label", "tabs", "views", "layouts", "pages", "available_tiles")}, "name": board["board"]["name"], "version": board["version"]}
-            project["surfboard"]["hidden_tabs"] = self.store.get("hidden_view_tabs:" + project["id"] + ":", [])
+            self.project_view(project)
         chats = self.codex.list_chats() if hasattr(self.codex, "list_chats") else []
         state["experiments"] = self.store.import_state(snapshot, state, chats)
         for item in state["experiments"]:
             item["archived"] = bool(self.store.get("experiment_archived:" + item["id"], False))
-            task_board = self.board_record(item["project_id"], item["id"])
-            item["surfboard"] = {"workflow": task_board["compiled"]["workflow"], "name": task_board["board"]["name"], "version": task_board["version"], "item_label": task_board["compiled"]["item_label"]}
+            item["surfboard"] = self.boards.summary(item["project_id"], item["id"], read_only=self.read_only)
         projects = {project["id"]: project for project in state["projects"]}
         experiments = {experiment["id"]: experiment for experiment in state["experiments"]}
         for run in state["runs"]:
@@ -441,6 +450,18 @@ class Service(SurfboardService, EditorService, WritingService):
                 return
 
     def lookup(self, collection, key, fresh=False):
+        if collection == "projects":
+            snapshot, error, _ = self.manager_snapshot(fresh)
+            projects = normalize({"projects": snapshot.get("projects", []), "agents": snapshot.get("agents", [])})["projects"]
+            local = self.store.get("local_projects", [])
+            known = {row["id"] for row in projects}
+            projects.extend(row for row in local if row["id"] not in known)
+            for project in projects:
+                if project["id"] == key:
+                    if fresh and (error is not None or not snapshot) and key not in {row["id"] for row in local}:
+                        raise APIError("AutoML manager is unavailable: " + (error or "disconnected"), 503)
+                    return self.project_view(project)
+            raise APIError("Project not found", 404)
         state = self.state(force=fresh)
         local_ids = {project["id"] for project in self.store.get("local_projects", [])}
         for value in state[collection]:
@@ -1394,7 +1415,7 @@ class Service(SurfboardService, EditorService, WritingService):
             from .cli_backends import provider_name
             provider_name(backend)
             key = "catalog:" + backend
-            with self.model_lock:
+            with self.provider_model_locks[backend]:
                 cached = self._model_defaults_cache.get(key)
                 if refresh or not cached or time.monotonic() - cached[0] > 60:
                     cached = (time.monotonic(), self.codex.models(backend=backend))
@@ -1536,7 +1557,9 @@ class Service(SurfboardService, EditorService, WritingService):
         for role in roles:
             self._model_choice(settings["models"][role] if settings["backends"][role] == "codex" else None, settings["reasoning"][role] if settings["backends"][role] == "codex" else None, explicit_reasoning=settings["backends"][role] == "codex" and (role in changes.get("models", {}) or role in changes.get("reasoning", {})), backend=settings["backends"][role])
 
-    def chat(self, scope):
+    def chat(self, scope, message_limit=None):
+        if message_limit is not None and (type(message_limit) is not int or not 1 <= message_limit <= 100000):
+            raise APIError("Choose a chat history size between 1 and 100000")
         if scope.startswith("agent:"):
             agent = self.lookup("agents", scope.removeprefix("agent:"))
             result = self.aml.native_chat(agent)
@@ -1546,10 +1569,15 @@ class Service(SurfboardService, EditorService, WritingService):
                 result["busy"] = False
                 result["ownership"] = "Previous AutoML conversation: read-only history. Create a SuperSurfer agent to continue work."
             result["preferences"] = self.chat_preferences(scope)
+            if message_limit is not None:
+                result["message_count"] = len(result["messages"])
+                result["messages"] = result["messages"][-message_limit:]
             return result
-        self.context_provider(scope)  # Validate IDs even before a chat exists.
+        # Full role context is built for new chats and actual turns by the bridge.
+        # Polling an existing chat only needs to validate its current ownership.
+        self._chat_scope(scope)
         self.sync_task_wakeups()
-        result = self.codex.chat(scope)
+        result = self.codex.chat(scope) if message_limit is None else self.codex.chat(scope, message_limit=message_limit)
         result["archived"] = self.chat_archived(scope)
         result.setdefault("agent", {})["name"] = self.store.get("chat_name:" + scope, result.get("agent", {}).get("name", "Agent"))
         result["preferences"] = self.chat_preferences(scope)
@@ -2004,12 +2032,33 @@ class Handler(BaseHTTPRequestHandler):
         # Never log Authorization headers, query strings, prompts or account codes.
         pass
 
-    def respond(self, status, payload, content_type="application/json; charset=utf-8", preview=False):
+    def respond(self, status, payload, content_type="application/json; charset=utf-8", preview=False, conditional=False):
         body = json.dumps(payload, allow_nan=False).encode() if not isinstance(payload, bytes) else payload
+        etag = 'W/"' + hashlib.sha256(body).hexdigest() + '"' if conditional and status == 200 else None
+        if etag and etag in [part.strip() for part in self.headers.get("If-None-Match", "").split(",")]:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+        # JSON and UI source compress well over SSH; videos and byte ranges use
+        # artifact_response instead and retain their original byte offsets.
+        compressible = content_type.startswith("text/") or "json" in content_type or "javascript" in content_type or "svg" in content_type
+        encoded = compressible and len(body) >= 2048 and any(
+            part.strip().split(";", 1)[0].lower() == "gzip" and not re.search(r";\s*q=0(?:\.0*)?(?:\s*(?:;|$))", part, re.I)
+            for part in self.headers.get("Accept-Encoding", "").split(","))
+        if encoded:
+            body = gzip.compress(body, compresslevel=3, mtime=0)
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if etag:
+            self.send_header("ETag", etag)
+        if compressible:
+            self.send_header("Vary", "Accept-Encoding")
+        if encoded:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         if preview:
@@ -2190,7 +2239,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.server.service.store.experiment(experiment_id)
                     result = {"rules": self.server.service.wakeups.list(experiment_id)}
                 elif path == "/api/chat":
-                    result = self.server.service.chat(query.get("scope", [""])[0])
+                    limit = int(query["limit"][0]) if "limit" in query else None
+                    result = self.server.service.chat(query.get("scope", [""])[0], message_limit=limit)
                 elif path == "/api/metrics":
                     experiment = self.server.service.store.experiment(query.get("id", [""])[0])
                     result = self.server.service.wandb.metrics(experiment["wandb_url"], refresh=query.get("refresh", [""])[0] == "1")
@@ -2204,14 +2254,14 @@ class Handler(BaseHTTPRequestHandler):
                     backend = query.get("backend", ["codex"])[0]
                     from .cli_backends import provider_name
                     provider_name(backend)
-                    result = self.server.service.codex.account(backend=backend) if hasattr(self.server.service.codex, "backend_for") else self.server.service.codex.account()
+                    result = self.server.service.codex.account(backend=backend, refresh=query.get("refresh", [""])[0] == "1") if hasattr(self.server.service.codex, "backend_for") else self.server.service.codex.account()
                 elif path == "/api/models":
                     result = self.server.service.models(backend=query.get("backend", ["codex"])[0])
                 elif path == "/api/directories":
                     result = directory_suggestions(query.get("path", [""])[0])
                 else:
                     raise APIError("Not found", 404)
-                self.respond(200, result)
+                self.respond(200, result, conditional=path in {"/api/state", "/api/chat", "/api/experiment", "/api/experiment-agents", "/api/project-agents", "/api/results", "/api/view-layout", "/api/worker-wakeups"})
                 return
             requested = (self.server.ui_dir / (path.lstrip("/") or "index.html")).resolve()
             if not requested.is_relative_to(self.server.ui_dir) or not requested.is_file():

@@ -1,3 +1,16 @@
+# Completed in 0.1.41
+
+- Accessible Cursor CLI installation and host-bound sign-in with Terminal fallback.
+- JSON and legacy Cursor login detection; advertised ACP authentication.
+- Coalesced display account checks with fresh authorization on every turn.
+- Independent provider model lookups and immediate provider switching while another stalls.
+- Current task summaries, bounded workflow compilation cache and unchanged-write suppression.
+- Compressed conditional reads, bounded recent chat rendering and retained older history.
+- Stream text write coalescing with immediate decisions and final state.
+- Canceled stale editor/chat reads; safe scope changes while loading history; selection no longer waits for LaTeX compilation.
+- Cmd/Ctrl+L works with Vim; stable native diff activation and concurrent draft review.
+- Shorter role skill entrypoints, with scoped guidance in specialist references.
+
 # Completed in 0.1.40
 
 - Unified Codex/Cursor/Claude Accounts in Settings with sign-in/out and active-turn guards.

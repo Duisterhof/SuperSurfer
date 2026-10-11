@@ -48,7 +48,11 @@ toggled Reviewed badge is separate inspection metadata. Neither is PR approval,
 a successful check, task completion, publication or launch authorization.
 
 Native chunk controls retain their stable recorded-diff URI and data across a
-diff-language update. Late refreshes must not steal focus from a subsequently
+diff-language update. Refresh retains unchanged virtual documents. Active review
+handoff carries the recorded change's scoped repository path as well as its
+conversation/change identity; a missing or invalid path is not permission to
+switch projects or broaden file access. These app-owned handoffs do not add an
+agent review tool. Late refreshes must not steal focus from a subsequently
 selected source file or another review. Keep current user navigation and source
 independent of asynchronous receipt refresh; reopen the intended recorded change
 only when needed for inspection, not to replay an already finalized decision.

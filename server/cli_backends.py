@@ -15,6 +15,7 @@ from pathlib import Path
 import queue
 import re
 import shutil
+import shlex
 import signal
 import subprocess
 import tempfile
@@ -164,6 +165,8 @@ class CliBridge(ConversationBridge):
     def __init__(self, backend, *args, **kwargs):
         self.backend = provider_name(backend)
         self._connections = {}
+        self._account_lock = threading.RLock()
+        self._account_cache = None
         super().__init__(*args, **kwargs)
         # Abandoned MCP configs are private and never reused after restart.
         for directory in self.state_dir.glob("turn-*"):
@@ -181,11 +184,25 @@ class CliBridge(ConversationBridge):
         raise BridgeError("This backend cannot steer an active turn. Answer its questions or approvals, wait for completion, or stop it first.", 409)
 
     def account(self, refresh=False):
+        # Coalesce UI status reads. Authorization and explicit checks always
+        # bypass this short cache; a cached login never authorizes a turn.
+        with self._account_lock:
+            cached = self._account_cache
+            if not refresh and cached and time.monotonic() - cached[0] < 10:
+                return copy.deepcopy(cached[1])
+            result = self._read_account()
+            self._account_cache = (time.monotonic(), result)
+            return copy.deepcopy(result)
+
+    def _read_account(self):
         label = PROVIDERS[self.backend]["account_label"]
         try:
             binary = executable(self.backend)
-            args = [binary, "auth", "status"] if self.backend == "claude" else [binary, "status"]
+            args = [binary, "auth", "status"] if self.backend == "claude" else [binary, "status", "--format", "json"]
             result = subprocess.run(args, capture_output=True, text=True, timeout=15)
+            if self.backend == "cursor" and result.returncode and re.search(r"unknown (?:option|argument)|unexpected argument|unrecognized", result.stderr, re.I):
+                # Older cursor-agent builds only expose text status.
+                result = subprocess.run([binary, "status"], capture_output=True, text=True, timeout=15)
             if len(result.stdout) > 100000:
                 raise ValueError("Oversized status")
             if self.backend == "claude":
@@ -196,10 +213,25 @@ class CliBridge(ConversationBridge):
                 method = value.get("authMethod") if value.get("authMethod") in {"none", "claude.ai", "oauth_token", "api_key", "api_key_helper", "third_party"} else None
                 email = value.get("email")
             else:
-                text = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
-                connected = result.returncode == 0 and bool(re.search(r"(?:authenticated|logged in|signed in)", text, re.I)) and not re.search(r"not (?:authenticated|logged in|signed in)", text, re.I)
-                matches = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
-                email, method = (matches[0] if matches else None), None
+                try:
+                    value = json.loads(result.stdout)
+                except ValueError:
+                    value = None
+                if isinstance(value, dict):
+                    flag = value.get("isAuthenticated")
+                    connected = result.returncode == 0 and (flag is True or flag is None and value.get("status") == "authenticated")
+                    status = value.get("status")
+                    if status is not None and not isinstance(status, str):
+                        raise ValueError("Invalid account status")
+                    connected = connected and status not in {"unauthenticated", "signed_out", "error"}
+                    user = value.get("userInfo")
+                    email = user.get("email") if isinstance(user, dict) else None
+                else:
+                    text = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout or result.stderr[:100000])
+                    connected = result.returncode == 0 and bool(re.search(r"(?im)^\s*(?:[✓✔]\s*)?(?:you are\s+)?(?:authenticated|logged in|signed in)(?:\s|$)", text)) and not re.search(r"not (?:authenticated|logged in|signed in)|unauthenticated|signed out|logged out", text, re.I)
+                    matches = re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+                    email = matches[0] if matches else None
+                method = None
             account = {"type": self.backend, "authMethod": method}
             if isinstance(email, str) and len(email) < 256 and re.fullmatch(r"[^\s@]+@[^\s@]+", email):
                 account["email"] = email
@@ -212,16 +244,22 @@ class CliBridge(ConversationBridge):
                     "error": label + " sign-in could not be verified. Run its official sign-in command on this host and check again."}
 
     def require_chatgpt(self):
-        account = self.account()
+        account = self.account(refresh=True)
         if account["login_required"]:
             raise BridgeError(account.get("error") or "Sign in to " + PROVIDERS[self.backend]["account_label"] + " on this workspace host before starting agent work.", 403)
 
     def login(self):
         # Never run auth with captured output, accept a pasted credential, or
         # implement provider OAuth. The desktop opens the user's trusted terminal.
-        return {"backend": self.backend, "type": "terminal", "command": "agent login" if self.backend == "cursor" else "claude auth login"}
+        binary = executable(self.backend)
+        return {"backend": self.backend, "type": "terminal", "command": shlex.join([binary, *( ["login"] if self.backend == "cursor" else ["auth", "login"] )])}
 
     def logout(self):
+        with self._account_lock:
+            self._account_cache = None
+            return self._logout()
+
+    def _logout(self):
         args = [executable(self.backend), *( ["auth", "logout"] if self.backend == "claude" else ["logout"] )]
         try:
             result = subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -377,7 +415,12 @@ class CliBridge(ConversationBridge):
                                      active_sandbox="provider-native" if approval_mode == "ask" else "danger-full-access", cwd=context["cwd"])
                 self._save(chat)
             if self.backend == "cursor":
-                init = connection.call("initialize", {"protocolVersion": 1, "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False}, "clientInfo": {"name": "supersurfer", "version": "1"}})
+                try:
+                    init = connection.call("initialize", {"protocolVersion": 1, "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False}, "clientInfo": {"name": "supersurfer", "version": "1"}})
+                    if any(method.get("id") == "cursor_login" for method in init.get("authMethods", []) if isinstance(method, dict)):
+                        connection.call("authenticate", {"methodId": "cursor_login"})
+                except BridgeError as exc:
+                    raise BridgeError("Cursor CLI could not connect using ACP. Update the official Cursor CLI on this workspace computer and check its sign-in, then retry. " + str(exc)) from exc
                 servers = [{"name": name, "command": config["command"], "args": config.get("args", []), "env": [{"name": k, "value": v} for k, v in config.get("env", {}).items()]} for name, config in mcp.items()]
                 if session_id and not init.get("agentCapabilities", {}).get("loadSession"):
                     raise BridgeError("This Cursor CLI cannot resume the saved session. Update its CLI; no new session or message was created.")
@@ -441,6 +484,7 @@ class CliBridge(ConversationBridge):
             chat = self._chats[scope]
             if not chat["busy"] or chat.get("cancel_requested"):
                 return
+            stream_only = False
             if self.backend == "cursor":
                 method, params = value.get("method"), value.get("params", {})
                 if method == "session/update":
@@ -451,6 +495,7 @@ class CliBridge(ConversationBridge):
                     if kind == "agent_message_chunk" and update.get("content", {}).get("type") == "text":
                         key = update.get("messageId") or chat["turn_id"] + ":assistant:" + str(chat.get("cursor_message_seq", 0))
                         self._assistant_item(chat, key, update["content"]["text"], delta=True, turn_id=chat["turn_id"])
+                        stream_only = True
                     elif kind in {"tool_call", "tool_call_update"}:
                         self._activity(chat, "mcpToolCall" if update.get("kind") == "other" else "commandExecution", update.get("title", "Tool action"), update.get("toolCallId"), update.get("status"))
                         # Consecutive assistant messages around tool work are separate.
@@ -515,6 +560,7 @@ class CliBridge(ConversationBridge):
                         chat["claude_message_id"] = event.get("message", {}).get("id") or uuid.uuid4().hex
                     if event.get("type") == "content_block_delta" and event.get("delta", {}).get("type") == "text_delta":
                         self._assistant_item(chat, chat.get("claude_message_id", chat["turn_id"]), event["delta"]["text"], delta=True, turn_id=chat["turn_id"])
+                        stream_only = True
                 elif kind == "assistant" and not value.get("parent_tool_use_id"):
                     message = value.get("message", {})
                     text = "\n".join(p.get("text", "") for p in message.get("content", []) if p.get("type") == "text")
@@ -529,7 +575,10 @@ class CliBridge(ConversationBridge):
                     if not failed and value.get("result") and not any(m["role"] == "assistant" and m.get("turn_id") == chat["turn_id"] for m in chat["messages"]):
                         self._assistant_item(chat, chat["turn_id"], value["result"], complete=True, turn_id=chat["turn_id"])
                     done.set()
-            self._save(chat)
+            if stream_only:
+                self._save_stream(chat)
+            else:
+                self._save(chat)
 
     def _native_question(self, scope, connection, request_id, questions, respond):
         """Queue on the reader thread, but wait/answer without blocking it."""
@@ -612,6 +661,7 @@ class CliBridge(ConversationBridge):
 
     def close(self):
         with self._lock:
+            self._flush_streams()
             self._closed = True
             scopes = [scope for scope, chat in self._chats.items() if chat["busy"]]
         for scope in scopes:
@@ -619,5 +669,6 @@ class CliBridge(ConversationBridge):
         for worker in list(self._workers):
             worker.join(timeout=5)
         with self._lock:
+            self._flush_streams()
             self._db.close()
             self._db_closed = True

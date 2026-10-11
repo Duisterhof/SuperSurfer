@@ -69,7 +69,10 @@ without an answer; inspect later messages and reask only if the decision remains
 A desktop disconnect alone does not cancel a still-live remote question.
 
 Entering or reopening a chat starts at its latest message; subsequent polling
-preserves a user's manual scroll position. Earlier messages remain history. This
+preserves a user's manual scroll position. The initial view contains the latest
+80 messages; **Show earlier** loads retained earlier history without starting a
+model turn. A windowed chat view does not truncate the provider's native session
+or erase earlier instructions or deliverables. This
 view behavior neither sends a message nor resumes, completes or duplicates work.
 Desktop windows restore connection/navigation without replaying instructions.
 Closing, fullscreen, collapsed Deliverables and Archive are presentation changes;
@@ -135,7 +138,11 @@ process only. Connection recovery is not evidence of sign-in, compiler success,
 completed tasks or fresh GPU/W&B observations. Re-read actual records after
 reconnect and preserve uncertainty around commands whose replies were lost.
 
-Settings → Accounts shows Codex, Cursor and Claude status, refresh, official
+A Cursor initialization/authentication failure before session creation sends no
+model prompt. Follow the host CLI update/sign-in guidance; preserve the request
+and existing session rather than changing providers or replaying uncertain work.
+
+Settings → Coding backends shows Codex, Cursor and Claude status, refresh, official
 sign-in and sign-out. The service refuses account changes while any turn on that
 provider is active; finish or deliberately stop it first, not another provider's
 work. Sign-out invokes the official CLI and retains histories, provider bindings
@@ -143,14 +150,27 @@ and task/run identities. If external host configuration still supplies credentia
 a completed CLI sign-out can remain connected; report that actual status without
 deleting account files or environment settings. These are authenticated user GUI
 actions, not agent MCP tools. A missing executable exposes official install
-guidance; the app does not silently install or migrate credentials.
+guidance; the app does not silently install or migrate credentials. Displayed
+account status can be cached for up to ten seconds; **Check again** and every
+turn authorization refresh it. A cached connected display never authorizes work.
+Cursor status supports current JSON and legacy text responses. Its signed-in
+account and native ACP session authentication are separate: the app authenticates
+that session when the CLI advertises `cursor_login`. Do not replace a saved
+session or replay work to repair either layer.
 
 A workspace host needs the selected provider's official CLI and its own account
 sign-in; a compute-only node does not. Codex uses the app's ChatGPT sign-in flow.
-Cursor and Claude Code use the user's trusted terminal on that workspace host:
-`agent login` or `claude auth login`, followed by the provider's official browser
-flow and the app's account recheck. Login output and credential storage belong
-to the CLI, not the agent conversation. Never ask for pasted passwords, login
+Cursor and Claude Code use the host-specific official sign-in action shown by
+Settings → Coding backends in the user's trusted terminal on that workspace host,
+then the app's account recheck. Use the detected executable; a supported
+`cursor-agent` installation need not also provide an `agent` alias. Native macOS
+Cursor setup offers an explicit **Install Cursor CLI** terminal action; the user
+chooses it, and connection or sign-in never installs a provider silently. Remote
+login keeps browser opening off on the remote host and prints the official link
+for the user to open locally. If the desktop cannot open Terminal, use the full
+host-bound command left visible in the app rather than signing in on the wrong
+machine. Login output and credential storage belong to the CLI, not the agent
+conversation. Never ask for pasted passwords, login
 codes, API keys or tokens in chat/ask_user, inspect account files, capture the
 authentication terminal, or copy credentials between hosts. If the official CLI
 requires a code, the user enters it directly in that terminal. An unavailable
@@ -169,3 +189,19 @@ must account for all returned attempts, including failed/pending/unavailable
 measurements; new attempt/status/report changes reopen it. Held-only drafts and
 nonresearch workflows do not force this check. Follow
 [Results checkpoint guidance](../../supersurfer-results/references/results-checkpoint.md).
+
+
+Ordinary chat/status polling validates ownership without constructing another
+model turn. Reusing unchanged saved state or a compiled Surfboard does not imply
+fresh host, run or W&B measurements. Read evidence timestamps and errors for the
+requested decision; required authorization and execution checks still run against
+their current state. Do not force polls, create extra monitoring or repeat model
+work merely to make the interface display the existing record.
+
+Streamed text can be persisted in short batches of up to 150 milliseconds;
+questions, decisions and final turn states persist immediately, and graceful
+service close flushes pending text. A visible partial answer or brief repaint is
+not completion or proof that a command failed. Inspect final status and retained
+receipts after reconnecting instead of replaying the last instruction. Provider
+model catalogs remain separate; a slow catalog for one provider does not require
+transferring another provider's session or task.

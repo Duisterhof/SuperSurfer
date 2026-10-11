@@ -2,12 +2,12 @@
 name: supersurfer-worker
 description: Complete one SuperSurfer experiment's requested implementation, runs and analysis through its scoped worker tools.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.40. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.41. Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -149,115 +149,38 @@ evidence, not another long chat recap or manager update. The app groups its own
 checks compactly; grouping does not stop the monitoring task or hide your duty
 to surface an actionable change.
 
-## Project surfboard
+## Task board and views
 
-Use `read_surfboard` for the applied task board, or the project defaults when that
-is the requested scope. Tasks snapshot their default and can choose a different
-workflow within the same project. Resolve the target `experiment_id` for lead or
-manager work; workers inherit their own task. Follow [task scope](../supersurfer-surfboard/references/task-scope.md).
-The role policy filters tools and server actions; requirements need actual service
-evidence. This guide describes Research work, not every task in a research project.
-Software, web and writing tasks use their own applied workflow. Shared source,
-artifacts, compute and project caps remain shared; a task board adds no new budget.
+Use `read_surfboard` for this task's applied workflow. Tasks snapshot project
+fallbacks; research, software and writing tasks can share a project and source
+without sharing a workflow. Follow [task scope](../supersurfer-surfboard/references/task-scope.md).
+The board filters actual tools; presentation changes grant no execution authority.
+Only the configurator can propose policy changes for the user to apply. Never
+change a board to bypass a denied capability or an existing run contract.
 
-Source is shared with the user's Code editor and other agents. Re-read saved files
-before applying a patch and preserve concurrent changes. A selected snippet may
-carry an unsaved warning; do not assume it is committed or deploy it as if it were.
-Follow [editor collaboration](../supersurfer-code-editor/SKILL.md) for recorded
-agent patches versus repository Git changes. A local review marker does not satisfy
-the exact-source PR requirement, and editing a file never launches a run by itself.
-Native editor trust does not change your agent permissions or exact-source
-launch contract. If a file-watch
-warning appears, verify the saved source independently instead of assuming an
-edit was observed or a run failed. Diagnose host watch capacity without stopping
-other IDEs, repeating launches or discarding the user's dirty buffer.
-File/selection attachments arrive only with the user's explicit send and may be
-snapshots of unsaved source or one side of a diff. Resolve their exact workspace
-path and provenance before editing; do not replace current files with an attached
-older snapshot or mistake PDF page numbers for source lines.
-Local uploads are project artifacts; inspect the supplied artifact/absolute
-workspace path through available project-file tools and existing file permissions.
-Read the actual file before claiming its contents. Uploading or attaching a file
-never executes it or adds launch authority; preserve its project/conversation.
+`inspect_board_data` resolves configured experiment/run/artifact inputs. Honor
+its source selection and provenance; shared research data does not permit
+cross-project access or training on held-out data. `run_board_action` executes
+only an enabled configured action; inspect its durable evidence after uncertainty.
 
-When a compact Compute view is unclear, inspect the existing run and its node
-readiness through your scoped tools. A layout issue does not justify duplicate
-submission, a budget increase or reporting the requested work as complete.
+For requested pages, tiles and geometry, read `read_view_layout` and use
+`update_view_layout` with current versions and stable tile IDs. Follow
+[layout editing](../supersurfer-surfboard/references/view-layout.md), keeping
+unrelated pages and scope intact. Views, archive and separate windows preserve
+underlying tasks, runs and monitoring; they never create another execution owner.
 
-Explorer, editor, recorded changes, chat and Results may be separate tiles on a
-custom experiment page. They still refer to this experiment and its shared source.
-Page navigation does not finish, restart or duplicate your task. Publish into the
-existing requested artifact/report, and let configured tiles display it rather
-than creating duplicate pages or periodic publishing work for each layout.
-For requested changes to this work item's pages, tile sizes/order or pane placement,
-use `read_view_layout` then `update_view_layout` directly with current versions.
-Your scope does not permit editing another item or project defaults. Follow
-[layout editing](../supersurfer-surfboard/references/view-layout.md); do not relay
-ordinary presentation work to the lead or manager. Nested horizontal/vertical
-dock splits and reserved empty drop space use that same page layout tool;
-preserve each main tile exactly once and keep source/report bindings unchanged.
-For a left-side file browser,
-move this page's existing `file_explorer` tile rather than creating a duplicate.
-Keep its ID and distinguish an unsaved Rearrange draft from the returned saved
-layout; changing width or placement never completes the underlying experiment.
+Source is shared with the user and other agents. Preserve concurrent edits and
+unsaved selections. Follow [editor collaboration](../supersurfer-code-editor/SKILL.md)
+for `present_code`, diffs and attachments, and [review/checklists](../supersurfer-code-editor/references/review-and-todos.md)
+for `manage_todos`. A Reviewed patch or buffer Accept/Reject is neither saved
+source nor exact-source PR evidence. Uploads remain scoped project artifacts.
+Use [writing guidance](../supersurfer-writing/SKILL.md) for enabled `compile_latex`;
+a compiled PDF is not a completed writing deliverable.
 
-`inspect_board_data` resolves a configured input's experiment/run/artifact sources.
-Research defaults to sharing data within the project; current-experiment and named
-experiment selections narrow that input. Preserve the selection and source
-provenance. Read the W&B/visualizer skills attached to those blocks before creating
-a comparison. Availability for comparison does not authorize training on held-out
-data or crossing project boundaries.
-
-`run_board_action` executes a configured permitted action with a durable record;
-use its recorded result rather than claiming that a command passed. Research GPU
-launches continue through their existing exact-source PR and scheduler workflow.
-For a requested workflow policy or capability change, prepare the concrete change for the
-configurator of that task, or the project configurator for future-task defaults. That conversation has `propose_surfboard` and the user applies its
-reviewable draft. Ordinary workers/leads cannot apply or propose their own policy
-changes. Never alter board state to grant yourself a denied capability.
-
-Use `present_code` for a requested file view or actual Git revision comparison;
-use `manage_todos` for a requested plain Markdown checklist. These scoped tools
-require existing user work for changes and do not launch jobs or finish goals.
-Integrated Changes can record per-chunk accept/reject and a final mixed review
-outcome; these user decisions never become a new PR, check or deliverable gate.
-Preserve final chunk decisions and unrelated source; do not infer full acceptance
-from a mixed Reviewed receipt or use a whole-file rollback to bypass a conflict.
-Read [code review and checklists](../supersurfer-code-editor/references/review-and-todos.md)
-for exact revision handling and the difference from `update_task`. A pinned chat
-retains its original authority. Task right-click Archive/Restore and the Archived
-folder organize items; project Archive hides its tree under Archived projects.
-These app controls and chat archiving preserve history, running work and monitoring;
-restore is not a new assignment or launch.
-
-A user request to place source and PDF/Results panels freely can be completed
-through this item's `update_view_layout`: read first, set the page's arrangement
-and individual bounds, and retain stable tile IDs. Use the layout reference for
-sizes and conflicts. Opening a separate native panel window is a user GUI action,
-not a worker tool or another execution owner. The original panel hides until the
-child closes, then restores without changing the saved layout; other panels
-reflow while it is absent. Default Code's shared Files and optional Full VS Code,
-Terminal or Ports views do not create another owner or change node readiness.
-A closed or
-detached view does not
-complete your deliverable, cancel a run or transfer your saved recovery grant.
-
-For short experiment Findings, use spaced prose and a Markdown table for method
-comparisons. Include the actual sample count, split and run status; distinguish
-measured results from unmeasured plans, missing metrics and unfinished runs.
-Do not compress evidence into inline slash strings. Preserve the document version
-when repairing its prose; follow
-[brief Findings guidance](../supersurfer-results/references/brief-findings.md).
-
-For a user-requested reusable HTML view, use `list_view_blocks` to inspect the
-workspace library and `publish_view_block` to publish safe scoped HTML/assets from
-this project. Then place `kind: html` with its durable `block_id` through the scoped
-layout tools; no routine manager relay or extra execution gate is needed. Published
-blocks are reusable workspace-wide, but only their publishing project can revise
-them with the current version. Publication requires an active user-origin turn;
-scheduled checks do not acquire this authority. Follow
-[reusable blocks guidance](../supersurfer-blocks/SKILL.md); live measured training
-curves still use the standard Results renderer rather than a static copied block.
+For reusable HTML, use `list_view_blocks` and `publish_view_block`, then place
+its durable block ID through the layout tools. Read [block publication](../supersurfer-blocks/SKILL.md)
+for assets, versions and sandbox boundaries. Publication requires active
+user-origin work; layout changes do not authorize publishing or republishing.
 
 ## Tool index
 
@@ -267,6 +190,11 @@ All worker experiment/project targets are fixed by this conversation; omit
 | Tools | Use |
 |---|---|
 | `read_surfboard`, `inspect_board_data`, `run_board_action` | Applied graph, scoped data inputs and permitted configured commands. |
+| `read_view_layout`, `update_view_layout` | Versioned scoped pages, placement and geometry; no policy change. |
+| `present_code`, `manage_todos` | Requested source/diff view or versioned Markdown checklist. |
+| `list_view_blocks`, `publish_view_block` | Scoped reusable HTML library and copied assets. |
+| `compile_latex` | Saved source compilation when the applied task enables it. |
+| `check_experiment_results` | Current research comparison across every observed attempt; exact report/version receipt. |
 | `list_project_artifacts`, `publish_artifact` | Browse or save requested project outputs in the project's isolated library. |
 | `inspect_project_activity`, `export_diagnostics` | Actual background work or a bounded redacted diagnostic report; never publish it externally without the user's request. |
 | `update_task` | Create/update the same deliverable; record real progress and verified completion. |
@@ -287,37 +215,6 @@ For questions, interruptions, permissions, local time and persistent chat behavi
 read [conversation continuity](references/conversations.md) when relevant.
 Retired AutoML sessions are read-only history; continue in an owned SuperSurfer
 conversation, without replacing an existing owner merely to evade a limitation.
-
-Read an owned block's HTML and asset names using `list_view_blocks` with
-`block_id` before revising it. An HTML-only revision omits `assets` to retain its
-copied media; an explicit asset map replaces the whole set. Preserve unrelated
-content and its current version rather than guessing lost source mappings.
-
-Ports is an app-owned user GUI block: after exact-project consent, desktop opens
-one explicitly selected localhost development port in an isolated preview window.
-It is not a native VS Code forwarding view or an agent tool. Closing the preview
-releases only that temporary listener; it neither stops the remote server nor
-closes the workspace. Existing command/board-action authorization still governs
-starting a server. Do not use code-server proxy routes, broaden app CORS or relay
-arbitrary localhost services to bypass these boundaries. Browser-only access
-starts no forwarding; use the desktop flow.
-
-Desktop tabs and Activity remain below the native drag area; sidebar edge arrows restore hidden navigation or chats, including a maximized conversation. Hiding your pane does not stop the task, clear deliverables or grant another turn. Preserve the same task and run identities when the user changes views.
-
-Both Monaco and the optional native editor use source-buffer Accept/Reject for
-external edits merged into an
-unsaved user draft. Preserve its user edits and unresolved overlaps; do not treat
-a draft choice as a durable agent-patch receipt or saved source. A successful
-explicit Save is still separate from checks, commits and launch authorization.
-
-Workspace Settings offers all three permission defaults, while this chat uses
-its provider's supported controls. An inherited Approve for me resolves to Ask
-on Cursor/Claude; verify the effective mode without replacing this task owner.
-
-Removing this task's tab or a visible block preserves its files, conversations,
-run records and remote work. Continue the existing goal and deliverables; missing
-view geometry is not completion or cancellation. Account setup/sign-out remains
-a user GUI action, never an extra worker MCP tool.
 
 Research tasks with observed released/started attempts can carry a required
 Results checkpoint. Use enabled `check_experiment_results` in this own task;

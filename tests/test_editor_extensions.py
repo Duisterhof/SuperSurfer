@@ -87,6 +87,11 @@ class ExtensionAPItests(unittest.TestCase):
         self.assertEqual('afterDelay',settings['files.autoSave'])
         self.assertEqual('example.custom',bindings[0]['command'])
         self.assertEqual(1,sum(row['command']=='-workbench.action.toggleZenMode' for row in bindings))
+        for key in ('ctrl+l', 'cmd+l'):
+            shortcuts = [row for row in bindings if row['key'] == key]
+            self.assertEqual(1, len(shortcuts))
+            self.assertEqual('supersurfer.askAgent', shortcuts[0]['command'])
+            self.assertIn('config.supersurfer.session', shortcuts[0]['when'])
 
     def test_watcher_exclusions_preserve_source_and_user_overrides(self):
         workbench=self.service.workbench

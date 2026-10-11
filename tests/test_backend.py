@@ -48,7 +48,7 @@ class FakeCodex:
         self.model_calls += 1
         return {"models": deepcopy(self.catalog)}
     def model_defaults(self, cwd=None): return {"model": self.default_model, "reasoning": "high"}
-    def chat(self, scope): return {"scope": scope, "messages": [], "busy": scope in self.busy,
+    def chat(self, scope, message_limit=None): return {"scope": scope, "messages": [], "busy": scope in self.busy,
                                   "agent": deepcopy(self.runtime.get(scope, {})), "status": "working" if scope in self.busy else "idle"}
     def list_chats(self): return [self.chat(scope) for scope in set(self.runtime) | self.busy]
     def send(self, scope, text, **kwargs):

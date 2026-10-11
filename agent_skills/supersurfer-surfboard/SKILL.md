@@ -2,12 +2,12 @@
 name: supersurfer-surfboard
 description: Edit a task's SuperSurfer workflow or a project's defaults for new tasks through a validated proposal, with reusable blocks, data connections, agent responsibilities and action requirements.
 metadata:
-  supersurfer-version: '0.1.40'
+  supersurfer-version: '0.1.41'
 ---
 
 # Configure a surfboard
 
-Reviewed for SuperSurfer 0.1.40. Help the user express one task's workflow in a
+Reviewed for SuperSurfer 0.1.41. Help the user express one task's workflow in a
 small readable diagram. Tasks own their applied boards; the project's board is a
 default copied at creation, alongside shared repository/data/compute resources.
 A project can contain research, writing and software tasks at the same time.
@@ -222,3 +222,10 @@ remain explicit configuration choices. Page/block removal is presentation only,
 with version checks for configured pages, and does not apply a policy proposal.
 Utility/Markdown tab visibility and account actions are user GUI controls, not
 new managed tools; agents retain read/update_view_layout for enabled scopes.
+
+For provider connection issues, use Settings → Coding backends on the connected
+workspace host and its host-specific official sign-in action. Account status,
+model catalogs and native-session availability are separate capabilities; a
+successful login does not prove this block's tools, extensions or data sources
+are ready. Preserve existing native ownership and uncertain action identities.
+See [conversation continuity](../supersurfer-worker/references/conversations.md).
