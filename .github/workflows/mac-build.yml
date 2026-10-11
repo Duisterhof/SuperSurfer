@@ -16,8 +16,16 @@ concurrency:
   cancel-in-progress: true
 jobs:
   mac-package:
-    name: Mac package and startup
-    runs-on: macos-latest
+    name: Mac package and startup (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -33,6 +41,14 @@ jobs:
       - run: npm ci
       - name: Build, verify local signature and open original/extracted ZIP
         run: |
-          export SUPERSURFER_ARCH="$(node -p 'process.arch')"
+          export SUPERSURFER_ARCH="${{ matrix.arch }}"
+          test "$(node -p 'process.arch')" = "$SUPERSURFER_ARCH"
           npm run package:mac
           node tests/mac-package.electron.cjs
+      - name: Retain verified Mac package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: supersurfer-mac-${{ matrix.arch }}
+          path: dist/SuperSurfer-*-mac-*.zip
+          if-no-files-found: error
+          retention-days: 7

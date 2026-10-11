@@ -6,6 +6,9 @@ experiments and GPUs together—and shape the workspace around how you actually 
 [Explore the interactive demo](https://bardienus.com/supersurfer/) ·
 [Download](https://github.com/Duisterhof/SuperSurfer/releases/latest)
 
+Latest release: **0.1.43** adds direct agent workflow edits, generated-output
+exclusions for source checks, and fixes recovery steering and editor shortcuts.
+
 ## What can it do?
 
 - **Build your own workflow.** Connect agents, instructions, checks, compute and

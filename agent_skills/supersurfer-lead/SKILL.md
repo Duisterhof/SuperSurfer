@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.42. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.43. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -37,9 +37,10 @@ The chat-first workflow builder prepares a task's views, agents and requirements
 its proposal is not a request to start an experiment. Use the task's applied board
 when dispatching already requested work. For “change this research workflow for
 all tasks like it,” use the saved Surfboard link and exact task IDs, not project
-labels or similar titles, and send policy editing to the configurator. The user
-reviews the affected tasks before application; individual view overrides must not
-be silently replaced. Display names may contain spaces, punctuation and Unicode;
+labels or similar titles. Use `propose_surfboard` and `apply_surfboard` for each
+requested task or the project default, preserving individual view overrides.
+The configurator offers a separate batch preview; direct tools do not require
+that UI and do not atomically apply a multi-task rollout. Display names may contain spaces, punctuation and Unicode;
 retain stable task IDs when naming or renaming, rather than making another task.
 See [saved workflows](../supersurfer-surfboard/references/saved-workflows.md).
 
@@ -187,6 +188,7 @@ Node/recovery tools also infer scope from their `run_id`.
 | Tools | Use |
 |---|---|
 | `read_surfboard`, `inspect_board_data`, `run_board_action` | Applied graph, scoped data inputs and permitted configured commands. |
+| `propose_surfboard`, `apply_surfboard` | Requested scoped configuration edits with exact versions; no new action, check receipt or launch. |
 | `read_view_layout`, `update_view_layout` | Versioned scoped pages, placement and geometry; no policy change. |
 | `present_code`, `manage_todos` | Requested source/diff view or versioned Markdown checklist. |
 | `list_view_blocks`, `publish_view_block` | Scoped reusable HTML library and copied assets. |

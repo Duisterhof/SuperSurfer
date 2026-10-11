@@ -26,10 +26,17 @@ and `expected_draft_version`. Optionally add `rollout`:
 - `{scope: "future"}` proposes the selected project's future-task default.
 
 This metadata records intent; it neither applies a change nor creates a task,
-model turn, run or monitoring schedule. Ordinary owned agents keep their scoped
-layout tools but cannot grant themselves policy capabilities. Library save,
-exact-target preview, apply and undo are user UI actions. Do not invoke private
-service actions or edit state files to imitate those controls.
+model turn, run or monitoring schedule. For a user-requested current-scope change,
+call `apply_surfboard` with the returned `expected_version` and
+`expected_draft_version`. Workers stay in their task; leads/managers may select
+a task or the project default. Preserve unrelated rules. Suggestions remain drafts.
+
+A draft targeting multiple existing tasks cannot be applied with this tool. A lead
+or manager can read, propose and apply each explicitly requested task separately,
+reconciling its local overrides and reporting any partial progress. For future
+tasks, select the project default instead of a task. Library save, batch preview,
+batch apply and undo remain user UI actions; do not imitate them with private
+service actions or state-file edits.
 
 ## Reuse without losing local choices
 

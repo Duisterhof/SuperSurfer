@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.42'
+  supersurfer-version: '0.1.43'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.42. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.43. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -36,11 +36,12 @@ capability and no new work or launch authorization.
 
 A request to redesign workflows is configuration work, not an assignment to launch
 every affected task. Read `read_surfboard` for the selected project/task and its
-saved Surfboard link. Route policy changes to that scope's configurator; ordinary
-workers still handle their own work without a manager relay. A workspace-wide
-request must identify the linked tasks to update, preserve their local overrides,
-and go through the user's exact-target preview. Do not infer membership from names
-or use handoffs to simulate a bulk workflow update. Applying or undoing a workflow
+saved Surfboard link. Apply requested policy edits with `propose_surfboard` and
+`apply_surfboard` in the selected scope; ordinary workers do this for their own
+tasks without a manager relay. A workspace-wide request must identify exact linked
+tasks and preserve their local overrides. Direct tools apply each selected scope
+separately; the configurator's batch preview is an optional UI route. Do not infer
+membership from names or claim one tool call updates every linked task. Applying or undoing a workflow
 changes configuration, not existing run identities or execution authorization.
 See [saved workflows](../supersurfer-surfboard/references/saved-workflows.md).
 
@@ -195,6 +196,7 @@ Node/recovery tools use `run_id` to derive project/experiment scope, with no ext
 | Tools | Use |
 |---|---|
 | `read_surfboard`, `inspect_board_data`, `run_board_action` | Applied graph, scoped data inputs and permitted configured commands. |
+| `propose_surfboard`, `apply_surfboard` | Requested scoped configuration edits with exact versions; no new action, check receipt or launch. |
 | `read_view_layout`, `update_view_layout` | Versioned scoped pages, placement and geometry; no policy change. |
 | `present_code`, `manage_todos` | Requested source/diff view or versioned Markdown checklist. |
 | `list_view_blocks`, `publish_view_block` | Scoped reusable HTML library and copied assets. |

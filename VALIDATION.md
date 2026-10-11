@@ -1,3 +1,17 @@
+# SuperSurfer 0.1.43 release
+
+Release scope is PR #39's direct workflow/source-receipt/steering fixes and PR #37's
+terminal/editor shortcut fixes. All 12 shipped agent skills were reviewed by a
+separate agent against the actual role tools; stale configurator-only instructions
+were removed, and both release markers updated. Repository skill validation and
+frontmatter validation passed. Release checks use isolated services and profiles.
+
+The Mac workflow now builds on matching Apple Silicon and Intel runners and
+retains only packages that pass strict signature and original/ZIP-extracted startup
+checks. These are ad-hoc signatures, not Developer ID signing or notarization.
+Unit, browser, package and native launch results are recorded on the release PR
+and tag workflows. No GPU jobs or provider inference are submitted by these checks.
+
 # Direct workflow changes and user steering — October 11, 2026
 
 The full suite passes 747 Python tests and 37 enabled Node tests (five optional

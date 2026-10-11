@@ -1,3 +1,11 @@
+# Release 0.1.43
+
+This release includes direct scoped agent workflow application, configurable
+untracked-output exclusions and accepted-user steering/answer authority described
+below. It also includes the terminal zoom, SuperSurfer sidebar shortcuts from the
+embedded editor, and compact editor startup fixes. Applying a workflow still
+starts no work; run ownership, reviewed-source and resource gates remain enforced.
+
 # Agent-applied workflow changes — October 11, 2026
 
 Owned workers, leads, managers and configurators can read, propose and apply a
