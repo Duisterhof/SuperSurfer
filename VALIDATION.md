@@ -32,7 +32,7 @@ Mac builds are cross-built on Linux: archive integrity/source bytes are checked,
 but actual macOS launch/signing/Gatekeeper and a brand-new OAuth callback remain
 external-platform checks. No live workspace restart or research launch is used.
 
-Final regression: **726 Python tests** and **35 enabled Node tests** pass; five optional real-SSH checks remain skipped. The final chat scope/history cancellation browser check also passes. Sustained-check totals are added below after completion.
+Final regression: **727 Python tests** and **35 enabled Node tests** pass; five optional real-SSH checks remain skipped. The final chat scope/history cancellation browser check also passes. Sustained-check totals are added below after completion.
 
 # Compact coding backend Settings — October 9, 2026
 

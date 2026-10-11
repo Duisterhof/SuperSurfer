@@ -42,7 +42,9 @@ for line in sys.stdin:
  v=json.loads(line);record(v)
  if backend=='cursor':
   method=v.get('method');p=v.get('params',{});key=v.get('id')
-  if method=='initialize':emit({'jsonrpc':'2.0','id':key,'result':{'protocolVersion':1,'agentCapabilities':{'loadSession':True},'authMethods':[{'id':'cursor_login'}]}})
+  if method=='initialize':
+   if os.environ.get('SS_TEST_UNSUPPORTED_ACP'):emit({'jsonrpc':'2.0','id':key,'error':{'code':-32601,'message':'ACP unsupported'}})
+   else:emit({'jsonrpc':'2.0','id':key,'result':{'protocolVersion':1,'agentCapabilities':{'loadSession':True},'authMethods':[{'id':'cursor_login'}]}})
   elif method=='authenticate':emit({'jsonrpc':'2.0','id':key,'result':{}})
   elif method in ('session/new','session/load'):
    if method=='session/load':emit({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':p['sessionId'],'update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'HISTORICAL_REPLAY'}}}})
@@ -146,6 +148,16 @@ class CliBackendTests(unittest.TestCase):
         with patch.dict(os.environ,{'SS_TEST_SIGNED_OUT':'1'}):
             with self.assertRaises(BridgeError):b.send('manager','hello')
         self.assertEqual([],b.chat('manager')['messages']);self.assertFalse(self.log.exists())
+    def test_cursor_connection_failure_has_setup_guidance_without_sending_a_prompt(self):
+        bridge = self.bridge('cursor')
+        with patch.dict(os.environ, {'SS_TEST_UNSUPPORTED_ACP': '1'}):
+            bridge.send('manager', 'Do the authorized task')
+            self.wait(lambda: not bridge.chat('manager')['busy'])
+        chat = bridge.chat('manager')
+        self.assertEqual('failed', chat['status'])
+        self.assertIn('Update the official Cursor CLI on this workspace computer', chat['error'])
+        self.assertIn('provider rejected this request', chat['error'])
+        self.assertFalse(any(row.get('method') in {'session/new', 'session/load', 'session/prompt'} for row in self.records()))
     def test_stream_resume_and_scoped_mcp_for_both_providers(self):
         for backend in ('cursor','claude'):
             b=self.bridge(backend);b.send('manager','hello');self.wait(lambda:not b.chat('manager')['busy']);chat=b.chat('manager')

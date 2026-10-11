@@ -5,6 +5,8 @@ legacy text fallback. UI reads coalesce for at most ten seconds; explicit accoun
 checks and every new turn verify fresh native status. A cached login never
 provides turn authorization. Sign-out retains its per-provider idle/send lock.
 Cursor ACP authenticates with cursor_login when the CLI advertises that method.
+Initialization/authentication failures show workspace-host update/sign-in guidance
+before session creation or prompt delivery.
 On Mac, explicit CLI installation/sign-in uses a fixed official command bound to
 the current window’s host; remote login prints a browser link. Credentials and
 Terminal output remain outside the app. A failed Terminal launch preserves the

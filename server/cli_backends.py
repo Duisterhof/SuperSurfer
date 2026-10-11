@@ -415,9 +415,12 @@ class CliBridge(ConversationBridge):
                                      active_sandbox="provider-native" if approval_mode == "ask" else "danger-full-access", cwd=context["cwd"])
                 self._save(chat)
             if self.backend == "cursor":
-                init = connection.call("initialize", {"protocolVersion": 1, "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False}, "clientInfo": {"name": "supersurfer", "version": "1"}})
-                if any(method.get("id") == "cursor_login" for method in init.get("authMethods", []) if isinstance(method, dict)):
-                    connection.call("authenticate", {"methodId": "cursor_login"})
+                try:
+                    init = connection.call("initialize", {"protocolVersion": 1, "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False}, "clientInfo": {"name": "supersurfer", "version": "1"}})
+                    if any(method.get("id") == "cursor_login" for method in init.get("authMethods", []) if isinstance(method, dict)):
+                        connection.call("authenticate", {"methodId": "cursor_login"})
+                except BridgeError as exc:
+                    raise BridgeError("Cursor CLI could not connect using ACP. Update the official Cursor CLI on this workspace computer and check its sign-in, then retry. " + str(exc)) from exc
                 servers = [{"name": name, "command": config["command"], "args": config.get("args", []), "env": [{"name": k, "value": v} for k, v in config.get("env", {}).items()]} for name, config in mcp.items()]
                 if session_id and not init.get("agentCapabilities", {}).get("loadSession"):
                     raise BridgeError("This Cursor CLI cannot resume the saved session. Update its CLI; no new session or message was created.")

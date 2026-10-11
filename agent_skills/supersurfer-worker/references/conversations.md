@@ -138,6 +138,10 @@ process only. Connection recovery is not evidence of sign-in, compiler success,
 completed tasks or fresh GPU/W&B observations. Re-read actual records after
 reconnect and preserve uncertainty around commands whose replies were lost.
 
+A Cursor initialization/authentication failure before session creation sends no
+model prompt. Follow the host CLI update/sign-in guidance; preserve the request
+and existing session rather than changing providers or replaying uncertain work.
+
 Settings → Coding backends shows Codex, Cursor and Claude status, refresh, official
 sign-in and sign-out. The service refuses account changes while any turn on that
 provider is active; finish or deliberately stop it first, not another provider's

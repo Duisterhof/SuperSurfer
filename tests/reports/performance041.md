@@ -8,7 +8,7 @@ Results are observations on this machine, not response-time guarantees.
 
 The friend’s exact error and computer are unavailable. Controlled tests cover
 missing CLI setup, current JSON status, legacy text status, rejected contradictory
-status, delayed other-provider checks, host-bound Terminal commands, a failed
+status, unsupported protocol initialization without prompt delivery, delayed other-provider checks, host-bound Terminal commands, a failed
 Terminal launch, sign-in confirmation and provider selection. Cursor Desktop and
 the workspace-host CLI are distinct installations.
 
