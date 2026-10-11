@@ -9,7 +9,7 @@ Results are observations on this machine, not response-time guarantees.
 The friend’s exact error and computer are unavailable. Controlled tests cover
 missing CLI setup, current JSON status, legacy text status, rejected contradictory
 status, unsupported protocol initialization without prompt delivery, delayed other-provider checks, host-bound Terminal commands, a failed
-Terminal launch, sign-in confirmation and provider selection. Cursor Desktop and
+Terminal launch, expired-code retry, reconnect error visibility, sign-in confirmation and provider selection. Cursor Desktop and
 the workspace-host CLI are distinct installations.
 
 The installed Cursor CLI, version `2026.10.01-e373342`, completed real ACP v1

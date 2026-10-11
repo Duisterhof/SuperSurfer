@@ -34,7 +34,10 @@ def main():
         ]
         service.aml.invalidate()
         items = service.state()['experiments']
+        catalog = service.codex
         service.codex = CodexBridge(service.directory / 'codex', service.context_provider)
+        service.codex.models = catalog.models
+        service.codex.model_defaults = catalog.model_defaults
         for i in range(12):
             scope = 'manager' if i == 0 else 'project:p1' if i == 1 else 'experiment:' + items[i - 2]['id']
             chat = service.codex._new_chat(scope, {'role': 'worker', 'name': 'Fixture worker', 'cwd': str(fixture.repo)})
@@ -65,6 +68,7 @@ def main():
                               'median_ms': round(statistics.median(times), 2),
                               'max_ms': round(max(times), 2),
                               'payload_bytes': len(json.dumps(result).encode())}), flush=True)
+        assert service.codex._proc is None, 'The fixture must never start a provider CLI.'
         if args.profile:
             profile = cProfile.Profile()
             profile.runcall(service.state)

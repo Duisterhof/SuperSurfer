@@ -10,7 +10,9 @@ before session creation or prompt delivery.
 On Mac, explicit CLI installation/sign-in uses a fixed official command bound to
 the current window’s host; remote login prints a browser link. Credentials and
 Terminal output remain outside the app. A failed Terminal launch preserves the
-complete host-bound command. Missing CLI setup remains accessible in Settings.
+complete host-bound command. Missing CLI setup remains accessible in Settings. Failed device codes show their
+reason and allow retry; persistent transport errors surface after the reconnect
+grace period. Dismissing the dialog never authorizes agent sends.
 
 Workspace reads skip unchanged SQLite writes, reuse at most 128 content-keyed
 compiled workflows and return current task summaries without full graph copies.

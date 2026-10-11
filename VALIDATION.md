@@ -5,7 +5,8 @@ workspaces and native editor runtimes. The friend’s exact failure and brand-ne
 account authentication are unavailable. A real existing-login Cursor ACP handshake
 passes with both sandbox modes, without a prompt or paid inference. JSON/legacy
 status, explicit installation, host-bound Terminal fallback, fresh account checks,
-provider switching and delayed-provider races are regression-tested.
+provider switching, delayed-provider races, expired-code retry and persistent
+connection errors after the reconnect grace period are regression-tested.
 
 Measured warm state refresh falls from 61.64 to 6.97 ms in the 40-task fixture;
 600-message full chat reads fall from 483.05 to 2.50 ms. Recent-history rendering
@@ -18,7 +19,7 @@ autocompile and canceled-read dirty-state guards pass. See
 Browser fixtures cover provider-only startup; all three Settings accounts/defaults;
 reconnect grace; complete monitoring history; queues and idempotent retained drafts;
 conservative GPU counts and refresh; wakeups/questions; current Results/W&B refresh;
-file uploads, Markdown checklist conflicts and page creation/removal; split and
+file uploads, Markdown checklist conflicts, terminal/ports/media and page creation/removal; split and
 floating layouts, separate windows, expanded sidebars; native and built-in dirty
 buffers, chunk decisions, overlapping edits, repeated saves; real multi-file LaTeX
 compilation, PDF selections and last-good build recovery. Real Open VSX Vim install,

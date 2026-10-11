@@ -24,7 +24,7 @@ export function createAccountGate({api,action,onAccount,readOnly,getBackend=()=>
   use.hidden=!setupMode;use.disabled=starting||!connected(backend);use.textContent='Use '+(labels[backend]||'this provider');
   code.hidden=!pending;code.querySelector('code').textContent=pending?.userCode||'';if(pending)code.querySelector('a').href=pending.verificationUrl;else code.querySelector('a').removeAttribute('href');
   command.hidden=!terminalCommand;command.textContent=terminalCommand;installHelp.hidden=account?.installed!==false;installCursor.hidden=backend!=='cursor'||!window.superSurferDesktop?.installCursor;installCursor.disabled=starting;install.href=installUrls[backend]||installUrls.codex;
-  status.textContent=actionError||(!labels[backend]?'Choose Codex, Cursor or Claude. You can connect more accounts later in Settings.':starting?'Opening official sign-in…':pending?'Enter this code on the official verification page. Sign-in is confirmed automatically.':checking?`Checking ${label} on this machine…`:reconnect?`Retrying the ${label} connection…`:account?.error||(connected(backend)?`${label} is signed in on this machine.`:terminalCommand?'Complete sign-in in your terminal, then check again. Never paste passwords, codes or tokens into chat.':`Sign in on this machine to use ${label}.`));
+  status.textContent=actionError||(!labels[backend]?'Choose Codex, Cursor or Claude. You can connect more accounts later in Settings.':starting?'Opening official sign-in…':pending?'Enter this code on the official verification page. Sign-in is confirmed automatically.':checking?`Checking ${label} on this machine…`:reconnect?(waiting()?`Retrying the ${label} connection…`:account?.error||`Could not verify ${label}. Check the connection and try again.`):account?.error||(connected(backend)?`${label} is signed in on this machine.`:terminalCommand?'Complete sign-in in your terminal, then check again. Never paste passwords, codes or tokens into chat.':`Sign in on this machine to use ${label}.`));
   const show=!readOnly()&&(setupMode||forced||!!pending||!dismissed&&!ready()&&!waiting()&&account!==undefined);
   if(show&&!dialog.open)dialog.showModal();else if(!show&&dialog.open)dialog.close();
  }
@@ -35,7 +35,9 @@ export function createAccountGate({api,action,onAccount,readOnly,getBackend=()=>
   try{
    let task=checks.get(backend);if(!task){const query=new URLSearchParams();if(backend!=='codex')query.set('backend',backend);if(force||pending||terminalCommand)query.set('refresh','1');task=api('account'+(query.size?'?'+query:''));checks.set(backend,task);task.finally(()=>{if(checks.get(backend)===task)checks.delete(backend);}).catch(()=>{});}const account=await task;if(epoch!==generation)return;
    observe(account);
-   if(pending&&account.login?.loginId===pending.loginId&&account.login.status==='failed')pending=null;
+   if(pending&&account.login?.loginId===pending.loginId&&account.login.status==='failed'){
+    actionError=typeof account.login.error==='string'?account.login.error.slice(0,2000):'Sign-in did not complete. Try again.';pending=null;
+   }
    if(connected(backend)){pending=null;if(!starting&&!setupMode){forced=false;terminalCommand='';}}
   }catch(error){if(epoch===generation)observe({backend,login_required:true,transport_error:true,error:error.message});}
   finally{if(ready())waitingSince=null;else if(waitingSince===null)waitingSince=Date.now();if(epoch===generation){checking=false;checkingBackend=null;render();schedule();}}
