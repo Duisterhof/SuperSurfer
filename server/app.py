@@ -1711,6 +1711,11 @@ class Service(SurfboardService, EditorService, WritingService):
             item = self.store.experiment(text_field(params, "id", 180))
             self.store.put("experiment_archived:" + item["id"], params["archived"])
             return {"id": item["id"], "archived": params["archived"]}
+        if op == "experiment.rename":
+            if set(params) != {"id", "name", "version"}:
+                raise APIError("Rename requires task ID, name and current version")
+            return self.store.update_experiment(text_field(params, "id", 180), integer(params, "version", 1),
+                                                {"name": text_field(params, "name", 160)})
         if op == "chat.archive":
             if set(params) != {"scope", "archived"} or type(params.get("archived")) is not bool:
                 raise APIError("Archive accepts scope and a boolean archived value")
