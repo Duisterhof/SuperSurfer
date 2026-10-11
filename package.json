@@ -6,13 +6,15 @@
   "private": true,
   "main": "desktop/main.cjs",
   "author": "SuperSurfer",
-  "license": "UNLICENSED",
+  "license": "GPL-2.0-or-later",
   "scripts": {
     "start": "node scripts/build-remote.cjs && electron .",
     "test": "python3 -m unittest discover -s tests -v && node --test tests/*.test.cjs",
     "package:mac": "node scripts/package.cjs",
     "package:linux": "SUPERSURFER_PLATFORM=linux node scripts/package.cjs",
-    "bundle:remote": "node scripts/build-remote.cjs"
+    "bundle:remote": "node scripts/build-remote.cjs",
+    "test:browser": "node scripts/check-browser.cjs",
+    "test:skills": "python3 scripts/check-agent-skills.py"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

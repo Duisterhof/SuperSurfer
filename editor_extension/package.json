@@ -105,5 +105,6 @@
     "untrustedWorkspaces": {
       "supported": true
     }
-  }
+  },
+  "license": "GPL-2.0-or-later"
 }

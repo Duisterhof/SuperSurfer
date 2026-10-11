@@ -1,6 +1,6 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict');
 (async()=>{
- const browser=await chromium.launch({executablePath:'/opt/google/chrome/chrome',headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||chromium.executablePath(),headless:true,args:['--no-sandbox']});
  try{
  const page=await browser.newPage();await page.route('http://fixture.test/**',async route=>{const path=new URL(route.request().url()).pathname;if(path==='/')return route.fulfill({contentType:'text/html',body:'<div id="tree"></div>'});const fs=require('node:fs');return route.fulfill({contentType:'text/javascript',body:fs.readFileSync('ui'+path,'utf8')});});
  await page.goto('http://fixture.test/');await page.evaluate(async()=>{

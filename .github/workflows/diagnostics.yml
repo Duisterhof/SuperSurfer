@@ -9,20 +9,10 @@ permissions:
 jobs:
   diagnostic-report:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       - name: Require reviewed diagnostic evidence for bugs
-        shell: python
-        run: |
-          import json, os, re
-          with open(os.environ['GITHUB_EVENT_PATH']) as stream:
-              event = json.load(stream)
-          issue = event.get('issue')
-          item = issue or event.get('pull_request', {})
-          body = item.get('body') or ''
-          if issue and not item.get('title', '').startswith('[Bug]'):
-              raise SystemExit(0)
-          attached = bool(re.search(r'https://github\.com/(?:user-attachments/files/|[^\s)]+/files/)\d+/[^\s)]+\.md(?:[?#][^\s)]*)?', body, re.I))
-          exception = not issue and bool(re.search(r'Diagnostics:\s*not applicable\s*[-—:]\s*\S', body, re.I))
-          if not attached and not exception:
-              print('Attach the reviewed Markdown from Project Activity → Export diagnostics. For non-bug PRs, explain: Diagnostics: not applicable — reason.')
-              raise SystemExit(1)
+        run: python3 scripts/check-diagnostics.py

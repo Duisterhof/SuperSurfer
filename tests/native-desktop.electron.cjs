@@ -12,7 +12,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   if(name===path.basename(process.env.ELECTRON_PATH || 'SuperSurfer'))fs.copyFileSync(from,to,fs.constants.COPYFILE_FICLONE);
   else fs.symlinkSync(from,to);
  }
- fs.mkdirSync(path.join(runtime,'resources'));fs.symlinkSync(root,path.join(runtime,'resources/app'));
+ fs.mkdirSync(path.join(runtime,'resources'));fs.symlinkSync(path.join(packaged,'resources/app'),path.join(runtime,'resources/app'));
  const launch=()=>electron.launch({executablePath:path.join(runtime,path.basename(process.env.ELECTRON_PATH || 'SuperSurfer')),chromiumSandbox:true,colorScheme:null,args:['--disable-dev-shm-usage'],env:{...process.env,HOME:profile,XDG_CONFIG_HOME:path.join(profile,'config'),XDG_CACHE_HOME:path.join(profile,'cache')}});
  try{
   app=await launch();let page=await app.firstWindow();await page.waitForFunction(()=>!document.querySelector('#connect-button')?.disabled);

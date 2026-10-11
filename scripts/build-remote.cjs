@@ -5,5 +5,5 @@ const root = path.resolve(__dirname, '..');
 require('./build-editor.cjs');
 require('./build-pdf.cjs');
 execFileSync('python3', [path.join(__dirname, 'check-agent-skills.py')], { cwd: root, stdio: 'inherit' });
-execFileSync('tar', ['--exclude=__pycache__', '--exclude=*.pyc', '-czf', path.join(root, 'desktop', 'remote.tar.gz'), 'server', 'ui', 'editor_extension', 'agent_skills', 'engine'], { cwd: root });
+execFileSync('tar', ['--exclude=__pycache__', '--exclude=*.pyc', '-czf', path.join(root, 'desktop', 'remote.tar.gz'), 'server', 'ui', 'editor_extension', 'agent_skills', 'engine', 'LICENSE', 'NOTICE', 'LICENSES'], { cwd: root });
 console.log('Remote service bundled.');

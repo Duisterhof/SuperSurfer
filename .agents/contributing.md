@@ -128,7 +128,8 @@ the build command, platform/architecture, app/archive path, launch result and an
 Gatekeeper limitation. Include screenshots for visual changes when they help review.
 
 For a workspace bug, attach reviewed diagnostic Markdown from **Activity → Export
-diagnostics**, with reproduction steps. Inspect it for private data before sharing.
+diagnostics**, with reproduction steps, or commit a redacted excerpt under
+`tests/reports/` and link it in the PR description. Inspect it for private data before sharing.
 For a change unrelated to a workspace failure, include the exact format
 `Diagnostics: not applicable — <reason>`; the diagnostic workflow checks this.
 

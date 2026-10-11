@@ -1,3 +1,20 @@
+# Community contribution checks — October 11, 2026
+
+GPLv2-or-later is recorded in LICENSE, NOTICE and package metadata. Third-party
+notices remain separate; the GPLv3 text is included for combined distributions
+with Apache-2.0 dependencies. The remote tarball and desktop package retain the
+project grant and notices.
+
+Local checks: 741 Python and 36 enabled Node tests pass; five optional SSH checks
+are skipped. The same documented browser command passes workflow creation,
+saved proposal edits, detached PDFs/editor zoom, independent folder expansion,
+and large-PDF rendering/downloads using temporary services. The Linux package
+opens with an isolated profile and retains renderer sandboxing and preferences.
+The native smoke now loads the actual packaged resources rather than source.
+Skill validation and whitespace checks pass. New account login and GPU jobs are
+not exercised. GitHub-hosted checks and native Mac builds are tracked by the PR;
+local Linux checks do not establish native macOS behavior or notarization.
+
 # SuperSurfer 0.1.42 — October 11, 2026
 
 Workflow checks cover chat-first entry, the real chat composer, saved Unicode
