@@ -1,3 +1,27 @@
+# Large repository PDF previews — October 11, 2026
+
+The authenticated repository PDF reader now accepts up to 512 MiB, matching
+the project artifact allowance. A 64 MiB HTTP regression verifies intact bytes,
+PDF content type/length and authentication. The descriptor boundary still rejects
+links, traversal and private state; the oversized-file test rejects 512 MiB + 1.
+
+The new `tests/large-pdf.browser.cjs` passes with a generated 33 MiB, two-page
+PDF and the reported 66,094,149-byte, 226-page dissertation. Both the source
+service and exact packaged service render its first/last pages, expose selectable
+text and download unchanged bytes, with no browser errors. The existing bundled
+PDF worker/selection/navigation/zoom/recovery browser regression also passes.
+
+Full regression: 731 Python and 35 enabled Node tests pass; five optional SSH
+checks are skipped. Capability-skill validation, diff checks, Linux x64 packaging
+and isolated native Electron launch/persistence/security checks pass. The older
+`tile-arrange.browser.cjs` fails before its PDF step because its code-tile resize
+handle is absent; the same failure reproduces with the unmodified origin/main
+reader. No live service, agents or research jobs were restarted. This is a local
+fix build, with native macOS packaging untested on this Linux host.
+
+The [reviewed diagnostic excerpt](tests/reports/large-pdf-preview.md) retains
+the relevant environment and reproduction while omitting private activity logs.
+
 # Task rename and layout follow-ups — October 11, 2026
 
 Files resizing previously changed the inner scroller while the fixed outer section

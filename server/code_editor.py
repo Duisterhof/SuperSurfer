@@ -23,6 +23,8 @@ import time
 from .surfboards import SurfboardError
 
 MAX_TEXT = 2 * 1024 * 1024
+# Match the project artifact size allowance for image-rich research PDFs.
+MAX_PDF = 512 * 1024 * 1024
 MAX_ENTRIES = 1000
 MAX_SEARCH = 500
 MAX_SEARCH_SCAN = 20000
@@ -161,12 +163,11 @@ class CodeEditor:
             fd = os.open(parts[-1], FILE_FLAGS, dir_fd=parent)
             try:
                 info = _regular(fd)
-                maximum = 32 * 1024 * 1024
-                if info.st_size > maximum:
-                    raise SurfboardError("PDF previews support files up to 32 MiB", 413)
+                if info.st_size > MAX_PDF:
+                    raise SurfboardError("PDF previews support files up to 512 MiB", 413)
                 with os.fdopen(os.dup(fd), "rb") as source:
-                    body = source.read(maximum + 1)
-                if len(body) > maximum:
+                    body = source.read(min(info.st_size + 1, MAX_PDF + 1))
+                if len(body) > MAX_PDF:
                     raise SurfboardError("PDF exceeds the preview size limit", 413)
                 if _stamp(os.fstat(fd)) != _stamp(info):
                     raise SurfboardError("PDF changed while being read. Retry after its writer finishes", 409)
