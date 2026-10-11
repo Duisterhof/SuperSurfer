@@ -133,6 +133,9 @@ window strip is draggable; buttons, links, inputs, selectors and summaries remai
 interactive. Cmd/Ctrl+Shift+B and the right chevron use the same sidebar toggle,
 including maximized/focused chats; restoring it also opens a previously closed
 chat. Neither toggle interrupts agents, changes permissions or writes source.
+The navigation resize separator occupies the same content row as the sidebar
+in both browser and desktop layouts. Dragging it needs no Rearrange mode; widths
+persist in navigation preferences or the selected page's saved dock layout.
 
 LaTeX's extra_source_files is an explicit bounded list of safe project-relative
 files within the selected source folder. It never includes all ignored files.

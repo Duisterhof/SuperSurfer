@@ -1,3 +1,19 @@
+# Desktop sidebar resize fix — October 11, 2026
+
+The new sidebar regression passes in browser mode and fails in desktop mode
+before the CSS fix: the navigation divider was left in the removed header
+layout's second row, with no usable content-height hit area. After aligning
+the divider with the desktop sidebar row, real pointer dragging and shrinking,
+keyboard bounds, double-click reset, ordinary preference persistence, saved
+page dock widths and collapse/restore pass in both modes.
+
+Desktop navigation/Activity/sidebar regression passes. Full regression: 727
+Python and 35 enabled Node tests pass; five optional SSH checks remain skipped.
+Linux packaging and isolated native Electron pointer drag, reload persistence
+and keyboard resizing pass against a fixture workspace. No live service,
+agents or research jobs are restarted. Native macOS mouse input is not tested
+on this Linux host.
+
 # SuperSurfer 0.1.41 — October 10–11, 2026
 
 Cursor connection and performance review uses isolated fixture accounts, protocols,

@@ -1,3 +1,7 @@
+# Post-0.1.41 fixes
+
+- Restore desktop left-sidebar dragging after removing the browser header row.
+
 # Completed in 0.1.41
 
 - Accessible Cursor CLI installation and host-bound sign-in with Terminal fallback.
