@@ -365,7 +365,7 @@ fingerprint before committing a remote response, preserving a concurrent correct
 - Tiles permit main/left/right placement and bounded spans/heights. Optional page
   widths are 200–600 px left and 280–760 px right; rendering also respects available
   screen space. Pages remain scoped independently. PDF tiles can read a bounded
-  ordinary repository PDF through the authenticated code API (32 MiB, PDF header,
+  ordinary repository PDF through the authenticated code API (512 MiB, PDF header,
   no symlinks, hardlinks, private paths or traversal). They grant no compilation.
 - Scheduled checks carry explicit background provenance and a system message role.
   New user messages retain user provenance, including pasted check instructions.

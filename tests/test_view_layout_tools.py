@@ -106,8 +106,9 @@ class ViewLayoutToolTests(unittest.TestCase):
             with self.subTest(path=path),self.assertRaises(SurfboardError):self.service.code.pdf(project,path)
         (self.repo/'hard.pdf').unlink();file.write_bytes(b'not a pdf')
         with self.assertRaisesRegex(SurfboardError,'not a PDF'):self.service.code.pdf(project,'paper.pdf')
-        with file.open('wb') as stream:stream.truncate(33*1024*1024)
-        with self.assertRaisesRegex(SurfboardError,'32 MiB'):self.service.code.pdf(project,'paper.pdf')
+        with file.open('wb') as stream:stream.truncate(512*1024*1024+1)
+        with self.assertRaisesRegex(SurfboardError,'512 MiB') as error:self.service.code.pdf(project,'paper.pdf')
+        self.assertEqual(413,error.exception.status)
 
     def test_context_attachments_are_scoped_bounded_and_separate_from_display_text(self):
         scope='experiment:'+self.exp['id']

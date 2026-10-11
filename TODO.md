@@ -1,5 +1,6 @@
 # Post-0.1.41 fixes
 
+- Preview repository PDFs up to the existing 512 MiB artifact allowance, including image-rich dissertations.
 - Restore desktop left-sidebar dragging after removing the browser header row.
 - Resize Files and Projects vertically with visible dividers and persistent sizes.
 - Keep detached-panel space reclaimed during zoom/resize; distinguish clicks from floating-panel drags.

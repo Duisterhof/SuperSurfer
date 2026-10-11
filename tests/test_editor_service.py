@@ -1,5 +1,6 @@
 """Authenticated editor routes, layout versions and exact agent attribution."""
 import http.client
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
@@ -98,6 +99,21 @@ class EditorServiceTests(unittest.TestCase):
         for cap in self.service.file_previews.tokens.values():cap['expires']=0
         with self.assertRaises(HTTPError) as error:urlopen(self.base+data['url'])
         self.assertEqual(404,error.exception.code)
+
+    def test_large_repository_pdf_is_delivered_intact_through_authenticated_route(self):
+        pdf = self.repository / 'large.pdf'
+        with pdf.open('wb') as stream:
+            stream.write(b'%PDF-1.4\n')
+            stream.seek(64 * 1024 * 1024)
+            stream.write(b'%%EOF\n')
+        route = '/api/code/pdf?' + urlencode({'project_id': self.pid, 'path': 'large.pdf'})
+        self.assertEqual(401, self.request(route, auth=False)[0])
+        request = Request(self.base + route, headers={'Authorization': 'Bearer ' + self.service.token})
+        with urlopen(request, timeout=10) as response:
+            self.assertEqual(200, response.status)
+            self.assertEqual('application/pdf', response.headers['Content-Type'])
+            self.assertEqual(pdf.stat().st_size, int(response.headers['Content-Length']))
+            self.assertEqual(hashlib.sha256(pdf.read_bytes()).digest(), hashlib.sha256(response.read()).digest())
 
     def test_reusable_html_blocks_persist_assets_and_versions(self):
         from server.view_blocks import ViewBlocks
