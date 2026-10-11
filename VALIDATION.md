@@ -33,7 +33,21 @@ Mac builds are cross-built on Linux: archive integrity/source bytes are checked,
 but actual macOS launch/signing/Gatekeeper and a brand-new OAuth callback remain
 external-platform checks. No live workspace restart or research launch is used.
 
-Final regression: **727 Python tests** and **35 enabled Node tests** pass; five optional real-SSH checks remain skipped. The final chat scope/history cancellation browser check also passes. Sustained-check totals are added below after completion.
+Final regression: **727 Python tests** and **35 enabled Node tests** pass; five optional real-SSH checks remain skipped. The final chat scope/history cancellation browser check also passes. A 60-minute fake-provider lifecycle run passes **1,678 checks** across streaming,
+scoped approvals/questions, concurrent scopes, stop ownership and restart without
+replay. Cleanup remains at one thread and four descriptors; observed peak RSS is
+31.49 MiB. A separate **90-minute** workspace/read run passes. Its final periodic sample
+records **19,023 authenticated reads**, including **13,948 unchanged 304 replies**,
+with 18.50 ms median and 100.43 ms maximum observed response time under concurrent
+QA load. Peak RSS is 49.02 MiB and the content cache remains at 128 entries.
+The run cycles 0–200 synthetic attempts, four workflows, external document edits
+and manager outages; fresh mutations reject stale/unavailable evidence and task
+lifecycle is not replaced by a failed attempt. It uses an earlier optimized read
+snapshot during sustained execution; the final suite covers subsequent guards.
+
+Final Mac arm64/x64 and Linux x64 archive/source-byte verification and native Linux
+startup are completed during packaging. These checks do not claim native Mac signing
+or a new real OAuth callback.
 
 # Compact coding backend Settings — October 9, 2026
 

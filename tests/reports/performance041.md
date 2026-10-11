@@ -103,7 +103,15 @@ export from the friend’s unavailable computer.
 
 ## Sustained checks
 
-Sustained fixture results are recorded in VALIDATION.md after completion. These
-checks inspect synthetic queue saturation, task lifecycle, manager outages,
-external document changes, bounded caches and repeated provider ownership/restart
-cycles. No actual research jobs or live accounts are changed.
+The 90-minute metadata/read run passes; its final periodic sample contains
+19,023 authenticated reads, 13,948 unchanged replies, 18.50 ms median response,
+100.43 ms maximum and 49.02 MiB peak RSS. The compiled cache stays at 128 entries.
+It cycles synthetic queue saturation (0–200 attempts), task lifecycle, four
+workflows, manager outages and external document changes. This long-lived process
+loads an earlier optimized read snapshot; subsequent guards are covered by the
+final regression suite.
+
+The 60-minute fake-provider run passes 1,678 streaming, scoped approval/question,
+stop, concurrency and restart checks without replay. After cleanup, it retains
+one thread and four descriptors; observed peak RSS is 31.49 MiB. No actual research
+jobs, live account changes or model prompts are used for either sustained run.
