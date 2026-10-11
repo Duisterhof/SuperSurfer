@@ -1,0 +1,11 @@
+SuperSurfer
+Copyright (C) 2026 SuperSurfer contributors
+
+SuperSurfer's original code is free software: you may redistribute it and/or
+modify it under the GNU General Public License as published by the Free Software
+Foundation, either version 2 of the License, or (at your option) any later version.
+It is distributed without any warranty; see LICENSE for the full terms.
+SPDX-License-Identifier: GPL-2.0-or-later
+
+Third-party components retain their own licenses. See LICENSES/THIRD-PARTY.md.
+Use the GPLv3 option for the combined app containing Apache-2.0 components.

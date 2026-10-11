@@ -11,13 +11,13 @@
 - New project terminals start at the absolute repository path without taking over another terminal.
 - Repository PDF previews up to 512 MiB (PR #34).
 
-# Next: community contribution setup
+# Community contribution setup (after 0.1.42)
 
 - Apply the selected GPLv2-or-later license, preserve third-party notices and document GPLv3 compatibility for bundled Apache-licensed components.
 - Contributor quickstart and a small, reproducible test/build workflow for PRs.
 - Automated unit, workflow/browser and package smoke checks without live accounts or jobs.
 - Allow reviewed diagnostic excerpts committed with a PR; current attachment-only check rejects them.
-- GitHub credential needs workflow scope before workflow changes can be pushed.
+- CI publication uses existing GitHub SSH authentication; no additional token scopes are needed.
 
 # Completed in 0.1.41
 

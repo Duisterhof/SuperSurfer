@@ -61,3 +61,21 @@ xattr -dr com.apple.quarantine "/Applications/SuperSurfer.app"
 Reopen the app. This clears its download quarantine; it does not sign or notarize it.
 
 [Agent contribution guide](.agents/README.md) · [More details](CONTRACT.md) · [Roadmap](TODO.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for a local setup, small PR workflow and
+commands matching CI. Checks use temporary projects and simulated providers;
+contributors do not need accounts, GPUs or access to the maintainers’ machines.
+
+## License
+
+Copyright © 2026 SuperSurfer contributors. SuperSurfer's original code is licensed
+under the [GNU GPL version 2](LICENSE), or (at your option) any later version:
+`GPL-2.0-or-later`. It is provided without warranty. Contributions are accepted
+under the same terms unless explicitly agreed otherwise.
+
+Bundled dependencies retain their own licenses and notices; see
+[third-party notices](LICENSES/THIRD-PARTY.md). Distributing the combined app with
+Apache-2.0 components such as PDF.js uses the GPLv3 option. Distributors must
+provide the corresponding source and build instructions required by that license.
