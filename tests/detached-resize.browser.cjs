@@ -25,9 +25,23 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
     window.resizeProbe=new ResizeObserver(measureResize);resizeProbe.observe(tile);measureResize();
    });
    for(const width of [1400,1800,1500]){await page.setViewportSize({width,height:1050});await page.waitForTimeout(100);}
+   // Ordinary editor activity must use the same projected layout, not the saved split.
+   await page.evaluate(()=>retainedModel.setValue('print("edited with PDF detached")\n'));
+   await page.locator('.code-monaco .monaco-editor').click();await page.keyboard.press('Control+End');await page.keyboard.type('# typed while detached');
+   await page.keyboard.press('Control+s');await page.waitForTimeout(250);
+   const text=page.locator('.code-monaco .view-lines').first(),font=await text.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),zoomBefore=await page.evaluate(()=>getComputedStyle(document.documentElement).zoom);
+   await page.keyboard.press('Control+=');assert.equal(await text.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),font+1);
+   await page.keyboard.press('Control+-');assert.equal(await text.evaluate(el=>parseFloat(getComputedStyle(el).fontSize)),font);
+   assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).zoom),zoomBefore);
+   await page.locator('.sidebar .brand').click();await page.keyboard.press('Control+=');assert.notEqual(await page.evaluate(()=>getComputedStyle(document.documentElement).zoom),zoomBefore);await page.keyboard.press('Control+0');
+
+   await page.locator('#workspace-files-tree [data-tile-file="README.md"]').click();await page.waitForTimeout(200);
+   await page.locator('#workspace-files-tree [data-tile-file="main.py"]').click();await page.waitForTimeout(200);
+   await page.locator('[data-action="refresh"]').click();await page.waitForTimeout(300);
+   const draft=await page.evaluate(()=>retainedModel.getValue());
    const ratios=await page.evaluate(()=>{resizeProbe.disconnect();return resizeRatios;});assert.ok(ratios.length>=3,JSON.stringify(ratios));assert.ok(ratios.every(ratio=>ratio>.95),'Detached panel reclaimed space during resize: '+JSON.stringify(ratios));
-   assert.equal(await page.evaluate(()=>retainedModel.getValue()),'print("my unsaved draft")\n');assert.deepEqual((await api('view-layout?project_id='+pid)).pages,saved);
-   await popup.close();await pdf.waitFor();assert.equal(await page.evaluate(()=>retainedModel.getValue()),'print("my unsaved draft")\n');
+   assert.equal(await page.evaluate(()=>retainedModel.getValue()),draft);assert.deepEqual((await api('view-layout?project_id='+pid)).pages,saved);
+   await popup.close();await pdf.waitFor();assert.equal(await page.evaluate(()=>retainedModel.getValue()),draft);
    if(tab==='docked')assert.ok((await editor.boundingBox()).width<(await page.locator('#page-tile-grid').boundingBox()).width*.6);
    assert.deepEqual(errors,[]);await context.close();console.log('PASS '+tab+' detached PDF keeps editor full width across resize, preserves draft/layout and returns on close');
   }

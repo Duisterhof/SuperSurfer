@@ -54,7 +54,16 @@ materially changes behavior. Ask one concise question; use sensible labeled choi
 A description is not executable evidence. Explain which effects are service-enforced and
 which are instructions or require activation with an existing tool. Use propose_surfboard
 to save the whole revised graph using both current version numbers. Preserve unrelated
-edits. On conflict reread and reconcile. A proposal never applies itself; the user reviews
+edits. On conflict reread and reconcile. Start with the user's goal and propose the smallest useful combination of views and
+agent steps, rather than presenting the whole catalog. Explain the schematic in plain
+language, including what agents do while the user is away and when they stop. Read
+saved_surfboards, template_link and workflow_tasks in read_surfboard to reuse named
+versions. For requested changes across workflows, propose optional rollout with scope
+current, existing or future, and task_ids for existing tasks. Only propose existing
+linked tasks of the requested kind; never guess membership from names. The UI previews
+exact targets, preserves local overrides, and applies only on the user's click. A saved
+Surfboard is a reusable definition, not a job, login or live resource allocation.
+A proposal never applies itself; the user reviews
 and applies it in the editor. Inspect repository manifests read-only when configuring commands. Do not change project files, run project scripts, install dependencies or launch work.
 Data sharing defaults to all experiments in this project, with individual provenance;
 use item or selected scope when requested. Never claim data or runs were created by edits.
@@ -175,7 +184,7 @@ class SurfboardService:
         return {**result, "live_limits": live, "catalog": catalog(), "templates": templates()}
 
     def _save_board_draft(self, project_id, fields, experiment_id=None):
-        if set(fields) - {"board", "expected_version", "expected_draft_version"}:
+        if set(fields) - {"board", "expected_version", "expected_draft_version", "rollout"}:
             raise SurfboardError("Unexpected surfboard draft fields.")
         if experiment_id:
             key = self.boards.task_key(project_id, experiment_id)
@@ -473,9 +482,13 @@ class SurfboardService:
         if tool == "read_surfboard":
             if set(fields) - {"experiment_id"}:
                 raise SurfboardError("Choose a project and optional task.")
-            return self.surfboard(project["id"], self.board_item(scope, arguments))
+            result = self.surfboard(project["id"], self.board_item(scope, arguments))
+            from .workflow_library import WorkflowLibrary
+            library = WorkflowLibrary(self).read(project['id'], self.board_item(scope, arguments))
+            result.update(saved_surfboards=library['library']['entries'], template_link=library['link'], workflow_tasks=[row for row in library['tasks'] if row['project_id'] == project['id'] and (not self.board_item(scope, arguments) or scope.startswith('surfboard:') or row['id'] == self.board_item(scope, arguments))])
+            return result
         if tool == "propose_surfboard":
-            if not scope.startswith("surfboard:") or set(fields) != {"board", "expected_version", "expected_draft_version"}:
+            if not scope.startswith("surfboard:") or set(fields) - {"board", "expected_version", "expected_draft_version", "rollout"} or not {"board", "expected_version", "expected_draft_version"} <= set(fields):
                 raise SurfboardError("Only the surfboard configurator can propose a versioned board.", 403)
             return self._save_board_draft(project["id"], fields, self.board_item(scope))
         if tool == "inspect_board_data":

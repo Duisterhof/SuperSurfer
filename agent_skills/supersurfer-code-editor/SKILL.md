@@ -2,12 +2,12 @@
 name: supersurfer-code-editor
 description: Collaborate on SuperSurfer's shared repository through selected code and recorded agent edits, preserving unsaved user work and distinguishing patch attribution from Git changes.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Shared source and recorded changes
 
-Reviewed for SuperSurfer 0.1.41. The Code editor shows the registered repository
+Reviewed for SuperSurfer 0.1.42. The Code editor shows the registered repository
 shared by the user and project agents, not an isolated agent checkout. The default
 editor uses Monaco. The optional VS Code extension editor requires its separate Code OSS runtime
 to be installed and selected. The default Code block is a clean editing surface:
@@ -16,6 +16,12 @@ engine keeps language/extension support without its embedded sidebar or IDE chro
 Monaco likewise uses SuperSurfer file browsing. Optional **Full VS Code**
 (`vscode`), **Terminal** (`terminal`) and **Ports** (`ports`) tiles are separately
 configurable; Full VS Code retains its native Explorer and broader workbench.
+A newly created **Project terminal** starts in this project's absolute repository
+path, including when a login shell's startup changes directory. Reopening that
+same live terminal preserves the directory the user chose; it does not reset it
+to the repository or adopt an unrelated active terminal. Inspect the actual
+working directory before relative commands. Opening a terminal is not authority
+to run setup, install packages or bypass the task's managed-action requirements.
 These views refer to the same repository but can have separate client buffers.
 Standalone File explorer tiles remain available. SuperSurfer supplies multi-page
 PDF and supported media viewing. Inspect the selected engine rather
@@ -99,7 +105,9 @@ shared SuperSurfer Files tree; a PDF selected in optional Full VS Code's native
 Explorer also hands its scoped path to SuperSurfer's PDF overlay. That Explorer
 remains usable, and selecting a source file or **Back to source** returns to code.
 That handoff neither compiles the PDF nor requires a desktop-only PDF extension.
-The PDF view scrolls through the
+Repository PDF viewing supports files up to 512 MiB; this does not raise the
+separate 32 MiB local-upload limit or the source-text editing limit. Large-file
+acceptance does not guarantee quick rendering on every machine. The PDF view scrolls through the
 whole document; only nearby pages need to be rendered at once. A missing canvas
 outside the visible range is not proof that those pages are absent.
 
@@ -116,6 +124,12 @@ Opening a port does not start its development server. Terminal work and permitte
 board previews retain their existing execution/permission rules. Ports exposes
 no agent opening tool, arbitrary localhost proxy or code-server proxy route;
 do not relax CORS/origin checks or app credential boundaries to imitate one.
+
+Cmd/Ctrl+Plus, Minus and Zero follow the focused pane: editor text size, PDF zoom
+(with Zero returning to fit width), or supported pane text scale. Outside a pane
+they fall back to app zoom. These viewing controls do not change source or a saved
+Surfboard layout; the code editor's reset returns to its configured font default.
+Do not suggest rearranging panels or saving another layout merely to enlarge text.
 
 Workspace editor defaults select the engine, theme, text/tab size, word wrapping
 and minimap. They apply across projects without changing source or task scope.
@@ -166,6 +180,11 @@ normal authorization, not a new surfboard block or agent permission level.
 Install only for requested editor capabilities, without treating installation as
 a way to evade an agent-tool denial. These workspace editor preferences and installs
 are app Settings operations, not a new managed tool granted by a surfboard block.
+Grammarly is not integrated. LTeX+ may be sought as a separate Open VSX extension
+for a compatible optional Code OSS runtime; it is not bundled or validated as part
+of this release. Installation, language-server requirements and actual activation
+must be checked separately; do not claim grammar checking merely because its
+catalog entry exists.
 Both editors include offline English spelling diagnostics for `.tex`/`.latex`
 prose, controlled by the workspace LaTeX spelling preference. They exclude commands,
 equations, labels, citation keys and code; a suggested change still needs context.
@@ -345,6 +364,19 @@ remaining docked panels; inside Rearrange, Done/Cancel still controls its draft.
 Dirty Monaco models/native parked frames survive view removal in the current
 window session, not as a promise of durability after closing/reloading the app.
 Save intended source before ending that session; removal neither saves nor deletes it.
+
+## Editor views in reusable workflows
+
+Chat-first workflow setup can propose Code, Files and optional Terminal/Ports
+without running code or changing native editor trust. A saved Surfboard stores
+views and workflow rules, not dirty buffers, source contents or extension logins.
+Reuse the destination project's actual repository and preserve open file identity
+through an applied layout update. Right-click task Rename changes its display name,
+not that path. Files and Projects have separate vertical dividers whose saved
+heights shrink to fit shorter windows. Detached panels leave the remaining editor
+full width during zoom/resize; do not rewrite the saved layout to compensate for
+a temporary client view or restore the detached tile in its parent prematurely.
+
 
 For provider connection issues, use Settings → Coding backends on the connected
 workspace host and its host-specific official sign-in action. Account status,

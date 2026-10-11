@@ -2,12 +2,12 @@
 name: supersurfer-manager
 description: Resolve shared compute and cross-project dependencies, correct observed coordination misalignment, and complete explicitly assigned workspace tasks in SuperSurfer.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.41. Coordinate shared resources and actual cross-project
+Reviewed for SuperSurfer 0.1.42. Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
 step, independently repeat their tests, request readiness receipts or become a
@@ -31,6 +31,19 @@ or another manager must take ownership. Preserve existing tasks, run IDs and que
 settings; use the app's bounded retry flow. Do not kill unrelated SSH sessions or
 release another process's connection lock. Transport recovery grants no deployment
 capability and no new work or launch authorization.
+
+## Saved workflows and coordination
+
+A request to redesign workflows is configuration work, not an assignment to launch
+every affected task. Read `read_surfboard` for the selected project/task and its
+saved Surfboard link. Route policy changes to that scope's configurator; ordinary
+workers still handle their own work without a manager relay. A workspace-wide
+request must identify the linked tasks to update, preserve their local overrides,
+and go through the user's exact-target preview. Do not infer membership from names
+or use handoffs to simulate a bulk workflow update. Applying or undoing a workflow
+changes configuration, not existing run identities or execution authorization.
+See [saved workflows](../supersurfer-surfboard/references/saved-workflows.md).
+
 
 ## Act on concrete workspace work
 

@@ -2,12 +2,12 @@
 name: supersurfer-host-onboarding
 description: Resolve a requested SuperSurfer run's capacity or setup needs by inspecting budgets and prepared nodes, then onboarding a compatible authorized host when needed.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.41. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.42. Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -30,6 +30,17 @@ run's exact commit and per-node paths, preserving dirty user buffers and shared
 source. An editor review, trust choice, upload or layout change does not satisfy
 compute readiness or alter ownership. See [editor collaboration](../supersurfer-code-editor/SKILL.md)
 for source conflicts; page geometry is covered by [layout editing](../supersurfer-surfboard/references/view-layout.md).
+
+## Reusing a workflow does not provision its hosts
+
+Saved Surfboards are reusable task definitions. Their names and compute blocks
+do not establish a destination project's SSH access, Python environment, dataset
+paths, GPU registration or run readiness. Reinspect that project's real compute
+pool and the exact existing run before acquisition. A workflow rollout does not
+stage data, change project budgets or broaden queued candidates. Keep those
+operations on the existing authorized compute tools and preserve each task's run
+owner. Configuration preview must not submit a diagnostic run to test a template.
+
 
 ## Separate the causes of a queue wait
 

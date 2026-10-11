@@ -2,12 +2,12 @@
 name: supersurfer-wandb-data
 description: Resolve a surfboard W&B data block into traceable experiment and run sources for shared project comparisons or an explicitly narrower selection.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # W&B experiment data block
 
-Reviewed for SuperSurfer 0.1.41. Use this skill when a board's W&B block supplies
+Reviewed for SuperSurfer 0.1.42. Use this skill when a board's W&B block supplies
 experiment data to another block. Read the applied board with `read_surfboard` and
 use `inspect_board_data` for the intended block. Work from returned experiment,
 run, result and source identities rather than guessing W&B URLs from names.
@@ -118,6 +118,18 @@ tracking run or a broader data selection.
 Settings → Coding backends manages provider CLI accounts, independently of W&B
 authentication and writers. Sign-out or removing a data-view block does not erase
 tracking history, change sharing selection or authorize another writer.
+
+## Portable templates and scoped data
+
+A saved Surfboard is a reusable definition, not an export of this project's W&B
+runs. Template saving removes explicit experiment-ID selections in favor of a
+portable project selection; do not describe that saved copy as retaining a narrow
+cohort. Before the user applies it elsewhere, explain the intended sharing choice
+and preserve explicit local overrides in the reviewed change. Resolve the applied
+selection with `inspect_board_data` afterward; do not copy source-project writer
+IDs or infer destination runs from display names. No template action creates or
+authenticates a W&B writer.
+
 
 For provider connection issues, use Settings → Coding backends on the connected
 workspace host and its host-specific official sign-in action. Account status,

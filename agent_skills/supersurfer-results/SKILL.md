@@ -2,12 +2,12 @@
 name: supersurfer-results
 description: Publish clear live training comparisons and requested scientific visuals in a SuperSurfer experiment, with measured splits, compatible axes and honest provenance.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.41. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.42. A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -47,6 +47,18 @@ Use the app's bounded connection retry and inspect the existing report and sourc
 status after access returns. Keep previously available samples with their genuine
 ages; do not republish, invent fresh measurements or allocate another writer to
 repair transport. Connection recovery never authorizes a replacement run.
+
+## Reuse the reporting workflow, preserve the evidence
+
+Saving a Surfboard reuses its views and data-flow configuration; it does not copy
+scientific reports, measurements or experiment identities into another task.
+After a reviewed rollout, read the destination task's applied data selection and
+resolve actual sources before revising its existing report. Preserve deliberate
+current/selected-experiment choices, source labels and prior attempts. A template
+name is not a W&B group or a comparison cohort. Keep unrequested publication and
+new runs out of workflow setup; preview can show the layout with honest empty
+states until evidence is available.
+
 
 ## Respect the board's data input
 

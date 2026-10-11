@@ -1,3 +1,38 @@
+# Chat-first Surfboards and editor behavior (0.1.42)
+
+Task Workflow and project Task defaults open the actual provider conversation.
+The configurator proposes a versioned draft using the existing Surfboard tool
+catalog. It can suggest current/existing/future scope but cannot apply the library
+receipt or start work through this setup flow. Advanced edits the same draft.
+
+Named templates store workflow definitions, never agent history or credentials.
+Saving removes project capacity caps and selected experiment IDs; selected W&B
+sources become task-local with a visible warning. Applying links the task to a
+version while retaining its own snapshot. Updates use identity-based three-way
+comparison to preserve local graph and page changes. The review lists exact
+scopes; conflicts, active worker turns, changed versions or layouts reject the
+whole batch. Future defaults preserve project views and existing task snapshots.
+Legacy tasks require explicit association; names never establish membership.
+Undo restores configuration only when no later edits or active turns conflict.
+Applying/undoing starts no jobs or monitoring and does not alter recorded execution
+contracts. The workflow library and receipts are local to one workspace.
+
+Human project labels support spaces, punctuation and Unicode; scheduler IDs and
+repository paths stay independent. Task creation starts with a goal and optional
+saved/preset workflow. Existing task chats and per-provider capability limits stay
+unchanged. Ordinary task creation does not submit a worker turn; choosing the
+agent-guided flow requests only a workflow proposal in the configurator chat.
+
+Cmd/Ctrl +/−/0 targets focused editor text or a focused PDF/panel; with no panel
+focused it changes application zoom. Editor zoom is local to that editor, without
+rewriting workspace font defaults. Detached panes are removed from the rendered
+layout projection, including after edits, saves, navigation, resizing and zoom.
+New project terminals are separately owned and start in the absolute repository
+folder, with an explicit quoted `cd` after shell startup. Reopening preserves the
+user's subsequent working directory. Folder expansion fetches only that folder,
+coalesces simultaneous reads and caches results for 15 seconds; Refresh forces a
+new listing. Search input is debounced.
+
 # SuperSurfer 0.1.41 — provider connection and responsive workspace
 
 Cursor account status uses the detected host CLI’s JSON status, with a bounded

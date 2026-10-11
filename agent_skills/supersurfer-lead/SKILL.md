@@ -2,12 +2,12 @@
 name: supersurfer-lead
 description: Develop a SuperSurfer project's research direction, create requested experiments, and give their workers clear bounded assignments.
 metadata:
-  supersurfer-version: '0.1.41'
+  supersurfer-version: '0.1.42'
 ---
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.41. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.42. Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -30,6 +30,19 @@ Cursor/Claude login happens in the user's trusted workspace-host terminal, never
 through passwords, codes or tokens pasted into chat. Cursor/Claude offer Ask/YOLO
 with provider-native permissions, but no active-turn steering, Codex auto-review,
 effort or Fast controls. Await or stop a live turn before giving a new instruction.
+
+## Configure before dispatching
+
+The chat-first workflow builder prepares a task's views, agents and requirements;
+its proposal is not a request to start an experiment. Use the task's applied board
+when dispatching already requested work. For “change this research workflow for
+all tasks like it,” use the saved Surfboard link and exact task IDs, not project
+labels or similar titles, and send policy editing to the configurator. The user
+reviews the affected tasks before application; individual view overrides must not
+be silently replaced. Display names may contain spaces, punctuation and Unicode;
+retain stable task IDs when naming or renaming, rather than making another task.
+See [saved workflows](../supersurfer-surfboard/references/saved-workflows.md).
+
 
 ## Move requested work forward
 

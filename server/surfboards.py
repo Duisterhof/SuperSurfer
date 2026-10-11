@@ -952,7 +952,8 @@ class Surfboards:
         # A project's in-progress proposal is not an applied task workflow.
         return {"version": 1, "board": board, "draft": None,
                 "next_draft_version": 0, "history": [],
-                "inherited_from": {"project_id": project_id, "version": source["version"]}}
+                "inherited_from": {"project_id": project_id, "version": source["version"]},
+                **({"library": deepcopy(source["library"])} if not workflow and source.get("library") else {})}
 
     def _task_record(self, project_id, experiment_id, *, read_only=False):
         identity = self.task_key(project_id, experiment_id, read_only=read_only)
@@ -997,7 +998,12 @@ class Surfboards:
         if actual != expected_draft_version or (not actual and not allow_new):
             raise SurfboardError("The surfboard draft changed. Reload it to preserve the newer edits.", 409)
 
-    def save_draft(self, project_id, board, expected_version, expected_draft_version=None, *, limits_baseline=None):
+    def save_draft(self, project_id, board, expected_version, expected_draft_version=None, *, limits_baseline=None, rollout=None, library_source=None):
+        if rollout is not None:
+            if not isinstance(rollout, dict) or set(rollout) - {'scope', 'task_ids'} or rollout.get('scope') not in {'current', 'existing', 'future'}:
+                raise SurfboardError('Choose current, existing or future workflow scope.')
+            if not isinstance(rollout.get('task_ids', []), list) or len(rollout.get('task_ids', [])) > 512 or any(not isinstance(x, str) for x in rollout.get('task_ids', [])):
+                raise SurfboardError('Choose specific task IDs for a scoped proposal.')
         board = validate(board, allow_pending=True)
         errors = []
         try:
@@ -1006,9 +1012,14 @@ class Surfboards:
             errors = error.errors
         def change(record):
             self._expect_draft(record, expected_draft_version, allow_new=True)
+            previous_library = (record.get("draft") or {}).get("library_source")
             record["next_draft_version"] = record.get("next_draft_version", 0) + 1
             record["draft"] = {"board": board, "draft_version": record["next_draft_version"], "base_version": record["version"],
                                "summary": diff_summary(record["board"], board), "errors": errors, "updated_at": time.time()}
+            if library_source or previous_library:
+                record["draft"]["library_source"] = deepcopy(library_source or previous_library)
+            if rollout is not None:
+                record["draft"]["rollout"] = deepcopy(rollout)
             if limits_baseline is not None:
                 record["draft"]["limits_baseline"] = deepcopy(limits_baseline)
         return self._mutate(project_id, expected_version, change)
