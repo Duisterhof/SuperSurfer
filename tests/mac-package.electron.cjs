@@ -14,15 +14,30 @@ const {execFileSync}=require('node:child_process');
   const extracted=path.join(temporary,'extracted');
   fs.mkdirSync(extracted);
   let application;
+  const close = async () => {
+    if (!application) return;
+    const current = application; application = null;
+    const watchdog = setTimeout(() => current.process().kill('SIGKILL'), 10000);
+    try { await current.close(); } finally { clearTimeout(watchdog); }
+  };
   try{
     execFileSync('ditto',['-x','-k',archive,extracted]);
     for(const [index,appPath] of [bundle,path.join(extracted,'SuperSurfer.app')].entries()){
-      execFileSync('codesign',['--verify','--deep','--strict',appPath],{stdio:'pipe'});
+      console.log(`Checking ${index?'extracted':'original'} bundle signature`);
+      execFileSync('codesign',['--verify','--deep','--strict',appPath],{stdio:'pipe',timeout:60000});
       const profile=path.join(temporary,`profile-${index}`);
+      console.log(`Launching ${index?'extracted':'original'} bundle`);
       application=await electron.launch({executablePath:path.join(appPath,'Contents/MacOS/SuperSurfer'),chromiumSandbox:true,args:[`--user-data-dir=${profile}`],timeout:30000});
-      const page=await application.firstWindow();
+      const page=await application.firstWindow({timeout:30000});
+      console.log('Window opened:',page.url());
       const errors=[];page.on('pageerror',error=>errors.push(error.message));
-      await page.waitForFunction(()=>document.querySelector('#connect-button')&&!document.querySelector('#connect-button').disabled);
+      try {
+        await page.waitForFunction(()=>document.querySelector('#connect-button')&&!document.querySelector('#connect-button').disabled, null, {timeout:45000});
+      } catch (error) {
+        console.error('Setup did not become ready:', await page.evaluate(()=>({url:location.href,status:document.querySelector('#status')?.textContent,bridge:typeof window.superSurferDesktop,body:document.body?.innerText.slice(0,1200)})).catch(()=>({renderer:'unresponsive'})), errors);
+        throw error;
+      }
+      console.log('Setup ready');
       const actual=await application.evaluate(({app,BrowserWindow})=>({profile:app.getPath('userData'),preferences:BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences()}));
       assert.equal(fs.realpathSync(actual.profile),fs.realpathSync(profile));
       assert.equal(actual.preferences.sandbox,true);
@@ -31,11 +46,11 @@ const {execFileSync}=require('node:child_process');
       assert.equal(await page.evaluate(()=>typeof require),'undefined');
       assert.match(page.url(),/desktop\/setup\.html$/);
       assert.deepEqual(errors,[]);
-      await application.close();application=null;
+      await close();
       console.log(`PASS ${index?'ZIP-extracted':'original'} Mac app: strict signature, isolated-profile launch and sandboxed setup screen`);
     }
   }finally{
-    if(application)await application.close();
+    await close();
     fs.rmSync(temporary,{recursive:true,force:true});
   }
 })().catch(error=>{console.error(error);process.exitCode=1;});
