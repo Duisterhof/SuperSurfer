@@ -4,7 +4,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
 const child=spawn('python3',['tests/layout_runtime_fixture.py'],{cwd:root,env:{...process.env,SUPERSURFER_CODE_SERVER:binary},stdio:['pipe','pipe','pipe']});let browser,stderr='';child.stderr.on('data',v=>stderr+=v);
 try{const service=await new Promise((resolve,reject)=>{let s='';child.stdout.on('data',v=>{s+=v;if(s.includes('\n'))resolve(JSON.parse(s.split('\n')[0]))});child.on('exit',code=>reject(new Error(code+' '+stderr)))}),base='http://127.0.0.1:'+service.port,token=fs.readFileSync(path.join(service.directory,'token'),'utf8').trim(),pid=service.projects.software;
 const request=async(route,body)=>{const response=await fetch(base+'/api/'+route,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await response.json();assert.ok(response.ok,JSON.stringify(data));return data;};
-const layout=await request('view-layout?project_id='+pid);await request('action',{op:'view-layout.save',params:{project_id:pid,experiment_id:null,version:layout.version,board_version:layout.board_version,pages:[{id:'desk',title:'Code',tiles:[{id:'code',kind:'editor',span:12,height:650}]}]}});
+const layout=await request('view-layout?project_id='+pid);await request('action',{op:'view-layout.save',params:{project_id:pid,experiment_id:null,version:layout.version,board_version:layout.board_version,pages:[{id:'desk',title:'Code',tiles:[{id:'code',kind:'editor',span:12,height:650}]},{id:'shell',title:'Terminal',tiles:[{id:'shell',kind:'terminal',span:12,height:650}]}]}});
 if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
  await request('action',{op:'editor.extension',params:{operation:'install',extension_id:'vscodevim.vim'}});
  let runtime;for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
@@ -12,13 +12,25 @@ if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
  console.log('PASS real Open VSX extension installation');
 }
 await request('action',{op:'editor.settings',params:{engine:'vscode'}});
-browser=await chromium.launch({...(process.env.SUPERSURFER_CHROMIUM?{executablePath:process.env.SUPERSURFER_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1650,height:1100}});page.setDefaultTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
+browser=await chromium.launch({...(process.env.SUPERSURFER_CHROMIUM?{executablePath:process.env.SUPERSURFER_CHROMIUM}:{}),headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1650,height:1100}});page.setDefaultTimeout(60000);page.setDefaultNavigationTimeout(60000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.addInitScript(({token,pid})=>{if(window===window.top){sessionStorage.setItem('supersurfer-token',token);localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:pid,tab:'desk',chatVisible:true}));}},{token,pid});
 console.log("opening page");await page.goto(base,{waitUntil:"domcontentloaded"});console.log("page loaded");await page.getByRole('button',{name:'Enable tools and open',exact:true}).click();await page.locator('.workbench-frame iframe').waitFor();console.log('iframe ready');const frame=page.frameLocator('.workbench-frame iframe');
-try{await frame.locator('.monaco-workbench').waitFor();console.log('workbench DOM');}catch(error){console.error(fs.readFileSync(path.join(service.directory,'editor/server.log'),'utf8').slice(-7000));await page.screenshot({path:path.resolve(root,'../../work/release031-workbench-failed.png')});throw error;}
+try{await frame.locator('.monaco-workbench').waitFor();console.log('workbench DOM');}catch(error){console.error(fs.readFileSync(path.join(service.directory,'editor/server.log'),'utf8').slice(-7000));await page.screenshot({path:path.resolve(process.env.SUPERSURFER_TEST_OUTPUT||require('node:os').tmpdir(),'release031-workbench-failed.png')});throw error;}
 await frame.getByRole('button',{name:/trust.*authors|Yes, I trust/i}).click({timeout:5000}).catch(()=>{});
 console.log('trust handled');await page.waitForFunction(()=>document.querySelector('.workbench-status')?.hidden===true,{},{timeout:60000});
-console.log('bridge ready');await page.locator('#workspace-files-tree [data-tile-file="main.py"]').click();await frame.locator('.monaco-editor').first().waitFor();
+console.log('bridge ready');
+assert.equal(await frame.locator('.part.sidebar').isVisible(),false,'compact editor must reveal without its own file explorer');
+for(const modifier of ['Control','Meta']){
+ await frame.locator('.monaco-workbench').click({position:{x:500,y:100}});
+ const before=await page.locator('.app-shell').evaluate(el=>el.classList.contains('sidebar-collapsed'));
+ await page.keyboard.press(modifier+'+b');
+ await page.waitForFunction(before=>document.querySelector('.app-shell').classList.contains('sidebar-collapsed')!==before,before);
+ await page.keyboard.press(modifier+'+b');
+ await page.waitForFunction(before=>document.querySelector('.app-shell').classList.contains('sidebar-collapsed')===before,before);
+ assert.equal(await frame.locator('.part.sidebar').isVisible(),false);
+}
+console.log('PASS Ctrl/Cmd+B in Code OSS toggles SuperSurfer sidebar only');
+await page.locator('#workspace-files-tree [data-tile-file="main.py"]').click();await frame.locator('.monaco-editor').first().waitFor();
 const nativeFont=()=>frame.locator('.view-lines').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize));
 await frame.locator('.view-lines').first().waitFor();const startFont=await nativeFont(),beforeWidth=(await page.locator('[data-tile-kind=editor]').boundingBox()).width;
 await frame.locator('.view-lines').first().click();await page.keyboard.press('Control+=');
@@ -27,7 +39,7 @@ assert.equal((await page.locator('[data-tile-kind=editor]').boundingBox()).width
 await page.keyboard.press('Control+0');await page.waitForFunction(({startFont})=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.view-lines')).fontSize)===startFont,{startFont});
 console.log('PASS real VS Code focused font zoom and reset, with unchanged panel width');
 
-await page.screenshot({path:path.resolve(root,'../../work/release031-workbench.png')});
+await page.screenshot({path:path.resolve(process.env.SUPERSURFER_TEST_OUTPUT||require('node:os').tmpdir(),'release031-workbench.png')});
 const session=JSON.parse(fs.readFileSync(fs.readdirSync(path.join(service.directory,'editor/workspaces')).map(name=>path.join(service.directory,'editor/workspaces',name))[0],'utf8')).settings['supersurfer.session'];
 await request('action',{op:'editor.command',params:{id:session,kind:'file',path:'main.py'}});await page.waitForTimeout(1100);await frame.locator('.view-line').first().dblclick();await page.locator('.workbench-toolbar button').getByText('Ask agent',{exact:true}).click();await page.locator('.chat-context-chip').waitFor({timeout:10000});assert.match(await page.locator('.chat-context-chip').textContent(),/main.py/);
 const selectionTimes=[];for(let i=0;i<4;i++){while(await page.locator('[data-context-remove]').count())await page.locator('[data-context-remove]').first().click();await frame.locator('.view-line').first().dblclick();const before=await page.locator('.chat-context-chip').count(),start=Date.now();await page.keyboard.press('Control+l');await page.waitForFunction(count=>document.querySelectorAll('.chat-context-chip').length>count,before,{timeout:5000});selectionTimes.push(Date.now()-start);}console.log('Native Ctrl/Cmd+L selection-to-chat milliseconds:',JSON.stringify(selectionTimes));
@@ -43,11 +55,39 @@ await page.keyboard.type('pwd > .terminal-cwd-test');await page.keyboard.press('
 const repo=(await request('state')).projects.find(p=>p.id===pid).repo,cwdFile=path.join(repo,'.terminal-cwd-test');
 for(let n=0;n<50&&!fs.existsSync(cwdFile);n++)await page.waitForTimeout(100);
 assert.equal(fs.readFileSync(cwdFile,'utf8').trim(),repo);console.log('PASS real terminal starts in the project absolute directory');
+const terminal=frame.locator('.xterm').first();
+const terminalFont=()=>terminal.locator('.xterm-helper-textarea').evaluate(el=>parseFloat(el.style.height));
+const terminalStart=await terminalFont(), editorStart=await nativeFont(), panelWidth=(await page.locator('[data-tile-kind=editor]').boundingBox()).width;
+for(const modifier of ['Control','Meta']){
+ await frame.locator('.xterm-helper-textarea').first().focus();await page.keyboard.press(modifier+'+=');
+ await page.waitForFunction(size=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.xterm-helper-textarea')).height)>size,terminalStart,{timeout:10000});
+ assert.equal(await nativeFont(),editorStart,'terminal zoom must not change source editor text');
+ assert.equal((await page.locator('[data-tile-kind=editor]').boundingBox()).width,panelWidth);
+ await page.keyboard.press(modifier+'+-');
+ await page.waitForFunction(size=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.xterm-helper-textarea')).height)===size,terminalStart,{timeout:10000});
+ await page.keyboard.press(modifier+'+Shift+=');
+ await page.waitForFunction(size=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.xterm-helper-textarea')).height)>size,terminalStart,{timeout:10000});
+ await page.keyboard.press(modifier+'+0');
+ await page.waitForFunction(size=>parseFloat(getComputedStyle(document.querySelector('.workbench-frame iframe').contentDocument.querySelector('.xterm-helper-textarea')).height)===size,terminalStart,{timeout:10000});
+}
+console.log('PASS real terminal Ctrl/Cmd plus, minus and reset change terminal text only');
+
 await request('action',{op:'editor.command',params:{id:session,kind:'settings',extension_id:'vscodevim.vim'}});await frame.locator('.settings-editor').waitFor();if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1')await frame.getByText('Argument Object Closing Delimiters',{exact:false}).first().waitFor();console.log('PASS native Configure opens settings; extension-specific controls are checked when installed');
 if(process.env.SUPERSURFER_TEST_EXTENSIONS==='1'){
  await request('action',{op:'editor.extension',params:{operation:'uninstall',extension_id:'vscodevim.vim'}});
  let runtime;for(let n=0;n<100;n++){runtime=(await request('editor')).workbench;if(runtime.job.status!=='running')break;await new Promise(resolve=>setTimeout(resolve,1000));}
  assert.equal(runtime.job.status,'succeeded');assert.ok(!runtime.extensions.some(row=>row.id.toLowerCase()==='vscodevim.vim'));console.log('PASS real Open VSX extension removal');
 }
+await page.locator('#main [data-tab="shell"]').click();
+const standalone=page.frameLocator('[data-tile-kind=terminal] .workbench-frame iframe');
+await standalone.locator('.xterm-helper-textarea').first().waitFor({state:'visible'});await standalone.locator('.xterm-helper-textarea').first().focus();
+const standaloneHeight=await standalone.locator('.xterm-helper-textarea').first().evaluate(el=>parseFloat(el.style.height));
+await page.keyboard.press('Meta+=');
+await page.waitForFunction(height=>parseFloat(document.querySelector('[data-tile-kind=terminal] iframe').contentDocument.querySelector('.xterm-helper-textarea').style.height)>height,standaloneHeight,{timeout:10000});
+const workspaces=fs.readdirSync(path.join(service.directory,'editor/workspaces')).map(name=>JSON.parse(fs.readFileSync(path.join(service.directory,'editor/workspaces',name),'utf8')).settings);
+assert.equal(workspaces.find(settings=>settings['supersurfer.session']===session)['terminal.integrated.fontSize'],undefined,'standalone zoom must not update another pane workspace');
+await page.keyboard.press('Meta+0');
+await page.waitForFunction(height=>parseFloat(document.querySelector('[data-tile-kind=terminal] iframe').contentDocument.querySelector('.xterm-helper-textarea').style.height)===height,standaloneHeight,{timeout:10000});
+console.log('PASS standalone Terminal block zoom/reset remains isolated from other editor sessions');
 assert.ok(!(await fetch(base+'/workbench/invalid/')).ok);assert.equal((await request('editor/session?id='+session)).connected,true);console.log('PASS real Code OSS HTTP/WebSocket, extension host, file opening, selected code to agent chip and capability rejection');
-}catch(error){console.error('TEST ERROR',error);if(browser){const p=browser.contexts()[0]?.pages()[0];if(p)await p.screenshot({path:path.resolve(root,'../../work/release031-workbench-failed.png')}).catch(()=>{});}throw error;}finally{child.stdin.end();await browser?.close();}})().catch(e=>{console.error(e);process.exitCode=1});
+}catch(error){console.error('TEST ERROR',error);if(browser){const p=browser.contexts()[0]?.pages()[0];if(p)await p.screenshot({path:path.resolve(process.env.SUPERSURFER_TEST_OUTPUT||require('node:os').tmpdir(),'release031-workbench-failed.png')}).catch(()=>{});}throw error;}finally{child.stdin.end();await browser?.close();}})().catch(e=>{console.error(e);process.exitCode=1});

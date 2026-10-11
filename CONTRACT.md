@@ -23,9 +23,12 @@ saved/preset workflow. Existing task chats and per-provider capability limits st
 unchanged. Ordinary task creation does not submit a worker turn; choosing the
 agent-guided flow requests only a workflow proposal in the configurator chat.
 
-Cmd/Ctrl +/−/0 targets focused editor text or a focused PDF/panel; with no panel
+Cmd/Ctrl +/−/0 targets focused editor/terminal text or a focused PDF/panel; with no panel
 focused it changes application zoom. Editor zoom is local to that editor, without
-rewriting workspace font defaults. Detached panes are removed from the rendered
+rewriting workspace font defaults. Terminal zoom uses its pane workspace and reset
+restores its previous override or inherited size. Cmd/Ctrl+B inside Code OSS
+toggles SuperSurfer’s sidebar; compact editors remain hidden until native sidebars
+are closed by the extension bridge. Detached panes are removed from the rendered
 layout projection, including after edits, saves, navigation, resizing and zoom.
 New project terminals are separately owned and start in the absolute repository
 folder, with an explicit quoted `cd` after shell startup. Reopening preserves the

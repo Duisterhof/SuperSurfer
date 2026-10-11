@@ -185,6 +185,27 @@ class EditorServiceTests(unittest.TestCase):
         for value in (-1,26,'invalid'):
             with self.assertRaises(Exception):self.service.workbench.poll(opened['id'],0,value)
 
+    def test_font_zoom_target_and_compact_surface_readiness(self):
+        from unittest.mock import patch
+        from server.surfboards import SurfboardError
+        workbench = self.service.workbench
+        workbench.root.mkdir(parents=True, exist_ok=True)
+        with patch.object(workbench, 'start'):
+            opened = workbench.open({'project_id': self.pid, 'client_id': 'terminal-zoom-window', 'view_kind': 'terminal'})
+        identity = opened['id']
+        self.assertFalse(workbench.poll(identity)['surface_ready'])
+        workbench.bridge({'session': identity, 'operation': 'state'})
+        self.assertFalse(workbench.poll(identity)['surface_ready'])
+        workbench.bridge({'session': identity, 'operation': 'poll', 'surface_ready': True})
+        self.assertTrue(workbench.poll(identity)['surface_ready'])
+        for target in ('editor', 'terminal'):
+            workbench.command({'id': identity, 'kind': 'zoom-in', 'zoom_target': target})
+            self.assertEqual(target, workbench.sessions[identity]['commands'][-1]['zoom_target'])
+        workbench.command({'id': identity, 'kind': 'zoom-reset'})
+        self.assertEqual('terminal', workbench.sessions[identity]['commands'][-1]['zoom_target'])
+        with self.assertRaises(SurfboardError):
+            workbench.command({'id': identity, 'kind': 'zoom-in', 'zoom_target': 'global'})
+
     def test_native_draft_bridge_is_project_scoped_and_revision_checked(self):
         from unittest.mock import patch
         from server.surfboards import SurfboardError

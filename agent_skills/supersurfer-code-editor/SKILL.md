@@ -125,10 +125,12 @@ board previews retain their existing execution/permission rules. Ports exposes
 no agent opening tool, arbitrary localhost proxy or code-server proxy route;
 do not relax CORS/origin checks or app credential boundaries to imitate one.
 
-Cmd/Ctrl+Plus, Minus and Zero follow the focused pane: editor text size, PDF zoom
+Cmd/Ctrl+Plus, Minus and Zero follow the focused pane: editor or terminal text size, PDF zoom
 (with Zero returning to fit width), or supported pane text scale. Outside a pane
 they fall back to app zoom. These viewing controls do not change source or a saved
 Surfboard layout; the code editor's reset returns to its configured font default.
+Terminal zoom stays in its pane workspace; reset restores the prior override or
+inherited size without changing shared user settings.
 Do not suggest rearranging panels or saving another layout merely to enlarge text.
 
 Workspace editor defaults select the engine, theme, text/tab size, word wrapping
@@ -151,8 +153,9 @@ selection-to-chat, fullscreen and separate-window actions. Save writes the activ
 file through the existing editor save behavior, not the page layout; Cmd/Ctrl+S
 remains available. Add Terminal or Ports as their own optional blocks. Missing
 toolbar strips do not remove those capabilities or require a second editor.
-Default Code startup closes native sidebars idempotently; its Cmd/Ctrl+B binding
-does not reveal a second Explorer. Optional Full VS Code retains native navigation
+Default Code startup closes native sidebars before revealing the editor.
+Cmd/Ctrl+B while typing toggles SuperSurfer’s sidebar; Cmd/Ctrl+Shift+B toggles
+the agent sidebar. These shortcuts do not reveal a second Explorer. Optional Full VS Code retains native navigation
 instead. Extension-host restarts after trust approval must not toggle the default
 Code block's surrounding full IDE chrome back into view. This
 presentation behavior preserves unrelated native user keybindings and does not reactivate

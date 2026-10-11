@@ -374,10 +374,10 @@ class Workbench:
         if not 0 <= wait <= 25:raise SurfboardError('Editor event wait must be between 0 and 25 seconds')
         with self.events_ready:
             row=self.session(identity);after=int(after)
-            state=lambda:(row['dirty'],row.get('trusted'),row['connected_at'] is not None)
+            state=lambda:(row['dirty'],row.get('trusted'),row['connected_at'] is not None,row.get('surface_ready',False))
             before=state()
             self.events_ready.wait_for(lambda:any(event['sequence']>after for event in row['events']) or state()!=before or self.service.shutdown.is_set(),timeout=wait)
-            return {"folders":row.get("folders",[]),"events":[event for event in row['events'] if event['sequence']>after],"dirty":row['dirty'],"connected":row['connected_at'] is not None,"dirty_observed_at":row.get('dirty_observed_at'),"trusted":row.get('trusted')}
+            return {"folders":row.get("folders",[]),"events":[event for event in row['events'] if event['sequence']>after],"dirty":row['dirty'],"connected":row['connected_at'] is not None,"dirty_observed_at":row.get('dirty_observed_at'),"trusted":row.get('trusted'),"surface_ready":row.get("surface_ready",False)}
 
     def command(self, fields):
         with self.lock:
@@ -389,6 +389,11 @@ class Workbench:
                 raise SurfboardError("Unknown editor command")
             project = self.service.lookup("projects", row["project_id"])
             result = {"id": secrets.token_hex(12), "kind": kind}
+            if kind in {"zoom-in", "zoom-out", "zoom-reset"}:
+                target = fields.get("zoom_target", "terminal" if row.get("view_kind") == "terminal" else "editor")
+                if target not in ("editor", "terminal"):
+                    raise SurfboardError("Choose editor or terminal text zoom")
+                result["zoom_target"] = target
             if kind == "settings":
                 extension_id = fields.get("extension_id")
                 if not isinstance(extension_id, str) or not EXTENSION_ID.fullmatch(extension_id) or "@" in extension_id:
@@ -415,6 +420,9 @@ class Workbench:
             row = self.session(fields.get("session"))
             previous_state=(row["dirty"],row.get("trusted"),row["connected_at"] is not None)
             row["connected_at"] = time.time()
+            if fields.get("operation") == "poll" and fields.get("surface_ready") is True and not row.get("surface_ready"):
+                row["surface_ready"] = True
+                self.events_ready.notify_all()
             if fields.get("operation") in {"buffer_read", "buffer_merge", "buffer_save"}:
                 project = self.service.lookup("projects", row["project_id"])
                 path = Path(fields.get("path", "")).resolve()
