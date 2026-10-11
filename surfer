@@ -552,7 +552,10 @@ def tmux_session(app, detached=False):
     socket_name = 'surfer-' + identity
     base = [binary, '-L', socket_name, '-f', '/dev/null']
     def call(*args, check=True):
-        return subprocess.run([*base, *args], check=check, text=True, capture_output=True)
+        result = subprocess.run([*base, *args], text=True, capture_output=True)
+        if check and result.returncode:
+            raise Error(f'tmux {args[0]} failed: {result.stderr.strip()}')
+        return result
     if call('has-session', '-t', '=surfer', check=False).returncode:
         session = app.client.get('session')
         if not app.client.url_override and Path(session.get('state_dir', '')).resolve() != app.client.state_dir:
@@ -572,7 +575,7 @@ def tmux_session(app, detached=False):
             call('set-option', '-t', 'surfer', 'status-right', ' Ctrl-b 1 control · 2 shell · 3 board · d detach ')
             call('set-option', '-t', 'surfer', 'status-right-length', '70')
             call('set-window-option', '-t', 'surfer:1', 'remain-on-exit', 'on')
-            call('split-window', '-h', '-p', '40', '-t', 'surfer:1', quote('watch', 'queue'))
+            call('split-window', '-h', '-l', '40%', '-t', 'surfer:1', quote('watch', 'queue'))
             call('select-pane', '-t', 'surfer:1.0')
             # Make the one-file client available as `surfer` in the ordinary shell.
             call('set-environment', '-t', 'surfer', 'PATH', str(Path(script).parent) + os.pathsep + os.environ.get('PATH', ''))

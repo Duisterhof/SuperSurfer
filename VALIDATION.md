@@ -19,6 +19,10 @@ in the passing 20-test focused suite. Node tests were run separately: 37 passed,
 five optional SSH tests skipped. Capability-skill validation and whitespace checks
 passed. Linux/native-provider authentication has not been tested on this Mac.
 
+Initial Linux CI exposed tmux 3.4's broken legacy percentage option. The client
+now uses `split-window -l 40%` and reports tmux's underlying errors; all 20 local
+terminal tests pass after the correction. Cross-platform CI runs on the PR.
+
 `npm run package:mac` built the Apple Silicon app and
 `dist/SuperSurfer-0.1.43-mac-arm64.zip`. The packaged-app regression opened both the
 original and ZIP-extracted app with isolated profiles; strict signatures, setup
