@@ -1,3 +1,31 @@
+# Terminal client — October 11, 2026 (unreleased)
+
+The standalone `surfer` client passes 20 integration tests using the real workspace
+HTTP service and isolated fake provider/scheduler fixtures. Coverage includes a real
+tmux server, reconnect without duplicate panes, recovery of an exited control pane,
+queue ordering/hold/pause/resume, existing source/PR and read-only gates, durable
+selection, editor cancellation, conflicting drafts, exact-version application,
+task/project isolation, one-field and natural-language board edits, persistent chat
+delivery, terminal escape filtering and no automatic resend after uncertain delivery.
+No live service, model inference or real GPU job was used.
+
+The ordinary `npm test` Python stage ran 765 tests: 724 passed, 34 skipped and seven
+failed because this Mac's system rsync does not support `--protect-args`. All seven
+failures reproduce with the unchanged base code (`fffbcc6`) and its node-workflow
+tests. The first attempt also exposed existing macOS `/var` versus `/private/var`
+temporary-path assumptions; using canonical `TMPDIR=/private/tmp/supersurfer-terminal-tests`
+removed those failures. The final three added terminal cases were subsequently run
+in the passing 20-test focused suite. Node tests were run separately: 37 passed,
+five optional SSH tests skipped. Capability-skill validation and whitespace checks
+passed. Linux/native-provider authentication has not been tested on this Mac.
+
+`npm run package:mac` built the Apple Silicon app and
+`dist/SuperSurfer-0.1.43-mac-arm64.zip`. The packaged-app regression opened both the
+original and ZIP-extracted app with isolated profiles; strict signatures, setup
+readiness and renderer sandbox checks passed. Extended attributes were inspected;
+no quarantine attribute was present. Signing is local/ad-hoc, not Developer ID
+signing or notarization. This is an unreleased local build with no version bump.
+
 # SuperSurfer 0.1.43 release
 
 Release scope is PR #39's direct workflow/source-receipt/steering fixes and PR #37's

@@ -1,3 +1,27 @@
+# Terminal client (unreleased)
+
+The standalone `surfer` Python client connects to an existing authenticated
+loopback workspace service. It uses a separate tmux server and does not install,
+start, restart or upgrade a service or provider. Queue edits use existing
+`queue.pause/resume` and `run.move/hold/ready/cancel` actions. No new submission
+path is added; read-only mode, scheduler ownership and exact-source PR/board gates
+remain service-enforced. Queue changes are workspace-wide. Cancellation requires
+terminal confirmation unless explicitly invoked with `--yes`.
+
+Project/task selections are terminal-local. Board editing preserves target, applied
+version and draft version; failed/invalid/conflicting edits remain recoverable on
+disk. Applying/discarding displays and confirms the current draft, and the service
+rejects version races. Project defaults do not rewrite existing task boards. The
+configurator command requests a draft rather than automatic application.
+
+Chat uses existing service scopes and provider settings. Provider pinning,
+one-time approvals, structured questions and service-side permissions still apply.
+Detaching or closing the terminal never stops agents/jobs; `/stop` explicitly
+stops a chat turn. Network uncertainty never automatically replays a mutation.
+Tokens are file-sourced, never CLI arguments, and HTTP redirects/proxies/external
+origins are disabled. Returned text cannot emit terminal control sequences.
+See [terminal usage](docs/terminal.md) for installation and known UI limits.
+
 # Release 0.1.43
 
 This release includes direct scoped agent workflow application, configurable

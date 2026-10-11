@@ -1,0 +1,639 @@
+#!/usr/bin/env python3
+"""A dependency-free terminal client for an existing SuperSurfer workspace."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+
+class Error(Exception):
+    pass
+
+
+def clean(value):
+    """Never interpret agent/server output as terminal escape sequences."""
+    return ''.join(c if c in '\n\t' or (ord(c) >= 32 and not 127 <= ord(c) < 160) else '?' for c in str(value))
+
+
+def say(value=''):
+    print(clean(value), flush=True)
+
+
+def write_json(path, value):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporary = tempfile.mkstemp(prefix='.surfer-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            json.dump(value, stream, indent=2, allow_nan=False)
+            stream.write('\n')
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def read_json(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        raise Error(f'Cannot read JSON from {path}: {exc}') from exc
+
+
+def choose(rows, reference, label, keys=('id', 'name')):
+    exact = [row for row in rows if any(str(row.get(k, '')) == reference for k in keys)]
+    matches = exact or [row for row in rows if str(row.get('id', '')).startswith(reference)]
+    if not reference or len(matches) != 1:
+        raise Error(f'{label} {reference!r} is {"ambiguous" if matches else "unknown"}; use its full ID or exact name.')
+    return matches[0]
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+class Client:
+    def __init__(self, state_dir, url=None, timeout=30):
+        self.state_dir = Path(state_dir).expanduser().resolve()
+        self.url_override = url
+        self.timeout = timeout
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+
+    def connection(self):
+        url = self.url_override
+        if not url:
+            manifest = read_json(self.state_dir / 'service.json')
+            port = manifest.get('port')
+            if type(port) is not int or not 1 <= port <= 65535:
+                raise Error('Workspace service.json has no valid port.')
+            url = f'http://127.0.0.1:{port}'
+        parsed = urllib.parse.urlsplit(url)
+        if (parsed.scheme != 'http' or parsed.hostname not in {'127.0.0.1', 'localhost', '::1'}
+                or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'', '/'}):
+            raise Error('Connect to an HTTP loopback URL; use SSH forwarding for a remote workspace.')
+        try:
+            token = (self.state_dir / 'token').read_text().strip()
+        except OSError as exc:
+            raise Error(f'Cannot read workspace token in {self.state_dir}. Use --state-dir for your existing workspace.') from exc
+        if not token or '\n' in token or '\r' in token:
+            raise Error('Workspace token is empty or invalid.')
+        return url.rstrip('/'), token
+
+    def request(self, path, payload=None):
+        url, token = self.connection()
+        headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json'}
+        data = None
+        if payload is not None:
+            data = json.dumps(payload, allow_nan=False).encode()
+            if len(data) > 2 * 1024 * 1024:
+                raise Error('Request exceeds the workspace limit of 2 MiB.')
+            headers['Content-Type'] = 'application/json'
+        request = urllib.request.Request(url + '/api/' + path, data=data, headers=headers)
+        try:
+            with self.opener.open(request, timeout=self.timeout) as response:
+                raw = response.read(32 * 1024 * 1024 + 1)
+            if len(raw) > 32 * 1024 * 1024:
+                raise Error('Workspace response exceeds 32 MiB.')
+            return json.loads(raw)
+        except urllib.error.HTTPError as exc:
+            try:
+                raw = exc.read(8192).decode(errors='replace')
+            finally:
+                exc.close()
+            try:
+                detail = json.loads(raw).get('error', f'HTTP {exc.code}')
+            except ValueError:
+                detail = f'HTTP {exc.code}'
+            raise Error(str(detail).replace(token, '[redacted]')) from exc
+        except (OSError, ValueError, urllib.error.URLError) as exc:
+            suffix = ' Delivery is uncertain; inspect current state before retrying. Nothing was automatically resent.' if payload is not None else ''
+            raise Error('Workspace connection failed.' + suffix) from exc
+
+    def get(self, path, **query):
+        query = {k: v for k, v in query.items() if v is not None}
+        return self.request(path + ('?' + urllib.parse.urlencode(query) if query else ''))
+
+    def action(self, op, **params):
+        return self.request('action', {'op': op, 'params': params})
+
+
+HELP = '''queue                         Show GPUs and queued/running jobs
+up RUN / down RUN             Move a queued job one place
+hold RUN / ready RUN [PR]     Hold or release through normal source/PR gates
+cancel RUN                    Cancel one job (asks before sending)
+pause / resume                Pause/resume queue admission, not running jobs
+projects / use PROJECT        Select a project by name or ID
+tasks / task TASK              Select a task; task clear returns to project
+board                         Show the selected Surfboard and draft
+board edit                    Edit its JSON in $VISUAL/$EDITOR (default vi)
+board ask "CHANGE"            Ask the persistent configurator to draft a change
+board set NODE FIELD VALUE    Change one node's config in a draft
+board apply / board discard   Review and apply/discard the current draft
+board load FILE               Recover an edit with its original versions
+agents / chat [SCOPE]          Open a persistent conversation
+backend [codex|cursor|claude]  Inspect/select the chosen conversation's provider
+help / exit                   Show help / leave the command prompt
+
+IDs accept unambiguous prefixes. Queue controls only edit existing runs.
+tmux: Ctrl-b d detaches; Ctrl-b 1/2/3 selects Control/Shell/Board.
+The workspace service, agents and GPU jobs outlive this terminal.'''
+
+
+class App:
+    def __init__(self, client, home, assume_yes=False):
+        self.client, self.home, self.assume_yes = client, Path(home), assume_yes
+
+    def preferences(self):
+        path = self.home / 'selection.json'
+        return read_json(path) if path.exists() else {}
+
+    def select(self, **values):
+        selected = self.preferences()
+        selected.update(values)
+        write_json(self.home / 'selection.json', selected)
+
+    def state(self):
+        return self.client.get('state')
+
+    def target(self):
+        selected = self.preferences()
+        state = self.state()
+        projects = state.get('projects', [])
+        project_id = selected.get('project_id')
+        if not project_id and len(projects) == 1:
+            project_id = projects[0]['id']
+        if not project_id:
+            raise Error('Select a project first: projects, then use PROJECT.')
+        project = choose(projects, project_id, 'Project', ('id',))
+        task_id = selected.get('experiment_id')
+        if task_id:
+            choose([r for r in state.get('experiments', []) if r['project_id'] == project['id']], task_id, 'Task', ('id',))
+        return {'project_id': project['id'], **({'experiment_id': task_id} if task_id else {})}
+
+    def confirm(self, prompt):
+        if self.assume_yes:
+            return True
+        if not sys.stdin.isatty():
+            raise Error('Confirmation needs an interactive terminal; use --yes only for the explicitly intended action.')
+        return input(clean(prompt) + ' [y/N] ').strip().lower() == 'y'
+
+    def queue(self):
+        state = self.state()
+        stale = state.get('error') or not state.get('manager_connected', state.get('connected', False))
+        say('GPU QUEUE · ' + ('PAUSED' if state.get('queue', {}).get('paused') else 'ADMITTING'))
+        if stale:
+            say('STALE / UNAVAILABLE: ' + str(state.get('error') or 'Scheduler is disconnected.'))
+        stamp = state.get('updated_at')
+        say('Observed: ' + (time.strftime('%Y-%m-%d %H:%M:%S %Z', time.localtime(stamp)) if stamp else 'unknown'))
+        for host in state.get('hosts', []):
+            say(f"\n{host['name']} · {host.get('status', 'unknown')}" + (' · stale' if host.get('stale') else ''))
+            for gpu in host.get('devices', []):
+                label = 'stale' if gpu.get('stale') else gpu.get('status', 'unknown')
+                say(f"  GPU {gpu['index']}  {label}  utilization={gpu.get('utilization', '?')}%  reserved={gpu.get('reserved_by') or '-'}")
+        order = {run_id: i for i, run_id in enumerate(state.get('queue', {}).get('run_ids', []))}
+        runs = [r for r in state.get('runs', []) if r.get('status') in {'queued', 'starting', 'running', 'cancelling'}]
+        runs.sort(key=lambda r: (r['status'] == 'queued', order.get(r['id'], -1)))
+        if not runs:
+            say('\nNo queued or active GPU jobs.')
+        for run in runs:
+            status = run['status'] + (' / held' if run['status'] == 'queued' and not run.get('ready') else '')
+            say(f"\n{run['id']}  {status}  {run.get('gpu_count', '?')} GPU(s)  {run.get('name') or ''}")
+            say(f"  project={run.get('project_id')}  host={run.get('host_name') or run.get('host_id') or '-'}")
+            if run.get('waiting_reason'):
+                say('  ' + run['waiting_reason'])
+
+    def queue_action(self, command, args):
+        if command not in {'pause', 'resume', 'up', 'down', 'hold', 'ready', 'cancel'}:
+            raise Error('Queue commands: up, down, hold, ready, cancel, pause, resume.')
+        state = self.state()
+        if state.get('error') or not state.get('manager_connected', state.get('connected', False)):
+            raise Error('Scheduler is disconnected or stale; reconnect before editing the queue.')
+        if command in {'pause', 'resume'}:
+            if args:
+                raise Error(f'Usage: {command}')
+            self.client.action('queue.' + command)
+            say('Queue admission ' + ('paused. Running jobs continue.' if command == 'pause' else 'resumed.'))
+            return
+        if len(args) not in ({1, 2} if command == 'ready' else {1}):
+            raise Error('Usage: ' + command + ' RUN' + (' [PR_URL]' if command == 'ready' else ''))
+        run = choose(state.get('runs', []), args[0], 'Run')
+        if command != 'cancel' and run['status'] != 'queued':
+            raise Error('Only queued jobs can be moved, held or released.')
+        if command in {'up', 'down'}:
+            queue = state['queue']['run_ids']
+            index = queue.index(run['id'])
+            if (command == 'up' and index == 0) or (command == 'down' and index == len(queue) - 1):
+                say('Already at the ' + ('front.' if command == 'up' else 'end.'))
+                return
+            before = queue[index - 1] if command == 'up' else (queue[index + 2] if index + 2 < len(queue) else None)
+            self.client.action('run.move', run_id=run['id'], before_id=before)
+        elif command == 'cancel':
+            if not self.confirm(f"Cancel {run['id']} ({run.get('name')}, {run['status']})?"):
+                say('Not cancelled.')
+                return
+            self.client.action('run.cancel', run_id=run['id'])
+        else:
+            params = {'run_id': run['id']}
+            if command == 'ready' and len(args) == 2:
+                params['pr_url'] = args[1]
+            self.client.action('run.' + command, **params)
+        self.queue()
+
+    def board_state(self):
+        target = self.target()
+        return target, self.client.get('surfboard', **target)
+
+    def show_board(self, state, target):
+        draft = state.get('draft') or {}
+        board = draft.get('board') or state['board']
+        say(f"SURFBOARD · {board.get('name', '')} · {'task ' + target['experiment_id'] if target.get('experiment_id') else 'project defaults'}")
+        say(f"Applied version {state['version']} · draft {draft.get('draft_version', 0)}")
+        for node in board.get('nodes', []):
+            say(f"\n{node['id']} [{node['kind']}] {node.get('label') or ''}")
+            for field, value in node.get('config', {}).items():
+                say('  ' + field + ' = ' + json.dumps(value, ensure_ascii=False))
+        if board.get('edges'):
+            say('\nConnections')
+            for edge in board['edges']:
+                say(f"  {edge['source']} -> {edge['target']}  [{edge.get('relation') or 'unresolved'}]")
+        if draft.get('summary'):
+            say('\nChanges: ' + json.dumps(draft['summary'], ensure_ascii=False))
+        if draft.get('errors'):
+            say('\nValidation errors: ' + json.dumps(draft['errors'], ensure_ascii=False))
+        if state.get('warning'):
+            say('\n' + state['warning'])
+
+    @staticmethod
+    def envelope(target, state):
+        return {**target, 'expected_version': state['version'],
+                'expected_draft_version': (state.get('draft') or {}).get('draft_version', 0),
+                'board': (state.get('draft') or {}).get('board') or state['board']}
+
+    def save_draft(self, envelope, recovery):
+        write_json(recovery, envelope)
+        try:
+            result = self.client.action('surfboard.draft', **envelope)
+        except Error as exc:
+            raise Error(f'{exc}\nYour edit is preserved in {recovery}. Recover with board load FILE; stale versions are never overwritten.') from exc
+        say('Draft saved. Use board apply to activate it.')
+        self.show_board(result, envelope)
+
+    def board(self, args):
+        target, state = self.board_state()
+        if not args:
+            return self.show_board(state, target)
+        command, *rest = args
+        envelope = self.envelope(target, state)
+        if command == 'ask' and rest:
+            # Explicitly ask for a draft, preserving the separate Apply action.
+            result = self.client.action('surfboard.ask', **envelope,
+                text='Propose this change as a draft only; do not apply it: ' + ' '.join(rest))
+            if not result.get('accepted'):
+                raise Error(result.get('error') or 'The configurator did not accept the request.')
+            self.chat(result['scope'])
+            return
+        if command == 'edit' and not rest:
+            self.home.mkdir(parents=True, exist_ok=True, mode=0o700)
+            fd, filename = tempfile.mkstemp(prefix='board-', suffix='.json', dir=self.home)
+            os.close(fd)
+            recovery = Path(filename)
+            write_json(recovery, envelope)
+            editor = shlex.split(os.environ.get('VISUAL') or os.environ.get('EDITOR') or 'vi')
+            if not editor:
+                raise Error('Set EDITOR to an editor command.')
+            say(f'Edit only the board field. Recovery file: {recovery}')
+            result = subprocess.run([*editor, str(recovery)])
+            if result.returncode:
+                raise Error(f'Editor exited with status {result.returncode}; file retained: {recovery}')
+            edited = read_json(recovery)
+            if {k: v for k, v in edited.items() if k != 'board'} != {k: v for k, v in envelope.items() if k != 'board'}:
+                raise Error(f'Keep target/version fields unchanged. Your file is retained: {recovery}')
+            if edited == envelope:
+                say('No changes.')
+                return
+            return self.save_draft(edited, recovery)
+        if command == 'set' and len(rest) >= 3:
+            node = choose(envelope['board']['nodes'], rest[0], 'Node', ('id',))
+            value = ' '.join(rest[2:])
+            try:
+                value = json.loads(value)
+            except ValueError:
+                pass
+            node.setdefault('config', {})[rest[1]] = value
+            recovery = self.home / ('board-' + str(time.time_ns()) + '.json')
+            return self.save_draft(envelope, recovery)
+        if command == 'load' and len(rest) == 1:
+            recovery = Path(rest[0]).expanduser()
+            recovered = read_json(recovery)
+            if {k: recovered.get(k) for k in ('project_id', 'experiment_id')} != {k: target.get(k) for k in ('project_id', 'experiment_id')}:
+                raise Error('Recovery file belongs to another project/task. Select that target first.')
+            return self.save_draft(recovered, recovery)
+        if command in {'apply', 'discard'} and not rest:
+            if not state.get('draft'):
+                say('No draft to ' + command + '.')
+                return
+            self.show_board(state, target)
+            if command == 'apply' and state['draft'].get('errors'):
+                raise Error('Fix the validation errors before applying this draft.')
+            if not self.confirm(command.capitalize() + ' this exact draft?'):
+                say('Draft unchanged.')
+                return
+            params = {k: v for k, v in envelope.items() if k != 'board'}
+            result = self.client.action('surfboard.' + command, **params)
+            say('Draft ' + ('applied.' if command == 'apply' else 'discarded.'))
+            self.show_board(result, target)
+            return
+        raise Error('Usage: board [edit | ask CHANGE | set NODE FIELD VALUE | apply | discard | load FILE]')
+
+    def projects(self):
+        selected = self.preferences().get('project_id')
+        for project in self.state().get('projects', []):
+            say(f"{'*' if project['id'] == selected else ' '} {project['id']}  {project['name']}")
+
+    def tasks(self):
+        target = self.target()
+        for task in self.state().get('experiments', []):
+            if task['project_id'] == target['project_id'] and not task.get('archived'):
+                say(f"{'*' if task['id'] == target.get('experiment_id') else ' '} {task['id']}  {task.get('status', '')}  {task['name']}")
+
+    def default_scope(self):
+        target = self.target()
+        if target.get('experiment_id'):
+            listing = self.client.get('experiment-agents', experiment_id=target['experiment_id'])
+            return listing['selected_scope']
+        return 'project:' + target['project_id']
+
+    def agents(self):
+        target = self.target()
+        if target.get('experiment_id'):
+            result = self.client.get('experiment-agents', experiment_id=target['experiment_id'])
+        else:
+            result = self.client.get('project-agents', project_id=target['project_id'])
+        for agent in result.get('agents', []):
+            say(f"{agent['scope']}  {agent.get('status', 'unknown')}  {agent.get('name', '')}" +
+                (' [archived]' if agent.get('archived') else '') + (' [read-only history]' if agent.get('retired') else ''))
+        say('Open the selected lead/worker with chat, or use chat SCOPE for a listed conversation.')
+
+    def chat(self, scope=None):
+        scope = scope or self.default_scope()
+        seen = {}
+        say(f'Conversation: {scope}\n/refresh  /stop  /back  /approve ID  /deny ID  /answer ID')
+        while True:
+            chat = self.client.get('chat', scope=scope, limit=40)
+            for message in chat.get('messages', []):
+                text = message.get('text', '')
+                if text and seen.get(message['id']) != text:
+                    prior = seen.get(message['id'], '')
+                    say(f"\n{message['role']}: " + (text[len(prior):] if prior and text.startswith(prior) else text))
+                    seen[message['id']] = text
+            if chat.get('error'):
+                say('Agent error: ' + str(chat['error']))
+            approvals = [a for a in chat.get('approvals', []) if a.get('status') == 'pending']
+            questions = [q for q in chat.get('questions', []) if q.get('status') == 'pending']
+            for item in approvals:
+                say('\nApproval required: ' + json.dumps(item, ensure_ascii=False))
+            for item in questions:
+                say('\nAnswer required: ' + json.dumps(item, ensure_ascii=False))
+            if chat.get('busy') and not approvals and not questions:
+                try:
+                    time.sleep(1)
+                    continue
+                except KeyboardInterrupt:
+                    say('\nStopped watching; the agent is still running. Use /stop to stop its turn.')
+            try:
+                line = input('agent> ').strip()
+            except (EOFError, KeyboardInterrupt):
+                say('\nConversation kept; no agent or job was stopped.')
+                return
+            try:
+                if line in {'/back', '/exit'}:
+                    return
+                if not line or line == '/refresh':
+                    continue
+                if line == '/stop':
+                    self.client.action('chat.stop', scope=scope)
+                elif line.startswith(('/approve ', '/deny ')):
+                    command, identity = line.split(maxsplit=1)
+                    approval = choose(approvals, identity, 'Pending approval', ('id',))
+                    self.client.action('chat.approve', scope=scope, approval_id=approval['id'], decision=command[1:])
+                elif line.startswith('/answer '):
+                    question = choose(questions, line.split(maxsplit=1)[1], 'Pending question', ('id',))
+                    answers = {}
+                    for item in question['questions']:
+                        say(item['question'])
+                        for option in item.get('options', []):
+                            say('  ' + option['label'] + ': ' + option.get('description', ''))
+                        if item.get('isSecret'):
+                            import getpass
+                            answer = getpass.getpass('Answer: ')
+                        else:
+                            answer = input('Answer (label or your text): ')
+                        answers[item['id']] = [answer]
+                    self.client.action('chat.answer', scope=scope, question_id=question['id'], answers=answers)
+                elif line.startswith('/'):
+                    raise Error('Use /refresh, /stop, /back, /approve ID, /deny ID or /answer ID.')
+                elif chat.get('busy'):
+                    raise Error('Agent is still working. Use /refresh or /stop; no second turn was sent.')
+                else:
+                    self.client.action('chat.send', scope=scope, text=line)
+            except Error as exc:
+                say('Error: ' + str(exc))
+
+    def dispatch(self, words):
+        command, *args = words or ['help']
+        if command in {'help', '?'} and not args:
+            say(HELP)
+        elif command == 'queue':
+            if args:
+                self.queue_action(args[0], args[1:])
+            else:
+                self.queue()
+        elif command in {'up', 'down', 'hold', 'ready', 'cancel', 'pause', 'resume'}:
+            self.queue_action(command, args)
+        elif command == 'projects' and not args:
+            self.projects()
+        elif command == 'use' and args:
+            project = choose(self.state()['projects'], ' '.join(args), 'Project')
+            self.select(project_id=project['id'], experiment_id=None)
+            say('Selected project: ' + project['name'])
+        elif command == 'tasks' and not args:
+            self.tasks()
+        elif command == 'task' and args:
+            if args == ['clear']:
+                self.select(experiment_id=None)
+                say('Selected project defaults.')
+            else:
+                target = self.target()
+                task = choose([t for t in self.state()['experiments'] if t['project_id'] == target['project_id']], ' '.join(args), 'Task')
+                self.select(project_id=target['project_id'], experiment_id=task['id'])
+                say('Selected task: ' + task['name'])
+        elif command == 'board':
+            self.board(args)
+        elif command == 'agents' and not args:
+            self.agents()
+        elif command == 'chat' and len(args) <= 1:
+            self.chat(args[0] if args else None)
+        elif command == 'backend' and len(args) <= 1:
+            scope = self.default_scope()
+            if args:
+                if args[0] not in {'codex', 'cursor', 'claude'}:
+                    raise Error('Choose codex, cursor or claude.')
+                self.client.action('chat.settings', scope=scope, backend=args[0])
+            chat = self.client.get('chat', scope=scope, limit=1)
+            say(json.dumps(chat.get('preferences', {}), indent=2))
+        else:
+            raise Error('Unknown command or arguments. Type help.')
+
+    def shell(self):
+        try:
+            import readline
+            commands = ['queue', 'up ', 'down ', 'hold ', 'ready ', 'cancel ', 'pause', 'resume', 'projects', 'use ', 'tasks', 'task ', 'board', 'board edit', 'board ask ', 'board set ', 'board apply', 'board discard', 'agents', 'chat', 'backend ', 'help', 'exit']
+            def complete(text, index):
+                candidates = [c for c in commands if c.startswith(text)]
+                return candidates[index] if index < len(candidates) else None
+            readline.set_completer_delims('\n')
+            readline.set_completer(complete)
+            readline.parse_and_bind('bind ^I rl_complete' if 'libedit' in (readline.__doc__ or '') else 'tab: complete')
+        except ImportError:
+            pass
+        say('SuperSurfer · type help for commands. Tab completes command names.')
+        while True:
+            try:
+                line = input('surfer> ').strip()
+                if line in {'exit', 'quit'}:
+                    return
+                if line:
+                    self.dispatch(shlex.split(line))
+            except (EOFError, KeyboardInterrupt):
+                say('\nDetached from the command prompt. Agents and jobs continue.')
+                return
+            except (Error, ValueError, OSError) as exc:
+                say('Error: ' + str(exc))
+
+    def watch(self, view):
+        try:
+            while True:
+                if sys.stdout.isatty():
+                    print('\033[H\033[2J', end='')
+                try:
+                    if view == 'board':
+                        target, state = self.board_state()
+                        self.show_board(state, target)
+                    else:
+                        self.queue()
+                except Error as exc:
+                    say('Unavailable: ' + str(exc))
+                say('\nRead-only view · refreshes every 5s · Ctrl-c closes this view')
+                time.sleep(5)
+        except KeyboardInterrupt:
+            return
+
+
+def tmux_session(app, detached=False):
+    binary = shutil.which('tmux')
+    if not binary:
+        raise Error('Install tmux, or run surfer shell for the same commands without tmux.')
+    # A dedicated tmux server leaves every user session and ~/.tmux.conf alone.
+    identity = hashlib.sha256((str(app.client.state_dir) + str(app.client.url_override)).encode()).hexdigest()[:12]
+    socket_name = 'surfer-' + identity
+    base = [binary, '-L', socket_name, '-f', '/dev/null']
+    def call(*args, check=True):
+        return subprocess.run([*base, *args], check=check, text=True, capture_output=True)
+    if call('has-session', '-t', '=surfer', check=False).returncode:
+        session = app.client.get('session')
+        if not app.client.url_override and Path(session.get('state_dir', '')).resolve() != app.client.state_dir:
+            raise Error('The listening service does not own the selected state directory.')
+        script = str(Path(__file__).resolve())
+        command = [sys.executable, script, '--state-dir', str(app.client.state_dir), '--home', str(app.home)]
+        if app.client.url_override:
+            command += ['--url', app.client.url_override]
+        quote = lambda *tail: shlex.join(command + list(tail))
+        size = shutil.get_terminal_size((120, 36))
+        call('new-session', '-d', '-x', str(size.columns), '-y', str(size.lines), '-s', 'surfer', '-n', 'Control', quote('shell'))
+        try:
+            call('set-option', '-t', 'surfer', 'base-index', '1')
+            call('move-window', '-s', 'surfer:0', '-t', 'surfer:1')
+            call('set-option', '-t', 'surfer', 'mouse', 'on')
+            call('set-option', '-t', 'surfer', 'status-left', ' SuperSurfer | ')
+            call('set-option', '-t', 'surfer', 'status-right', ' Ctrl-b 1 control · 2 shell · 3 board · d detach ')
+            call('set-option', '-t', 'surfer', 'status-right-length', '70')
+            call('set-window-option', '-t', 'surfer:1', 'remain-on-exit', 'on')
+            call('split-window', '-h', '-p', '40', '-t', 'surfer:1', quote('watch', 'queue'))
+            call('select-pane', '-t', 'surfer:1.0')
+            # Make the one-file client available as `surfer` in the ordinary shell.
+            call('set-environment', '-t', 'surfer', 'PATH', str(Path(script).parent) + os.pathsep + os.environ.get('PATH', ''))
+            call('set-environment', '-t', 'surfer', 'SURFER_STATE_DIR', str(app.client.state_dir))
+            call('set-environment', '-t', 'surfer', 'SURFER_HOME', str(app.home))
+            if app.client.url_override:
+                call('set-environment', '-t', 'surfer', 'SURFER_URL', app.client.url_override)
+            call('new-window', '-t', 'surfer:2', '-n', 'Shell')
+            call('new-window', '-t', 'surfer:3', '-n', 'Board', quote('watch', 'board'))
+            call('set-window-option', '-t', 'surfer:3', 'remain-on-exit', 'on')
+            call('select-window', '-t', 'surfer:1')
+        except Exception:
+            call('kill-session', '-t', '=surfer', check=False)
+            raise
+    # Reopening restores closed command/view processes without touching live ones.
+    panes = call('list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_dead}').stdout
+    for row in panes.splitlines():
+        pane, dead = row.split()
+        if dead == '1' and pane in {'surfer:1.0', 'surfer:1.1', 'surfer:3.0'}:
+            call('respawn-pane', '-t', pane)
+    if detached:
+        say('Session ready. Reconnect with surfer (same connection options).')
+        return socket_name
+    if os.environ.get('TMUX'):
+        say('Already inside tmux. Detach first, then run surfer to attach to its dedicated session; or use surfer shell here.')
+        return socket_name
+    os.execvp(binary, [*base, 'attach-session', '-t', '=surfer'])
+
+
+def main(argv=None):
+    candidates = [Path.home() / '.local/share/supersurfer/state', Path.home() / '.supersurfer']
+    default = next((p for p in candidates if (p / 'service.json').exists()), candidates[0])
+    parser = argparse.ArgumentParser(description='SuperSurfer in tmux. No arguments opens/reconnects your workspace.', epilog=HELP, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--state-dir', default=os.environ.get('SURFER_STATE_DIR', str(default)), help='Existing workspace directory containing service.json and token')
+    parser.add_argument('--url', default=os.environ.get('SURFER_URL'), help='Optional loopback URL, e.g. an SSH-forwarded port')
+    parser.add_argument('--home', default=os.environ.get('SURFER_HOME'), help='Terminal preferences and recoverable drafts directory')
+    parser.add_argument('--yes', action='store_true', help='Confirm an explicitly requested apply/discard/cancel')
+    parser.add_argument('--detached', action='store_true', help='Prepare tmux without attaching')
+    parser.add_argument('command', nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    client = Client(args.state_dir, args.url)
+    identity = hashlib.sha256((str(client.state_dir) + str(args.url)).encode()).hexdigest()[:12]
+    home = Path(args.home).expanduser() if args.home else Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'supersurfer-terminal' / identity
+    app = App(client, home, args.yes)
+    try:
+        if not args.command:
+            tmux_session(app, args.detached)
+        elif args.command == ['shell']:
+            app.shell()
+        elif len(args.command) == 2 and args.command[0] == 'watch' and args.command[1] in {'queue', 'board'}:
+            app.watch(args.command[1])
+        else:
+            app.dispatch(args.command)
+        return 0
+    except (Error, OSError, ValueError, subprocess.SubprocessError) as exc:
+        say('Error: ' + str(exc))
+        return 1
+    except KeyboardInterrupt:
+        say('\nStopped watching. No agent or GPU job was cancelled.')
+        return 130
+
+
+if __name__ == '__main__':
+    sys.exit(main())

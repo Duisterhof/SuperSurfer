@@ -11,6 +11,9 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 ## What can it do?
 
+- **Work from a terminal.** The standalone [`surfer`](docs/terminal.md) client
+  connects to an existing workspace in tmux. Inspect and reorder the GPU queue,
+  edit Surfboard drafts, and reconnect to persistent agents with short commands.
 - **Build your own workflow.** Connect agents, instructions, checks, compute and
   results on a **Surfboard**. Start by telling an agent what you want to build,
   or choose a saved workflow. Review its views and steps, refine them in chat,

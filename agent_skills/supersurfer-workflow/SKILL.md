@@ -17,6 +17,12 @@ artifacts, data, compute and caps remain shared within that project. Follow
 board prose does not override them. Preserve the goal through follow-ups and
 reconnects. A normal final message ends a turn, not an unfinished deliverable.
 
+Users can also access the same workspace through the standalone `surfer` tmux
+client. Its `chat` command reconnects to an existing owned conversation; changing
+interfaces does not create another worker or grant new authority. Terminal board
+edits are drafts until applied. Treat closing a terminal as disconnection, not a
+request to stop; explicit chat stops and queue cancellations remain distinct.
+
 The desktop reports bounded SSH upload/setup progress; a connection error does
 not establish that a configured check or remote preview failed. Reconnect through
 the app, then inspect the same durable action receipt before retrying execution.

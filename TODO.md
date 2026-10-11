@@ -1,3 +1,10 @@
+# Terminal client (unreleased)
+
+- [x] Standalone tmux client, live GPU queue, short queue-management commands.
+- [x] Project/task Surfboard editing, recoverable drafts and version-checked apply.
+- [x] Existing persistent conversation access, provider selection, questions and approvals.
+- [ ] Graphical terminal node editing and named-library bulk rollout remain desktop features.
+
 # Completed in 0.1.43 — agent workflow control
 
 - [x] Direct scoped Surfboard proposal/apply tools for requested edits, with version checks.
