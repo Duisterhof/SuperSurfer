@@ -1,3 +1,29 @@
+# Native VS Code workflow preview — October 12, 2026
+
+An authenticated host companion attaches an existing Agent Host session/chat to
+one registered repository and project/task. This adds scoped tools without
+creating a provider conversation, copying history, selecting a model or changing
+permissions. An owner-only local socket separates editor/terminal controls from
+agent tool calls. Only the companion's client-owned calls execute; stable receipts
+cache results and refuse conflicting or uncertain retries. Activity observations
+expire after twenty seconds and must carry a direct-user or bounded continuation
+origin for mutations. Detaching revokes the binding.
+
+Native board actions reuse role/graph guards and source-bound check receipts.
+Required checks gate `finish_workflow`; this does not claim to intercept native
+shell/editor tools. Queue controls use existing authenticated service actions;
+queue submission is not advertised to native agents. Graph refresh reads local
+state without remote scheduler probes, while applying keeps existing version and
+live-policy validation. Local unsaved edits persist in extension workspace storage.
+
+Standalone-host continuation remains in the same chat, respects stop/error/input
+states and pauses after three attempts or uncertain delivery. Graph-edit requests
+from the panel suppress execution continuation. Editor-owned hosts do not claim
+persistence after the editor closes. VS Code 1.139's standalone remote sessions
+use its Agents window; normal editor tabs are available for its editor-owned
+native chats. This is an explicit preview boundary, not a cache-sync workaround.
+Native provider credentials and billing remain owned by that provider's host.
+
 # Release 0.1.43
 
 This release includes direct scoped agent workflow application, configurable

@@ -1,3 +1,13 @@
+# Native VS Code preview
+
+- [x] Attach workflow tools to the same native Agent Host chat without copying caches.
+- [x] Colored graph editing, live edits via that chat, durable local drafts and CAS conflicts.
+- [x] Existing scheduler queue controls and a standard-library Python tmux companion.
+- [x] Bounded standalone-host continuation and service-enforced completion checks.
+- [ ] Native standalone remote chats inside ordinary VS Code editor tabs (currently an upstream view limitation).
+- [ ] Validate authenticated Codex inference, other providers, Cursor and a real Tulip installation before general release.
+- [ ] OS startup/reboot recovery, host-instance migration and packaged companion lifecycle upgrades.
+
 # Completed in 0.1.43 — agent workflow control
 
 - [x] Direct scoped Surfboard proposal/apply tools for requested edits, with version checks.

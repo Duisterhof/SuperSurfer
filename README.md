@@ -9,6 +9,16 @@ experiments and GPUs together—and shape the workspace around how you actually 
 Latest release: **0.1.43** adds direct agent workflow edits, generated-output
 exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
+## Native VS Code preview
+
+The [native chat extension](native_extension/README.md) adds a visual Surfboard,
+live edits through the same agent, GPU queue controls and a small tmux companion.
+Provider login and chat history remain native. The preview supports VS Code's
+editor host and standalone Agent Host, with a current limitation: persistent
+remote chats open in the native Agents window rather than ordinary editor tabs.
+It requires the workspace service from this branch and is not part of the
+published 0.1.43 release.
+
 ## What can it do?
 
 - **Build your own workflow.** Connect agents, instructions, checks, compute and

@@ -14,7 +14,8 @@
     "package:linux": "SUPERSURFER_PLATFORM=linux node scripts/package.cjs",
     "bundle:remote": "node scripts/build-remote.cjs",
     "test:browser": "node scripts/check-browser.cjs",
-    "test:skills": "python3 scripts/check-agent-skills.py"
+    "test:skills": "python3 scripts/check-agent-skills.py",
+    "package:vscode": "python3 scripts/package-native-extension.py"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",
@@ -26,5 +27,8 @@
     "nspell": "2.1.5",
     "pdfjs-dist": "6.4.299",
     "playwright": "1.63.0"
-  }
+  },
+  "workspaces": [
+    "native_extension"
+  ]
 }

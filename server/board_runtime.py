@@ -137,6 +137,11 @@ class BoardRuntime:
             if item is not None and item != owned["id"]:
                 raise SurfboardError("Worker actions belong to this conversation's work item", 403)
             item = owned["id"]
+        elif scope.startswith("native:"):
+            bound = self.service._chat_scope(scope)
+            if bound["project_id"] != project["id"] or item not in {None, bound.get("experiment_id")}:
+                raise SurfboardError("Native conversation is fixed to its attached workflow", 403)
+            item = bound.get("experiment_id")
         elif scope == "manager" or scope in {"project:" + project["id"], "surfboard:" + project["id"]}:
             pass
         else:

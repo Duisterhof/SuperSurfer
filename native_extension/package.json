@@ -1,0 +1,102 @@
+{
+  "name": "native-workflows",
+  "displayName": "SuperSurfer",
+  "publisher": "supersurfer",
+  "version": "0.1.43",
+  "description": "Surfboards and persistent workflows for your existing VS Code Agent Host chats.",
+  "engines": {
+    "vscode": "^1.139.0"
+  },
+  "main": "./extension.cjs",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "license": "GPL-2.0-or-later",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "supersurferNative.open",
+        "title": "SuperSurfer: Open Surfboard"
+      },
+      {
+        "command": "supersurferNative.attach",
+        "title": "SuperSurfer: Attach Surfboard to Native Chat"
+      },
+      {
+        "command": "supersurferNative.queue",
+        "title": "SuperSurfer: GPU Queue"
+      },
+      {
+        "command": "supersurferNative.refresh",
+        "title": "SuperSurfer: Refresh"
+      },
+      {
+        "command": "supersurferNative.openChat",
+        "title": "SuperSurfer: Open Native Chat"
+      },
+      {
+        "command": "supersurferNative.detach",
+        "title": "SuperSurfer: Detach Workflow"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "supersurferNative",
+          "title": "SuperSurfer",
+          "icon": "media/surfer.svg"
+        }
+      ]
+    },
+    "views": {
+      "supersurferNative": [
+        {
+          "id": "supersurferNative.sessions",
+          "name": "Native agents"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "supersurferNative.attach",
+          "when": "view == supersurferNative.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "supersurferNative.refresh",
+          "when": "view == supersurferNative.sessions",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "SuperSurfer",
+      "properties": {
+        "supersurferNative.stateDirectory": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Existing SuperSurfer service directory on this host. Auto-detected when empty."
+        },
+        "supersurferNative.endpointFile": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Agent Host endpoint registry JSON on this host. Auto-detected when there is one live endpoint."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

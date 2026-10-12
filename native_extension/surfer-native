@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Small terminal/tmux client for the same native workflow companion. Python 3.9+."""
+import argparse
+import http.client
+import json
+import os
+from pathlib import Path
+import socket
+import stat
+import sys
+
+
+def request(config, op, args=None):
+    connection = http.client.HTTPConnection('localhost', timeout=35)
+    connection.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    connection.sock.settimeout(35)
+    connection.sock.connect(config['socket'])
+    try:
+        connection.request('POST', '/', json.dumps({'op': op, 'args': args or {}}),
+                           {'Authorization': 'Bearer ' + config['secret'], 'Content-Type': 'application/json'})
+        response = connection.getresponse()
+        result = json.loads(response.read(16 * 1024 * 1024))
+        if response.status != 200:
+            raise ValueError(result.get('error', 'Request failed'))
+        return result
+    finally:
+        connection.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--connection', type=Path, help='Companion connection file for a nonstandard editor profile')
+    sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('agents', help='See what attached native agents are doing')
+    sub.add_parser('queue', help='See the shared GPU queue')
+    for command in ('board', 'pause', 'resume', 'ask'):
+        child = sub.add_parser(command)
+        child.add_argument('agent', help='Agent number from agents, or full native scope')
+        if command == 'ask': child.add_argument('message')
+    args = parser.parse_args()
+    home = Path.home()
+    roots = [home / '.vscode-server/data', home / '.config/Code', home / 'Library/Application Support/Code']
+    paths = [args.connection] if args.connection else [p / 'User/globalStorage/supersurfer.native-workflows/companion.json' for p in roots]
+    paths = [p for p in paths if p.is_file()]
+    if len(paths) != 1:
+        raise ValueError('Open SuperSurfer in VS Code first. For multiple profiles, select its --connection file.')
+    file = paths[0]
+    info = file.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ValueError('The connection file must be an owner-only regular file.')
+    config = json.loads(file.read_text())
+    status = request(config, 'status')
+    bindings = status['bindings']
+    if args.command == 'agents':
+        print('Native agents · ' + ('connected' if status['connected'] else 'disconnected'))
+        for number, b in enumerate(bindings, 1):
+            activity = 'finished' if b.get('complete') else 'paused' if b.get('paused') else 'working' if b.get('status', 0) & 8 else 'ready'
+            print(f"{number}. {b.get('title') or b['session']} — {activity}")
+            if b.get('note'): print('   ' + b['note'])
+        return
+    if args.command == 'queue':
+        queue = request(config, 'queue')
+        print('GPU queue · ' + ('paused' if queue.get('queue', {}).get('paused') else 'running'))
+        for run in queue.get('runs', []):
+            if run['status'] in ('queued', 'running', 'starting', 'cancelling'):
+                print(f"{run.get('name') or run['id']} — {run['status']} · {run.get('gpu_count', '?')} GPU(s)")
+        return
+    if args.agent.isdecimal():
+        index = int(args.agent) - 1
+        if not 0 <= index < len(bindings): raise ValueError('Choose an agent from agents.')
+        binding = bindings[index]
+    else:
+        binding = next((b for b in bindings if b['scope'] == args.agent), None)
+        if not binding: raise ValueError('Choose an attached native agent.')
+    scope = binding['scope']
+    if args.command == 'board':
+        state = request(config, 'board', {'scope': scope})
+        board = (state.get('draft') or {}).get('board', state['board'])
+        print(board['name'] + (' · draft' if state.get('draft') else ' · applied'))
+        nodes = {n['id']: n for n in board['nodes']}
+        for edge in board['edges']:
+            print(f"{nodes[edge['source']]['label']} —{edge['relation']}→ {nodes[edge['target']]['label']}")
+    elif args.command == 'ask':
+        request(config, 'ask', {'scope': scope, 'text': args.message})
+        print('Sent to the same native conversation.')
+    else:
+        request(config, 'pause', {'scope': scope, 'paused': args.command == 'pause'})
+        print('Persistence ' + ('paused.' if args.command == 'pause' else 'resumed.'))
+
+
+if __name__ == '__main__':
+    try: main()
+    except (OSError, ValueError, KeyError, http.client.HTTPException) as error:
+        print('SuperSurfer: ' + str(error), file=sys.stderr)
+        sys.exit(1)
