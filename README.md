@@ -11,13 +11,27 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 ## Native VS Code preview
 
-The [native chat extension](native_extension/README.md) adds a visual Surfboard,
-live edits through the same agent, GPU queue controls and a small tmux companion.
-Provider login and chat history remain native. The preview supports VS Code's
-editor host and standalone Agent Host, with a current limitation: persistent
-remote chats open in the native Agents window rather than ordinary editor tabs.
-It requires the workspace service from this branch and is not part of the
-published 0.1.43 release.
+The [VS Code extension](native_extension/README.md) opens your existing agents in
+VS Code’s **built-in Chat pane**. Their history, provider account and research
+tools stay with the SuperSurfer service on the host. Close VS Code and the agents
+keep working; reconnect to see their progress. Right-click an agent → **Open Agent
+to the Side** for multiple native chat views. Surfboards remain visually editable,
+including live changes requested through the same agent. The terminal uses the
+same service conversations.
+
+**New Chat in This Folder** starts from any folder and registers it as needed.
+This preview targets VS Code 1.139 and needs a one-time preview API permission:
+
+```sh
+python3 scripts/install-vscode.py dist/supersurfer-native-0.1.43.vsix --remote tulip
+```
+
+Run the installer on the computer running VS Code, after building the VSIX with
+`npm run package:vscode`. Omit `--remote tulip` for local work. Save your files and
+fully quit/reopen VS Code once. Installing the extension does not restart the
+workspace service. See the extension README for preview limitations and the
+separate integration for attaching Surfboards to VS Code-owned chats. This work
+is not yet in the published 0.1.43 release.
 
 ## What can it do?
 

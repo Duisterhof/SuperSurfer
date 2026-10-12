@@ -1,3 +1,49 @@
+# Service-owned agents in native VS Code Chat — October 12, 2026
+
+Native session items and response streams render existing SuperSurfer scopes in
+VS Code’s Chat pane and editor groups. SuperSurfer remains the sole provider
+owner. The detached presentation bridge reads service history and forwards only
+explicit user sends, supported steering, question answers, one-time approvals
+and stop actions through authenticated service APIs. Closing VS Code never stops
+provider execution. No private provider cache is copied or mutated.
+
+A session-scoped model entry routes requests to the saved provider; it cannot
+perform standalone inference or change model/permission settings. The native
+session type and participant share an ID so requests never fall through to
+Copilot. Preview APIs are explicitly enabled for this extension alone.
+
+The loopback bridge requires an owner-only token, serializes actions, and writes
+uncertain receipts before delivery. Repeated stable IDs return the prior result;
+conflicting or uncertain retries fail without replay. History pages are loaded
+before rendering, rather than silently dropping the oldest conversation turns.
+Text context is bounded and unsupported attachments fail visibly. Pending human
+decisions never auto-submit. Stop agent is explicit: native view cancellation
+only detaches observation. Native status refreshes; a view already idle needs a
+window reload to see a turn started elsewhere. Provider-native edit review,
+model switching and reboot recovery are not supplied by this presentation layer.
+
+The older custom conversation webview remains in source for its existing tests,
+but Open Agent Chat uses native VS Code Chat. The separate VS Code-owned native
+attachment mode below has different tools, continuation limits and persistence.
+
+# Existing agents and folder-first VS Code chats — October 12, 2026
+
+The extension lists service-owned agents through the existing read APIs, without
+requiring a native Agent Host or creating, migrating or restarting provider
+sessions. Each chat view is bound to one scope. Messages, steering, stop,
+questions and one-time approval decisions use the existing owner APIs and keep
+provider/model/permission settings. No action is retried after uncertain delivery.
+VS Code owns native unsent input drafts; service history remains authoritative.
+Separate agents can open in separate editor groups. Service credentials remain
+in the extension host and never enter a webview.
+
+New Chat uses the active file's workspace folder, the sole open folder, or an
+explicit folder selection. Canonical paths reuse existing projects through
+symlink aliases. Missing projects are registered with the Software default;
+existing project workflows remain unchanged. An empty task/chat is created,
+without sending a provider turn. VS Code chat attachment also starts with the
+chat's folder and registers it as needed. Surfboard editing is optional.
+
 # Native VS Code workflow preview — October 12, 2026
 
 An authenticated host companion attaches an existing Agent Host session/chat to

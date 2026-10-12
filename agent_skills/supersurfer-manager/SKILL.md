@@ -229,3 +229,14 @@ For a requested research review, use enabled `check_experiment_results` with
 revise the current comparison, and complete with its exact current version/SHA.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 This is scoped reporting, not permission to take over another recovery owner.
+
+## Service-owned native VS Code conversations
+
+The native VS Code Chat preview can display this service-owned conversation.
+The service still owns the provider, permissions, workflow and continuation; the
+editor is a view, and disconnecting it does not stop work. Keep using the tools
+advertised for this scope. Do not create a duplicate chat or copy provider caches.
+This differs from attaching a Surfboard to a VS Code-owned Agent Host chat, whose
+limited native tools and persistence depend on its owner. Questions and approvals
+require explicit user answers; only the explicit **Stop agent** action stops the
+service task. A request to edit a Surfboard remains configuration work only.

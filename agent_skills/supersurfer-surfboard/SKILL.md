@@ -281,3 +281,14 @@ provider UI. A standalone host may continue the same requested task up to three
 times; an editor-owned host does not promise persistence after editor shutdown.
 Other native tools mentioned in this skill may be unavailable in this preview;
 never substitute direct scheduler access for an unadvertised queue tool.
+
+## Service-owned native VS Code conversations
+
+The native VS Code Chat preview can display this service-owned conversation.
+The service still owns the provider, permissions, workflow and continuation; the
+editor is a view, and disconnecting it does not stop work. Keep using the tools
+advertised for this scope. Do not create a duplicate chat or copy provider caches.
+This differs from attaching a Surfboard to a VS Code-owned Agent Host chat, whose
+limited native tools and persistence depend on its owner. Questions and approvals
+require explicit user answers; only the explicit **Stop agent** action stops the
+service task. A request to edit a Surfboard remains configuration work only.

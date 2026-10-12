@@ -1,60 +1,94 @@
-# SuperSurfer for native VS Code chats — preview
+# SuperSurfer in native VS Code Chat — preview
 
-Edit a colored Surfboard beside your normal editor and attach its tools to an
-existing native Codex conversation. The provider, model, login and conversation
-remain owned by VS Code. SuperSurfer does not copy or rewrite the Codex cache.
+Select an agent under its project in **SuperSurfer → Agents**. Its existing
+conversation opens in the built-in right-hand **Chat** pane. Send messages there,
+read live responses and tool activity, answer native question forms (or the native picker after reconnect), and approve
+or deny permission requests. Opening a conversation never sends a message.
 
-## Current compatibility
+Right-click another agent → **Open Agent to the Side** to use native editor splits.
+**Open Surfboard** opens the colored workflow editor. Edit it directly or use
+**Edit with this agent**; saved changes appear live. GPU queue controls remain in
+**SuperSurfer: GPU Queue**. The existing `surfer` terminal and tmux interface use
+the same host service and conversation scopes.
 
-This preview targets VS Code 1.139 and Agent Host Protocol 0.9 / 0.10 on macOS
-and Linux, including a workspace extension installed through Remote SSH.
-Codex is exercised against the real VS Code host with a deterministic provider
-fixture; authenticated inference, Claude, Cursor, and older host versions have
-not been validated. This is not an integration with the separate OpenAI Codex
-extension's private history store.
+The service on Tulip owns execution, the provider login and the full conversation.
+Closing a chat or VS Code disconnects the view; agents continue working on the
+host. Reconnect and open an agent to read its saved progress. The extension does
+not move or rewrite VS Code’s or Codex’s private caches, start a second provider,
+or change an agent’s model or permissions. No Copilot subscription is required.
 
-There are two distinct host modes:
+To start fresh, open any folder and run **SuperSurfer: New Chat in This Folder**.
+The active file chooses the folder in a multi-folder workspace; otherwise choose
+one. A missing project is registered with the Software workflow. An empty chat
+is created, and only your first message starts the agent. Existing workflows stay
+unchanged; project context lives in `.SuperSurfer`.
 
-- **Editor host:** the Surfboard and native conversation open in normal editor
-  tabs. Use **Split chat** or ordinary editor splits. The companion does not
-  claim that an editor-owned host survives closing VS Code.
-- **Standalone host:** the companion and agent stay on the host when the editor
-  disconnects. VS Code 1.139 exposes these remote sessions in its **Agents
-  window**, rather than ordinary editor chat tabs. **Open in Agents** uses that
-  native route. This preview therefore does **not yet provide the entire
-  persistent remote experience inside an ordinary VS Code chat tab**.
+## Install
 
-Native chat opening uses version-specific built-in commands. Unsupported editor
-versions can require adjustments even when their Agent Host protocol connects.
-This preview attaches each native session's main conversation; additional chat
-channels within a session are not offered as separate attachments.
-
-## Install and connect
-
-This branch's updated SuperSurfer workspace service is required; the existing
-0.1.43 release does not include the `native.*` service actions. Build the desktop
-and use an isolated workspace to try the preview before updating a live service.
-Installing the extension alone does not update or restart your running service.
+Targets VS Code 1.139 on macOS/Linux, locally or with **Remote SSH**. Native session
+registration uses preview APIs, so the installer enables only
+`supersurfer.native-workflows` in the local VS Code runtime arguments, preserving
+other settings and a backup. It uses stock Python, no additional Python packages.
 
 From a checkout with Node 22.12+ and Python 3.11+:
 
 ```sh
 npm ci
 npm run package:vscode
-code --install-extension dist/supersurfer-native-0.1.43.vsix
+python3 scripts/install-vscode.py dist/supersurfer-native-0.1.43.vsix --remote tulip
 ```
 
-For Tulip, install the VSIX into **SSH: tulip** using VS Code's Extensions view.
-Keep the existing provider login on Tulip. Connect to the desired native host in
-VS Code first. The extension discovers owner-only Agent Host registry files and
-the existing SuperSurfer service directory. If needed, select
-`supersurferNative.endpointFile` and `supersurferNative.stateDirectory` in Settings.
-The extension never downloads a different host version, logs in for you, changes
-your model, or replaces a running host.
+Run this on the computer running VS Code, not inside SSH. Omit `--remote tulip`
+for local agents. Save your work and **fully quit/reopen VS Code once**. This
+installs the extension; it does not update or restart the running SuperSurfer
+service or its agents. The service must expose `/api/project-agents` and `/api/chat`
+(as the current SuperSurfer branch and Tulip installation do). If autodetection
+finds the wrong service, set `supersurferNative.stateDirectory` on that host.
 
-1. Open a native chat in the registered project's repository.
-2. Run **SuperSurfer: Attach Surfboard to Native Chat**. Choose the project,
-   task (or project defaults), and the existing chat.
+Alternatively install the VSIX in the Extensions view, then use **Preferences:
+Configure Runtime Arguments** to add `"enable-proposed-api":
+["supersurfer.native-workflows"]` to the existing list, and restart VS Code.
+
+## Preview boundaries
+
+- Use **Stop agent** in a running response, or the agent’s sidebar context menu,
+  to stop work on the host. VS Code’s standard cancel button stops observing that
+  response; closing a view must not cancel persistent work.
+- Provider and model stay with the existing conversation. Change them through
+  SuperSurfer’s conversation settings. Native file/selection context is supported
+  up to eight text items and 100,000 total characters; unsupported/oversized items
+  produce an error rather than disappearing. Images are not supported here.
+- Open active work streams live. If a new turn starts from another interface
+  after this view has become idle, reload the VS Code window to reload its
+  history. Session status and the project sidebar refresh automatically.
+- Workflow enforcement, permissions and continuation belong to the existing
+  service. This does not turn arbitrary Copilot/VS Code chats into persistent
+  SuperSurfer agents. It does not provide VS Code’s inline accept/reject UI for
+  edits made by external provider tools; review them in Source Control.
+- Cursor’s editor APIs and authenticated inference through this new view have
+  not been validated. The native UI regression uses a deterministic fake service
+  and no provider credits. OS reboot recovery remains the host service’s concern.
+
+## Attaching an existing VS Code-owned chat
+
+You can also attach a Surfboard to an existing VS Code-owned Codex conversation.
+That separate integration keeps the provider, model, login and conversation owned
+by VS Code. SuperSurfer does not copy or rewrite the Codex cache.
+
+This separate companion targets VS Code Agent Host Protocol 0.9 / 0.10. An
+editor-owned native agent does not gain persistence merely by attaching a
+Surfboard. A standalone Agent Host can stay running, but that integration uses
+VS Code’s separate Agents window. The service-owned native chats described above
+use the right-hand pane. Configure `supersurferNative.endpointFile` only for this
+separate attachment mode. It requires the branch’s `native.*` service actions.
+
+1. To open an existing research agent, select it under its project in the
+   **SuperSurfer → Agents** sidebar. No native chat is required.
+2. For a VS Code-owned chat instead, run **SuperSurfer: Attach Surfboard to Native
+   Chat** and choose the chat. Its working folder is matched to an existing
+   project, including symlink aliases, or registered automatically. Choose a
+   task's Surfboard if the project already has tasks; otherwise the project
+   workflow opens directly.
 3. Select a block to edit its name, instructions, command or connections.
    Drag blocks to rearrange them. **Save draft** preserves a proposal;
    **Apply workflow** validates and activates it without starting its actions.
@@ -78,8 +112,12 @@ box does not start executing the graph afterward.
 
 ## Terminal and tmux
 
-The small terminal companion uses ordinary Python 3.9+; no Conda environment or
-Python packages are required. Start the VS Code companion once, then use:
+For service-owned agents shown in native Chat, run the existing `surfer` CLI on
+the host. It uses the same SuperSurfer conversations and works in tmux.
+
+For the separate VS Code-owned attachment mode, the small terminal companion
+uses ordinary Python 3.9+ with no Conda environment or Python packages. Start
+that VS Code companion once, then use:
 
 ```sh
 ./native_extension/surfer-native agents
@@ -95,14 +133,17 @@ compact control client, not an embedded Codex TUI. Do not open a second provider
 process against an actively owned conversation's cache. Nonstandard profiles can
 pass `--connection /path/to/companion.json`; never paste that file into a chat.
 
-## Boundaries
+## Attachment-mode boundaries
 
-SuperSurfer enforces its own board action permissions, project/task ownership,
-check receipts and completion gates. It cannot intercept every native shell or
-editor tool, so a board is not a sandbox around the provider. Existing task
-agents created by SuperSurfer's own service are not automatically converted into
-native VS Code chats. There is no cache synchronization or subscription sharing
-between providers. Native provider billing and sign-in stay unchanged.
+The following applies to the separate VS Code-owned companion. Service-owned
+agents use the native presentation layer described at the top of this document;
+their execution stays with the SuperSurfer service.
+
+SuperSurfer enforces its board action permissions, project/task ownership, check
+receipts and completion gates. The attachment cannot intercept every native
+shell or editor tool, so a board is not a sandbox around a VS Code-owned agent.
+There is no cache copying or subscription sharing between providers. Provider
+billing and sign-in remain with the conversation's existing owner.
 
 The companion uses a local owner-only Unix socket and retains bindings/receipts
 in extension and service storage. Only its own advertised tool calls are executed.

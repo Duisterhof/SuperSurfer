@@ -1,5 +1,13 @@
 # Native VS Code preview
 
+- [x] List and open service-owned agents in native VS Code Chat and editor splits.
+- [x] Folder-first New Chat registers missing projects without an attachment prerequisite.
+- [x] Saved history, live activity, steering, questions, approvals and split views for existing agents.
+- [x] Bounded native text/file-selection attachments; preserve saved provider settings.
+- [x] Native session routing without Copilot sign-in; close/reconnect without stopping or replaying.
+- [ ] Native model/permission pickers, inline edit review and automatic history refresh for turns started elsewhere while idle.
+- [ ] Distinguish native Stop from view disposal safely (explicit Stop agent is available).
+
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.
 - [x] Colored graph editing, live edits via that chat, durable local drafts and CAS conflicts.
 - [x] Existing scheduler queue controls and a standard-library Python tmux companion.
