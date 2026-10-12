@@ -33,15 +33,17 @@ from pathlib import Path
 import hashlib
 import os
 import shlex
+import subprocess
 import sys
 import tempfile
 import urllib.request
 
 # Pin both downloads to the same reviewed client revision. Update these together
 # when shipping a new terminal client; installer-only edits need no client update.
-REVISION = '7a0a456997b8e0eb55f2140da99d5a3645a6a877'
+REVISION = '31dc47a83a63c0b105b819b60e1dc17eb9972d8f'
 FILES = {
-    'surfer': 'ba9baf6d995081251f2aa59c128440d1a61af4b54f96b549aef5fa8021c1d5df',
+    'surfer': 'e018e64eede1d1fc6a624423090ad4069566be8441b40dd90d4c6bc69220e85d',
+    'integrations/supersurfer/SKILL.md': 'ee97b7536ee85de10b88d8547afe3113c085c98956fcde51de4e3d886e0e0bc0',
     'LICENSE': '8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643',
 }
 
@@ -86,6 +88,7 @@ def main():
             if os.path.exists(temporary):
                 os.unlink(temporary)
     replace(install / 'surfer.py', payloads['surfer'], 0o644)
+    replace(install / 'SKILL.md', payloads['integrations/supersurfer/SKILL.md'], 0o644)
     replace(install / 'LICENSE', payloads['LICENSE'], 0o644)
     launcher = '#!/bin/sh\n' + marker + '\n'
     launcher += 'export PATH="$HOME/.local/bin:$PATH"\n'
@@ -108,6 +111,7 @@ def main():
             profile.parent.mkdir(parents=True, exist_ok=True)
             with profile.open('a') as stream:
                 stream.write('\n' + path_marker + '\ncase ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac\n')
+    subprocess.run([sys.executable, '-I', str(install / 'surfer.py'), 'skill', 'install'], check=True)
     print(f'Installed SuperSurfer terminal with Python {sys.version_info.major}.{sys.version_info.minor}.')
 
 try:
