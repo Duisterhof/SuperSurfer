@@ -1,3 +1,47 @@
+# Native Chat presentation adapter — October 12, 2026
+
+The extension now uses VS Code 1.139's native Chat session/participant APIs for
+service-owned agents. Older sections below describe the earlier webview and the
+separate VS Code-owned attachment mode, not this new presentation path.
+
+- Real VS Code, isolated profile, deterministic HTTP service, no model inference:
+  saved history opens without a write; a native message reaches the original
+  scope; closing the editor while busy sends no Stop; the host fixture completes;
+  reopening shows its result without replay. Two native agent views, restored
+  question answers through a native picker and explicit approval all pass.
+  Source: `tests/service-host.electron.cjs` and its extension-host fixture.
+- All 64 enabled Node tests pass; five optional SSH tests are skipped. Ten adapter
+  tests cover discovery/provider identity, two-client idempotency, uncertain
+  delivery across bridge restart, decisions, drafts, text context, complete
+  history pagination, Stop and read-only/unknown-scope rejection.
+- `npm test` ran 762 Python tests, with 34 skipped and the same seven pre-existing
+  `test_node_workflow` failures because macOS system rsync lacks `--protect-args`.
+  Node tests were therefore run separately. Three new stock-Python installer
+  tests pass. Agent-skill consistency and whitespace checks pass.
+- VSIX packaged and installed locally and into Tulip's existing VS Code server.
+  The remote `service-provider.cjs` SHA-256 matches the tested source. Only
+  SuperSurfer was added to local preview-API permission; no live window was
+  restarted. The installer prefers the real VS Code app over a Cursor `code`
+  alias and uses the remote server CLI because desktop extension installation
+  ignores `--remote` for VSIX installation.
+- Read-only Tulip verification: live service healthy, an existing Codex
+  conversation retains its original thread ID; the installed adapter lists
+  47 conversations and reads seven saved turns from the selected chat. Discovery
+  took about 6.5 seconds and its chat read 10 ms. No agent messages, approvals,
+  provider session changes or service restarts were performed.
+- macOS arm64 build and ZIP-extracted build pass strict ad-hoc signatures,
+  isolated-profile launch and sandboxed setup-screen checks. This is not
+  Developer ID signing/notarization and does not establish Gatekeeper trust for
+  a browser-downloaded archive. No installed app was overwritten.
+
+Preview boundaries: explicit **Stop agent** stops host execution; native stream
+cancel only detaches observation. A view that is already idle needs a window
+reload to see new turns started elsewhere. Model/permission settings remain in
+SuperSurfer, and external edits are reviewed through Source Control. Fresh
+request streams use native question carousels; restored response streams use
+native pickers because this VS Code version does not resolve their carousel
+answers. Authenticated inference and Cursor's editor API were not tested.
+
 # Existing-agent VS Code views — October 12, 2026
 
 - Read-only diagnosis found service agents excluded by the native-only attachment

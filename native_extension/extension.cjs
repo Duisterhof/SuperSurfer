@@ -9,13 +9,13 @@ const { endpointFiles, privateJSON, atomic } = require("./host.cjs");
 const { call } = require("./client.cjs");
 const { Service } = require("./service.cjs");
 const { ServiceAgents, sessionFolder } = require("./service-agents.cjs");
-const { chatPanel } = require("./service-chat-panel.cjs");
+const { NativeServiceChats } = require("./service-host-client.cjs");
 
 function activate(context) {
   let config,
     starting,
     selected,
-    status = { bindings: [] }, projects = [], serviceError, serviceAgents;
+    status = { bindings: [] }, projects = [], serviceError, serviceAgents, nativeChats;
   const panels = new Map(),
     changed = new vscode.EventEmitter();
   const output = vscode.window.createOutputChannel("SuperSurfer");
@@ -154,7 +154,7 @@ function activate(context) {
     return call(await ensure(), op, args);
   }
   async function refresh() {
-    try { projects = await agents().list(); serviceError = null; }
+    try { projects = await agents().list(); nativeChats?.provider.update(projects); serviceError = null; }
     catch (e) { serviceError = e.message; }
     if (config) {
       try { status = await call(config, "status"); }
@@ -313,9 +313,10 @@ function activate(context) {
   async function openChat(b, split = false) {
     b = b?.scope ? b : await chooseService();
     if (!b) return;
-    if (b.service) return chatPanel({ vscode, context, binding: b, agents: agents(), split,
-      openBoard: () => show(b), splitAgent: async () => { const other = await chooseService(); if (other) return openChat(other, true); },
-      panels: chatPanels, onChange: () => refresh(), output });
+    if (b.service) {
+      nativeChats ||= new NativeServiceChats(vscode, context, agents().service);
+      return nativeChats.open(b, split);
+    }
     const row = privateJSON((await ensure()).endpointFile);
     const configured =
       vscode.workspace.getConfiguration("chat").get("remoteAgentHosts") || [];
@@ -482,13 +483,13 @@ function activate(context) {
         Promise.resolve(fn(...args)).catch(fail),
       ),
     );
-  const chatPanels = new Map();
   register("open", async b => { b = b?.scope ? b : await chooseService(); if (b?.project_id || !b?.service && b) return show(b); });
   register("newChat", newChat);
   register("attach", attach);
   register("queue", () => show(null, "queue"));
   register("refresh", refresh);
   register("openChat", openChat);
+  register("openChatBeside", b => openChat(b, true));
   register("detach", async (b) => {
     b = await choose(b);
     if (b) {
@@ -518,11 +519,12 @@ function activate(context) {
     dispose() {
       clearInterval(timer);
       for (const panel of panels.values()) panel.dispose();
-      for (const panel of chatPanels.values()) panel.dispose();
     },
   });
   // Service agents are available without a native Agent Host or an attachment.
   refresh().catch(e => output.appendLine(e.message));
+  try { nativeChats = new NativeServiceChats(vscode, context, agents().service); }
+  catch (e) { output.appendLine(e.message); }
   if (
     fs.existsSync(path.join(context.globalStorageUri.fsPath, "companion.json"))
   )

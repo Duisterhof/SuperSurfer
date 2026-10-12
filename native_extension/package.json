@@ -3,7 +3,7 @@
   "displayName": "SuperSurfer",
   "publisher": "supersurfer",
   "version": "0.1.43",
-  "description": "Surfboards and persistent workflows for your existing VS Code Agent Host chats.",
+  "description": "Your persistent SuperSurfer agents in VS Code native Chat, with Surfboards and shared history.",
   "engines": {
     "vscode": "^1.139.0"
   },
@@ -29,11 +29,13 @@
       },
       {
         "command": "supersurferNative.open",
-        "title": "SuperSurfer: Open Surfboard"
+        "title": "SuperSurfer: Open Surfboard",
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "supersurferNative.attach",
-        "title": "SuperSurfer: Attach Surfboard to Native Chat"
+        "title": "SuperSurfer: Attach Surfboard to Native Chat",
+        "icon": "$(link)"
       },
       {
         "command": "supersurferNative.queue",
@@ -41,7 +43,8 @@
       },
       {
         "command": "supersurferNative.refresh",
-        "title": "SuperSurfer: Refresh"
+        "title": "SuperSurfer: Refresh",
+        "icon": "$(refresh)"
       },
       {
         "command": "supersurferNative.openChat",
@@ -50,6 +53,22 @@
       {
         "command": "supersurferNative.detach",
         "title": "SuperSurfer: Detach Workflow"
+      },
+      {
+        "command": "supersurferNative.stopAgent",
+        "title": "SuperSurfer: Stop Agent"
+      },
+      {
+        "command": "supersurferNative.openChatBeside",
+        "title": "SuperSurfer: Open Agent to the Side"
+      },
+      {
+        "command": "supersurferNative.agentDecision",
+        "title": "SuperSurfer: Answer Agent Request"
+      },
+      {
+        "command": "supersurferNative.answerQuestion",
+        "title": "SuperSurfer: Answer Question"
       }
     ],
     "viewsContainers": {
@@ -92,6 +111,26 @@
           "command": "supersurferNative.open",
           "when": "view == supersurferNative.sessions && viewItem == serviceAgent",
           "group": "inline"
+        },
+        {
+          "command": "supersurferNative.openChatBeside",
+          "when": "view == supersurferNative.sessions && viewItem =~ /^service/",
+          "group": "1_chat"
+        },
+        {
+          "command": "supersurferNative.stopAgent",
+          "when": "view == supersurferNative.sessions && viewItem =~ /^service/",
+          "group": "2_control"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "supersurferNative.agentDecision",
+          "when": "false"
+        },
+        {
+          "command": "supersurferNative.answerQuestion",
+          "when": "false"
         }
       ]
     },
@@ -111,9 +150,48 @@
           "description": "Agent Host endpoint registry JSON on this host. Auto-detected when there is one live endpoint."
         }
       }
-    }
+    },
+    "chatSessions": [
+      {
+        "type": "supersurfer",
+        "name": "supersurfer",
+        "displayName": "SuperSurfer",
+        "description": "Persistent agents on this host",
+        "requiresCopilotSignIn": false,
+        "requiresCustomModels": true,
+        "capabilities": {
+          "supportsFileAttachments": true,
+          "supportsImageAttachments": false,
+          "supportsToolAttachments": false,
+          "supportsMCPAttachments": false
+        },
+        "welcomeTitle": "Work with your persistent agents",
+        "welcomeMessage": "Your chats, files, and Surfboards stay on the host.",
+        "supportsAutoModel": false
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "supersurfer",
+        "name": "supersurfer",
+        "fullName": "SuperSurfer",
+        "description": "Talk to your persistent agents."
+      }
+    ],
+    "languageModelChatProviders": [
+      {
+        "vendor": "supersurfer",
+        "displayName": "SuperSurfer"
+      }
+    ]
   },
   "dependencies": {
     "ws": "^8.18.3"
-  }
+  },
+  "enabledApiProposals": [
+    "chatSessionsProvider",
+    "chatParticipantAdditions",
+    "chatParticipantPrivate",
+    "chatProvider"
+  ]
 }
