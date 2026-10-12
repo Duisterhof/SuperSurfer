@@ -26,6 +26,9 @@ The terminal's default dashboard exposes Jobs, a coloured Workflow flowchart and
 Agent chat. Users can click blocks to edit settings and connections, then review
 and apply their draft. The main view hides supporting blocks for readability;
 this never changes the board's actual nodes, requirements or tools.
+Its workflow-agent conversation stays below the graph: draft changes and replies
+appear live while the user types follow-ups. Respect its explicit draft-only
+requests; use questions for clarification and leave application to the user's review.
 
 The desktop reports bounded SSH upload/setup progress; a connection error does
 not establish that a configured check or remote preview failed. Reconnect through

@@ -46,8 +46,20 @@ Failure/recovery arrows are shown for the selected block or in Show all.
 Every edit creates a **draft**. Press `a` to review all changes and then explicitly
 apply them. Review includes changes to hidden blocks and settings changed by other
 interfaces. Version checks prevent overwriting a newer draft while editing or
-reviewing. `d` reviews/discards a draft. `f` asks the persistent workflow editor to
-propose a change in plain language and opens its conversation. Advanced JSON editing
+reviewing. `d` reviews/discards a draft.
+
+The **Workflow agent** stays visible below the flowchart. Click its message field
+or press `f`, type what you want, and press Enter. The same persistent agent replies
+there and changes the draft above as it works, without switching views. The graph
+and conversation refresh every second, including while you type. Changed blocks
+get a `*` and scroll into view; changed supporting blocks reveal Show all. Follow-up
+messages use the same conversation and the provider's existing steering behavior.
+`r` handles questions and approvals, `s` stops its turn, and PgUp/PgDn scroll its
+history. Esc leaves typing with the unsent text retained; Ctrl-U clears the input.
+Agent changes stay drafts until you review and apply them. Ordinary block dialogs
+temporarily pause screen refresh; closing them resumes the live view.
+
+Advanced JSON editing
 is available with `x`; dragging blocks and bulk library rollout remain in the desktop.
 
 Use `c` to choose a project and task. Project defaults apply to new tasks; existing

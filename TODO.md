@@ -2,6 +2,7 @@
 
 - [x] Standalone tmux client with Jobs, Workflow and Agent dashboard screens.
 - [x] Coloured Surfboard flowchart, mouse/keyboard block editing, add/connect/remove and review/apply.
+- [x] Persistent workflow-agent chat alongside the graph, live draft updates and inline follow-ups.
 - [x] Project/task Surfboard editing, recoverable drafts and version-checked apply.
 - [x] Existing persistent conversation access, provider selection, questions and approvals.
 - [ ] Dragging/repositioning blocks and named-library bulk rollout remain desktop features.

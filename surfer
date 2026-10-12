@@ -677,6 +677,10 @@ class Dashboard:
         self.graph_offset = [0, 0]
         self.hitboxes = []
         self.show_all = False
+        self.workflow_scope, self.workflow_chat = None, {}
+        self.workflow_input, self.composing = '', False
+        self.workflow_scroll = 0
+        self.changed_nodes = set()
 
     def refresh(self):
         selected_id = self.rows[self.index]['id'] if self.rows and self.index < len(self.rows) else None
@@ -693,14 +697,29 @@ class Dashboard:
                 target['experiment_id'] = task['id']
         if target != self.target:
             self.target, self.scope = target, None
+            self.board, self.workflow_chat = {}, {}
+            self.workflow_input, self.composing = '', False
+            self.changed_nodes = set()
+            self.workflow_scroll = 0
+        self.workflow_scope = ('surfboard:experiment:' + target['experiment_id'] if target.get('experiment_id')
+                               else 'surfboard:' + target['project_id']) if target else None
         self.rows = []
         if self.tab == 0:
             order = {identity: i for i, identity in enumerate(self.state.get('queue', {}).get('run_ids', []))}
             self.rows = sorted([r for r in self.state.get('runs', []) if r['status'] in {'queued', 'starting', 'running', 'cancelling'}],
                                key=lambda r: (r['status'] == 'queued', order.get(r['id'], -1)))
         elif target and self.tab == 1:
+            previous = self.current_graph() if self.board else None
             self.board = self.app.client.get('surfboard', **target)
             nodes = ((self.board.get('draft') or {}).get('board') or self.board['board'])['nodes']
+            if previous is not None and previous != self.current_graph():
+                old_nodes = {n['id']: n for n in previous['nodes']}
+                self.changed_nodes = {n['id'] for n in nodes if n != old_nodes.get(n['id'])}
+                if self.changed_nodes:
+                    selected_id = next(n['id'] for n in nodes if n['id'] in self.changed_nodes)
+                if any(n['id'] in self.changed_nodes and n['kind'] in {'brief','document','artifacts','activity','timer'} for n in nodes):
+                    self.show_all = True
+                self.notice = 'Workflow updated. Changed blocks have a *. Review and apply when ready.'
             self.rows = [n for n in nodes if self.show_all or n['kind'] not in {'brief','document','artifacts','activity','timer'}]
         elif target:
             if not self.scope:
@@ -712,6 +731,8 @@ class Dashboard:
                     self.scope, self.scope_name = 'project:' + target['project_id'], 'Project lead'
             self.chat = self.app.client.get('chat', scope=self.scope, limit=100)
         self.index = next((i for i, row in enumerate(self.rows) if row['id'] == selected_id), min(self.index, max(0, len(self.rows) - 1)))
+        if target and self.tab == 1:
+            self.workflow_chat = self.app.client.get('chat', scope=self.workflow_scope, limit=100)
         self.error = ''
 
     def save_field(self, field, value):
@@ -746,8 +767,8 @@ class Dashboard:
         c, s = self.curses, self.screen
         s.erase()
         h, w = s.getmaxyx()
-        if h < 20 or w < 72:
-            self.put(1, 2, 'SuperSurfer needs at least 72 columns and 20 rows.')
+        if h < 23 or w < 72:
+            self.put(1, 2, 'SuperSurfer needs at least 72 columns and 23 rows.')
             self.put(3, 2, 'Enlarge the terminal, or press q to close.')
             s.refresh()
             return
@@ -787,8 +808,10 @@ class Dashboard:
             self.put(6, 2, 'Press c to choose the project you want to work on.')
             actions = 'c Choose project'
         elif self.tab == 1:
-            self.render_graph()
-            actions = 'Click/Enter Edit block   n Add block   l Connect   a Review & apply   f Ask for a change'
+            if self.board: self.render_graph()
+            else: self.put(6,2,'Waiting for the workspace workflow. Reconnecting automatically.',c.A_DIM)
+            self.render_workflow_chat()
+            actions = 'Click/Enter Edit block   n Add block   l Connect   a Review & apply   f Talk to agent'
         else:
             pending = any(item.get('status') == 'pending' for key in ('approvals', 'questions') for item in self.chat.get(key, []))
             status = 'Needs your response' if pending else 'Working' if self.chat.get('busy') else 'Ready for your message'
@@ -825,7 +848,8 @@ class Dashboard:
         for x, label, pair in [(2,'AGENT',1),(17,'CONDITION / CHECK',2),(43,'JOB / COMPUTE',3),(65,'OUTPUT / DATA',4)]:
             self.put(8,x,label,self.color(pair)|c.A_BOLD)
         positions = graph_positions(self.rows)
-        area_w, area_h = w-4, h-19
+        chat_top = max(12, h-13)
+        area_w, area_h = w-4, chat_top-12
         selected = self.rows[self.index] if self.rows else None
         if area_h < 4:
             self.hitboxes=[]
@@ -833,7 +857,6 @@ class Dashboard:
             if selected:
                 label,pair=NODE_TYPES.get(selected['kind'],(selected['kind'],5))
                 self.put(10,2,'> '+label+'  '+selected.get('label',''),self.color(pair)|c.A_REVERSE)
-            self.put(h-6,2,'Tab or arrows select a block. v shows all blocks.',c.A_DIM)
             return
         if selected:
             sx, sy = positions[selected['id']]
@@ -864,6 +887,7 @@ class Dashboard:
             if node['id'] not in visible: continue
             x,y,_,_=visible[node['id']]
             label,pair=NODE_TYPES.get(node['kind'],(node['kind'].upper(),5))
+            if node['id'] in self.changed_nodes: label += ' *'
             style=self.color(pair)|c.A_BOLD
             self.put(10+y,2+x,'┌─ '+label+' '+'─'*(15-len(label))+'┐',style)
             lines=self.wrap(node.get('label') or label,16)
@@ -876,16 +900,49 @@ class Dashboard:
         if not self.rows: self.put(11,4,'No blocks yet. Press n to add your first block.')
         if selected:
             connections=[e for e in board.get('edges',[]) if selected['id'] in (e['source'],e['target'])]
-            self.put(h-8,2,'Selected: '+(selected.get('label') or selected['kind'])+'  |  '+str(len(connections))+' connections. Enter to edit.',c.A_BOLD)
-            fields=workflow_fields({'nodes':[selected]})
-            detail='  |  '.join(f['label']+': '+human(f['value']) for f in fields)
-            if not detail: detail='Use l to connect this block, or Enter to change its name and connections.'
-            self.put(h-7,2,detail,c.A_DIM)
-        scope='This task' if self.target.get('experiment_id') else 'Project defaults for new tasks'
+            self.put(chat_top-1,2,'Selected: '+(selected.get('label') or selected['kind'])+'  |  '+str(len(connections))+' connections. Enter to edit.',c.A_BOLD)
         hidden=len(board['nodes'])-len(self.rows)
         self.put(6,2,('All blocks' if self.show_all else f'Main flow ({hidden} supporting blocks hidden)')+'  |  v '+('Main flow' if self.show_all else 'Show all')+'  |  Click or select a block to edit',c.A_DIM)
-        self.put(h-6,2,scope+'  |  Tab / arrows select'+('  |  Selection scrolls to more blocks' if len(visible)<len(self.rows) else ''),c.A_DIM)
-        if draft.get('errors'): self.put(h-6,2,'Draft has validation errors. Press a to inspect them.',c.A_BOLD)
+        if draft.get('errors'): self.put(chat_top-1,2,'Draft has validation errors. Press a to inspect them.',c.A_BOLD)
+
+    def render_workflow_chat(self):
+        c = self.curses
+        h,w = self.screen.getmaxyx()
+        top = max(12,h-13)
+        chat = self.workflow_chat
+        pending = any(item.get('status')=='pending' for key in ('questions','approvals') for item in chat.get(key,[]))
+        status = 'Needs your response - r Respond' if pending else 'Working - draft updates live' if chat.get('busy') else 'Ready'
+        provider = chat.get('preferences',{}).get('backend') or 'configured provider'
+        self.put(top,2,'─'*(w-4),c.A_DIM)
+        self.put(top,4,' Workflow agent · '+status+' · '+provider+' ',c.A_BOLD|self.accent)
+        lines=[]
+        for message in chat.get('messages',[]):
+            if message.get('text'):
+                # The service prepends the draft context to configurator messages.
+                text=message['text']
+                if message.get('role')=='user':
+                    text=text.removeprefix('Requested surfboard edit: Propose this change as a draft only; do not apply it: ')
+                    text=text.rsplit('\nDraft version: ',1)[0]
+                lines.extend(self.wrap(('You: ' if message.get('role')=='user' else 'Agent: ')+text,w-6))
+        if not lines: lines=['Describe what you want to change. The flowchart updates here as the agent saves its draft.']
+        room=max(1,h-8-(top+2))
+        self.workflow_scroll=min(self.workflow_scroll,max(0,len(lines)-room))
+        end=len(lines)-self.workflow_scroll
+        for i,line in enumerate(lines[max(0,end-room):end]): self.put(top+2+i,2,line)
+        prompt='> '+self.workflow_input[-max(1,w-8):]+'_' if self.composing else '[ f Talk to workflow agent ]  '+('Unsent: '+self.workflow_input if self.workflow_input else 'Example: Require tests before running a GPU job')
+        self.put(h-7,2,prompt,c.A_REVERSE if self.composing else c.A_BOLD)
+        self.put(h-6,2,'Enter Send   Esc Leave typing   Ctrl-U Clear' if self.composing else 'r Respond   s Stop turn   PgUp/PgDn Conversation   * Changed block   Draft refreshes automatically',c.A_DIM)
+        if chat.get('error'): self.put(h-6,2,str(chat['error']),c.A_BOLD)
+
+    def send_workflow_message(self):
+        text=self.workflow_input.strip()
+        if not text: return
+        result=self.app.client.action('surfboard.ask',**self.app.envelope(self.target,self.board),text='Propose this change as a draft only; do not apply it: '+text)
+        if not result.get('accepted'): raise Error(result.get('error') or 'The workflow editor could not start.')
+        self.workflow_scope=result['scope']
+        self.workflow_input,self.composing='',False
+        self.workflow_scroll=0
+        self.notice='Message sent. Watch the draft change above; a reviews and applies it.'
 
     def save_graph(self, board, notice='Workflow draft saved. Press a to review and apply.'):
         envelope=deepcopy(self.app.envelope(self.target,self.board))
@@ -1129,9 +1186,11 @@ class Dashboard:
         if index is not None:
             self.scope=agents[index]['scope']; self.scope_name=agents[index].get('name') or 'Agent'; self.chat_scroll=0
 
-    def respond(self):
-        questions=[q for q in self.chat.get('questions',[]) if q.get('status')=='pending']
-        approvals=[a for a in self.chat.get('approvals',[]) if a.get('status')=='pending']
+    def respond(self, chat=None, scope=None):
+        chat=self.chat if chat is None else chat
+        scope=self.scope if scope is None else scope
+        questions=[q for q in chat.get('questions',[]) if q.get('status')=='pending']
+        approvals=[a for a in chat.get('approvals',[]) if a.get('status')=='pending']
         if questions:
             question=questions[0]
             answers={}
@@ -1139,20 +1198,27 @@ class Dashboard:
                 answer=self.prompt(item.get('header') or 'Agent question',detail=item['question']+'\n'+human([o['label'] for o in item.get('options',[])]),secret=item.get('isSecret',False))
                 if answer is None: return
                 answers[item['id']]=[answer]
-            self.app.client.action('chat.answer',scope=self.scope,question_id=question['id'],answers=answers)
+            self.app.client.action('chat.answer',scope=scope,question_id=question['id'],answers=answers)
         elif approvals:
             approval=approvals[0]
             if not self.review('Review the requested permission',human(approval)): return
             options=['Leave pending','Deny']+(['Approve once'] if approval.get('can_approve',True) else [])
             choice=self.menu('Your decision',options)
             if choice in (1,2):
-                self.app.client.action('chat.approve',scope=self.scope,approval_id=approval['id'],decision='approve' if choice==2 else 'deny')
+                self.app.client.action('chat.approve',scope=scope,approval_id=approval['id'],decision='approve' if choice==2 else 'deny')
         else: self.notice='The agent has no pending questions or approvals.'
 
     def handle(self,key):
         c=self.curses
+        if self.tab==1 and self.composing and key not in (c.KEY_MOUSE,c.KEY_RESIZE):
+            if key in ('\x1b','\x03'): self.composing=False
+            elif key in ('\n','\r',c.KEY_ENTER): self.send_workflow_message()
+            elif key in ('\x7f','\b',c.KEY_BACKSPACE): self.workflow_input=self.workflow_input[:-1]
+            elif key=='\x15': self.workflow_input=''
+            elif isinstance(key,str) and key.isprintable(): self.workflow_input+=key
+            return
         if key in ('1','2','3'):
-            self.tab=int(key)-1; self.index=0; self.rows=[]; self.notice=''
+            self.tab=int(key)-1; self.index=0; self.rows=[]; self.notice=''; self.composing=False
         elif self.tab==1 and key in (c.KEY_UP,c.KEY_DOWN,c.KEY_LEFT,c.KEY_RIGHT): self.select_direction(key)
         elif self.tab==1 and key=='\t' and self.rows: self.index=(self.index+1)%len(self.rows)
         elif key==c.KEY_MOUSE:
@@ -1161,18 +1227,22 @@ class Dashboard:
             except c.error: return
             if buttons & (c.BUTTON1_CLICKED | c.BUTTON1_DOUBLE_CLICKED):
                 if y==3 and 2<=x<62:
-                    self.tab=(x-2)//20; self.index=0; self.rows=[]; self.notice=''
+                    self.tab=(x-2)//20; self.index=0; self.rows=[]; self.notice=''; self.composing=False
                 elif self.tab==1:
-                    for bx,by,bw,bh,index in self.hitboxes:
-                        if bx<=x<bx+bw and by<=y<by+bh:
-                            self.index=index; self.edit_node(); break
+                    if y==self.screen.getmaxyx()[0]-7: self.composing=True
+                    else:
+                        for bx,by,bw,bh,index in self.hitboxes:
+                            if bx<=x<bx+bw and by<=y<by+bh:
+                                self.index=index; self.edit_node(); break
         elif key in (c.KEY_UP,'k') and self.tab!=2: self.index=max(0,self.index-1)
         elif key in (c.KEY_DOWN,'j') and self.tab!=2: self.index=min(max(0,len(self.rows)-1),self.index+1)
         elif key==c.KEY_PPAGE and self.tab==2: self.chat_scroll+=10
         elif key==c.KEY_NPAGE and self.tab==2: self.chat_scroll=max(0,self.chat_scroll-10)
+        elif key==c.KEY_PPAGE and self.tab==1: self.workflow_scroll+=5
+        elif key==c.KEY_NPAGE and self.tab==1: self.workflow_scroll=max(0,self.workflow_scroll-5)
         elif key=='c': self.change_context()
         elif key=='?':
-            self.review('SuperSurfer help','Jobs: select a named job, then Enter for its actions. The queue covers this entire workspace.\n\nWorkflow: coloured blocks form your flowchart. Click or select a block to edit its name, settings and connections. Add a block with n; connect it with l. Review and apply with a; discard with d. Use f to ask the workflow editor for a change.\n\nAgent: Enter writes a message. Respond handles questions and one-time approvals.\n\nAdvanced: press x on Workflow for JSON editing. Existing commands remain available through surfer shell.\n\nCtrl-b 2 opens a normal shell. Ctrl-b d detaches tmux. Agents and jobs continue in the workspace service.')
+            self.review('SuperSurfer help','Jobs: select a named job, then Enter for its actions. The queue covers this entire workspace.\n\nWorkflow: coloured blocks form your flowchart. Click or select a block to edit its name, settings and connections. Add a block with n; connect it with l. Review and apply with a; discard with d. The workflow agent stays below the graph. Press f or click the message field, then Enter to send. Draft changes and replies update live, including while you type. Press r for questions/approvals, s to stop its turn, or PgUp/PgDn for history. Changes remain drafts until you apply them.\n\nAgent: Enter writes a message. Respond handles questions and one-time approvals.\n\nAdvanced: press x on Workflow for JSON editing. Existing commands remain available through surfer shell.\n\nCtrl-b 2 opens a normal shell. Ctrl-b d detaches tmux. Agents and jobs continue in the workspace service.')
         elif self.tab==0:
             if key=='p': self.job_action('resume' if self.state.get('queue',{}).get('paused') else 'pause',None)
             elif key in ('\n','\r',c.KEY_ENTER) and self.rows:
@@ -1194,12 +1264,10 @@ class Dashboard:
             elif key=='l': self.connect_block()
             elif key=='a': self.apply_draft()
             elif key=='d': self.apply_draft(discard=True)
-            elif key=='f':
-                text=self.prompt('Describe the workflow change',detail='Your workflow editor will propose a draft. Example: Require tests to pass before a GPU job can run.')
-                if text and text.strip():
-                    result=self.app.client.action('surfboard.ask',**self.app.envelope(self.target,self.board),text='Propose this change as a draft only; do not apply it: '+text)
-                    if not result.get('accepted'): raise Error(result.get('error') or 'The workflow editor could not start.')
-                    self.scope=result['scope']; self.scope_name='Workflow editor'; self.tab=2; self.chat_scroll=0
+            elif key=='f': self.composing=True
+            elif key=='r': self.respond(self.workflow_chat,self.workflow_scope)
+            elif key=='s' and self.menu('Stop the workflow agent?', ['Keep working','Stop this turn'])==1:
+                self.app.client.action('chat.stop',scope=self.workflow_scope)
             elif key=='x':
                 c.def_prog_mode(); c.endwin()
                 try: self.app.board(['edit'])
@@ -1234,14 +1302,15 @@ class Dashboard:
             if time.monotonic()>=next_refresh:
                 try: self.refresh()
                 except (Error,OSError,ValueError) as exc: self.error=str(exc)
-                next_refresh=time.monotonic()+3
+                next_refresh=time.monotonic()+(1 if self.tab==1 else 3)
             self.render()
             try: key=screen.get_wch()
             except curses.error: continue
-            if key in ('q','\x03'): return
+            if key in ('q','\x03') and not self.composing: return
             try: self.handle(key)
             except (Error,OSError,ValueError) as exc: self.error=str(exc)
-            else: next_refresh=0
+            else:
+                if not self.composing: next_refresh=0
 
 
 def dashboard(app):

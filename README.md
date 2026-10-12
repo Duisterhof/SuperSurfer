@@ -13,7 +13,8 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 - **Work from a terminal.** The standalone [`surfer`](docs/terminal.md) client
   opens Jobs, Workflow and Agent screens in tmux. Manage named GPU jobs, click
-  coloured Surfboard blocks to edit them, and reconnect to persistent agents.
+  coloured Surfboard blocks to edit them, and talk to a persistent workflow agent
+  while its draft changes appear live in the same view.
 - **Build your own workflow.** Connect agents, instructions, checks, compute and
   results on a **Surfboard**. Start by telling an agent what you want to build,
   or choose a saved workflow. Review its views and steps, refine them in chat,

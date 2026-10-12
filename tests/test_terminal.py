@@ -214,6 +214,41 @@ class TerminalTests(unittest.TestCase):
         dashboard.refresh()
         return dashboard
 
+    def test_workflow_agent_stays_beside_graph_and_resumes_its_conversation(self):
+        dashboard=self.workflow_dashboard()
+        dashboard.workflow_input='Require tests before GPU jobs'
+        dashboard.composing=True
+        dashboard.send_workflow_message()
+        self.assertEqual(dashboard.tab,1)
+        self.assertEqual(dashboard.workflow_scope,'surfboard:p1')
+        self.assertFalse(dashboard.composing)
+        self.assertEqual(dashboard.workflow_input,'')
+        self.assertEqual(self.service.codex.sent[0][0],'surfboard:p1')
+        self.assertIn('draft only; do not apply',self.service.codex.sent[0][1])
+        resumed=self.workflow_dashboard()
+        self.assertEqual(resumed.workflow_scope,dashboard.workflow_scope)
+        self.assertTrue(resumed.workflow_chat['busy'])
+
+    def test_workflow_refresh_shows_agent_draft_and_reply_without_losing_typed_message(self):
+        dashboard=self.workflow_dashboard()
+        original=deepcopy(dashboard.board['board'])
+        dashboard.workflow_input='And limit it to 2 GPUs'
+        dashboard.composing=True
+        envelope=deepcopy(terminal.App.envelope(dashboard.target,dashboard.board))
+        schedule=next(n for n in envelope['board']['nodes'] if n['kind']=='timer')
+        schedule['label']='Daily review'
+        self.client.action('surfboard.draft',**envelope)
+        with patch.object(self.service.codex,'chat',return_value={'scope':'surfboard:p1','messages':[{'role':'assistant','text':'I added the daily review.'}],'busy':False}):
+            dashboard.refresh()
+        self.assertEqual(dashboard.tab,1)
+        self.assertTrue(dashboard.show_all)
+        self.assertEqual(dashboard.rows[dashboard.index]['label'],'Daily review')
+        self.assertIn(schedule['id'],dashboard.changed_nodes)
+        self.assertEqual(dashboard.workflow_chat['messages'][-1]['text'],'I added the daily review.')
+        self.assertEqual(dashboard.workflow_input,'And limit it to 2 GPUs')
+        self.assertTrue(dashboard.composing)
+        self.assertEqual(dashboard.board['board'],original)
+
     def test_dashboard_edits_a_named_setting_as_a_draft(self):
         dashboard = self.workflow_dashboard()
         field = next(f for f in terminal.workflow_fields(dashboard.board['board']) if f['field'] == 'gpu_limit')
@@ -298,6 +333,7 @@ class TerminalTests(unittest.TestCase):
                 if 'CONDITION' in view: break
                 time.sleep(.1)
             self.assertIn('CONDITION', view)
+            self.assertIn('Workflow agent', view)
             # Match the pane's terminfo protocol; tmux translates physical mouse
             # events into X10 on older Mac terminfo and SGR on newer Linux builds.
             term = subprocess.check_output(command + ['show-options','-gv','default-terminal'],text=True).strip()
@@ -323,6 +359,25 @@ class TerminalTests(unittest.TestCase):
                 time.sleep(.1)
             self.assertEqual(next(n for n in state['draft']['board']['nodes'] if n['kind']=='compute')['config']['gpu_limit'],2)
             self.assertEqual(next(n for n in state['board']['nodes'] if n['kind']=='compute')['config']['gpu_limit'],4)
+            # Chat and graph stay visible together. A later service-side draft
+            # edit appears without switching tabs or asking for a refresh.
+            subprocess.run(command+['send-keys','-t','surfer:1.0','f'],check=True)
+            subprocess.run(command+['send-keys','-t','surfer:1.0','-l','Require tests'],check=True)
+            subprocess.run(command+['send-keys','-t','surfer:1.0','Enter'],check=True)
+            deadline=time.monotonic()+5
+            while time.monotonic()<deadline and not self.service.codex.sent: time.sleep(.1)
+            self.assertEqual(self.service.codex.sent[0][0],'surfboard:p1')
+            state=self.client.get('surfboard',project_id='p1')
+            envelope=terminal.App.envelope({'project_id':'p1'},state)
+            next(n for n in envelope['board']['nodes'] if n['kind']=='code')['label']='Live check'
+            self.client.action('surfboard.draft',**envelope)
+            deadline=time.monotonic()+5
+            while time.monotonic()<deadline:
+                view=subprocess.check_output(command+['capture-pane','-p','-t','surfer:1.0'],text=True)
+                if 'Live check' in view and 'Working - draft updates live' in view: break
+                time.sleep(.1)
+            self.assertIn('Live check',view)
+            self.assertIn('Working - draft updates live',view)
             time.sleep(.3)
             subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', 'q'], check=True)
             deadline = time.monotonic() + 5

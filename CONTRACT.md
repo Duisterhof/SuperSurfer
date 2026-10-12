@@ -9,6 +9,12 @@ selection opens a block editor; add, rename, settings, connect and remove operat
 all create version-checked drafts. Connection choices come from the server catalog.
 Apply reviews every changed field, including changes outside the main view, and
 requires explicit confirmation. JSON editing remains an advanced option.
+The workflow's persistent configurator conversation is always shown below the
+flowchart. Inline message composition preserves live one-second draft/chat refresh;
+changed blocks are marked and revealed, and unsent text survives refresh. Follow-up
+messages use the existing `surfboard.ask` send/steer path. Questions, approvals,
+stop and history are available in the same view. Block-edit dialogs temporarily
+pause refresh. Agent requests explicitly ask for drafts pending review/application.
 
 The standalone `surfer` Python client connects to an existing authenticated
 loopback workspace service. It uses a separate tmux server and does not install,
