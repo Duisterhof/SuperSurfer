@@ -1,3 +1,24 @@
+# Existing-agent VS Code views — October 12, 2026
+
+- Read-only diagnosis found service agents excluded by the native-only attachment
+  flow; the connected native host's chats worked in an unregistered folder.
+  [Redacted diagnostic](tests/reports/vscode-existing-agents/diagnostic.md).
+- All 54 enabled Node tests pass (five optional SSH checks skipped), including
+  extension startup without an Agent Host, opening the original scope, folder
+  registration/reuse, blank chat creation without inference, same-owner steering,
+  uncertain delivery and path-alias matching.
+- The client also passes an isolated real HTTP service check: list existing
+  agents, read their chat, register a new folder, create two separate chats in
+  the same project, and read their Surfboard. No provider messages or scheduler
+  mutations occur.
+- The actual webview passes browser checks for history, polling, draft retention,
+  steering, no automatic replay, questions, approvals, split controls, escaped
+  content and read-only behavior. Screenshot uses deterministic fixture data;
+  it is not evidence of authenticated provider inference.
+- macOS Python-suite and packaged-app results are recorded in the associated PR.
+  The existing node-acquisition tests require GNU rsync's `--protect-args` and
+  cannot pass against this Mac's system rsync.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.

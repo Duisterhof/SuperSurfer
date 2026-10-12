@@ -6,6 +6,7 @@ const fs = require("node:fs"),
   http = require("node:http"),
   crypto = require("node:crypto");
 const { fileURLToPath } = require("node:url");
+const { sameFolder } = require("./service-agents.cjs");
 const { Host, atomic } = require("./host.cjs"),
   { Service } = require("./service.cjs");
 const finish = {
@@ -300,7 +301,7 @@ class Controller {
             return null;
           }
         })
-        .find((dir) => dir && path.resolve(dir) === path.resolve(args.repo));
+        .find((dir) => dir && sameFolder(dir, args.repo));
       if (!cwd)
         throw new Error(
           "The native chat must work in the selected project repository.",

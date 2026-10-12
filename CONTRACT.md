@@ -1,3 +1,21 @@
+# Existing agents and folder-first VS Code chats — October 12, 2026
+
+The extension lists service-owned agents through the existing read APIs, without
+requiring a native Agent Host or creating, migrating or restarting provider
+sessions. Each editor tab is bound to one scope. Messages, steering, stop,
+questions and one-time approval decisions use the existing owner APIs and keep
+provider/model/permission settings. No action is retried after uncertain delivery.
+Drafts survive polling and reopening; only visible chats poll their history.
+Separate agents can open in separate editor groups. Service credentials remain
+in the extension host and never enter a webview.
+
+New Chat uses the active file's workspace folder, the sole open folder, or an
+explicit folder selection. Canonical paths reuse existing projects through
+symlink aliases. Missing projects are registered with the Software default;
+existing project workflows remain unchanged. An empty task/chat is created,
+without sending a provider turn. VS Code chat attachment also starts with the
+chat's folder and registers it as needed. Surfboard editing is optional.
+
 # Native VS Code workflow preview — October 12, 2026
 
 An authenticated host companion attaches an existing Agent Host session/chat to

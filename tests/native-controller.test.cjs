@@ -166,6 +166,7 @@ test("repeated tools use the same stable receipt", async (t) => {
 
 test("attachments reject secondary chats and pause if tool installation fails", async (t) => {
   const f = fixture(t);
+  const repo = f.c.config.storage;
   const session = {
     provider: "codex",
     defaultChat: "ahp-chat://default/same",
@@ -173,14 +174,14 @@ test("attachments reject secondary chats and pause if tool installation fails", 
       { resource: "ahp-chat://default/same" },
       { resource: "ahp-chat://secondary/same" },
     ],
-    workingDirectories: ["file:///tmp/project"],
+    workingDirectories: [require("node:url").pathToFileURL(repo).href],
   };
   f.c.host.snapshot = async () => session;
   await assert.rejects(
     f.c.handle("attach", {
       session: "codex:/same",
       chat: "ahp-chat://secondary/same",
-      repo: "/tmp/project",
+      repo,
     }),
     /main conversation/,
   );
@@ -194,7 +195,7 @@ test("attachments reject secondary chats and pause if tool installation fails", 
     throw new Error("host lost");
   };
   await assert.rejects(
-    f.c.handle("attach", { session: "codex:/same", repo: "/tmp/project" }),
+    f.c.handle("attach", { session: "codex:/same", repo }),
     /host lost/,
   );
   assert.equal(f.c.bindings[f.b.scope].paused, true);

@@ -1,5 +1,10 @@
 # Native VS Code preview
 
+- [x] List and open existing service-owned research agents directly in editor tabs.
+- [x] Folder-first New Chat registers missing projects without an attachment prerequisite.
+- [x] Saved history, live activity, steering, questions, approvals and split views for existing agents.
+- [ ] Service-chat file attachments and provider settings within the new editor view.
+
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.
 - [x] Colored graph editing, live edits via that chat, durable local drafts and CAS conflicts.
 - [x] Existing scheduler queue controls and a standard-library Python tmux companion.

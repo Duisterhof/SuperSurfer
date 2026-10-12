@@ -7,16 +7,21 @@ const crypto = require("node:crypto"),
   { spawn } = require("node:child_process");
 const { endpointFiles, privateJSON, atomic } = require("./host.cjs");
 const { call } = require("./client.cjs");
+const { Service } = require("./service.cjs");
+const { ServiceAgents, sessionFolder } = require("./service-agents.cjs");
+const { chatPanel } = require("./service-chat-panel.cjs");
 
 function activate(context) {
   let config,
     starting,
     selected,
-    status = { bindings: [] };
+    status = { bindings: [] }, projects = [], serviceError, serviceAgents;
   const panels = new Map(),
     changed = new vscode.EventEmitter();
   const output = vscode.window.createOutputChannel("SuperSurfer");
   const settings = () => vscode.workspace.getConfiguration("supersurferNative");
+  const agents = () => serviceAgents ||= new ServiceAgents(new Service(settings().get("stateDirectory")));
+  const manager = { scope: "manager", title: "Workspace manager", name: "Workspace manager", service: true };
   const fail = (e) => {
     output.appendLine(e.message);
     vscode.window.showErrorMessage("SuperSurfer: " + e.message);
@@ -149,19 +154,49 @@ function activate(context) {
     return call(await ensure(), op, args);
   }
   async function refresh() {
-    status = await request("status");
+    try { projects = await agents().list(); serviceError = null; }
+    catch (e) { serviceError = e.message; }
+    if (config) {
+      try { status = await call(config, "status"); }
+      catch (e) { status = { ...status, connected: false, error: e.message }; }
+    }
     changed.fire();
     for (const [key, panel] of panels)
       if (panel.visible) await update(panel, key);
   }
   const tree = {
     onDidChangeTreeData: changed.event,
-    getChildren: () =>
-      status.bindings.length ? status.bindings : [{ empty: true }],
+    getChildren: (parent) => parent?.kind === "project" ? parent.agents : parent?.kind === "native" ? status.bindings : [
+      ...(serviceError ? [{ kind: "error", name: serviceError }] : [manager, ...projects]),
+      ...(status.bindings.length ? [{ kind: "native", name: "Attached VS Code chats" }] : []),
+      { newChat: true }, { empty: true },
+    ],
     getTreeItem: (b) => {
+      if (b.kind) {
+        const folder = b.kind === "project" || b.kind === "native";
+        const item = new vscode.TreeItem(b.name, folder ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
+        item.id = b.kind + ":" + (b.id || b.name);
+        item.iconPath = new vscode.ThemeIcon(folder ? "folder" : "warning");
+        if (b.kind === "project") {
+          const working = b.agents.filter(a => a.busy).length;
+          item.description = working ? `${working} working` : `${b.agents.length} agents`;
+          item.tooltip = b.repo;
+        }
+        return item;
+      }
       const item = new vscode.TreeItem(
-        b.empty ? "Attach a native chat…" : b.title || "Native agent",
+        b.newChat ? "New SuperSurfer Chat…" : b.empty ? "Attach a VS Code chat…" : b.title || "Native agent",
       );
+      if (b.newChat) { item.iconPath = new vscode.ThemeIcon("add"); item.command = { command: "supersurferNative.newChat", title: "New SuperSurfer Chat" }; return item; }
+      if (b.service) {
+        item.id = b.scope;
+        item.description = b.busy ? "Working" : b.status === "awaiting_input" ? "Needs your input" : b.status || "Ready";
+        item.tooltip = `${b.projectName || "SuperSurfer"} · ${b.name}\nExisting conversation on this host`;
+        item.iconPath = new vscode.ThemeIcon(b.busy ? "sync~spin" : "comment-discussion");
+        item.command = { command: "supersurferNative.openChat", title: "Open conversation", arguments: [b] };
+        item.contextValue = b.project_id ? "serviceAgent" : "serviceManager";
+        return item;
+      }
       item.description = b.empty
         ? ""
         : b.connected === false
@@ -207,61 +242,68 @@ function activate(context) {
     );
     if (picked) return (selected = picked.b);
   }
+  async function chooseService() {
+    if (!projects.length) await refresh();
+    if (serviceError) throw new Error(serviceError);
+    const picked = await vscode.window.showQuickPick([manager, ...projects.flatMap(p => p.agents)].map(b => ({
+      label: b.name, description: [b.projectName, b.busy ? "Working" : b.status].filter(Boolean).join(" · "), b,
+    })), { title: "Open an existing SuperSurfer agent" });
+    return picked?.b;
+  }
+  let creatingChat = false;
+  async function newChat() {
+    if (creatingChat) return;
+    if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before starting an agent.");
+    let folders = vscode.workspace.workspaceFolders || [], folder;
+    const active = vscode.window.activeTextEditor?.document.uri;
+    if (active) folder = vscode.workspace.getWorkspaceFolder(active);
+    if (!folder && folders.length === 1) folder = folders[0];
+    if (!folder && folders.length > 1) {
+      const picked = await vscode.window.showQuickPick(folders.map(f => ({ label: f.name, description: f.uri.fsPath, folder: f })), { title: "Which folder should this chat work in?" });
+      if (!picked) return; folder = picked.folder;
+    }
+    if (!folder) {
+      const picked = await vscode.window.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: false, openLabel: "Start chat here" });
+      if (!picked?.length) return; folder = { uri: picked[0] };
+    }
+    creatingChat = true;
+    try { const b = await agents().newChat(folder.uri.fsPath); await refresh(); return openChat(b); }
+    finally { creatingChat = false; }
+  }
   async function attach() {
-    const state = await request("state");
-    const project = await vscode.window.showQuickPick(
-      (state.projects || []).map((p) => ({
-        label: p.name,
-        description: p.repo,
-        p,
-      })),
-      { title: "Choose a SuperSurfer project" },
-    );
-    if (!project) return;
-    const task = await vscode.window.showQuickPick(
-      [
-        { label: "Project workflow", id: null },
-        ...(state.experiments || [])
-          .filter((e) => e.project_id === project.p.id)
-          .map((e) => ({ label: e.name, id: e.id })),
-      ],
-      { title: "Choose the workflow to attach" },
-    );
-    if (!task) return;
     const { sessions } = await request("sessions");
-    const choices = sessions.filter((s) =>
-      (s.workingDirectories || []).some((dir) => {
-        try {
-          return (
-            path.resolve(vscode.Uri.parse(dir).fsPath) ===
-            path.resolve(project.p.repo)
-          );
-        } catch {
-          return false;
-        }
-      }),
-    );
+    const choices = sessions.filter(s => sessionFolder(s).length);
     if (!choices.length)
       throw new Error(
-        "Open a native chat in this project folder first, then attach it here.",
+        "No VS Code chats with a local project folder were found on this host. Use New SuperSurfer Chat to start here, or select an existing research agent in the sidebar.",
       );
     const session = await vscode.window.showQuickPick(
       choices.map((s) => ({
         label: s.title || "Untitled native chat",
-        description: s.provider,
+        description: sessionFolder(s).join(", "),
         s,
       })),
       { title: "Attach the same chat you already use" },
     );
     if (!session) return;
+    const roots = sessionFolder(session.s);
+    const directory = roots.length === 1 ? roots[0] : await vscode.window.showQuickPick(roots, { title: "Choose this chat’s project folder" });
+    if (!directory) return;
+    const project = await agents().projectForFolder(directory);
+    const state = await agents().service.request("/api/state");
+    const tasks = (state.experiments || []).filter(e => e.project_id === project.id && !e.archived);
+    const task = tasks.length ? await vscode.window.showQuickPick([
+      { label: "Project workflow", id: null }, ...tasks.map(e => ({ label: e.name, id: e.id })),
+    ], { title: "Choose a Surfboard" }) : { id: null };
+    if (!task) return;
     const resource = session.s.resource || session.s.session;
     const snapshot = await request("snapshot", { channel: resource });
     const chat = snapshot.defaultChat;
     selected = await request("attach", {
       session: resource,
       chat,
-      repo: project.p.repo,
-      project_id: project.p.id,
+      repo: project.repo,
+      project_id: project.id,
       experiment_id: task.id,
     });
     await refresh();
@@ -269,8 +311,11 @@ function activate(context) {
     return selected;
   }
   async function openChat(b, split = false) {
-    b = b?.scope ? b : await choose();
+    b = b?.scope ? b : await chooseService();
     if (!b) return;
+    if (b.service) return chatPanel({ vscode, context, binding: b, agents: agents(), split,
+      openBoard: () => show(b), splitAgent: async () => { const other = await chooseService(); if (other) return openChat(other, true); },
+      panels: chatPanels, onChange: () => refresh(), output });
     const row = privateJSON((await ensure()).endpointFile);
     const configured =
       vscode.workspace.getConfiguration("chat").get("remoteAgentHosts") || [];
@@ -327,15 +372,16 @@ function activate(context) {
   }
   async function update(panel, key) {
     try {
+      const binding = panel.serviceBinding || status.bindings.find(b => b.scope === key);
       const data =
         key === "queue"
-          ? await request("queue")
-          : await request("board", { scope: key });
+          ? await agents().service.request("/api/state")
+          : binding?.service ? await agents().board(binding) : await request("board", { scope: key });
       await panel.webview.postMessage({
         type: "state",
         data,
-        binding: status.bindings.find((b) => b.scope === key),
-        hostType: status.hostType,
+        binding: binding?.service ? { ...binding, status: projects.flatMap(p => p.agents).find(a => a.scope === key)?.busy ? 8 : 0 } : binding,
+        hostType: binding?.service ? "service" : status.hostType,
       });
     } catch (e) {
       await panel.webview.postMessage({ type: "error", message: e.message });
@@ -364,6 +410,7 @@ function activate(context) {
       },
     );
     panels.set(key, panel);
+    if (b?.service) panel.serviceBinding = b;
     panel.onDidDispose(() => panels.delete(key));
     const uri = (file) =>
       panel.webview.asWebviewUri(
@@ -411,10 +458,13 @@ function activate(context) {
           )
             return;
         }
-        const result = await request(message.op, {
-          ...message.args,
-          scope: key,
-        });
+        let result;
+        if (mode === "queue") {
+          const { action, ...args } = message.args || {};
+          if (!["run.cancel", "run.move", "queue.pause", "queue.resume"].includes(action)) throw new Error("Unsupported queue action");
+          result = await agents().service.action(action, args);
+        } else if (b?.service) result = await agents().boardAction(b, message.op, message.args);
+        else result = await request(message.op, { ...message.args, scope: key });
         await panel.webview.postMessage({
           type: "result",
           op: message.op,
@@ -432,7 +482,9 @@ function activate(context) {
         Promise.resolve(fn(...args)).catch(fail),
       ),
     );
-  register("open", show);
+  const chatPanels = new Map();
+  register("open", async b => { b = b?.scope ? b : await chooseService(); if (b?.project_id || !b?.service && b) return show(b); });
+  register("newChat", newChat);
   register("attach", attach);
   register("queue", () => show(null, "queue"));
   register("refresh", refresh);
@@ -452,7 +504,7 @@ function activate(context) {
   );
   let polling = false;
   const timer = setInterval(async () => {
-    if (!config || polling) return;
+    if (polling) return;
     polling = true;
     try {
       await refresh();
@@ -466,13 +518,15 @@ function activate(context) {
     dispose() {
       clearInterval(timer);
       for (const panel of panels.values()) panel.dispose();
+      for (const panel of chatPanels.values()) panel.dispose();
     },
   });
-  // Only reconnect on startup when the user previously configured this extension.
+  // Service agents are available without a native Agent Host or an attachment.
+  refresh().catch(e => output.appendLine(e.message));
   if (
     fs.existsSync(path.join(context.globalStorageUri.fsPath, "companion.json"))
   )
-    refresh().catch((e) => output.appendLine(e.message));
+    ensure().then(() => refresh()).catch((e) => output.appendLine(e.message));
   return { request, show, refresh };
 }
 module.exports = { activate };

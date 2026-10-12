@@ -11,6 +11,11 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 ## Native VS Code preview
 
+The VS Code sidebar also opens existing SuperSurfer agents directly, including
+their live history and running work. **New Chat in This Folder** starts from any
+folder and registers it as needed. No pre-existing project or native-chat
+attachment is required for service-owned agents.
+
 The [native chat extension](native_extension/README.md) adds a visual Surfboard,
 live edits through the same agent, GPU queue controls and a small tmux companion.
 Provider login and chat history remain native. The preview supports VS Code's

@@ -1,8 +1,26 @@
 # SuperSurfer for native VS Code chats — preview
 
-Edit a colored Surfboard beside your normal editor and attach its tools to an
-existing native Codex conversation. The provider, model, login and conversation
-remain owned by VS Code. SuperSurfer does not copy or rewrite the Codex cache.
+Open your existing SuperSurfer agents from the sidebar, with live conversation
+history, tool activity, questions and approvals in editor tabs. Use **Split view**
+to work with several agents side by side. These conversations remain owned by the
+running SuperSurfer service; opening a tab never restarts an agent or changes its
+provider, model or permissions.
+
+To start fresh, open any folder and click **+** in the SuperSurfer sidebar, or run
+**SuperSurfer: New Chat in This Folder**. In a multi-folder workspace, the active
+file chooses the folder; otherwise you choose a folder. A folder does not need
+to be a registered SuperSurfer project. Registration and an empty task/chat are
+created as needed; the first message starts the agent. New projects use the
+editable Software workflow by default. Existing projects keep their workflow.
+Project context is stored in `.SuperSurfer`; no GPU job is launched by this flow.
+
+**Surfboard** opens the visual editor for that agent. You can edit it directly or
+talk to the same agent and see changes appear. Existing service agents need no
+VS Code Agent Host and no attachment step.
+
+You can also attach a Surfboard to an existing VS Code-owned Codex conversation.
+That separate integration keeps the provider, model, login and conversation owned
+by VS Code. SuperSurfer does not copy or rewrite the Codex cache.
 
 ## Current compatibility
 
@@ -52,9 +70,13 @@ the existing SuperSurfer service directory. If needed, select
 The extension never downloads a different host version, logs in for you, changes
 your model, or replaces a running host.
 
-1. Open a native chat in the registered project's repository.
-2. Run **SuperSurfer: Attach Surfboard to Native Chat**. Choose the project,
-   task (or project defaults), and the existing chat.
+1. To open an existing research agent, select it under its project in the
+   **SuperSurfer → Agents** sidebar. No native chat is required.
+2. For a VS Code-owned chat instead, run **SuperSurfer: Attach Surfboard to Native
+   Chat** and choose the chat. Its working folder is matched to an existing
+   project, including symlink aliases, or registered automatically. Choose a
+   task's Surfboard if the project already has tasks; otherwise the project
+   workflow opens directly.
 3. Select a block to edit its name, instructions, command or connections.
    Drag blocks to rearrange them. **Save draft** preserves a proposal;
    **Apply workflow** validates and activates it without starting its actions.
@@ -96,6 +118,11 @@ process against an actively owned conversation's cache. Nonstandard profiles can
 pass `--connection /path/to/companion.json`; never paste that file into a chat.
 
 ## Boundaries
+
+Service-owned chat tabs support history, live replies, steering when supported,
+stop, questions, one-time approvals and drafts retained across reopen. They are
+SuperSurfer editor views, not VS Code Agent Host sessions. Native provider login,
+advanced settings and attachments remain in their existing owner interfaces.
 
 SuperSurfer enforces its own board action permissions, project/task ownership,
 check receipts and completion gates. It cannot intercept every native shell or

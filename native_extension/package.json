@@ -23,6 +23,11 @@
   "contributes": {
     "commands": [
       {
+        "command": "supersurferNative.newChat",
+        "title": "SuperSurfer: New Chat in This Folder",
+        "icon": "$(add)"
+      },
+      {
         "command": "supersurferNative.open",
         "title": "SuperSurfer: Open Surfboard"
       },
@@ -40,7 +45,7 @@
       },
       {
         "command": "supersurferNative.openChat",
-        "title": "SuperSurfer: Open Native Chat"
+        "title": "SuperSurfer: Open Agent Chat"
       },
       {
         "command": "supersurferNative.detach",
@@ -60,12 +65,17 @@
       "supersurferNative": [
         {
           "id": "supersurferNative.sessions",
-          "name": "Native agents"
+          "name": "Agents"
         }
       ]
     },
     "menus": {
       "view/title": [
+        {
+          "command": "supersurferNative.newChat",
+          "when": "view == supersurferNative.sessions",
+          "group": "navigation@0"
+        },
         {
           "command": "supersurferNative.attach",
           "when": "view == supersurferNative.sessions",
@@ -75,6 +85,13 @@
           "command": "supersurferNative.refresh",
           "when": "view == supersurferNative.sessions",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "supersurferNative.open",
+          "when": "view == supersurferNative.sessions && viewItem == serviceAgent",
+          "group": "inline"
         }
       ]
     },
