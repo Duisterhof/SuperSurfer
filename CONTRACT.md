@@ -852,7 +852,7 @@ All owned roles get `ask_user {questions:[...]}` for one to three concise questi
 The workspace manager gets:
 
 - `queue_run` with mandatory `experiment_id`, plus either `{run_id,pr_url}` for an existing held run or the complete new-run fields and `pr_url`. The target must be an existing registered experiment; the server derives its project and rejects run/experiment mismatches. The tool performs the same exact-source PR verification and AutoML readiness sequence as the worker tool. New-run requests may supply a stable `request_id` (16–100 ASCII letters, digits, underscores or hyphens), one per explicitly requested arm. Its scope/experiment-bound receipt persists across restarts. Reusing an ID with changed intent returns 409. Requests without an ID retain the legacy one-new-run-per-turn limit. Existing run retries use only `experiment_id`, `run_id` and `pr_url`.
-- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment across registered projects. It selects or explicitly targets an owned worker and preserves that conversation's settings, allows at most three distinct handoffs per user turn, and retains the same busy/duplicate/uncertain-work guards. This can forward an explicit queue/run request or preparation-only work without broadening it. The manager has no `update_experiment` or `prepare_run` tool.
+- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment across registered projects. It selects or explicitly targets an owned worker and preserves that conversation's settings, has no per-turn cap on distinct experiment handoffs, and retains the same busy/duplicate/uncertain-work guards. This can forward an explicit queue/run request or preparation-only work without broadening it. The manager has no `update_experiment` or `prepare_run` tool.
 
 All owned roles get `inspect_project_compute`, `inspect_compute_host`, `register_compute_host` and `onboard_project_node`. Manager calls require `project_id`; leads derive their project, workers derive it from their experiment. Active scheduled turns may inspect but cannot register/onboard. Workers cannot replace pools or shared defaults. Only managers/leads get `configure_project_compute`.
 
@@ -866,7 +866,7 @@ Node source staging accepts the exact root of a bare Git repository as well as a
 
 Project leads get:
 
-- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment in their project. The selected owned conversation and its model choices are preserved. At most three distinct handoffs are allowed per user turn; duplicate, busy or uncertain work is rejected. A lead may forward the user's explicit queue/run request but cannot invoke the worker's queue tool itself.
+- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment in their project. The selected owned conversation and its model choices are preserved. Distinct experiments have no per-turn handoff cap; duplicate, busy or uncertain work is rejected. A lead may forward the user's explicit queue/run request but cannot invoke the worker's queue tool itself.
 - `update_experiment {experiment_id,version,name?,summary?,markdown?,status?}` for versioned scope, explanation and planning updates. Status is draft, preparing, ready, paused or completed. Execution-state conflicts and stale versions are rejected. Planning `ready` is not run readiness.
 
 Experiment workers get:

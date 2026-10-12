@@ -1,3 +1,7 @@
+# Handoff cap removal
+
+- [x] Allow more than three distinct experiment handoffs per user turn; retain duplicate/busy/scope guards.
+
 # Completed in 0.1.43 — agent workflow control
 
 - [x] Direct scoped Surfboard proposal/apply tools for requested edits, with version checks.
