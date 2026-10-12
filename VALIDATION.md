@@ -27,6 +27,20 @@ Surfboard endpoint remains a server-side limitation, not claimed fixed. The UI
 stays responsive while it waits. Existing service-owned sessions remain separate
 from native terminals; persistent skill work is explicitly handed to their owner.
 
+Public installer validation on Tulip passes with stock Python 3.10.12 in a
+disposable home: repeated installation, direct command in a fresh shell, all
+three provider skill directories, and the real native tmux/curses dashboard against
+an isolated empty HTTP service. A separate credential-free Codex app-server
+successfully discovers the installed supersurfer skill through `skills/list`.
+Only initialize/discovery RPCs run; no agent thread or provider inference starts.
+The initial discovery-test timeout came from a missing temporary CODEX_HOME
+folder and passed once that fixture was corrected. No user home, credentials,
+live service, agents or jobs were modified.
+
+All implementation checks pass at de813b8: stock Python 3.10 terminal/installer,
+Python 3.11/3.13 unit suites, browser workflows, Linux package and diagnostic check.
+Evidence: https://github.com/Duisterhof/SuperSurfer/actions/runs/38269313623
+
 # Terminal installer — October 12, 2026 (unreleased)
 
 Seven installer tests pass in disposable homes, covering direct command access in
