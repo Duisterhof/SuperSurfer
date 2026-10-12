@@ -19,6 +19,6 @@ native discovery. New Chat starts from an ordinary folder and registers it as
 needed. Native attachment starts with the chat rather than a project picker.
 
 No production messages, prompts, repository paths, host addresses, session IDs
-or tokens are included in this report. The screenshot `chat.png` is the actual
+or tokens are included in this report. The screenshot `vscode-existing-agents/chat.png` is the actual
 webview with deterministic fixture data. Existing live agents were inspected
 read-only; no inference was performed to test the patch.

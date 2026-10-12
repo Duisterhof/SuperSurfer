@@ -2,7 +2,7 @@
 
 - Read-only diagnosis found service agents excluded by the native-only attachment
   flow; the connected native host's chats worked in an unregistered folder.
-  [Redacted diagnostic](tests/reports/vscode-existing-agents/diagnostic.md).
+  [Redacted diagnostic](tests/reports/vscode-existing-agents.md).
 - All 54 enabled Node tests pass (five optional SSH checks skipped), including
   extension startup without an Agent Host, opening the original scope, folder
   registration/reuse, blank chat creation without inference, same-owner steering,
