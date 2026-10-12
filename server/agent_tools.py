@@ -57,7 +57,7 @@ TOOL = {
 }
 HANDOFF_TOOL = {
     "name": "handoff_experiment",
-    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing experiment in this project. Supply agent_scope to target a specific worker conversation, including one returned by create_experiment_agent; otherwise use the selected owned worker. These workers have prepare_run and queue_run. Preserve the user's actual preparation or explicit queue/run request in task. A handoff itself does not release a run. Busy workers and retired native sessions are rejected. At most three distinct experiment handoffs per user turn; no unsolicited ideas or recurring reviews.",
+    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing experiment in this project. Supply agent_scope to target a specific worker conversation, including one returned by create_experiment_agent; otherwise use the selected owned worker. These workers have prepare_run and queue_run. Preserve the user's actual preparation or explicit queue/run request in task. A handoff itself does not release a run. Busy workers and retired native sessions are rejected. No per-turn cap on distinct experiments; duplicate handoffs in the same turn are rejected. No unsolicited ideas or recurring reviews.",
     "inputSchema": {
         "type": "object", "additionalProperties": False,
         "properties": {
@@ -175,7 +175,7 @@ MANAGER_QUEUE_TOOL = {
 }
 MANAGER_HANDOFF_TOOL = {
     **HANDOFF_TOOL,
-    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing registered experiment. Supply experiment_id and task, optionally agent_scope returned by create_experiment_agent to target a specific worker. Default dispatch uses the selected owned worker, which has prepare_run/queue_run; retired native sessions cannot receive work. Preserve the user's actual preparation or explicit queue/run authorization. Busy workers are rejected; at most three distinct experiment handoffs per user turn. The handoff itself does not release a run. No unsolicited ideas or recurring reviews.",
+    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing registered experiment. Supply experiment_id and task, optionally agent_scope returned by create_experiment_agent to target a specific worker. Default dispatch uses the selected owned worker, which has prepare_run/queue_run; retired native sessions cannot receive work. Preserve the user's actual preparation or explicit queue/run authorization. Busy workers and duplicate handoffs in the same turn are rejected; distinct experiments have no per-turn handoff cap. The handoff itself does not release a run. No unsolicited ideas or recurring reviews.",
 }
 MANAGER_CREATE_AGENT_TOOL = {
     **CREATE_AGENT_TOOL,

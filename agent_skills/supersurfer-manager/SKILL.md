@@ -81,8 +81,9 @@ or another copy of the shared source/data. See the task-scope reference below.
 
 `create_experiment_agent` is for distinct requested work in an existing experiment.
 `handoff_experiment` uses an explicit idle `agent_scope` or the selected worker;
-omitting scope keeps the experiment-wide busy guard. At most three worker
-creations and three distinct experiment handoffs are allowed per user turn.
+omitting scope keeps the experiment-wide busy guard. Distinct experiment handoffs
+have no per-turn cap; duplicate dispatches in the same turn remain blocked.
+The separate limit of three new worker conversations per turn still applies.
 Preserve the worker's preferences and the user's actual preparation/launch intent.
 Never dispatch and queue the same work concurrently or replace a stopped owner.
 

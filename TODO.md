@@ -7,6 +7,9 @@
 - [ ] Native standalone remote chats inside ordinary VS Code editor tabs (currently an upstream view limitation).
 - [ ] Validate authenticated Codex inference, other providers, Cursor and a real Tulip installation before general release.
 - [ ] OS startup/reboot recovery, host-instance migration and packaged companion lifecycle upgrades.
+# Handoff cap removal
+
+- [x] Allow more than three distinct experiment handoffs per user turn; retain duplicate/busy/scope guards.
 
 # Completed in 0.1.43 — agent workflow control
 

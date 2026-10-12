@@ -52,6 +52,14 @@ OS-reboot recovery or Tulip deployment is claimed. AHP 0.10 is offered during
 negotiation but only 0.9 received the complete workflow test. Native chat-opening
 commands are version-specific and the remote Agents-window route needs an
 end-to-end authenticated acceptance test before promotion from draft.
+# Remove the three-handoff cap — October 12, 2026
+
+Manager and project-lead fixtures reproduce the former fourth-handoff rejection.
+Both now dispatch four distinct experiments in one user turn, preserve worker
+preferences/ownership and reject duplicate, busy, foreign or scheduled dispatches.
+After a new user turn, an idle worker can receive another assignment. No fixture
+run launch occurs. Agent instructions, tool descriptions and shipped lead/manager
+skills agree with the new behavior; worker-creation limits remain separate.
 
 # SuperSurfer 0.1.43 release
 
