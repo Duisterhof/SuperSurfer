@@ -42,6 +42,18 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 ## Install
 
+**Terminal preview:** inside your workspace host's Bash or Zsh shell, run:
+
+```bash
+source <(curl -fsSL https://raw.githubusercontent.com/Duisterhof/SuperSurfer/feat/tmux-terminal/install.sh)
+```
+
+Then run **`surfer`**. It uses standard Python 3.10+ and tmux; no pip or conda
+environment is needed. It connects to an existing workspace. Rerun the command
+to update. [Terminal guide](docs/terminal.md).
+
+**Desktop app:**
+
 1. [Download the latest release](https://github.com/Duisterhof/SuperSurfer/releases/latest) for **macOS** (Apple Silicon or Intel) or **Linux x64**.
 2. Extract it. On Mac, move **SuperSurfer.app** to Applications. On Linux, run **SuperSurfer-linux-x64/SuperSurfer**.
 3. Open the app and choose **This machine** or connect to a **remote machine over SSH**. The workspace host needs **Python 3.11+, Git and one AI provider’s CLI**.

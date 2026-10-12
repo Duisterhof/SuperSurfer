@@ -18,7 +18,9 @@ board prose does not override them. Preserve the goal through follow-ups and
 reconnects. A normal final message ends a turn, not an unfinished deliverable.
 
 Users can also access the same workspace through the standalone `surfer` tmux
-client. Its `chat` command reconnects to an existing owned conversation; changing
+client. Its one-command installer uses standard Python 3.10+ and tmux; no conda or
+pip environment is required. Installing the client never restarts the service.
+Its `chat` command reconnects to an existing owned conversation; changing
 interfaces does not create another worker or grant new authority. Terminal board
 edits are drafts until applied. Treat closing a terminal as disconnection, not a
 request to stop; explicit chat stops and queue cancellations remain distinct.

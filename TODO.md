@@ -1,5 +1,6 @@
 # Terminal client (unreleased)
 
+- [x] One-command user-local installation, direct `surfer` command and stock Python 3.10 support.
 - [x] Standalone tmux client with Jobs, Workflow and Agent dashboard screens.
 - [x] Coloured Surfboard flowchart, mouse/keyboard block editing, add/connect/remove and review/apply.
 - [x] Persistent workflow-agent chat alongside the graph, live draft updates and inline follow-ups.

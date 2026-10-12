@@ -1,12 +1,27 @@
 # SuperSurfer in tmux
 
-Run the executable `surfer` from this checkout. It is one Python file, requires
-Python 3.11+ and standard tmux, and connects to an **already running** SuperSurfer
-workspace. It does not start, upgrade or restart the workspace service.
+Install from a Bash or Zsh shell **on the workspace host**, such as Tulip:
+
+```bash
+source <(curl -fsSL https://raw.githubusercontent.com/Duisterhof/SuperSurfer/feat/tmux-terminal/install.sh)
+```
+
+Then run:
 
 ```sh
-./surfer
+surfer
 ```
+
+This preview installer uses the terminal feature branch. Rerun the same command
+to update. It uses ordinary **Python 3.10+**, its standard-library curses module,
+and **tmux**. No conda, pip packages, virtual environment, desktop app or Node.js
+is required. Existing alternative Python installations are only fallbacks when
+the default Python is too old. The installer reports missing prerequisites.
+
+The command installs under `~/.local/`, configures your shell path, and makes
+`surfer` available immediately. Downloads are pinned to a client revision and
+verified before replacement. The client connects to your **already running**
+SuperSurfer workspace; installing it does not start or restart the service.
 
 The default screen has three clearly labelled views. Press **1 Jobs**, **2 Workflow**,
 or **3 Agent**. A separate tmux Shell window is available with `Ctrl-b 2`.
@@ -73,7 +88,7 @@ reviewed one-time approvals, `g` chooses a named conversation, and `s` stops a t
 with confirmation. PgUp/PgDn scroll history. Closing or detaching never stops work.
 
 The client uses standard Python curses (normally included on Mac/Linux), Python
-3.11+ and tmux. It is still a single executable file with no pip dependencies.
+3.10+ and tmux. It is still a single executable file with no pip dependencies.
 `surfer dashboard` opens the interface without tmux. The previous short commands
 remain available through `surfer shell` or ordinary one-shot commands below.
 
@@ -86,23 +101,16 @@ and its adjacent `token`, falling back to `~/.supersurfer`. For a custom workspa
 ./surfer --state-dir /path/to/existing/workspace/state
 ```
 
-Install the standalone file somewhere on your PATH if desired:
+For development, run `./surfer` from a checkout, or install offline with:
 
 ```sh
-mkdir -p ~/.local/bin
-install -m 755 surfer ~/.local/bin/surfer
+SURFER_SOURCE_DIR="$PWD" source ./install.sh
 ```
 
-For Tulip or another Linux workspace, copy that same file there and run it **on
-the workspace host**. No desktop application or JavaScript dependencies are needed:
-
-```sh
-ssh tulip 'mkdir -p ~/.local/bin'
-scp surfer tulip:.local/bin/surfer
-ssh -t tulip '~/.local/bin/surfer'
-```
-
-The remote host must have Python 3.11+, tmux, and the existing workspace service.
+The offline source must match the installer's pinned client revision. A launcher
+under `~/.local/bin/` remembers the compatible Python it found. Client and license
+files live under `~/.local/share/supersurfer-terminal/`; no Python environment is
+created. `SURFER_PYTHON=/path/to/python` can explicitly select an interpreter.
 Provider login stays with the official CLI on that host. Reconnecting from another
 terminal uses the same tmux session and persistent agents.
 

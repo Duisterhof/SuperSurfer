@@ -1,3 +1,19 @@
+# Terminal installer — October 12, 2026 (unreleased)
+
+Seven installer tests pass in disposable homes, covering direct command access in
+the installing shell, Bash/Zsh startup configuration, quoted/space-containing
+paths, standard Python preference, optional existing interpreter discovery,
+repeat installation, corrupt-download preservation and unrelated-command protection.
+The pinned client imports successfully under Tulip's stock Python 3.10.12 with
+standard-library curses. A dedicated Python 3.10 CI job runs the terminal and
+installer tests. No provider inference or live workspace changes are used.
+
+All 34 focused terminal/installer checks pass. The ordinary Python suite ran 782
+tests: 741 passed, 34 skipped, and the same seven previously verified Mac system-rsync
+failures. Node tests pass 37 with five optional SSH skips. Capability skills and
+whitespace checks pass. The Mac package is rebuilt with isolated native launch checks;
+final cross-platform checks run on the PR.
+
 # Terminal dashboard and flowchart — October 11, 2026 (unreleased)
 
 The default terminal now opens Jobs, Workflow and Agent screens. Visual inspection

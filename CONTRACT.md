@@ -1,5 +1,13 @@
 # Terminal client (unreleased)
 
+The sourced Bash/Zsh installer makes `surfer` available immediately and in future
+shells through a user-local launcher and an idempotent PATH entry. It prefers
+ordinary Python 3.10+ with standard-library curses, checks tmux, downloads the
+client and license from one pinned revision and verifies their hashes before
+replacement. Existing alternative interpreters are optional fallbacks. It installs
+no Python packages or environment, leaves unrelated commands untouched, and never
+starts or changes the workspace service. Rerunning the installer updates the client.
+
 The default terminal interface is a keyboard/mouse dashboard with Jobs, Workflow
 and Agent views. Job selection uses stable IDs internally while displaying names.
 The workflow is a coloured, labelled flowchart whose main view hides supporting
