@@ -44,6 +44,11 @@ class TerminalInstallTests(unittest.TestCase):
         self.assertFalse((self.home / '.local/share/supersurfer/state').exists())
         self.assertIn('SuperSurfer terminal PATH', (self.home / '.bashrc').read_text())
         self.assertIn('SuperSurfer terminal PATH', (self.home / '.profile').read_text())
+        for folder in ('.agents','.claude','.cursor'):
+            skill=(self.home/folder/'skills/supersurfer/SKILL.md').read_text()
+            self.assertIn('workflow send',skill)
+            self.assertNotIn('@SURFER_COMMAND@',skill)
+            self.assertIn(str(self.home).split("'")[0],skill)
 
     def test_existing_miniforge_is_found_when_system_python_is_too_old(self):
         self.env.pop('SURFER_PYTHON')

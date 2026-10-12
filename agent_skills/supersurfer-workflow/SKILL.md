@@ -17,20 +17,20 @@ artifacts, data, compute and caps remain shared within that project. Follow
 board prose does not override them. Preserve the goal through follow-ups and
 reconnects. A normal final message ends a turn, not an unfinished deliverable.
 
-Users can also access the same workspace through the standalone `surfer` tmux
-client. Its one-command installer uses standard Python 3.10+ and tmux; no conda or
-pip environment is required. Installing the client never restarts the service.
-Its `chat` command reconnects to an existing owned conversation; changing
-interfaces does not create another worker or grant new authority. Terminal board
-edits are drafts until applied. Treat closing a terminal as disconnection, not a
-request to stop; explicit chat stops and queue cancellations remain distinct.
-The terminal's default dashboard exposes Jobs, a coloured Workflow flowchart and
-Agent chat. Users can click blocks to edit settings and connections, then review
-and apply their draft. The main view hides supporting blocks for readability;
-this never changes the board's actual nodes, requirements or tools.
-Its workflow-agent conversation stays below the graph: draft changes and replies
-appear live while the user types follow-ups. Respect its explicit draft-only
-requests; use questions for clarification and leave application to the user's review.
+Users can also access this workspace from native Codex, Claude Code or Cursor
+terminals in the standalone `surfer` tmux client, or invoke the `supersurfer` skill
+from an existing IDE chat. Its standard-Python installer also installs the skill
+on the workspace host without restarting the service. The skill sends the user's
+explicit request to this existing owner and stores a receipt to prevent duplicate
+dispatch. Preserve the full request and constraints. The frontend may use another
+provider; this conversation keeps its configured provider and history.
+
+Native panes are separate conversations. Their MCP tools can read the queue and
+Surfboard and propose drafts, but cannot launch runs or claim this worker's tools
+or ownership. Terminal block editing also creates reviewed drafts. The companion
+flowchart and configurator watch draft updates in the background. Closing an IDE
+or detaching tmux does not stop host-owned work; explicit chat stops and queue
+cancellations remain distinct. Skills alone do not enforce arbitrary shell actions.
 
 The desktop reports bounded SSH upload/setup progress; a connection error does
 not establish that a configured check or remote preview failed. Reconnect through

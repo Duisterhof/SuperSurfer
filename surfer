@@ -17,7 +17,9 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import time
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -135,7 +137,60 @@ class Client:
         return self.request('action', {'op': op, 'params': params})
 
 
+class ReadCache:
+    """Bounded background reads. Only the curses thread ever updates UI state."""
+    def __init__(self, client):
+        self.client, self.entries = client, {}
+        self.lock, self.workers, self.revision = threading.Lock(), 0, 0
+        self.errors = []
+
+    def get(self, path, **query):
+        key = (path, tuple(sorted(query.items())))
+        with self.lock:
+            entry = self.entries.setdefault(key, {'value': None, 'due': 0, 'busy': False, 'error': '', 'generation': 0})
+            if not entry['busy'] and time.monotonic() >= entry['due'] and self.workers < 4:
+                entry['busy'] = True
+                self.workers += 1
+                threading.Thread(target=self.fetch, args=(key, entry, entry['generation'], path, query), daemon=True).start()
+            if entry['error']:
+                self.errors.append(path + ': ' + entry['error'])
+            return entry['value']
+
+    def publish(self, path, value, **query):
+        key = (path, tuple(sorted(query.items())))
+        with self.lock:
+            entry = self.entries.setdefault(key, {'busy': False, 'generation': 0})
+            entry.update(value=value, error='', due=time.monotonic()+1, generation=entry['generation']+1)
+            self.revision += 1
+
+    def fetch(self, key, entry, generation, path, query):
+        try:
+            value, error = self.client.get(path, **query), ''
+        except (Error, OSError, ValueError) as exc:
+            value, error = None, str(exc)
+        with self.lock:
+            if generation == entry['generation']:
+                if value is not None:
+                    entry['value'] = value
+                entry.update(error=error, due=time.monotonic() + (10 if error else 1 if path == 'chat' else 2 if path == 'surfboard' else 3))
+            entry['busy'] = False
+            self.workers -= 1
+            self.revision += 1
+            # Context switching must not accumulate unbounded cached histories.
+            for old in list(self.entries):
+                if len(self.entries) <= 32:
+                    break
+                if old != key and not self.entries[old]['busy']:
+                    del self.entries[old]
+
+
 HELP = '''dashboard                     Open Jobs, Workflow and Agent screens
+chat [codex|claude|cursor]     Open the actual provider terminal
+split [codex|claude|cursor]    Add an agent beside this pane
+split below [PROVIDER]        Add an agent below this pane
+zoom / tile                   Focus this pane / arrange every pane
+skill install                 Install $supersurfer for Codex, Claude and Cursor
+workflow --help               JSON commands used by the skill for host-owned work
 queue                         Show GPUs and queued/running jobs
 up RUN / down RUN             Move a queued job one place
 hold RUN / ready RUN [PR]     Hold or release through normal source/PR gates
@@ -149,12 +204,13 @@ board ask "CHANGE"            Ask the persistent configurator to draft a change
 board set NODE FIELD VALUE    Change one node's config in a draft
 board apply / board discard   Review and apply/discard the current draft
 board load FILE               Recover an edit with its original versions
-agents / chat [SCOPE]          Open a persistent conversation
+agents / chat SCOPE            Open an existing service-owned conversation
 backend [codex|cursor|claude]  Inspect/select the chosen conversation's provider
 help / exit                   Show help / leave the command prompt
 
 IDs accept unambiguous prefixes. Queue controls only edit existing runs.
-tmux: Ctrl-b d detaches; Ctrl-b 1/2 selects SuperSurfer/Shell.
+tmux: F2 split beside, F3 split below, F4 zoom, F6 arrange, F7 pane picker.
+Ctrl-b 1 workspace, Ctrl-b 2 shell, Ctrl-b 3 agents; Ctrl-b d detaches.
 The workspace service, agents and GPU jobs outlive this terminal.'''
 
 
@@ -296,6 +352,7 @@ class App:
             raise Error(f'{exc}\nYour edit is preserved in {recovery}. Recover with board load FILE; stale versions are never overwritten.') from exc
         say('Draft saved. Use board apply to activate it.')
         self.show_board(result, envelope)
+        return result
 
     def board(self, args):
         target, state = self.board_state()
@@ -491,7 +548,15 @@ class App:
         elif command == 'agents' and not args:
             self.agents()
         elif command == 'chat' and len(args) <= 1:
-            self.chat(args[0] if args else None)
+            if not args or args[0] in PROVIDERS:
+                native_launcher(self, args[0] if args else None)
+            else:
+                self.chat(args[0])
+        elif command == 'split':
+            split_pane(self, args)
+        elif command in {'zoom', 'tile'} and not args:
+            if not os.environ.get('TMUX'): raise Error('Open surfer first to arrange its panes.')
+            subprocess.run(['tmux', *(['resize-pane', '-Z'] if command == 'zoom' else ['select-layout', 'tiled'])], check=True)
         elif command == 'backend' and len(args) <= 1:
             scope = self.default_scope()
             if args:
@@ -666,6 +731,347 @@ def graph_route(source, target, rectangles, width, height):
     return [], ''
 
 
+PROVIDERS = {'codex': 'Codex', 'claude': 'Claude Code', 'cursor': 'Cursor'}
+NATIVE_INSTRUCTIONS = '''You are in a native provider terminal inside SuperSurfer.
+Use the SuperSurfer MCP tools to read the GPU queue and the selected Surfboard.
+Read the Surfboard before working and respect its requirements. Workflow edits
+must use propose_surfboard with the versions you read; they remain drafts for the
+user to review and apply. Never claim a draft is active or that a run has started.
+This terminal is a separate conversation, not an existing SuperSurfer worker.
+It does not have worker ownership, scheduler launch tools, workflow action
+receipts or automatic wakeups. Do not take over service-owned conversations or
+bypass the scheduler with direct GPU launches. Use the existing workspace agent
+for managed experiment execution. Preserve concurrent edits and running jobs.
+'''
+
+
+def client_command(app, *tail):
+    command = [sys.executable, '-I', str(Path(__file__).resolve()), '--state-dir', str(app.client.state_dir), '--home', str(app.home.resolve())]
+    if app.client.url_override:
+        command += ['--url', app.client.url_override]
+    return command + list(tail)
+
+
+def provider_binary(provider):
+    names = ['agent', 'cursor-agent'] if provider == 'cursor' else [provider]
+    for name in names:
+        found = shutil.which(name)
+        if found:
+            return found
+        for directory in (Path.home() / '.local/bin', Path.home() / '.npm-global/bin'):
+            candidate = directory / name
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+    raise Error(f'{PROVIDERS[provider]} CLI is not on PATH. Install and sign in to that provider on this host first.')
+
+
+def native_record(app, identity):
+    if not re.fullmatch('[a-f0-9]{32}', identity):
+        raise Error('Invalid native pane ID.')
+    return app.home / 'native' / identity
+
+
+def create_native_context(app):
+    if app.client.url_override:
+        raise Error('Native agents must run on the workspace host. SSH there and run surfer; forwarded dashboard connections remain supported.')
+    session = app.client.get('session')
+    if Path(session.get('state_dir', '')).resolve() != app.client.state_dir:
+        raise Error('The service does not own the selected local workspace.')
+    state, selected = app.state(), app.preferences()
+    projects = state.get('projects', [])
+    project = next((p for p in projects if p['id'] == selected.get('project_id')), None)
+    if project is None:
+        if len(projects) == 1:
+            project = projects[0]
+        else:
+            say('Choose a project for this agent:')
+            for i, item in enumerate(projects): say(f"  {i+1}  {item['name']}")
+            answer = input('Project number (blank cancels): ').strip()
+            if not answer: return None
+            if not answer.isdigit() or not 1 <= int(answer) <= len(projects):
+                raise Error('Choose one of the listed project numbers.')
+            project = projects[int(answer)-1]
+    cwd = Path(project['repo']).expanduser().resolve()
+    if not cwd.is_dir():
+        raise Error('This project repository is unavailable on this host.')
+    target = {'project_id': project['id']}
+    task = next((e for e in state.get('experiments', []) if e['id'] == selected.get('experiment_id') and e['project_id'] == project['id']), None)
+    if task: target['experiment_id'] = task['id']
+    identity = uuid.uuid4().hex
+    directory = native_record(app, identity)
+    write_json(directory / 'context.json', {'target': target, 'cwd': str(cwd), 'name': (task or project)['name']})
+    mcp_command = client_command(app, '_mcp', identity)
+    write_json(directory / 'mcp.json', {'mcpServers': {'supersurfer-terminal': {'command': mcp_command[0], 'args': mcp_command[1:]}}})
+    # Cursor's per-invocation plugin avoids editing project/global MCP settings.
+    write_json(directory / '.cursor-plugin/plugin.json', {'name': 'supersurfer-terminal', 'description': 'Queue visibility and reviewed Surfboard drafts', 'mcpServers': './mcp.json'})
+    return identity
+
+
+def native_command(app, identity, provider, resume=False):
+    if provider not in PROVIDERS:
+        raise Error('Choose codex, claude or cursor.')
+    binary = provider_binary(provider)
+    directory = native_record(app, identity)
+    config = read_json(directory / 'mcp.json')['mcpServers']['supersurfer-terminal']
+    if provider == 'codex':
+        # JSON strings/arrays are valid TOML values. No credential is an argv.
+        args = [binary] + (['resume'] if resume else [])
+        for key in ('command', 'args'):
+            args += ['-c', 'mcp_servers.supersurfer-terminal.' + key + '=' + json.dumps(config[key])]
+        args += ['-c', 'mcp_servers.supersurfer-terminal.required=true']
+    elif provider == 'claude':
+        args = [binary, '--mcp-config', str(directory / 'mcp.json')]
+        if resume: args.append('--resume')
+    else:
+        args = [binary, '--plugin-dir', str(directory)]
+        if resume: args.append('--resume')
+    return args
+
+
+def native_launcher(app, provider=None):
+    """The child inherits the real PTY. No transcript copying or render loop."""
+    if not sys.stdin.isatty():
+        raise Error('A native agent needs an interactive terminal.')
+    identity = None
+    while True:
+        resume = False
+        if provider is None:
+            say('\nSuperSurfer · Native agent\n')
+            say('  1  Codex      2  Claude Code      3  Cursor')
+            say('  r  Resume a saved provider chat     q  Close this launcher')
+            say('\nF2 Split beside  F3 Split below  F4 Zoom  F6 Arrange  F7 Choose pane')
+            say('Ctrl-b 1 Workspace  Ctrl-b 2 Shell  Ctrl-b d Detach (keeps agents running)')
+            say('\nNew native chats are separate from existing workspace agents.')
+            answer = input('\nChoose provider [1]: ').strip().lower() or '1'
+            if answer == 'q': return
+            if answer == 'r':
+                resume = True
+                answer = input('Resume with 1 Codex, 2 Claude Code, 3 Cursor [1]: ').strip() or '1'
+            provider = {'1': 'codex', '2': 'claude', '3': 'cursor'}.get(answer, answer)
+        try:
+            if provider not in PROVIDERS: raise Error('Choose 1, 2 or 3.')
+            provider_binary(provider)  # Fail before creating any context files.
+            if identity is None:
+                say('Connecting this pane to your selected project…')
+                identity = create_native_context(app)
+                if identity is None: return
+            context = read_json(native_record(app, identity) / 'context.json')
+            command = native_command(app, identity, provider, resume)
+            if os.environ.get('TMUX'):
+                subprocess.run(['tmux', 'select-pane', '-t', os.environ.get('TMUX_PANE', ''), '-T', PROVIDERS[provider] + ' · ' + clean(context['name']).replace('#', '')], capture_output=True)
+            say('Opening ' + PROVIDERS[provider] + ' in ' + context['cwd'])
+            result = subprocess.run(command, cwd=context['cwd'])
+            say(f'\n{PROVIDERS[provider]} exited ({result.returncode}). Saved chats remain in the provider. Choose r to resume.')
+        except (Error, OSError, ValueError) as exc:
+            say('Error: ' + str(exc))
+        except KeyboardInterrupt:
+            say('\nReturned to the launcher.')
+        provider = None
+
+
+def native_tools():
+    empty = {'type': 'object', 'properties': {}, 'additionalProperties': False}
+    return [
+        {'name': 'read_queue', 'description': 'Read current workspace GPU jobs and queue. Does not launch or release work.', 'inputSchema': empty},
+        {'name': 'read_surfboard', 'description': 'Read this pane’s fixed project/task Surfboard, compiled requirements, and exact draft versions. Read before work or edits.', 'inputSchema': empty},
+        {'name': 'propose_surfboard', 'description': 'Save a workflow DRAFT for human review. Copy exact versions from read_surfboard and preserve unrelated fields. Never applies or launches.',
+         'inputSchema': {'type': 'object', 'properties': {'board': {'type': 'object'}, 'expected_version': {'type': 'integer'}, 'expected_draft_version': {'type': 'integer'}},
+                         'required': ['board', 'expected_version', 'expected_draft_version'], 'additionalProperties': False}},
+    ]
+
+
+def native_tool_call(app, identity, name, arguments):
+    context = read_json(native_record(app, identity) / 'context.json')
+    if not isinstance(arguments, dict): raise Error('Arguments must be an object.')
+    if name == 'read_queue' and not arguments:
+        state = app.state()
+        return {key: state.get(key) for key in ('queue', 'runs', 'hosts', 'projects', 'connected', 'manager_connected', 'updated_at', 'error')}
+    if name == 'read_surfboard' and not arguments:
+        state = app.client.get('surfboard', **context['target'])
+        return {**state, 'edit': app.envelope(context['target'], state), 'instructions': NATIVE_INSTRUCTIONS}
+    if name == 'propose_surfboard' and set(arguments) == {'board', 'expected_version', 'expected_draft_version'}:
+        if not isinstance(arguments['board'], dict) or any(type(arguments[k]) is not int or arguments[k] < 0 for k in ('expected_version', 'expected_draft_version')):
+            raise Error('Supply a board object and the exact nonnegative integer versions you read.')
+        envelope = {**context['target'], **arguments}
+        recovery = native_record(app, identity) / ('draft-' + str(time.time_ns()) + '.json')
+        write_json(recovery, envelope)
+        try:
+            return app.client.action('surfboard.draft', **envelope)
+        except Error as exc:
+            raise Error(str(exc) + ' Your draft is retained at ' + str(recovery) + '. Reread before reconciling; do not blindly retry.') from exc
+    raise Error('This terminal MCP only reads the queue/Surfboard and proposes drafts. Applying, launching and worker actions belong to the workspace.')
+
+
+def native_mcp(app, identity):
+    native_record(app, identity)  # Reject malformed IDs before reading stdin.
+    for raw in iter(lambda: sys.stdin.buffer.readline(2 * 1024 * 1024 + 1), b''):
+        request = None
+        try:
+            if len(raw) > 2 * 1024 * 1024:
+                raise ValueError('Request exceeds 2 MiB.')
+            request = json.loads(raw)
+            if not isinstance(request, dict) or request.get('jsonrpc') != '2.0': raise ValueError('Invalid JSON-RPC request.')
+            if 'id' not in request: continue
+            params = request.get('params') or {}
+            if not isinstance(params, dict): raise ValueError('Invalid parameters.')
+            method = request.get('method')
+            response = {'jsonrpc': '2.0', 'id': request['id']}
+            if method == 'initialize':
+                response['result'] = {'protocolVersion': params.get('protocolVersion', '2024-11-05'), 'capabilities': {'tools': {}},
+                                      'serverInfo': {'name': 'supersurfer-terminal', 'version': '1'}, 'instructions': NATIVE_INSTRUCTIONS}
+            elif method == 'ping': response['result'] = {}
+            elif method == 'tools/list': response['result'] = {'tools': native_tools()}
+            elif method == 'tools/call':
+                try:
+                    result = native_tool_call(app, identity, params.get('name'), params.get('arguments', {}))
+                    response['result'] = {'content': [{'type': 'text', 'text': json.dumps(result)}], 'isError': False}
+                except (Error, OSError, ValueError) as exc:
+                    response['result'] = {'content': [{'type': 'text', 'text': str(exc)}], 'isError': True}
+            else: response['error'] = {'code': -32601, 'message': 'Method not found'}
+        except (ValueError, TypeError) as exc:
+            response = {'jsonrpc': '2.0', 'id': request.get('id') if isinstance(request, dict) else None, 'error': {'code': -32600, 'message': str(exc)}}
+        print(json.dumps(response), flush=True)
+        if len(raw) > 2 * 1024 * 1024: return
+
+
+def split_pane(app, args):
+    if not os.environ.get('TMUX'):
+        raise Error('Run surfer first, then use F2/F3 to split, or surfer split in its Shell window.')
+    below = bool(args and args[0] == 'below')
+    if below: args = args[1:]
+    if len(args) > 1 or (args and args[0] not in PROVIDERS):
+        raise Error('Usage: surfer split [below] [codex|claude|cursor]')
+    target = ['-t', os.environ['TMUX_PANE']] if os.environ.get('TMUX_PANE') else []
+    result = subprocess.run(['tmux', 'split-window', *target, '-v' if below else '-h', shlex.join(client_command(app, '_native', *args))], text=True, capture_output=True)
+    if result.returncode: raise Error(result.stderr.strip())
+
+
+def workflow_target(app, project_ref=None, task_ref=None):
+    state = app.state()
+    projects = state.get('projects', [])
+    if project_ref:
+        project = choose(projects, project_ref, 'Project', ('id', 'name', 'repo'))
+    else:
+        cwd = Path.cwd().resolve()
+        matches = [p for p in projects if cwd.is_relative_to(Path(p['repo']).expanduser().resolve())]
+        if not matches:
+            raise Error('This directory is not a registered project. Use workflow list, then --project ID explicitly.')
+        project = max(matches, key=lambda p: len(Path(p['repo']).parts))
+    target = {'project_id': project['id']}
+    if task_ref:
+        task = choose([e for e in state.get('experiments', []) if e['project_id'] == project['id']], task_ref, 'Task')
+        target['experiment_id'] = task['id']
+    return target
+
+
+def workflow_scope(app, target, configure=False):
+    if configure:
+        return 'surfboard:experiment:' + target['experiment_id'] if target.get('experiment_id') else 'surfboard:' + target['project_id']
+    if target.get('experiment_id'):
+        listing = app.client.get('experiment-agents', experiment_id=target['experiment_id'])
+        scope = listing['selected_scope']
+        agent = next((a for a in listing['agents'] if a['scope'] == scope), {})
+        if agent.get('owner') != 'supersurfer' or agent.get('archived'):
+            raise Error('Select an active SuperSurfer-owned worker for this task in the workspace. Its existing owner will not be replaced.')
+        return scope
+    return 'project:' + target['project_id']
+
+
+def persistent_send(app, target, request_id, text, configure=False):
+    """Durable single-dispatch receipt; ambiguous HTTP delivery is never replayed."""
+    import fcntl
+    if not isinstance(request_id, str) or not re.fullmatch('[a-zA-Z0-9_-]{16,100}', request_id):
+        raise Error('Use a stable request_id of 16–100 letters, digits, underscores or hyphens; reuse it after a connection failure.')
+    if not isinstance(text, str) or not text.strip() or len(text) > 90000:
+        raise Error('Supply a nonempty request of at most 90,000 characters.')
+    if configure and len(text) > 19900:
+        raise Error('Keep a workflow change below 19,900 characters.')
+    directory = app.home / 'requests'
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path = directory / (request_id + '.json')
+    lock_path = directory / (request_id + '.lock')
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(fd, 'w') as lock:
+        try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc: raise Error('This request is being sent. Inspect its receipt; do not send another request.') from exc
+        fingerprint = hashlib.sha256(json.dumps([target, text, configure], sort_keys=True).encode()).hexdigest()
+        if path.exists():
+            receipt = read_json(path)
+            if receipt['fingerprint'] != fingerprint: raise Error('This request_id already belongs to a different request.')
+            return receipt
+        scope = workflow_scope(app, target, configure)
+        chat = app.client.get('chat', scope=scope, limit=20)
+        if chat.get('busy'): raise Error('The host agent is already working. Inspect workflow status or stop it explicitly before sending more work.')
+        receipt = {'request_id': request_id, 'fingerprint': fingerprint, 'target': target, 'scope': scope,
+                   'status': 'uncertain', 'created': time.time(), 'note': 'Dispatch may have occurred. Inspect the same agent; this request will not be automatically resent.'}
+        write_json(path, receipt)
+        try:
+            if configure:
+                state = app.client.get('surfboard', **target)
+                result = app.client.action('surfboard.ask', **app.envelope(target, state), text='Draft only; do not apply. ' + text)
+            else:
+                result = app.client.action('chat.send', scope=scope, text=text)
+        except Error as exc:
+            receipt['error'] = str(exc)
+            write_json(path, receipt)
+            return receipt
+        receipt.update(status='rejected' if result.get('accepted') is False else 'accepted',
+                       note=result.get('error') if result.get('accepted') is False else 'The existing workspace agent owns this work and continues when this client disconnects.', result=result)
+        write_json(path, receipt)
+        return receipt
+
+
+def workflow_command(app, args):
+    parser = argparse.ArgumentParser(prog='surfer workflow', description='JSON interface for the SuperSurfer skill. Requests use the existing host-owned agent and provider settings.')
+    parser.add_argument('operation', choices=['list', 'status', 'board', 'send', 'configure', 'receipt', 'stop', 'answer'])
+    parser.add_argument('--project', help='Registered project ID, name or exact repository path; otherwise resolve from cwd')
+    parser.add_argument('--task', help='Existing task ID or name')
+    parser.add_argument('--request-id', help='Stable ID required for send/configure; reused on uncertain delivery')
+    parser.add_argument('--question', help='Pending question ID for answer; JSON answers arrive on stdin')
+    parser.add_argument('--configurator', action='store_true', help='Read/stop/answer the workflow configurator instead of the worker')
+    options = parser.parse_args(args)
+    if options.operation == 'list':
+        state = app.state()
+        result = {k: state.get(k, []) for k in ('projects', 'experiments')}
+    elif options.operation == 'receipt' or (options.operation == 'status' and options.request_id):
+        if not options.request_id or not re.fullmatch('[a-zA-Z0-9_-]{16,100}', options.request_id): raise Error('Supply a valid --request-id.')
+        receipt = read_json(app.home / 'requests' / (options.request_id + '.json'))
+        result = receipt if options.operation == 'receipt' else {'receipt': receipt, 'chat': app.client.get('chat', scope=receipt['scope'], limit=40)}
+    else:
+        target = workflow_target(app, options.project, options.task)
+        if options.operation == 'board': result = app.client.get('surfboard', **target)
+        elif options.operation in {'send', 'configure'}:
+            if sys.stdin.isatty(): raise Error('Pass the exact user-authorized request on stdin, preferably from a saved text file.')
+            result = persistent_send(app, target, options.request_id, sys.stdin.read(90001), options.operation == 'configure')
+        else:
+            scope = workflow_scope(app, target, options.configurator)
+            if options.operation == 'status': result = {'target': target, 'scope': scope, 'chat': app.client.get('chat', scope=scope, limit=40)}
+            elif options.operation == 'stop': result = app.client.action('chat.stop', scope=scope)
+            else:
+                if not options.question or sys.stdin.isatty(): raise Error('Supply --question ID and JSON answers on stdin.')
+                answers = json.loads(sys.stdin.read(100001))
+                result = app.client.action('chat.answer', scope=scope, question_id=options.question, answers=answers)
+    print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
+
+
+def install_skill():
+    script = Path(__file__).resolve()
+    source = script.parent / 'integrations/supersurfer/SKILL.md'
+    if not source.exists(): source = script.parent / 'SKILL.md'
+    content = source.read_text().replace('@SURFER_COMMAND@', shlex.join([sys.executable, '-I', str(script)]))
+    paths = [Path.home() / folder / 'skills/supersurfer/SKILL.md' for folder in ('.agents', '.claude', '.cursor')]
+    marker = '<!-- Managed by SuperSurfer: native client skill -->'
+    for path in paths:
+        if path.is_symlink() or (path.exists() and marker not in path.read_text()):
+            raise Error(f'{path} already contains an unrelated skill. It was left unchanged.')
+    for path in paths:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix='.skill-', dir=path.parent)
+        with os.fdopen(fd, 'w') as stream: stream.write(content)
+        os.replace(temporary, path)
+    say('Installed $supersurfer for Codex, Claude Code and Cursor on this host. Start a new chat or refresh skills to discover it.')
+
+
 class Dashboard:
     """Standard-library terminal UI; the existing service owns all real actions."""
     def __init__(self, app):
@@ -681,10 +1087,16 @@ class Dashboard:
         self.workflow_input, self.composing = '', False
         self.workflow_scroll = 0
         self.changed_nodes = set()
+        self.reads = None
+        self.service_chat = False
+
+    def read(self, path, **query):
+        return self.reads.get(path, **query) if self.reads else self.app.client.get(path, **query)
 
     def refresh(self):
+        if self.reads: self.reads.errors = []
         selected_id = self.rows[self.index]['id'] if self.rows and self.index < len(self.rows) else None
-        self.state = self.app.state()
+        self.state = self.read('state') or self.state
         selected = self.app.preferences()
         projects = self.state.get('projects', [])
         project = next((p for p in projects if p['id'] == selected.get('project_id')), None)
@@ -697,7 +1109,7 @@ class Dashboard:
                 target['experiment_id'] = task['id']
         if target != self.target:
             self.target, self.scope = target, None
-            self.board, self.workflow_chat = {}, {}
+            self.board, self.workflow_chat, self.chat = {}, {}, {}
             self.workflow_input, self.composing = '', False
             self.changed_nodes = set()
             self.workflow_scroll = 0
@@ -710,8 +1122,8 @@ class Dashboard:
                                key=lambda r: (r['status'] == 'queued', order.get(r['id'], -1)))
         elif target and self.tab == 1:
             previous = self.current_graph() if self.board else None
-            self.board = self.app.client.get('surfboard', **target)
-            nodes = ((self.board.get('draft') or {}).get('board') or self.board['board'])['nodes']
+            self.board = self.read('surfboard', **target) or self.board
+            nodes = ((self.board.get('draft') or {}).get('board') or self.board.get('board', {})).get('nodes', [])
             if previous is not None and previous != self.current_graph():
                 old_nodes = {n['id']: n for n in previous['nodes']}
                 self.changed_nodes = {n['id'] for n in nodes if n != old_nodes.get(n['id'])}
@@ -721,19 +1133,19 @@ class Dashboard:
                     self.show_all = True
                 self.notice = 'Workflow updated. Changed blocks have a *. Review and apply when ready.'
             self.rows = [n for n in nodes if self.show_all or n['kind'] not in {'brief','document','artifacts','activity','timer'}]
-        elif target:
+        elif target and self.service_chat:
             if not self.scope:
                 if target.get('experiment_id'):
-                    listing = self.app.client.get('experiment-agents', experiment_id=target['experiment_id'])
-                    self.scope = listing['selected_scope']
+                    listing = self.read('experiment-agents', experiment_id=target['experiment_id']) or {}
+                    self.scope = listing.get('selected_scope')
                     self.scope_name = next((a.get('name') for a in listing.get('agents', []) if a['scope'] == self.scope), None) or 'Task worker'
                 else:
                     self.scope, self.scope_name = 'project:' + target['project_id'], 'Project lead'
-            self.chat = self.app.client.get('chat', scope=self.scope, limit=100)
+            if self.scope: self.chat = self.read('chat', scope=self.scope, limit=100) or self.chat
         self.index = next((i for i, row in enumerate(self.rows) if row['id'] == selected_id), min(self.index, max(0, len(self.rows) - 1)))
         if target and self.tab == 1:
-            self.workflow_chat = self.app.client.get('chat', scope=self.workflow_scope, limit=100)
-        self.error = ''
+            self.workflow_chat = self.read('chat', scope=self.workflow_scope, limit=100) or self.workflow_chat
+        self.error = '; '.join(self.reads.errors) if self.reads else ''
 
     def save_field(self, field, value):
         envelope = deepcopy(self.app.envelope(self.target, self.board))
@@ -742,8 +1154,13 @@ class Dashboard:
         recovery = self.app.home / ('board-' + str(time.time_ns()) + '.json')
         # Preserve the exact versions displayed before opening the editor.
         with redirect_stdout(io.StringIO()):
-            self.app.save_draft(envelope, recovery)
+            result = self.app.save_draft(envelope, recovery)
+        self.publish_board(result)
         self.notice = 'Change saved as a draft. Press a to review and apply.'
+
+    def publish_board(self, result):
+        self.board = {**self.board, **result}
+        if self.reads: self.reads.publish('surfboard', self.board, **self.target)
 
     def job_action(self, command, job):
         with redirect_stdout(io.StringIO()):
@@ -812,10 +1229,22 @@ class Dashboard:
             else: self.put(6,2,'Waiting for the workspace workflow. Reconnecting automatically.',c.A_DIM)
             self.render_workflow_chat()
             actions = 'Click/Enter Edit block   n Add block   l Connect   a Review & apply   f Talk to agent'
+        elif not self.service_chat:
+            self.put(6, 2, 'Actual provider terminals', c.A_BOLD | self.accent)
+            for i, line in enumerate([
+                'Enter opens Codex, Claude Code or Cursor beside this view.',
+                'Type directly in the provider terminal. Its own chat, tools,',
+                'approvals and model controls work normally.', '',
+                'F2 Split beside   F3 Split below   F4 Zoom   F6 Arrange',
+                'Click to focus or drag a border to resize. F7 lists panes.', '',
+                'Native chats can read the queue and draft this Surfboard.',
+                'Existing workspace agents remain separate: press g to open one.',
+            ]): self.put(8+i, 2, line)
+            actions = 'Enter Open native agent   g Existing workspace conversations'
         else:
             pending = any(item.get('status') == 'pending' for key in ('approvals', 'questions') for item in self.chat.get(key, []))
             status = 'Needs your response' if pending else 'Working' if self.chat.get('busy') else 'Ready for your message'
-            self.put(5, 2, self.scope_name + '  -  ' + status, c.A_BOLD)
+            self.put(5, 2, self.scope_name + '  -  ' + status + ' (service chat)', c.A_BOLD)
             backend = self.chat.get('preferences', {}).get('backend') or 'configured provider'
             self.put(6, 2, f'{backend.title()}  |  This conversation stays available when you detach.', c.A_DIM)
             lines = []
@@ -831,7 +1260,7 @@ class Dashboard:
             for i, (line, style) in enumerate(lines[max(0, end-room):end]): self.put(8+i, 2, line, style)
             if self.chat.get('error'): self.put(h-6, 2, str(self.chat['error']), c.A_BOLD)
             elif pending: self.put(h-6, 2, 'The agent is waiting for you. Press r to review and respond.', self.accent)
-            actions = 'Enter Write message   r Respond   g Choose agent   s Stop turn   PgUp/PgDn History'
+            actions = 'Enter Write   r Respond   g Choose agent   N Native terminal   s Stop'
         self.put(h-4, 2, (self.error or self.notice).split('\n')[0], c.A_BOLD if self.error else self.accent)
         self.put(h-3, 2, actions, c.A_BOLD)
         self.put(h-2, 2, '1/2/3 Switch view   c Project/task   ? Help   q Close (agents keep running)', c.A_DIM)
@@ -948,7 +1377,8 @@ class Dashboard:
         envelope=deepcopy(self.app.envelope(self.target,self.board))
         envelope['board']=board
         with redirect_stdout(io.StringIO()):
-            self.app.save_draft(envelope,self.app.home/('board-'+str(time.time_ns())+'.json'))
+            result = self.app.save_draft(envelope,self.app.home/('board-'+str(time.time_ns())+'.json'))
+        self.publish_board(result)
         self.notice=notice
 
     def current_graph(self):
@@ -1162,7 +1592,8 @@ class Dashboard:
         if not self.review('Discard draft?' if discard else 'Review workflow changes',scope+'\n\n'+changes): return
         if self.menu('Discard these changes?' if discard else 'Apply these changes?', ['Keep draft', 'Discard draft' if discard else 'Apply now']) != 1: return
         envelope=self.app.envelope(target,state)
-        self.app.client.action('surfboard.discard' if discard else 'surfboard.apply',**{k:v for k,v in envelope.items() if k!='board'})
+        result = self.app.client.action('surfboard.discard' if discard else 'surfboard.apply',**{k:v for k,v in envelope.items() if k!='board'})
+        self.publish_board(result)
         self.notice='Draft discarded.' if discard else 'Workflow applied. These settings are now active.'
 
     def change_context(self):
@@ -1185,6 +1616,15 @@ class Dashboard:
         index=self.menu('Choose a conversation',[(a.get('name') or 'Agent')+(' (read-only history)' if a.get('retired') else '') for a in agents])
         if index is not None:
             self.scope=agents[index]['scope']; self.scope_name=agents[index].get('name') or 'Agent'; self.chat_scroll=0
+            self.chat={}; self.service_chat=True
+
+    def open_native(self):
+        if os.environ.get('TMUX'):
+            split_pane(self.app, [])
+        else:
+            self.curses.def_prog_mode(); self.curses.endwin()
+            try: native_launcher(self.app)
+            finally: self.curses.reset_prog_mode(); self.screen.clear(); self.screen.refresh()
 
     def respond(self, chat=None, scope=None):
         chat=self.chat if chat is None else chat
@@ -1241,6 +1681,7 @@ class Dashboard:
         elif key==c.KEY_PPAGE and self.tab==1: self.workflow_scroll+=5
         elif key==c.KEY_NPAGE and self.tab==1: self.workflow_scroll=max(0,self.workflow_scroll-5)
         elif key=='c': self.change_context()
+        elif key=='N': self.open_native()
         elif key=='?':
             self.review('SuperSurfer help','Jobs: select a named job, then Enter for its actions. The queue covers this entire workspace.\n\nWorkflow: coloured blocks form your flowchart. Click or select a block to edit its name, settings and connections. Add a block with n; connect it with l. Review and apply with a; discard with d. The workflow agent stays below the graph. Press f or click the message field, then Enter to send. Draft changes and replies update live, including while you type. Press r for questions/approvals, s to stop its turn, or PgUp/PgDn for history. Changes remain drafts until you apply them.\n\nAgent: Enter writes a message. Respond handles questions and one-time approvals.\n\nAdvanced: press x on Workflow for JSON editing. Existing commands remain available through surfer shell.\n\nCtrl-b 2 opens a normal shell. Ctrl-b d detaches tmux. Agents and jobs continue in the workspace service.')
         elif self.tab==0:
@@ -1274,6 +1715,9 @@ class Dashboard:
                 finally: c.reset_prog_mode(); self.screen.clear(); self.screen.refresh()
         elif self.target and self.tab==2:
             if key in ('\n','\r',c.KEY_ENTER):
+                if not self.service_chat:
+                    self.open_native()
+                    return
                 if self.chat.get('busy'): raise Error('The agent is working. Wait for its reply, or use s to stop its turn.')
                 text=self.prompt('Message to '+self.scope_name,detail='Enter sends your message to this existing conversation.')
                 if text and text.strip(): self.app.client.action('chat.send',scope=self.scope,text=text)
@@ -1297,20 +1741,24 @@ class Dashboard:
         try: curses.mousemask(curses.ALL_MOUSE_EVENTS)
         except curses.error: pass
         screen.keypad(True); screen.timeout(250)
-        next_refresh=0
+        self.reads=ReadCache(self.app.client)
+        next_refresh, revision, dirty=0, -1, True
         while True:
             if time.monotonic()>=next_refresh:
                 try: self.refresh()
                 except (Error,OSError,ValueError) as exc: self.error=str(exc)
-                next_refresh=time.monotonic()+(1 if self.tab==1 else 3)
-            self.render()
+                next_refresh=time.monotonic()+.25
+                if self.reads.revision!=revision:
+                    revision=self.reads.revision; dirty=True
+            if dirty:
+                self.render(); dirty=False
             try: key=screen.get_wch()
             except curses.error: continue
             if key in ('q','\x03') and not self.composing: return
             try: self.handle(key)
             except (Error,OSError,ValueError) as exc: self.error=str(exc)
-            else:
-                if not self.composing: next_refresh=0
+            next_refresh=0
+            dirty=True
 
 
 def dashboard(app):
@@ -1334,15 +1782,14 @@ def tmux_session(app, detached=False):
         if check and result.returncode:
             raise Error(f'tmux {args[0]} failed: {result.stderr.strip()}')
         return result
+    quote = lambda *tail: shlex.join(client_command(app, *tail))
+    created = False
     if call('has-session', '-t', '=surfer', check=False).returncode:
+        created = True
         session = app.client.get('session')
         if not app.client.url_override and Path(session.get('state_dir', '')).resolve() != app.client.state_dir:
             raise Error('The listening service does not own the selected state directory.')
         script = str(Path(__file__).resolve())
-        command = [sys.executable, script, '--state-dir', str(app.client.state_dir), '--home', str(app.home)]
-        if app.client.url_override:
-            command += ['--url', app.client.url_override]
-        quote = lambda *tail: shlex.join(command + list(tail))
         size = shutil.get_terminal_size((148, 42))
         call('new-session', '-d', '-x', str(size.columns), '-y', str(size.lines), '-s', 'surfer', '-n', 'SuperSurfer', quote('dashboard'))
         try:
@@ -1350,7 +1797,6 @@ def tmux_session(app, detached=False):
             call('move-window', '-s', 'surfer:0', '-t', 'surfer:1')
             call('set-option', '-t', 'surfer', 'mouse', 'on')
             call('set-option', '-t', 'surfer', 'status-left', '')
-            call('set-option', '-t', 'surfer', 'status-right', ' Ctrl-b 2 shell · Ctrl-b d detach ')
             call('set-option', '-t', 'surfer', 'status-style', 'bg=colour236,fg=colour250')
             call('set-option', '-t', 'surfer', 'status-right-length', '70')
             call('set-window-option', '-t', 'surfer:1', 'remain-on-exit', 'on')
@@ -1366,6 +1812,25 @@ def tmux_session(app, detached=False):
         except Exception:
             call('kill-session', '-t', '=surfer', check=False)
             raise
+    # Reapply controls on reconnect so installing an update needs no server kill.
+    call('set-option', '-t', 'surfer', 'status-right', ' F2 beside | F3 below | F4 zoom | F6 tile | F7 panes | ^b d detach ')
+    call('set-option', '-t', 'surfer', 'status-right-length', '100')
+    call('set-option', '-gw', 'pane-border-status', 'top')
+    call('set-option', '-gw', 'pane-border-format', ' #{pane_index}: #{pane_title} ')
+    call('set-option', '-gw', 'pane-active-border-style', 'fg=cyan')
+    call('set-option', '-s', 'escape-time', '10')
+    for key, orientation in [('F2','-h'), ('F3','-v')]:
+        call('bind-key', '-n', key, 'split-window', orientation, quote('_native'))
+    for key, operation in [('F4',('resize-pane','-Z')), ('F6',('select-layout','tiled')), ('F7',('choose-tree','-Z'))]:
+        call('bind-key', '-n', key, *operation)
+    for key, orientation in [('v','-h'), ('s','-v')]:
+        call('bind-key', key, 'split-window', orientation, quote('_native'))
+    call('bind-key', 'n', 'new-window', '-n', 'Agent', quote('_native'))
+    windows = call('list-windows', '-t', 'surfer', '-F', '#{window_index}').stdout.splitlines()
+    if '3' not in windows:
+        call('new-window', '-d', '-t', 'surfer:3', '-n', 'Agents', quote('_native'))
+    if created and not detached:
+        call('select-window', '-t', 'surfer:3')
     # Reopening restores closed command/view processes without touching live ones.
     panes = call('list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_dead}').stdout
     for row in panes.splitlines():
@@ -1403,6 +1868,14 @@ def main(argv=None):
             dashboard(app)
         elif args.command == ['shell']:
             app.shell()
+        elif args.command == ['skill', 'install']:
+            install_skill()
+        elif args.command and args.command[0] == 'workflow':
+            workflow_command(app, args.command[1:])
+        elif args.command and args.command[0] == '_native' and len(args.command) <= 2:
+            native_launcher(app, args.command[1] if len(args.command) == 2 else None)
+        elif len(args.command) == 2 and args.command[0] == '_mcp':
+            native_mcp(app, args.command[1])
         elif len(args.command) == 2 and args.command[0] == 'watch' and args.command[1] in {'queue', 'board'}:
             app.watch(args.command[1])
         else:

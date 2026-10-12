@@ -1,5 +1,11 @@
 # Terminal client (unreleased)
 
+- [x] Native Codex/Claude/Cursor terminals, simple splits, zoom, tiling and retained tmux layouts.
+- [x] Shared explicit SuperSurfer skill for IDE/CLI chats and durable host-owned request receipts.
+- [x] Nonblocking display reads; per-pane MCP queue reads and versioned Surfboard drafts.
+- [ ] Attaching a native TUI to an already service-owned conversation requires provider/ownership integration.
+- [ ] Diagnose the existing live service's slow Surfboard responses separately; client reads no longer freeze input.
+
 - [x] One-command user-local installation, direct `surfer` command and stock Python 3.10 support.
 - [x] Standalone tmux client with Jobs, Workflow and Agent dashboard screens.
 - [x] Coloured Surfboard flowchart, mouse/keyboard block editing, add/connect/remove and review/apply.

@@ -1,3 +1,32 @@
+# Native terminals and shared IDE skill — October 12, 2026 (unreleased)
+
+44 focused tests pass using isolated HTTP services, real tmux panes and disposable
+homes. Coverage includes side/below splitting, tiling and reconnect without
+replacing agents; per-provider launch arguments and scoped stdio MCP transport;
+version-conflicting drafts; bounded background reads under a stalled Surfboard;
+late responses losing to confirmed edits; multi-root project resolution; receipt
+locking/replay prevention and provider rejection; and the skill installed for
+Codex/Claude/Cursor without touching existing host service state. Saved-receipt
+status also passes through the real CLI subprocess.
+
+The ordinary Python suite ran 792 tests: 751 passed, 34 skipped, and the same seven
+previously reproduced Mac system-rsync `--protect-args` failures. Node checks pass
+37 with five optional SSH skips. Skill capability, compilation and whitespace
+checks pass. The Mac arm64 package and ZIP-extracted app pass strict signatures,
+isolated-profile launch, setup readiness and renderer sandbox checks. Signing is
+local/ad-hoc, not Developer ID signing/notarization. No quarantine attribute was
+present; downloaded-archive Gatekeeper behavior is not verified.
+
+Read-only inspection verified Tulip's installed native CLI options (Codex 0.162.1,
+Claude Code 2.1.259 and Cursor 2026.10.01). No authenticated provider prompt was
+submitted. Native CLI launch configuration and MCP calls use fixtures in tests;
+this is not evidence of a completed live provider conversation. The current VS
+Code build exposes Codex skill discovery and MCP integration; installation and
+runtime discovery on the host are checked separately. The live workspace's slow
+Surfboard endpoint remains a server-side limitation, not claimed fixed. The UI
+stays responsive while it waits. Existing service-owned sessions remain separate
+from native terminals; persistent skill work is explicitly handed to their owner.
+
 # Terminal installer — October 12, 2026 (unreleased)
 
 Seven installer tests pass in disposable homes, covering direct command access in

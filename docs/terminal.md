@@ -23,10 +23,57 @@ The command installs under `~/.local/`, configures your shell path, and makes
 verified before replacement. The client connects to your **already running**
 SuperSurfer workspace; installing it does not start or restart the service.
 
-The default screen has three clearly labelled views. Press **1 Jobs**, **2 Workflow**,
-or **3 Agent**. A separate tmux Shell window is available with `Ctrl-b 2`.
-`Ctrl-b 1` returns to SuperSurfer; `Ctrl-b d` detaches. Reopen with `surfer`.
-Agents and jobs remain owned by your existing workspace service.
+The default window opens a **native agent launcher**. Choose Codex, Claude Code
+or Cursor and type in that provider's actual terminal interface. It uses the
+provider's existing host login and model controls. SuperSurfer does not redraw
+or poll its transcript. New native chats are separate from existing service chats.
+
+**F2** adds an agent beside the current pane; **F3** adds one below. **F4** zooms
+one pane, **F6** arranges all panes, and **F7** opens the pane picker. Click a pane
+to focus it and drag its border to resize. If function keys are unavailable,
+`Ctrl-b v` splits beside, `Ctrl-b s` splits below, `Ctrl-b z` zooms, and
+`Ctrl-b` followed by an arrow focuses that neighbour. `Ctrl-b n` creates another
+agent window. In a shell, `surfer split codex` or `surfer split below claude`
+opens the requested provider directly.
+
+`Ctrl-b 1` opens Jobs/Workflow, `Ctrl-b 2` opens the shell, and `Ctrl-b 3` returns
+to agents. `Ctrl-b d` detaches; reopen with `surfer`. Detachment preserves the
+native processes and pane layout. Exiting the provider returns to its launcher;
+choose **r** to use its saved-chat picker. Host reboot/process death is different
+from detaching: it requires resuming saved chats, not automatic continuation.
+
+## Use your existing VS Code chat
+
+The installer also installs **supersurfer** under the host's `.agents/skills`,
+`.claude/skills` and `.cursor/skills` directories. For an existing checkout,
+`./surfer skill install` installs the same skill. Unrelated skills are preserved.
+Start a new chat or refresh skills after installation. In a VS Code SSH workspace,
+install on that SSH host. No VS Code extension or MCP settings edit is required:
+the skill calls the installed client using its exact interpreter and path.
+
+Invoke `$supersurfer` in Codex (or select **supersurfer** in your provider's skill
+picker), for example: “Follow this task's workflow and keep working on Tulip after
+I disconnect.” The skill resolves the project/task explicitly, reads its board
+and status, and forwards the authorized request once to its existing host worker.
+The host worker retains its own provider/model and history; the frontend chat
+remains a separate conversation. The service owns persistence and managed gates;
+a skill alone cannot enforce arbitrary shell operations or keep an IDE process
+alive. This does not install/restart the host service or migrate live chats.
+
+“Create a workflow requiring tests before completion” asks the persistent
+configurator for a draft. Review/apply it in the Workflow view. Native terminal
+panes also load a small MCP integration for queue visibility and version-checked
+Surfboard drafts. The graph watches the same saved draft. Launching, applying and
+worker execution remain in the workspace service. Do not interpret native shell
+access as a workflow gate or as scheduler permission.
+
+The agent-facing `surfer workflow --help` documents status, board, configure,
+send, receipt, stop and question-answer commands. Sends require a stable request
+ID and read the request from stdin. Receipts survive reconnects and suppress
+replays after uncertain delivery. `workflow status --request-id ID` inspects the
+original owner. A receipt is acceptance evidence, not completion evidence.
+This first integration reuses registered projects/tasks; create new projects in
+SuperSurfer. Pending workspace approvals use its existing chat controls.
 
 ## Jobs
 
@@ -65,8 +112,8 @@ reviewing. `d` reviews/discards a draft.
 
 The **Workflow agent** stays visible below the flowchart. Click its message field
 or press `f`, type what you want, and press Enter. The same persistent agent replies
-there and changes the draft above as it works, without switching views. The graph
-and conversation refresh every second, including while you type. Changed blocks
+there and changes the draft above as it works, without switching views. The conversation refreshes about every second and the graph about every two
+seconds, including while you type. Changed blocks
 get a `*` and scroll into view; changed supporting blocks reveal Show all. Follow-up
 messages use the same conversation and the provider's existing steering behavior.
 `r` handles questions and approvals, `s` stops its turn, and PgUp/PgDn scroll its
@@ -82,15 +129,21 @@ tasks retain their own boards.
 
 ## Agent
 
-The Agent view shows who you are talking to, the provider and whether they are
-working or waiting for you. Enter writes a message; `r` handles questions and
-reviewed one-time approvals, `g` chooses a named conversation, and `s` stops a turn
-with confirmation. PgUp/PgDn scroll history. Closing or detaching never stops work.
+The dashboard's Agent view opens a native terminal beside it with Enter. `g`
+selects an existing service conversation, preserving its current provider and
+owner; that fallback retains Enter to write, `r` to respond and `s` to stop.
+`N` opens a native pane from the dashboard. Existing service conversations cannot
+be transferred into a provider TUI: they use a private service-owned connection.
 
-The client uses standard Python curses (normally included on Mac/Linux), Python
-3.10+ and tmux. It is still a single executable file with no pip dependencies.
-`surfer dashboard` opens the interface without tmux. The previous short commands
-remain available through `surfer shell` or ordinary one-shot commands below.
+Dashboard state, Surfboards and chat now load independently in bounded background
+reads. Navigation and typing do not trigger extra network requests, and the screen
+only redraws after input or updated data. Slow reads keep the last known display;
+errors remain visible. Applying/editing still waits for the service's confirmation.
+A slow service-side Surfboard request may delay fresh graph data; this client does
+not bypass the service's policy checks to label cached budgets as live.
+
+`surfer dashboard` opens the interface without tmux. Earlier commands remain
+available through `surfer shell` or ordinary one-shot commands below.
 
 ## Connect
 
@@ -146,7 +199,7 @@ cancel RUN                 cancel one job, with confirmation
 Use full IDs, unique ID prefixes, or exact names. Queue controls are workspace-wide,
 even when a project is selected. Displays retain unknown/stale GPU observations.
 Mutations are rejected when the scheduler is disconnected. Queue controls only
-edit existing jobs; an explicit request in `chat` can still ask an agent to submit
+edit existing jobs; an explicit request in a service chat can still ask its agent to submit
 work through the existing service. `ready` can start work once its checks pass;
 `cancel` requests cancellation and the displayed state remains authoritative.
 
@@ -202,13 +255,13 @@ fresh edit of the current board and manually reconcile the retained changes.
 
 ```text
 agents
-chat
+chat project:PROJECT_ID
 backend
 backend cursor
 ```
 
-`chat` opens the selected task worker or project lead; `chat SCOPE` selects a listed
-conversation explicitly. Model/provider settings, tools, questions, approvals,
+`chat SCOPE` opens a listed existing service conversation explicitly. Plain
+`chat` opens the native provider launcher. Model/provider settings, tools, questions, approvals,
 history and session ownership remain in the workspace service. `backend NAME`
 selects `codex`, `cursor` or `claude` only when the server permits it; existing
 provider-bound conversations cannot silently migrate. New tasks/conversations and

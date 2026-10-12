@@ -302,6 +302,130 @@ class TerminalTests(unittest.TestCase):
         self.assertIn(arrow,'<>v^')
         self.assertFalse(any(24<=x<44 and 0<=y<3 for x,y in path))
 
+    def test_slow_board_does_not_block_typing_or_other_reads(self):
+        started, release = threading.Event(), threading.Event()
+        original = self.client.get
+        def delayed(path, **query):
+            if path == 'surfboard':
+                started.set(); release.wait(5)
+            return original(path, **query)
+        dashboard = self.workflow_dashboard()
+        dashboard.reads = terminal.ReadCache(self.client)
+        dashboard.workflow_input = 'Unsent draft'
+        dashboard.workflow_chat = {}
+        try:
+            with patch.object(self.client, 'get', side_effect=delayed) as get:
+                before = time.monotonic()
+                dashboard.refresh()
+                self.assertLess(time.monotonic()-before, .1)
+                self.assertTrue(started.wait(1))
+                for _ in range(100): dashboard.refresh()
+                self.assertEqual(dashboard.workflow_input, 'Unsent draft')
+                deadline=time.monotonic()+2
+                while not dashboard.workflow_chat and time.monotonic()<deadline:
+                    dashboard.refresh(); time.sleep(.01)
+                self.assertTrue(dashboard.workflow_chat)
+                self.assertEqual(sum(call.args == ('surfboard',) for call in get.call_args_list), 1)
+        finally: release.set()
+
+    def test_native_configuration_is_scoped_and_contains_no_token(self):
+        identity = terminal.create_native_context(self.app)
+        directory = terminal.native_record(self.app, identity)
+        context = terminal.read_json(directory/'context.json')
+        self.assertEqual(context['target'], {'project_id':'p1'})
+        for provider in terminal.PROVIDERS:
+            with patch.object(terminal, 'provider_binary', return_value='/fake/provider'):
+                command = terminal.native_command(self.app, identity, provider)
+                self.assertNotIn(self.service.token, ' '.join(command))
+                self.assertNotIn('--dangerously-bypass-approvals-and-sandbox', command)
+                self.assertNotIn('--dangerously-skip-permissions', command)
+                self.assertNotIn('--force', command)
+        self.assertFalse(self.service.codex.sent)
+        self.assertNotIn(self.service.token, (directory/'mcp.json').read_text())
+
+    def test_late_read_cannot_replace_a_confirmed_edit(self):
+        started, release = threading.Event(), threading.Event()
+        def old_read(*_, **__):
+            started.set(); release.wait(2)
+            return {'version':1}
+        cache=terminal.ReadCache(self.client)
+        with patch.object(self.client,'get',side_effect=old_read):
+            cache.get('surfboard',project_id='p1')
+            self.assertTrue(started.wait(1))
+            cache.publish('surfboard',{'version':2},project_id='p1')
+            release.set()
+            deadline=time.monotonic()+1
+            while cache.workers and time.monotonic()<deadline: time.sleep(.01)
+            self.assertEqual(cache.get('surfboard',project_id='p1'),{'version':2})
+
+    def test_configurator_rejection_is_not_reported_as_accepted(self):
+        with patch.object(self.client,'action',return_value={'accepted':False,'error':'Provider unavailable'}):
+            result=terminal.persistent_send(self.app,{'project_id':'p1'},'stable-request-0004','Require tests',configure=True)
+        self.assertEqual(result['status'],'rejected')
+        self.assertIn('Provider unavailable',result['note'])
+
+    def test_native_mcp_can_only_draft_its_original_target(self):
+        identity = terminal.create_native_context(self.app)
+        initial = terminal.native_tool_call(self.app, identity, 'read_surfboard', {})
+        edit = initial['edit']
+        params = {k:v for k,v in edit.items() if k not in {'project_id','experiment_id'}}
+        params['board']['name'] = 'Native draft'
+        terminal.native_tool_call(self.app, identity, 'propose_surfboard', params)
+        current = self.client.get('surfboard',project_id='p1')
+        self.assertNotEqual(current['board']['name'], 'Native draft')
+        self.assertEqual(current['draft']['board']['name'], 'Native draft')
+        with self.assertRaises(terminal.Error): terminal.native_tool_call(self.app, identity, 'propose_surfboard', params)
+        with self.assertRaises(terminal.Error): terminal.native_tool_call(self.app, identity, 'propose_surfboard', {**params,'project_id':'other'})
+        with self.assertRaises(terminal.Error): terminal.native_tool_call(self.app, identity, 'queue_run', {})
+        self.assertFalse(self.service.codex.sent)
+
+    def test_native_mcp_protocol_is_real_stdio_without_provider_inference(self):
+        identity = terminal.create_native_context(self.app)
+        requests = [{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2024-11-05'}},
+                    {'jsonrpc':'2.0','method':'notifications/initialized'},
+                    {'jsonrpc':'2.0','id':2,'method':'tools/list'},
+                    {'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'read_queue','arguments':{}}}]
+        result = subprocess.run(terminal.client_command(self.app,'_mcp',identity),input=''.join(json.dumps(r)+'\n' for r in requests),capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+        replies=[json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual([r['id'] for r in replies],[1,2,3])
+        self.assertFalse(replies[-1]['result']['isError'])
+        self.assertNotIn(self.service.token,result.stdout)
+        self.assertFalse(self.service.codex.sent)
+
+    def test_persistent_skill_sends_once_and_keeps_original_owner(self):
+        target={'project_id':'p1'}
+        first=terminal.persistent_send(self.app,target,'stable-request-0001','Finish the authorized task')
+        second=terminal.persistent_send(self.app,target,'stable-request-0001','Finish the authorized task')
+        self.assertEqual(first,second)
+        self.assertEqual(first['status'],'accepted')
+        self.assertEqual(first['scope'],'project:p1')
+        self.assertEqual(len(self.service.codex.sent),1)
+        status=subprocess.run(terminal.client_command(self.app,'workflow','status','--request-id','stable-request-0001'),capture_output=True,text=True,timeout=10)
+        self.assertEqual(status.returncode,0,status.stderr)
+        self.assertEqual(json.loads(status.stdout)['receipt']['scope'],'project:p1')
+        with self.assertRaises(terminal.Error): terminal.persistent_send(self.app,target,'stable-request-0001','Different work')
+
+    def test_persistent_skill_retains_uncertain_receipt_without_replay(self):
+        target={'project_id':'p1'}
+        with patch.object(self.client,'action',side_effect=terminal.Error('Delivery is uncertain')) as action:
+            first=terminal.persistent_send(self.app,target,'stable-request-0002','Finish task')
+            restarted=terminal.App(self.client,self.app.home)
+            second=terminal.persistent_send(restarted,target,'stable-request-0002','Finish task')
+            self.assertEqual(first,second)
+            self.assertEqual(first['status'],'uncertain')
+            self.assertEqual(action.call_count,1)
+
+    def test_skill_configuration_is_a_draft_request_to_configurator(self):
+        result=terminal.persistent_send(self.app,{'project_id':'p1'},'stable-request-0003','Require tests',configure=True)
+        self.assertEqual(result['status'],'accepted',result)
+        self.assertEqual(self.service.codex.sent[0][0],'surfboard:p1')
+        self.assertIn('do not apply',self.service.codex.sent[0][1])
+
+    def test_workflow_target_uses_explicit_project_in_multi_root_editor(self):
+        self.assertEqual(terminal.workflow_target(self.app,'p1'),{'project_id':'p1'})
+        with self.assertRaises(terminal.Error): terminal.workflow_target(self.app)
+
     @unittest.skipUnless(shutil.which('tmux'), 'tmux is not installed')
     def test_real_tmux_session_reconnects_without_duplicate_panes(self):
         # Mouse coordinates below refer to this fixed viewport, independent of
@@ -314,7 +438,7 @@ class TerminalTests(unittest.TestCase):
             terminal.tmux_session(self.app, detached=True)
             second = subprocess.check_output(command + ['list-panes', '-a', '-F', '#{pane_id}'], text=True)
             self.assertEqual(first, second)
-            self.assertEqual(len(first.splitlines()), 2)
+            self.assertEqual(len(first.splitlines()), 3)
             subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', '1'], check=True)
             deadline = time.monotonic() + 8
             while time.monotonic() < deadline:
@@ -349,7 +473,8 @@ class TerminalTests(unittest.TestCase):
                 time.sleep(.1)
             self.assertIn('Maximum GPUs: 4', view)
             # Click the GPU setting in its dialog, edit it, and save a real draft.
-            click(35,22)
+            gpu_row = next(i+1 for i, line in enumerate(view.splitlines()) if 'Maximum GPUs: 4' in line)
+            click(35,gpu_row)
             time.sleep(.3)
             subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', 'C-u', '2', 'Enter'],check=True)
             deadline=time.monotonic()+5
@@ -389,6 +514,20 @@ class TerminalTests(unittest.TestCase):
             self.assertEqual(dead, '1')
             terminal.tmux_session(self.app, detached=True)
             self.assertEqual(subprocess.check_output(command + ['display-message', '-p', '-t', 'surfer:1.0', '#{pane_dead}'], text=True).strip(), '0')
+            # Split native launchers in one window; every existing process stays
+            # alive and reconnect preserves the layout without another agent.
+            pane = subprocess.check_output(command+['display-message','-p','-t','surfer:3.0','#{pane_id}'],text=True).strip()
+            tmux_env = subprocess.check_output(command+['display-message','-p','-t',pane,'#{socket_path},#{pid},0'],text=True).strip()
+            with patch.dict(os.environ, {'TMUX':tmux_env,'TMUX_PANE':pane}):
+                terminal.split_pane(self.app, [])
+                terminal.split_pane(self.app, ['below'])
+            native_panes=subprocess.check_output(command+['list-panes','-t','surfer:3','-F','#{pane_id}'],text=True).splitlines()
+            self.assertEqual(len(native_panes),3)
+            subprocess.run(command+['select-layout','-t','surfer:3','tiled'],check=True,capture_output=True)
+            before=subprocess.check_output(command+['list-panes','-a','-F','#{pane_id}'],text=True)
+            terminal.tmux_session(self.app,detached=True)
+            self.assertEqual(before,subprocess.check_output(command+['list-panes','-a','-F','#{pane_id}'],text=True))
+            self.assertEqual(len(self.service.codex.sent),1)
         finally:
             subprocess.run(command + ['kill-server'], check=False, capture_output=True)
 

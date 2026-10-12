@@ -11,10 +11,11 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 ## What can it do?
 
-- **Work from a terminal.** The standalone [`surfer`](docs/terminal.md) client
-  opens Jobs, Workflow and Agent screens in tmux. Manage named GPU jobs, click
-  coloured Surfboard blocks to edit them, and talk to a persistent workflow agent
-  while its draft changes appear live in the same view.
+- **Keep your native agent interface.** The [`surfer`](docs/terminal.md) preview
+  runs real Codex, Claude Code and Cursor terminals in easily split tmux panes.
+  Its `$supersurfer` skill also works from an existing IDE chat: read or draft a
+  Surfboard, then send authorized work to the persistent host agent. Manage GPU
+  jobs and edit the live flowchart in the companion dashboard.
 - **Build your own workflow.** Connect agents, instructions, checks, compute and
   results on a **Surfboard**. Start by telling an agent what you want to build,
   or choose a saved workflow. Review its views and steps, refine them in chat,
