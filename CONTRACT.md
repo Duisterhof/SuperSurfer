@@ -1,5 +1,15 @@
 # Terminal client (unreleased)
 
+The default terminal interface is a keyboard/mouse dashboard with Jobs, Workflow
+and Agent views. Job selection uses stable IDs internally while displaying names.
+The workflow is a coloured, labelled flowchart whose main view hides supporting
+goal/notes/files/activity/timer blocks; Show all exposes the entire board. Hidden
+blocks are never removed. Selection scrolls larger diagrams. Mouse or keyboard
+selection opens a block editor; add, rename, settings, connect and remove operations
+all create version-checked drafts. Connection choices come from the server catalog.
+Apply reviews every changed field, including changes outside the main view, and
+requires explicit confirmation. JSON editing remains an advanced option.
+
 The standalone `surfer` Python client connects to an existing authenticated
 loopback workspace service. It uses a separate tmux server and does not install,
 start, restart or upgrade a service or provider. Queue edits use existing

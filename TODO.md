@@ -1,9 +1,10 @@
 # Terminal client (unreleased)
 
-- [x] Standalone tmux client, live GPU queue, short queue-management commands.
+- [x] Standalone tmux client with Jobs, Workflow and Agent dashboard screens.
+- [x] Coloured Surfboard flowchart, mouse/keyboard block editing, add/connect/remove and review/apply.
 - [x] Project/task Surfboard editing, recoverable drafts and version-checked apply.
 - [x] Existing persistent conversation access, provider selection, questions and approvals.
-- [ ] Graphical terminal node editing and named-library bulk rollout remain desktop features.
+- [ ] Dragging/repositioning blocks and named-library bulk rollout remain desktop features.
 
 # Completed in 0.1.43 — agent workflow control
 

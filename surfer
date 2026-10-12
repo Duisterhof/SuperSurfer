@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import redirect_stdout
+from copy import deepcopy
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -13,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 import urllib.error
 import urllib.parse
@@ -131,7 +135,8 @@ class Client:
         return self.request('action', {'op': op, 'params': params})
 
 
-HELP = '''queue                         Show GPUs and queued/running jobs
+HELP = '''dashboard                     Open Jobs, Workflow and Agent screens
+queue                         Show GPUs and queued/running jobs
 up RUN / down RUN             Move a queued job one place
 hold RUN / ready RUN [PR]     Hold or release through normal source/PR gates
 cancel RUN                    Cancel one job (asks before sending)
@@ -149,7 +154,7 @@ backend [codex|cursor|claude]  Inspect/select the chosen conversation's provider
 help / exit                   Show help / leave the command prompt
 
 IDs accept unambiguous prefixes. Queue controls only edit existing runs.
-tmux: Ctrl-b d detaches; Ctrl-b 1/2/3 selects Control/Shell/Board.
+tmux: Ctrl-b d detaches; Ctrl-b 1/2 selects SuperSurfer/Shell.
 The workspace service, agents and GPU jobs outlive this terminal.'''
 
 
@@ -216,7 +221,7 @@ class App:
             if run.get('waiting_reason'):
                 say('  ' + run['waiting_reason'])
 
-    def queue_action(self, command, args):
+    def queue_action(self, command, args, confirmed=False):
         if command not in {'pause', 'resume', 'up', 'down', 'hold', 'ready', 'cancel'}:
             raise Error('Queue commands: up, down, hold, ready, cancel, pause, resume.')
         state = self.state()
@@ -242,7 +247,7 @@ class App:
             before = queue[index - 1] if command == 'up' else (queue[index + 2] if index + 2 < len(queue) else None)
             self.client.action('run.move', run_id=run['id'], before_id=before)
         elif command == 'cancel':
-            if not self.confirm(f"Cancel {run['id']} ({run.get('name')}, {run['status']})?"):
+            if not confirmed and not self.confirm(f"Cancel {run['id']} ({run.get('name')}, {run['status']})?"):
                 say('Not cancelled.')
                 return
             self.client.action('run.cancel', run_id=run['id'])
@@ -543,12 +548,716 @@ class App:
             return
 
 
+FIELD_NAMES = {
+    'gpu_limit': 'Maximum GPUs', 'run_limit': 'Jobs at once',
+    'instructions': 'Extra instructions', 'argv': 'Command to run',
+    'requirements': 'Required before running', 'interval_minutes': 'Check every (minutes)',
+    'user_authorization': 'Your permission', 'exact_commit': 'Committed source',
+    'verified_pr': 'Verified pull request', 'description': 'Instructions / description',
+}
+
+
+def human(value):
+    if value is None:
+        return 'Not set'
+    if isinstance(value, bool):
+        return 'Yes' if value else 'No'
+    if isinstance(value, list):
+        return ', '.join(FIELD_NAMES.get(str(v), str(v)) for v in value) or 'None'
+    if isinstance(value, dict):
+        return '; '.join(f'{k.replace("_", " ")}: {human(v)}' for k, v in value.items()) or 'None'
+    return str(value) if value != '' else 'None'
+
+
+def workflow_fields(board):
+    """A small set of everyday settings; arbitrary graph edits remain advanced."""
+    fields = []
+    groups = {'compute': [('gpu_limit', 'unlimited'), ('run_limit', 'unlimited')],
+              'agent': [('instructions', '')], 'check': [('argv', [])],
+              'code': [('argv', [])], 'preview': [('argv', [])],
+              'document': [('description', '')], 'brief': [('description', '')],
+              'approval': [('requirements', [])], 'timer': [('interval_minutes', 10)]}
+    for kind, definitions in groups.items():
+        for node in board.get('nodes', []):
+            if node['kind'] != kind or (kind == 'timer' and node.get('config', {}).get('event', 'interval') != 'interval'):
+                continue
+            for field, default in definitions:
+                fields.append({'id': node['id'] + ':' + field, 'node_id': node['id'], 'field': field,
+                               'label': FIELD_NAMES[field], 'group': node.get('label') or kind.title(),
+                               'value': node.get('config', {}).get(field, default)})
+    return fields
+
+
+def workflow_changes(before, after):
+    """Review every changed field, including changes made outside this interface."""
+    changes = []
+    old_nodes = {n['id']: n for n in before.get('nodes', [])}
+    new_nodes = {n['id']: n for n in after.get('nodes', [])}
+    for identity in dict.fromkeys([*old_nodes, *new_nodes]):
+        old, new = old_nodes.get(identity), new_nodes.get(identity)
+        label = (new or old).get('label') or identity
+        if old is None or new is None:
+            changes.append(('Add ' if old is None else 'Remove ') + label + ': ' + human(new or old))
+            continue
+        for key in dict.fromkeys([*old, *new]):
+            if old.get(key) == new.get(key):
+                continue
+            if key == 'config':
+                a, b = old.get(key, {}), new.get(key, {})
+                for field in dict.fromkeys([*a, *b]):
+                    if a.get(field) != b.get(field):
+                        changes.append(f'{label} / {FIELD_NAMES.get(field, field.replace("_", " "))}:\n  {human(a.get(field))}\n  -> {human(b.get(field))}')
+            else:
+                changes.append(f'{label} / {key.replace("_", " ")}: {human(old.get(key))} -> {human(new.get(key))}')
+    names = {key: n.get('label') or key for key, n in {**old_nodes, **new_nodes}.items()}
+    for verb, source, other in [('Remove', before, after), ('Add', after, before)]:
+        for edge in source.get('edges', []):
+            if edge not in other.get('edges', []):
+                changes.append(f'{verb} connection: {names.get(edge["source"], edge["source"])} -> {names.get(edge["target"], edge["target"])} ({edge.get("relation") or "unresolved"})')
+    for key in dict.fromkeys([*before, *after]):
+        if key not in {'nodes', 'edges'} and before.get(key) != after.get(key):
+            changes.append(f'{key.replace("_", " ").title()}:\n  {human(before.get(key))}\n  -> {human(after.get(key))}')
+    return changes
+
+
+NODE_TYPES = {
+    'agent': ('AGENT', 1), 'approval': ('CONDITION', 2), 'check': ('CHECK', 2),
+    'compute': ('COMPUTE', 3), 'experiment': ('GPU JOB', 3),
+    'results': ('OUTPUT', 4), 'visualizer': ('CHARTS', 4), 'wandb': ('DATA', 4),
+    'brief': ('GOAL', 5), 'code': ('CODE', 5), 'timer': ('SCHEDULE', 2),
+    'document': ('NOTES', 5), 'artifacts': ('FILES', 4), 'activity': ('ACTIVITY', 5),
+    'editor': ('EDITOR', 5), 'latex': ('DOCUMENT', 4), 'preview': ('PREVIEW', 4),
+}
+
+
+def graph_positions(nodes):
+    xs = sorted(set(n.get('x', 0) for n in nodes))
+    ys = sorted(set(n.get('y', 0) for n in nodes))
+    positions, occupied = {}, set()
+    for node in nodes:
+        x, y = xs.index(node.get('x', 0))*24, ys.index(node.get('y', 0))*6
+        while (x, y) in occupied: y += 6
+        positions[node['id']] = (x, y)
+        occupied.add((x, y))
+    return positions
+
+
+def graph_route(source, target, rectangles, width, height):
+    """Route one arrow through free cells, preserving the actual graph edges."""
+    from collections import deque
+    def ports(box):
+        x, y, w, h = box
+        return [((x-1, y+h//2), '>'), ((x+w, y+h//2), '<'),
+                ((x+w//2, y-1), 'v'), ((x+w//2, y+h), '^')]
+    blocked = {(x+i,y+j) for x,y,w,h in rectangles for i in range(w) for j in range(h)}
+    starts = [p for p,_ in ports(source) if 0 <= p[0] < width and 0 <= p[1] < height and p not in blocked]
+    ends = {p:arrow for p,arrow in ports(target) if 0 <= p[0] < width and 0 <= p[1] < height and p not in blocked}
+    queue, previous = deque(starts), {p:None for p in starts}
+    while queue:
+        p = queue.popleft()
+        if p in ends:
+            result, end = [], p
+            while p is not None:
+                result.append(p); p = previous[p]
+            return list(reversed(result)), ends[end]
+        for nxt in [(p[0]+1,p[1]),(p[0],p[1]+1),(p[0]-1,p[1]),(p[0],p[1]-1)]:
+            if 0 <= nxt[0] < width and 0 <= nxt[1] < height and nxt not in blocked and nxt not in previous:
+                previous[nxt]=p; queue.append(nxt)
+    return [], ''
+
+
+class Dashboard:
+    """Standard-library terminal UI; the existing service owns all real actions."""
+    def __init__(self, app):
+        self.app, self.tab, self.index = app, 0, 0
+        self.state, self.board, self.chat = {}, {}, {}
+        self.target, self.scope, self.scope_name = {}, None, 'Project lead'
+        self.rows, self.error, self.notice = [], '', ''
+        self.chat_scroll = 0
+        self.graph_offset = [0, 0]
+        self.hitboxes = []
+        self.show_all = False
+
+    def refresh(self):
+        selected_id = self.rows[self.index]['id'] if self.rows and self.index < len(self.rows) else None
+        self.state = self.app.state()
+        selected = self.app.preferences()
+        projects = self.state.get('projects', [])
+        project = next((p for p in projects if p['id'] == selected.get('project_id')), None)
+        if not project and len(projects) == 1:
+            project = projects[0]
+        target = {'project_id': project['id']} if project else {}
+        if project and selected.get('experiment_id'):
+            task = next((t for t in self.state.get('experiments', []) if t['id'] == selected['experiment_id'] and t['project_id'] == project['id']), None)
+            if task:
+                target['experiment_id'] = task['id']
+        if target != self.target:
+            self.target, self.scope = target, None
+        self.rows = []
+        if self.tab == 0:
+            order = {identity: i for i, identity in enumerate(self.state.get('queue', {}).get('run_ids', []))}
+            self.rows = sorted([r for r in self.state.get('runs', []) if r['status'] in {'queued', 'starting', 'running', 'cancelling'}],
+                               key=lambda r: (r['status'] == 'queued', order.get(r['id'], -1)))
+        elif target and self.tab == 1:
+            self.board = self.app.client.get('surfboard', **target)
+            nodes = ((self.board.get('draft') or {}).get('board') or self.board['board'])['nodes']
+            self.rows = [n for n in nodes if self.show_all or n['kind'] not in {'brief','document','artifacts','activity','timer'}]
+        elif target:
+            if not self.scope:
+                if target.get('experiment_id'):
+                    listing = self.app.client.get('experiment-agents', experiment_id=target['experiment_id'])
+                    self.scope = listing['selected_scope']
+                    self.scope_name = next((a.get('name') for a in listing.get('agents', []) if a['scope'] == self.scope), None) or 'Task worker'
+                else:
+                    self.scope, self.scope_name = 'project:' + target['project_id'], 'Project lead'
+            self.chat = self.app.client.get('chat', scope=self.scope, limit=100)
+        self.index = next((i for i, row in enumerate(self.rows) if row['id'] == selected_id), min(self.index, max(0, len(self.rows) - 1)))
+        self.error = ''
+
+    def save_field(self, field, value):
+        envelope = deepcopy(self.app.envelope(self.target, self.board))
+        node = next(n for n in envelope['board']['nodes'] if n['id'] == field['node_id'])
+        node.setdefault('config', {})[field['field']] = value
+        recovery = self.app.home / ('board-' + str(time.time_ns()) + '.json')
+        # Preserve the exact versions displayed before opening the editor.
+        with redirect_stdout(io.StringIO()):
+            self.app.save_draft(envelope, recovery)
+        self.notice = 'Change saved as a draft. Press a to review and apply.'
+
+    def job_action(self, command, job):
+        with redirect_stdout(io.StringIO()):
+            self.app.queue_action(command, [job['id']] if job else [])
+        self.notice = {'up': 'Job moved earlier.', 'down': 'Job moved later.', 'hold': 'Job put on hold.',
+                       'ready': 'Job released through the workspace checks.', 'pause': 'Queue paused. Running jobs continue.',
+                       'resume': 'Queue resumed.'}.get(command, 'Request sent.')
+
+    def put(self, y, x, text, style=0):
+        h, w = self.screen.getmaxyx()
+        if 0 <= y < h and 0 <= x < w - 1:
+            try:
+                self.screen.addnstr(y, x, clean(text).replace('\n', ' ').replace('\t', ' '), w - x - 1, style)
+            except self.curses.error:
+                pass
+
+    def wrap(self, value, width):
+        return [line for part in clean(value).split('\n') for line in (textwrap.wrap(part, max(10, width), replace_whitespace=False) or [''])]
+
+    def render(self):
+        c, s = self.curses, self.screen
+        s.erase()
+        h, w = s.getmaxyx()
+        if h < 20 or w < 72:
+            self.put(1, 2, 'SuperSurfer needs at least 72 columns and 20 rows.')
+            self.put(3, 2, 'Enlarge the terminal, or press q to close.')
+            s.refresh()
+            return
+        project = next((p['name'] for p in self.state.get('projects', []) if p['id'] == self.target.get('project_id')), 'Choose a project with c')
+        task = next((t['name'] for t in self.state.get('experiments', []) if t['id'] == self.target.get('experiment_id')), 'Project defaults')
+        self.put(1, 2, 'SuperSurfer', c.A_BOLD | self.accent)
+        self.put(1, 19, project + '  /  ' + task, c.A_DIM)
+        for i, name in enumerate(['Jobs', 'Workflow', 'Agent']):
+            self.put(3, 2 + i * 20, f' {i+1}  {name} ', c.A_REVERSE | c.A_BOLD if self.tab == i else c.A_DIM)
+        if self.tab == 0:
+            self.put(5, 2, 'GPU jobs', c.A_BOLD)
+            self.put(6, 2, 'Across this workspace. Select a job, then press Enter for actions.', c.A_DIM)
+            queued = sum(r['status'] == 'queued' for r in self.rows)
+            paused = self.state.get('queue', {}).get('paused')
+            self.put(8, 2, f'{queued} waiting   {len(self.rows)-queued} active   |   Queue {"paused" if paused else "open"}', self.accent)
+            gpu = [g for host in self.state.get('hosts', []) for g in host.get('devices', [])]
+            unknown = any(g.get('stale') or g.get('occupied') is None for g in gpu)
+            self.put(9, 2, 'GPU availability: ' + ('unknown or stale' if unknown or not gpu else f'{sum(g.get("occupied") is False for g in gpu)} of {len(gpu)} reported idle'), c.A_DIM)
+            name_width = min(42, max(20, w - 49))
+            self.put(11, 4, f'{"JOB":<{name_width}} {"STATUS":<13} {"GPUs":<6} PROJECT', c.A_DIM)
+            first = max(0, self.index - max(0, h - 23))
+            for i, job in list(enumerate(self.rows))[first:first + max(1, h - 21)]:
+                status = 'On hold' if job['status'] == 'queued' and not job.get('ready') else 'Ready' if job['status'] == 'queued' else job['status'].capitalize()
+                pname = next((p['name'] for p in self.state.get('projects', []) if p['id'] == job['project_id']), 'Unknown')
+                line = f'{(job.get("name") or "Unnamed job")[:name_width]:<{name_width}} {status:<13} {str(job.get("gpu_count", "?")):<6} {pname}'
+                self.put(12+i-first, 2, ('> ' if i == self.index else '  ') + line, c.A_REVERSE if i == self.index else 0)
+            if not self.rows:
+                self.put(13, 4, 'No jobs are queued or running. Ask your agent to prepare work.')
+            elif self.index < len(self.rows):
+                job = self.rows[self.index]
+                detail = job.get('waiting_reason') or ('This job stays on hold until you release it.' if job['status'] == 'queued' and not job.get('ready') else 'The workspace scheduler manages this job.')
+                for i, line in enumerate(self.wrap(detail, w-6)[:2]): self.put(h-7+i, 2, line, c.A_DIM)
+            if self.state.get('error') or not self.state.get('manager_connected', self.state.get('connected', False)):
+                self.put(9, 2, 'Scheduler disconnected. Queue changes are unavailable.', c.A_BOLD)
+            actions = 'Up/Down Select   Enter Job actions   p ' + ('Resume queue' if paused else 'Pause queue')
+        elif not self.target:
+            self.put(6, 2, 'Press c to choose the project you want to work on.')
+            actions = 'c Choose project'
+        elif self.tab == 1:
+            self.render_graph()
+            actions = 'Click/Enter Edit block   n Add block   l Connect   a Review & apply   f Ask for a change'
+        else:
+            pending = any(item.get('status') == 'pending' for key in ('approvals', 'questions') for item in self.chat.get(key, []))
+            status = 'Needs your response' if pending else 'Working' if self.chat.get('busy') else 'Ready for your message'
+            self.put(5, 2, self.scope_name + '  -  ' + status, c.A_BOLD)
+            backend = self.chat.get('preferences', {}).get('backend') or 'configured provider'
+            self.put(6, 2, f'{backend.title()}  |  This conversation stays available when you detach.', c.A_DIM)
+            lines = []
+            for message in self.chat.get('messages', []):
+                if message.get('text'):
+                    lines += [('', 0), ('You' if message.get('role') == 'user' else self.scope_name, c.A_BOLD | self.accent)]
+                    lines += [(line, 0) for line in self.wrap(message['text'], w-6)]
+            if not lines:
+                lines = [('Press Enter and tell your agent what you want to do.', 0), ('Example: Review the queued experiments and suggest what to run next.', c.A_DIM)]
+            room = h-14
+            self.chat_scroll = min(self.chat_scroll, max(0, len(lines)-room))
+            end = len(lines)-self.chat_scroll
+            for i, (line, style) in enumerate(lines[max(0, end-room):end]): self.put(8+i, 2, line, style)
+            if self.chat.get('error'): self.put(h-6, 2, str(self.chat['error']), c.A_BOLD)
+            elif pending: self.put(h-6, 2, 'The agent is waiting for you. Press r to review and respond.', self.accent)
+            actions = 'Enter Write message   r Respond   g Choose agent   s Stop turn   PgUp/PgDn History'
+        self.put(h-4, 2, (self.error or self.notice).split('\n')[0], c.A_BOLD if self.error else self.accent)
+        self.put(h-3, 2, actions, c.A_BOLD)
+        self.put(h-2, 2, '1/2/3 Switch view   c Project/task   ? Help   q Close (agents keep running)', c.A_DIM)
+        s.refresh()
+
+    def render_graph(self):
+        c = self.curses
+        h, w = self.screen.getmaxyx()
+        draft = self.board.get('draft') or {}
+        board = draft.get('board') or self.board['board']
+        self.put(5, 2, 'Your workflow', c.A_BOLD)
+        self.put(5, 24, 'DRAFT - review before applying' if draft else 'APPLIED', self.accent)
+        self.put(6, 2, 'Click a block to edit it. Arrows show connections; the selected block is highlighted.', c.A_DIM)
+        for x, label, pair in [(2,'AGENT',1),(17,'CONDITION / CHECK',2),(43,'JOB / COMPUTE',3),(65,'OUTPUT / DATA',4)]:
+            self.put(8,x,label,self.color(pair)|c.A_BOLD)
+        positions = graph_positions(self.rows)
+        area_w, area_h = w-4, h-19
+        selected = self.rows[self.index] if self.rows else None
+        if area_h < 4:
+            self.hitboxes=[]
+            self.put(6,2,'Compact view. Enlarge the terminal to see the flowchart; Enter still edits a block.',c.A_DIM)
+            if selected:
+                label,pair=NODE_TYPES.get(selected['kind'],(selected['kind'],5))
+                self.put(10,2,'> '+label+'  '+selected.get('label',''),self.color(pair)|c.A_REVERSE)
+            self.put(h-6,2,'Tab or arrows select a block. v shows all blocks.',c.A_DIM)
+            return
+        if selected:
+            sx, sy = positions[selected['id']]
+            self.graph_offset[0] = min(self.graph_offset[0], sx)
+            self.graph_offset[1] = min(self.graph_offset[1], sy)
+            if sx+20 > self.graph_offset[0]+area_w: self.graph_offset[0] = sx+20-area_w
+            if sy+4 > self.graph_offset[1]+area_h: self.graph_offset[1] = sy+4-area_h
+        ox, oy = self.graph_offset
+        visible = {key:(x-ox,y-oy,20,4) for key,(x,y) in positions.items()
+                   if 0 <= x-ox and x-ox+20 <= area_w and 0 <= y-oy and y-oy+4 <= area_h}
+        self.hitboxes = []
+        selected_id = selected['id'] if selected else None
+        edges = sorted(board.get('edges',[]),key=lambda e:selected_id in (e['source'],e['target']))
+        for edge in edges:
+            if edge['source'] not in visible or edge['target'] not in visible: continue
+            if not self.show_all and edge.get('relation') in {'recovers','triggers'} and selected_id not in (edge['source'],edge['target']): continue
+            path, arrow = graph_route(visible[edge['source']],visible[edge['target']],list(visible.values()),area_w,area_h)
+            focused = selected_id in (edge['source'],edge['target'])
+            style = (c.A_BOLD | self.accent) if focused else c.A_DIM
+            for i,(x,y) in enumerate(path):
+                if i == len(path)-1: char = arrow
+                elif 0<i<len(path)-1:
+                    prev,nxt=path[i-1],path[i+1]
+                    char = '│' if prev[0]==nxt[0] else '─' if prev[1]==nxt[1] else '·'
+                else: char='·'
+                self.put(10+y,2+x,char,style)
+        for i,node in enumerate(self.rows):
+            if node['id'] not in visible: continue
+            x,y,_,_=visible[node['id']]
+            label,pair=NODE_TYPES.get(node['kind'],(node['kind'].upper(),5))
+            style=self.color(pair)|c.A_BOLD
+            self.put(10+y,2+x,'┌─ '+label+' '+'─'*(15-len(label))+'┐',style)
+            lines=self.wrap(node.get('label') or label,16)
+            for row in range(2):
+                text=lines[row] if row<len(lines) else ''
+                if row==1 and len(lines)>2: text=text[:15]+'…'
+                self.put(11+y+row,2+x,'│ '+text.ljust(16)+' │',style|(c.A_REVERSE if i==self.index else 0))
+            self.put(13+y,2+x,'└'+'─'*18+'┘',style)
+            self.hitboxes.append((2+x,10+y,20,4,i))
+        if not self.rows: self.put(11,4,'No blocks yet. Press n to add your first block.')
+        if selected:
+            connections=[e for e in board.get('edges',[]) if selected['id'] in (e['source'],e['target'])]
+            self.put(h-8,2,'Selected: '+(selected.get('label') or selected['kind'])+'  |  '+str(len(connections))+' connections. Enter to edit.',c.A_BOLD)
+            fields=workflow_fields({'nodes':[selected]})
+            detail='  |  '.join(f['label']+': '+human(f['value']) for f in fields)
+            if not detail: detail='Use l to connect this block, or Enter to change its name and connections.'
+            self.put(h-7,2,detail,c.A_DIM)
+        scope='This task' if self.target.get('experiment_id') else 'Project defaults for new tasks'
+        hidden=len(board['nodes'])-len(self.rows)
+        self.put(6,2,('All blocks' if self.show_all else f'Main flow ({hidden} supporting blocks hidden)')+'  |  v '+('Main flow' if self.show_all else 'Show all')+'  |  Click or select a block to edit',c.A_DIM)
+        self.put(h-6,2,scope+'  |  Tab / arrows select'+('  |  Selection scrolls to more blocks' if len(visible)<len(self.rows) else ''),c.A_DIM)
+        if draft.get('errors'): self.put(h-6,2,'Draft has validation errors. Press a to inspect them.',c.A_BOLD)
+
+    def save_graph(self, board, notice='Workflow draft saved. Press a to review and apply.'):
+        envelope=deepcopy(self.app.envelope(self.target,self.board))
+        envelope['board']=board
+        with redirect_stdout(io.StringIO()):
+            self.app.save_draft(envelope,self.app.home/('board-'+str(time.time_ns())+'.json'))
+        self.notice=notice
+
+    def current_graph(self):
+        return deepcopy((self.board.get('draft') or {}).get('board') or self.board['board'])
+
+    def add_block(self):
+        kinds=['agent','approval','check','code','experiment','compute','results','document','timer']
+        labels=['Agent - carries out work','Condition - permission or source requirements','Check - a command that must pass','Code - implementation step',
+                'GPU job - a managed experiment','Compute - GPU and job limits','Output - results page','Notes - instructions or findings','Schedule - when an agent wakes up']
+        choice=self.menu('Add a workflow block',labels)
+        if choice is None: return
+        kind=kinds[choice]
+        name=self.prompt('Name this block',{'approval':'Before running','check':'Run tests','agent':'Research agent'}.get(kind,kind.title()),'Use a short name that describes what this block does.')
+        if not name or not name.strip(): return
+        config={}
+        if kind=='agent':
+            role=self.menu('What should this agent do?',['Lead - coordinates work','Worker - carries out a task'])
+            if role is None: return
+            config['role']='lead' if role==0 else 'worker'
+        if kind=='approval': config['requirements']=['user_authorization']
+        graph=self.current_graph()
+        identity=kind+'-'+str(time.time_ns())
+        graph['nodes'].append({'id':identity,'kind':kind,'label':name,'x':80,'y':max((n.get('y',0) for n in graph['nodes']),default=-10)+160,'config':config})
+        self.save_graph(graph,'Block added to the draft. Select it and use Connect to add its role in the workflow.')
+        self.show_all=True
+        self.index=len(graph['nodes'])-1
+
+    def connect_block(self, node=None):
+        if not self.rows: return
+        source=node or self.rows[self.index]
+        graph=self.current_graph()
+        catalog=next((row for row in self.board.get('catalog',[]) if row['kind']==source['kind']),{})
+        relations=catalog.get('relations',[])
+        if not relations: raise Error('This type of block has no outgoing connections.')
+        choice=self.menu('Connect from '+source['label'],[r['label'] for r in relations])
+        if choice is None: return
+        relation=relations[choice]
+        targets=[n for n in graph['nodes'] if n['id']!=source['id'] and n['kind'] in relation['targets']]
+        if not targets: raise Error('Add a compatible destination block first.')
+        choice=self.menu(relation['label'],[n['label']+' ('+NODE_TYPES.get(n['kind'],(n['kind'],0))[0].lower()+')' for n in targets])
+        if choice is None: return
+        edge={'source':source['id'],'target':targets[choice]['id'],'relation':relation['relation']}
+        if any(all(e.get(k)==v for k,v in edge.items()) for e in graph.get('edges',[])):
+            self.notice='These blocks already have that connection.'
+            return
+        edge['id']='edge-'+str(time.time_ns())
+        graph.setdefault('edges',[]).append(edge)
+        self.save_graph(graph)
+
+    def edit_node(self):
+        if not self.rows: return
+        node=deepcopy(self.rows[self.index])
+        fields=workflow_fields({'nodes':[node]})
+        options=['Name: '+node.get('label',node['kind'])]+[f['label']+': '+human(f['value']) for f in fields]
+        options+=['Connect to another block','Review / remove a connection','Remove this block']
+        choice=self.menu(node.get('label') or 'Workflow block',options,NODE_TYPES.get(node['kind'],(node['kind'],0))[0].title()+'. Changes are saved as a draft.')
+        if choice is None: return
+        graph=self.current_graph()
+        if choice==0:
+            name=self.prompt('Block name',node.get('label',''))
+            if name and name.strip():
+                next(n for n in graph['nodes'] if n['id']==node['id'])['label']=name
+                self.save_graph(graph)
+        elif choice<=len(fields): self.edit_field(fields[choice-1])
+        elif choice==len(fields)+1: self.connect_block(node)
+        elif choice==len(fields)+2:
+            connections=[e for e in graph.get('edges',[]) if node['id'] in (e['source'],e['target'])]
+            names={n['id']:n['label'] for n in graph['nodes']}
+            if not connections: self.notice='This block has no connections.'; return
+            labels=[names[e['source']]+' -> '+names[e['target']]+' ('+e.get('relation','unresolved')+')' for e in connections]
+            selected=self.menu('Connections for '+node['label'],labels)
+            if selected is not None and self.menu('Remove this connection?',['Keep connection','Remove connection'],labels[selected])==1:
+                graph['edges'].remove(connections[selected]); self.save_graph(graph)
+        elif self.menu('Remove '+node['label']+'?',['Keep block','Remove block and its connections'])==1:
+            graph['nodes']=[n for n in graph['nodes'] if n['id']!=node['id']]
+            graph['edges']=[e for e in graph.get('edges',[]) if node['id'] not in (e['source'],e['target'])]
+            self.save_graph(graph)
+
+    def select_direction(self, key):
+        if not self.rows: return
+        positions=graph_positions(self.rows)
+        sx,sy=positions[self.rows[self.index]['id']]
+        dx,dy={self.curses.KEY_LEFT:(-1,0),self.curses.KEY_RIGHT:(1,0),self.curses.KEY_UP:(0,-1),self.curses.KEY_DOWN:(0,1)}[key]
+        candidates=[]
+        for i,node in enumerate(self.rows):
+            x,y=positions[node['id']]
+            if (x-sx)*dx+(y-sy)*dy>0:
+                candidates.append((abs((x-sx)/24)+abs((y-sy)/6),i))
+        if candidates: self.index=min(candidates)[1]
+
+    def dialog(self, title, detail, desired_height):
+        self.render()
+        h,w=self.screen.getmaxyx()
+        width,height=min(92,w-6),min(desired_height,h-4)
+        x,y=(w-width)//2,(h-height)//2
+        for row in range(height): self.put(y+row,x,' '*width)
+        self.put(y,x,'┌'+'─'*(width-2)+'┐',self.accent)
+        self.put(y+height-1,x,'└'+'─'*(width-2)+'┘',self.accent)
+        for row in range(1,height-1):
+            self.put(y+row,x,'│',self.accent); self.put(y+row,x+width-1,'│',self.accent)
+        self.put(y+1,x+2,title[:width-4],self.curses.A_BOLD|self.accent)
+        for i,line in enumerate(self.wrap(detail,width-4)[:3]): self.put(y+3+i,x+2,line)
+        return x,y,width,height
+
+    def menu(self, title, options, detail=''):
+        index = 0
+        self.screen.timeout(-1)
+        try:
+            while True:
+                x,y,width,height=self.dialog(title,detail,max(14,len(options)+10))
+                room=max(1,height-10)
+                first=max(0,index-room+1)
+                for i,option in list(enumerate(options))[first:first+room]:
+                    self.put(y+7+i-first,x+2,(('> ' if i==index else '  ')+option)[:width-4],self.curses.A_REVERSE if i==index else 0)
+                self.put(y+height-2,x+2,'Up/Down Select   Enter Choose   Esc Back'[:width-4],self.curses.A_DIM)
+                self.screen.refresh()
+                key=self.screen.get_wch()
+                if key=='\x1b': return None
+                if key in ('\n','\r',self.curses.KEY_ENTER): return index
+                if key==self.curses.KEY_MOUSE:
+                    try: _,mx,my,_,buttons=self.curses.getmouse()
+                    except self.curses.error: continue
+                    picked=first+my-(y+7)
+                    if buttons & self.curses.BUTTON1_CLICKED and x+1<=mx<x+width-1 and y+7<=my<y+7+room and picked<len(options): return picked
+                if key in (self.curses.KEY_UP,'k'): index=max(0,index-1)
+                if key in (self.curses.KEY_DOWN,'j'): index=min(len(options)-1,index+1)
+        finally:
+            self.screen.timeout(250)
+
+    def prompt(self, title, value='', detail='', secret=False):
+        value=str(value)
+        self.screen.timeout(-1)
+        try:
+            while True:
+                x,y,width,height=self.dialog(title,detail,16)
+                display='*'*len(value) if secret else value.replace('\n',' ')
+                self.put(y+height-5,x+2,'> '+display[-max(1,width-8):]+'_',self.curses.A_REVERSE)
+                self.put(y+height-2,x+2,'Ctrl-U Clear   Enter Save   Esc Cancel'[:width-4],self.curses.A_DIM)
+                self.screen.refresh()
+                key=self.screen.get_wch()
+                if key=='\x1b': return None
+                if key in ('\n','\r',self.curses.KEY_ENTER): return value
+                if key in ('\x7f','\b',self.curses.KEY_BACKSPACE): value=value[:-1]
+                elif key=='\x15': value=''
+                elif isinstance(key,str) and key.isprintable(): value+=key
+        finally:
+            self.screen.timeout(250)
+
+    def review(self, title, text):
+        """Scrollable review; only reaching its end enables confirmation."""
+        offset = 0
+        self.screen.timeout(-1)
+        try:
+            while True:
+                self.screen.erase()
+                h, w = self.screen.getmaxyx()
+                lines = self.wrap(text, w-8)
+                room = max(1,h-8)
+                offset = min(offset,max(0,len(lines)-room))
+                at_end = offset+room >= len(lines)
+                self.put(2,3,title,self.curses.A_BOLD | self.accent)
+                for i,line in enumerate(lines[offset:offset+room]): self.put(4+i,3,line)
+                self.put(h-2,3,'Up/Down Scroll   ' + ('Enter Continue   ' if at_end else 'Read to the end   ') + 'Esc Cancel',self.curses.A_DIM)
+                self.screen.refresh()
+                key=self.screen.get_wch()
+                if key=='\x1b': return False
+                if key in ('\n','\r',self.curses.KEY_ENTER) and at_end: return True
+                if key in (self.curses.KEY_DOWN,'j'): offset+=1
+                if key in (self.curses.KEY_UP,'k'): offset=max(0,offset-1)
+                if key==self.curses.KEY_NPAGE: offset+=room
+                if key==self.curses.KEY_PPAGE: offset=max(0,offset-room)
+        finally:
+            self.screen.timeout(250)
+
+    def edit_field(self, field):
+        value = field['value']
+        if field['field'] == 'requirements':
+            # Display all supported gates, retaining unrelated values in a draft.
+            choices = ['user_authorization', 'exact_commit', 'verified_pr']
+            value = list(value)
+            while True:
+                selected = self.menu(field['label'], [('Remove ' if key in value else 'Require ') + FIELD_NAMES[key] for key in choices] + ['Save draft'], field['group'])
+                if selected is None: return
+                if selected == len(choices): break
+                key = choices[selected]
+                value.remove(key) if key in value else value.append(key)
+        else:
+            text = shlex.join(value) if field['field'] == 'argv' else str(value)
+            detail = field['group'] + '. This saves a draft; the active workflow changes only after you apply it.'
+            if field['field'] in {'gpu_limit','run_limit'}: detail += ' Enter a number or unlimited.'
+            value = self.prompt(field['label'],text,detail)
+            if value is None: return
+            if field['field'] == 'argv': value = shlex.split(value)
+            elif field['field'] in {'gpu_limit','run_limit','interval_minutes'}:
+                value = value.strip()
+                value = 'unlimited' if value == 'unlimited' and field['field'] != 'interval_minutes' else int(value)
+        self.save_field(field,value)
+
+    def apply_draft(self, discard=False):
+        target = deepcopy(self.target)
+        state = self.app.client.get('surfboard', **target)
+        draft = state.get('draft')
+        if not draft:
+            self.notice='There are no draft changes.'
+            return
+        if draft.get('errors') and not discard:
+            self.review('Fix these workflow errors first',human(draft['errors']))
+            return
+        changes='\n\n'.join(workflow_changes(state['board'],draft['board'])) or 'No settings changed.'
+        scope='This task only.' if target.get('experiment_id') else 'Project defaults for new tasks. Existing task workflows are unchanged.'
+        if not self.review('Discard draft?' if discard else 'Review workflow changes',scope+'\n\n'+changes): return
+        if self.menu('Discard these changes?' if discard else 'Apply these changes?', ['Keep draft', 'Discard draft' if discard else 'Apply now']) != 1: return
+        envelope=self.app.envelope(target,state)
+        self.app.client.action('surfboard.discard' if discard else 'surfboard.apply',**{k:v for k,v in envelope.items() if k!='board'})
+        self.notice='Draft discarded.' if discard else 'Workflow applied. These settings are now active.'
+
+    def change_context(self):
+        projects=self.state.get('projects',[])
+        if not projects: raise Error('No projects are available in this workspace.')
+        index=self.menu('Choose a project',[p['name'] for p in projects])
+        if index is None: return
+        project=projects[index]
+        tasks=[t for t in self.state.get('experiments',[]) if t['project_id']==project['id'] and not t.get('archived')]
+        index=self.menu('Choose what to work on',['Project defaults and lead']+[t['name'] for t in tasks])
+        if index is not None:
+            self.app.select(project_id=project['id'],experiment_id=tasks[index-1]['id'] if index else None)
+            self.scope=None
+            self.notice='Selection updated.'
+
+    def choose_agent(self):
+        result=self.app.client.get('experiment-agents',experiment_id=self.target['experiment_id']) if self.target.get('experiment_id') else self.app.client.get('project-agents',project_id=self.target['project_id'])
+        agents=result.get('agents',[])
+        if not agents: raise Error('No conversations are available for this selection.')
+        index=self.menu('Choose a conversation',[(a.get('name') or 'Agent')+(' (read-only history)' if a.get('retired') else '') for a in agents])
+        if index is not None:
+            self.scope=agents[index]['scope']; self.scope_name=agents[index].get('name') or 'Agent'; self.chat_scroll=0
+
+    def respond(self):
+        questions=[q for q in self.chat.get('questions',[]) if q.get('status')=='pending']
+        approvals=[a for a in self.chat.get('approvals',[]) if a.get('status')=='pending']
+        if questions:
+            question=questions[0]
+            answers={}
+            for item in question['questions']:
+                answer=self.prompt(item.get('header') or 'Agent question',detail=item['question']+'\n'+human([o['label'] for o in item.get('options',[])]),secret=item.get('isSecret',False))
+                if answer is None: return
+                answers[item['id']]=[answer]
+            self.app.client.action('chat.answer',scope=self.scope,question_id=question['id'],answers=answers)
+        elif approvals:
+            approval=approvals[0]
+            if not self.review('Review the requested permission',human(approval)): return
+            options=['Leave pending','Deny']+(['Approve once'] if approval.get('can_approve',True) else [])
+            choice=self.menu('Your decision',options)
+            if choice in (1,2):
+                self.app.client.action('chat.approve',scope=self.scope,approval_id=approval['id'],decision='approve' if choice==2 else 'deny')
+        else: self.notice='The agent has no pending questions or approvals.'
+
+    def handle(self,key):
+        c=self.curses
+        if key in ('1','2','3'):
+            self.tab=int(key)-1; self.index=0; self.rows=[]; self.notice=''
+        elif self.tab==1 and key in (c.KEY_UP,c.KEY_DOWN,c.KEY_LEFT,c.KEY_RIGHT): self.select_direction(key)
+        elif self.tab==1 and key=='\t' and self.rows: self.index=(self.index+1)%len(self.rows)
+        elif key==c.KEY_MOUSE:
+            try:
+                _,x,y,_,buttons=c.getmouse()
+            except c.error: return
+            if buttons & (c.BUTTON1_CLICKED | c.BUTTON1_DOUBLE_CLICKED):
+                if y==3 and 2<=x<62:
+                    self.tab=(x-2)//20; self.index=0; self.rows=[]; self.notice=''
+                elif self.tab==1:
+                    for bx,by,bw,bh,index in self.hitboxes:
+                        if bx<=x<bx+bw and by<=y<by+bh:
+                            self.index=index; self.edit_node(); break
+        elif key in (c.KEY_UP,'k') and self.tab!=2: self.index=max(0,self.index-1)
+        elif key in (c.KEY_DOWN,'j') and self.tab!=2: self.index=min(max(0,len(self.rows)-1),self.index+1)
+        elif key==c.KEY_PPAGE and self.tab==2: self.chat_scroll+=10
+        elif key==c.KEY_NPAGE and self.tab==2: self.chat_scroll=max(0,self.chat_scroll-10)
+        elif key=='c': self.change_context()
+        elif key=='?':
+            self.review('SuperSurfer help','Jobs: select a named job, then Enter for its actions. The queue covers this entire workspace.\n\nWorkflow: coloured blocks form your flowchart. Click or select a block to edit its name, settings and connections. Add a block with n; connect it with l. Review and apply with a; discard with d. Use f to ask the workflow editor for a change.\n\nAgent: Enter writes a message. Respond handles questions and one-time approvals.\n\nAdvanced: press x on Workflow for JSON editing. Existing commands remain available through surfer shell.\n\nCtrl-b 2 opens a normal shell. Ctrl-b d detaches tmux. Agents and jobs continue in the workspace service.')
+        elif self.tab==0:
+            if key=='p': self.job_action('resume' if self.state.get('queue',{}).get('paused') else 'pause',None)
+            elif key in ('\n','\r',c.KEY_ENTER) and self.rows:
+                job=deepcopy(self.rows[self.index])
+                actions=[('up','Move earlier'),('down','Move later'),('hold' if job.get('ready') else 'ready','Put on hold' if job.get('ready') else 'Release through checks')] if job['status']=='queued' else []
+                actions+=[('cancel','Cancel job')]
+                choice=self.menu(job.get('name') or 'Job',[label for _,label in actions], 'Choose an action for this job.')
+                if choice is not None:
+                    command=actions[choice][0]
+                    if command=='cancel':
+                        if self.menu('Cancel '+(job.get('name') or 'this job')+'?', ['Keep job','Cancel job'])==1:
+                            with redirect_stdout(io.StringIO()): self.app.queue_action('cancel',[job['id']],confirmed=True)
+                            self.notice='Cancellation requested.'
+                    else: self.job_action(command,job)
+        elif self.target and self.tab==1:
+            if key in ('\n','\r',c.KEY_ENTER): self.edit_node()
+            elif key=='v': self.show_all=not self.show_all; self.graph_offset=[0,0]
+            elif key=='n': self.add_block()
+            elif key=='l': self.connect_block()
+            elif key=='a': self.apply_draft()
+            elif key=='d': self.apply_draft(discard=True)
+            elif key=='f':
+                text=self.prompt('Describe the workflow change',detail='Your workflow editor will propose a draft. Example: Require tests to pass before a GPU job can run.')
+                if text and text.strip():
+                    result=self.app.client.action('surfboard.ask',**self.app.envelope(self.target,self.board),text='Propose this change as a draft only; do not apply it: '+text)
+                    if not result.get('accepted'): raise Error(result.get('error') or 'The workflow editor could not start.')
+                    self.scope=result['scope']; self.scope_name='Workflow editor'; self.tab=2; self.chat_scroll=0
+            elif key=='x':
+                c.def_prog_mode(); c.endwin()
+                try: self.app.board(['edit'])
+                finally: c.reset_prog_mode(); self.screen.clear(); self.screen.refresh()
+        elif self.target and self.tab==2:
+            if key in ('\n','\r',c.KEY_ENTER):
+                if self.chat.get('busy'): raise Error('The agent is working. Wait for its reply, or use s to stop its turn.')
+                text=self.prompt('Message to '+self.scope_name,detail='Enter sends your message to this existing conversation.')
+                if text and text.strip(): self.app.client.action('chat.send',scope=self.scope,text=text)
+                self.chat_scroll=0
+            elif key=='g': self.choose_agent()
+            elif key=='r': self.respond()
+            elif key=='s' and self.menu('Stop the current agent turn?', ['Keep working','Stop this turn'])==1:
+                self.app.client.action('chat.stop',scope=self.scope)
+
+    def run(self,screen):
+        import curses
+        self.curses,self.screen=curses,screen
+        try: curses.curs_set(0)
+        except curses.error: pass
+        self.accent=0
+        if curses.has_colors():
+            curses.start_color(); curses.use_default_colors(); curses.init_pair(1,curses.COLOR_CYAN,-1)
+            self.accent=curses.color_pair(1)
+            for pair,color in [(2,curses.COLOR_YELLOW),(3,curses.COLOR_GREEN),(4,curses.COLOR_MAGENTA),(5,curses.COLOR_WHITE)]: curses.init_pair(pair,color,-1)
+        self.color=lambda pair: curses.color_pair(pair) if curses.has_colors() else 0
+        try: curses.mousemask(curses.ALL_MOUSE_EVENTS)
+        except curses.error: pass
+        screen.keypad(True); screen.timeout(250)
+        next_refresh=0
+        while True:
+            if time.monotonic()>=next_refresh:
+                try: self.refresh()
+                except (Error,OSError,ValueError) as exc: self.error=str(exc)
+                next_refresh=time.monotonic()+3
+            self.render()
+            try: key=screen.get_wch()
+            except curses.error: continue
+            if key in ('q','\x03'): return
+            try: self.handle(key)
+            except (Error,OSError,ValueError) as exc: self.error=str(exc)
+            else: next_refresh=0
+
+
+def dashboard(app):
+    try:
+        import curses
+    except ImportError as exc:
+        raise Error('This Python installation has no curses support. Use surfer shell or install Python with curses.') from exc
+    curses.wrapper(Dashboard(app).run)
+
+
 def tmux_session(app, detached=False):
     binary = shutil.which('tmux')
     if not binary:
         raise Error('Install tmux, or run surfer shell for the same commands without tmux.')
     # A dedicated tmux server leaves every user session and ~/.tmux.conf alone.
-    identity = hashlib.sha256((str(app.client.state_dir) + str(app.client.url_override)).encode()).hexdigest()[:12]
+    identity = hashlib.sha256((str(app.client.state_dir) + str(app.client.url_override) + str(app.home.resolve()) + ':dashboard-v1').encode()).hexdigest()[:12]
     socket_name = 'surfer-' + identity
     base = [binary, '-L', socket_name, '-f', '/dev/null']
     def call(*args, check=True):
@@ -565,17 +1274,17 @@ def tmux_session(app, detached=False):
         if app.client.url_override:
             command += ['--url', app.client.url_override]
         quote = lambda *tail: shlex.join(command + list(tail))
-        size = shutil.get_terminal_size((120, 36))
-        call('new-session', '-d', '-x', str(size.columns), '-y', str(size.lines), '-s', 'surfer', '-n', 'Control', quote('shell'))
+        size = shutil.get_terminal_size((148, 42))
+        call('new-session', '-d', '-x', str(size.columns), '-y', str(size.lines), '-s', 'surfer', '-n', 'SuperSurfer', quote('dashboard'))
         try:
             call('set-option', '-t', 'surfer', 'base-index', '1')
             call('move-window', '-s', 'surfer:0', '-t', 'surfer:1')
             call('set-option', '-t', 'surfer', 'mouse', 'on')
-            call('set-option', '-t', 'surfer', 'status-left', ' SuperSurfer | ')
-            call('set-option', '-t', 'surfer', 'status-right', ' Ctrl-b 1 control · 2 shell · 3 board · d detach ')
+            call('set-option', '-t', 'surfer', 'status-left', '')
+            call('set-option', '-t', 'surfer', 'status-right', ' Ctrl-b 2 shell · Ctrl-b d detach ')
+            call('set-option', '-t', 'surfer', 'status-style', 'bg=colour236,fg=colour250')
             call('set-option', '-t', 'surfer', 'status-right-length', '70')
             call('set-window-option', '-t', 'surfer:1', 'remain-on-exit', 'on')
-            call('split-window', '-h', '-l', '40%', '-t', 'surfer:1', quote('watch', 'queue'))
             call('select-pane', '-t', 'surfer:1.0')
             # Make the one-file client available as `surfer` in the ordinary shell.
             call('set-environment', '-t', 'surfer', 'PATH', str(Path(script).parent) + os.pathsep + os.environ.get('PATH', ''))
@@ -584,8 +1293,6 @@ def tmux_session(app, detached=False):
             if app.client.url_override:
                 call('set-environment', '-t', 'surfer', 'SURFER_URL', app.client.url_override)
             call('new-window', '-t', 'surfer:2', '-n', 'Shell')
-            call('new-window', '-t', 'surfer:3', '-n', 'Board', quote('watch', 'board'))
-            call('set-window-option', '-t', 'surfer:3', 'remain-on-exit', 'on')
             call('select-window', '-t', 'surfer:1')
         except Exception:
             call('kill-session', '-t', '=surfer', check=False)
@@ -594,13 +1301,13 @@ def tmux_session(app, detached=False):
     panes = call('list-panes', '-a', '-F', '#{session_name}:#{window_index}.#{pane_index} #{pane_dead}').stdout
     for row in panes.splitlines():
         pane, dead = row.split()
-        if dead == '1' and pane in {'surfer:1.0', 'surfer:1.1', 'surfer:3.0'}:
+        if dead == '1' and pane == 'surfer:1.0':
             call('respawn-pane', '-t', pane)
     if detached:
         say('Session ready. Reconnect with surfer (same connection options).')
         return socket_name
     if os.environ.get('TMUX'):
-        say('Already inside tmux. Detach first, then run surfer to attach to its dedicated session; or use surfer shell here.')
+        say('Already inside tmux. Detach first, then run surfer to attach to its dedicated session; or use surfer dashboard here.')
         return socket_name
     os.execvp(binary, [*base, 'attach-session', '-t', '=surfer'])
 
@@ -623,6 +1330,8 @@ def main(argv=None):
     try:
         if not args.command:
             tmux_session(app, args.detached)
+        elif args.command == ['dashboard']:
+            dashboard(app)
         elif args.command == ['shell']:
             app.shell()
         elif len(args.command) == 2 and args.command[0] == 'watch' and args.command[1] in {'queue', 'board'}:

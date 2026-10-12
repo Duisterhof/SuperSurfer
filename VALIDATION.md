@@ -1,3 +1,23 @@
+# Terminal dashboard and flowchart — October 11, 2026 (unreleased)
+
+The default terminal now opens Jobs, Workflow and Agent screens. Visual inspection
+uses captures from a running demo service and real tmux/curses sessions, including
+the coloured flowchart and its block-editing dialog. Demo jobs and provider replies
+are simulated; no live workspace is changed. The desktop Terminal app is unavailable
+to computer automation, so PNGs render the captured terminal cells and ANSI colours.
+
+The 25-test focused suite passes, including real mouse input (using the pane's
+advertised X10/SGR protocol), dashboard startup/reconnect, adding a command check
+and its actual `requires` edge, named setting edits, complete change review,
+concurrent draft rejection and all earlier queue/chat protections. The ordinary
+Python suite ran 773 tests: 732 passed, 34 skipped and the same seven previously
+verified system-rsync failures. Node tests pass 37, with five optional SSH skips.
+Capability-skill validation, Python compilation and whitespace checks pass.
+
+The Mac Apple Silicon package is rebuilt and tested with the same strict-signature,
+original/ZIP-extracted isolated-profile launch and sandbox checks described below.
+Full Linux checks run on the updated PR; real provider authentication is not tested.
+
 # Terminal client — October 11, 2026 (unreleased)
 
 The standalone `surfer` client passes 20 integration tests using the real workspace

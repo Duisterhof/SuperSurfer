@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -207,27 +208,123 @@ class TerminalTests(unittest.TestCase):
                 self.client.action('chat.send', scope='project:p1', text='Do work')
         self.assertEqual(opener.call_count, 1)
 
+    def workflow_dashboard(self):
+        dashboard = terminal.Dashboard(self.app)
+        dashboard.tab = 1
+        dashboard.refresh()
+        return dashboard
+
+    def test_dashboard_edits_a_named_setting_as_a_draft(self):
+        dashboard = self.workflow_dashboard()
+        field = next(f for f in terminal.workflow_fields(dashboard.board['board']) if f['field'] == 'gpu_limit')
+        dashboard.save_field(field, 2)
+        state = self.client.get('surfboard', project_id='p1')
+        changes = terminal.workflow_changes(state['board'], state['draft']['board'])
+        self.assertIn('Maximum GPUs', '\n'.join(changes))
+        self.assertEqual(next(n for n in state['board']['nodes'] if n['kind']=='compute')['config']['gpu_limit'], 4)
+
+    def test_dashboard_editor_does_not_overwrite_concurrent_draft(self):
+        dashboard = self.workflow_dashboard()
+        field = next(f for f in terminal.workflow_fields(dashboard.board['board']) if f['field'] == 'gpu_limit')
+        self.app.dispatch(['board','set',field['node_id'],'gpu_limit','3'])
+        with self.assertRaisesRegex(terminal.Error,'preserved'):
+            dashboard.save_field(field, 2)
+        state = self.client.get('surfboard', project_id='p1')
+        self.assertEqual(next(n for n in state['draft']['board']['nodes'] if n['kind']=='compute')['config']['gpu_limit'], 3)
+
+    def test_dashboard_adds_and_connects_a_real_check_without_applying(self):
+        dashboard = self.workflow_dashboard()
+        with patch.object(dashboard,'menu',return_value=2), patch.object(dashboard,'prompt',return_value='Run unit tests'):
+            dashboard.add_block()
+        dashboard.refresh()
+        node = next(n for n in dashboard.rows if n['label']=='Run unit tests')
+        graph = dashboard.current_graph()
+        next(n for n in graph['nodes'] if n['id']==node['id'])['config']['argv']=['python3','-m','unittest']
+        dashboard.save_graph(graph)
+        dashboard.refresh()
+        def choose_relation(title, options, detail=''):
+            if title.startswith('Connect from'): return options.index('Must be satisfied before')
+            return next(i for i,label in enumerate(options) if label.startswith('Experiment ('))
+        with patch.object(dashboard,'menu',side_effect=choose_relation): dashboard.connect_block(node)
+        state = self.client.get('surfboard', project_id='p1')
+        self.assertFalse(any(n['label']=='Run unit tests' for n in state['board']['nodes']))
+        self.assertTrue(any(e['source']==node['id'] and e['target']=='experiment' and e['relation']=='requires' for e in state['draft']['board']['edges']))
+
+    def test_dashboard_apply_checks_the_exact_reviewed_draft(self):
+        dashboard = self.workflow_dashboard()
+        field = next(f for f in terminal.workflow_fields(dashboard.board['board']) if f['field']=='gpu_limit')
+        dashboard.save_field(field, 2)
+        def edit_during_review(*_):
+            self.app.dispatch(['board','set',field['node_id'],'gpu_limit','3'])
+            return True
+        with patch.object(dashboard,'review',side_effect=edit_during_review), patch.object(dashboard,'menu',return_value=1):
+            with self.assertRaises(terminal.Error): dashboard.apply_draft()
+
+    def test_flowchart_routes_arrows_around_other_blocks(self):
+        boxes=[(0,0,20,3),(24,0,20,3),(48,0,20,3)]
+        path,arrow=terminal.graph_route(boxes[0],boxes[2],boxes,70,10)
+        self.assertTrue(path)
+        self.assertIn(arrow,'<>v^')
+        self.assertFalse(any(24<=x<44 and 0<=y<3 for x,y in path))
+
     @unittest.skipUnless(shutil.which('tmux'), 'tmux is not installed')
     def test_real_tmux_session_reconnects_without_duplicate_panes(self):
-        socket_name = terminal.tmux_session(self.app, detached=True)
+        # Mouse coordinates below refer to this fixed viewport, independent of
+        # the test runner's terminal dimensions or COLUMNS/LINES environment.
+        with patch.object(terminal.shutil, 'get_terminal_size', return_value=os.terminal_size((148, 42))):
+            socket_name = terminal.tmux_session(self.app, detached=True)
         command = [shutil.which('tmux'), '-L', socket_name]
         try:
             first = subprocess.check_output(command + ['list-panes', '-a', '-F', '#{pane_id}'], text=True)
             terminal.tmux_session(self.app, detached=True)
             second = subprocess.check_output(command + ['list-panes', '-a', '-F', '#{pane_id}'], text=True)
             self.assertEqual(first, second)
-            self.assertEqual(len(first.splitlines()), 4)
-            subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', 'queue', 'Enter'], check=True)
+            self.assertEqual(len(first.splitlines()), 2)
+            subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', '1'], check=True)
             deadline = time.monotonic() + 8
             while time.monotonic() < deadline:
                 view = subprocess.check_output(command + ['capture-pane', '-p', '-S', '-', '-t', 'surfer:1.0'], text=True)
-                if 'GPU QUEUE' in view:
+                if 'GPU jobs' in view:
                     break
                 time.sleep(.1)
-            self.assertIn('GPU QUEUE', view)
+            self.assertIn('GPU jobs', view)
+            self.assertIn('Enter Job actions', view)
             self.assertNotIn(self.service.token, view)
             self.assertFalse(self.service.codex.sent)
-            subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', 'exit', 'Enter'], check=True)
+            subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', '2'], check=True)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                view = subprocess.check_output(command + ['capture-pane', '-p', '-t', 'surfer:1.0'], text=True)
+                if 'CONDITION' in view: break
+                time.sleep(.1)
+            self.assertIn('CONDITION', view)
+            # Match the pane's terminfo protocol; tmux translates physical mouse
+            # events into X10 on older Mac terminfo and SGR on newer Linux builds.
+            term = subprocess.check_output(command + ['show-options','-gv','default-terminal'],text=True).strip()
+            mouse = subprocess.check_output([sys.executable,'-c','import curses,sys; curses.setupterm(sys.argv[1]); sys.stdout.buffer.write(curses.tigetstr("kmous") or b"")',term])
+            def click(column,row):
+                event = f'\x1b[<0;{column};{row}M\x1b[<0;{column};{row}m' if mouse == b'\x1b[<' else '\x1b[M'+chr(32)+chr(32+column)+chr(32+row)+'\x1b[M'+chr(35)+chr(32+column)+chr(32+row)
+                subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', '-l', event],check=True)
+            click(29,24)
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                view = subprocess.check_output(command + ['capture-pane', '-p', '-t', 'surfer:1.0'], text=True)
+                if 'Maximum GPUs: 4' in view: break
+                time.sleep(.1)
+            self.assertIn('Maximum GPUs: 4', view)
+            # Click the GPU setting in its dialog, edit it, and save a real draft.
+            click(35,22)
+            time.sleep(.3)
+            subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', 'C-u', '2', 'Enter'],check=True)
+            deadline=time.monotonic()+5
+            while time.monotonic()<deadline:
+                state=self.client.get('surfboard',project_id='p1')
+                if state.get('draft'): break
+                time.sleep(.1)
+            self.assertEqual(next(n for n in state['draft']['board']['nodes'] if n['kind']=='compute')['config']['gpu_limit'],2)
+            self.assertEqual(next(n for n in state['board']['nodes'] if n['kind']=='compute')['config']['gpu_limit'],4)
+            time.sleep(.3)
+            subprocess.run(command + ['send-keys', '-t', 'surfer:1.0', 'q'], check=True)
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
                 dead = subprocess.check_output(command + ['display-message', '-p', '-t', 'surfer:1.0', '#{pane_dead}'], text=True).strip()

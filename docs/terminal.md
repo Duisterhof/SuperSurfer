@@ -8,13 +8,62 @@ workspace. It does not start, upgrade or restart the workspace service.
 ./surfer
 ```
 
-It creates a dedicated tmux server with a Control window (command prompt and live
-GPU queue), an ordinary Shell window, and a live Surfboard window. Your tmux
-configuration and other sessions are unaffected. Run the same command to reconnect.
-`Ctrl-b d` detaches; `Ctrl-b 1`, `2`, `3` selects a window. The normal shell can run
-your editor, git, or an official agent CLI. Those separately launched CLIs do not
-automatically acquire Supersurfer's workflow tools; `chat` uses the existing managed
-Supersurfer conversation and its configured tools.
+The default screen has three clearly labelled views. Press **1 Jobs**, **2 Workflow**,
+or **3 Agent**. A separate tmux Shell window is available with `Ctrl-b 2`.
+`Ctrl-b 1` returns to SuperSurfer; `Ctrl-b d` detaches. Reopen with `surfer`.
+Agents and jobs remain owned by your existing workspace service.
+
+## Jobs
+
+Select a named job with Up/Down and press Enter for its actions: move earlier/later,
+hold, release through existing checks, or cancel. `p` pauses/resumes queue admission.
+The page states that the queue covers the entire workspace, shows readable statuses,
+and preserves unknown/stale GPU observations. Cancellation asks for confirmation.
+
+## Workflow: edit the flowchart
+
+![Terminal workflow with coloured blocks](terminal-workflow.png)
+
+Each block has a type label as well as a colour:
+
+- Cyan: agents.
+- Yellow: conditions, checks and schedules.
+- Green: jobs and compute.
+- Purple: outputs and data.
+
+Click a block, or select it with Tab/arrows and press Enter. Its editor offers a
+readable name, everyday settings such as **Maximum GPUs**, and connection controls.
+`n` adds a block; `l` connects the selected block to another. Relationship choices
+come from the service (for example, **Must be satisfied before** for a check).
+The block editor can remove a connection or a block with confirmation.
+
+The main flow hides supporting goal, notes, files, activity and timer blocks.
+`v` shows the entire board. This is a view filter: hidden blocks retain all their
+connections and behavior. Larger graphs scroll to the selected block. Arrows keep
+the actual direction of each connection; selected connections are highlighted.
+Failure/recovery arrows are shown for the selected block or in Show all.
+
+Every edit creates a **draft**. Press `a` to review all changes and then explicitly
+apply them. Review includes changes to hidden blocks and settings changed by other
+interfaces. Version checks prevent overwriting a newer draft while editing or
+reviewing. `d` reviews/discards a draft. `f` asks the persistent workflow editor to
+propose a change in plain language and opens its conversation. Advanced JSON editing
+is available with `x`; dragging blocks and bulk library rollout remain in the desktop.
+
+Use `c` to choose a project and task. Project defaults apply to new tasks; existing
+tasks retain their own boards.
+
+## Agent
+
+The Agent view shows who you are talking to, the provider and whether they are
+working or waiting for you. Enter writes a message; `r` handles questions and
+reviewed one-time approvals, `g` chooses a named conversation, and `s` stops a turn
+with confirmation. PgUp/PgDn scroll history. Closing or detaching never stops work.
+
+The client uses standard Python curses (normally included on Mac/Linux), Python
+3.11+ and tmux. It is still a single executable file with no pip dependencies.
+`surfer dashboard` opens the interface without tmux. The previous short commands
+remain available through `surfer shell` or ordinary one-shot commands below.
 
 ## Connect
 
@@ -53,7 +102,9 @@ printed, or forwarded across HTTP redirects. Remote HTTP addresses are rejected.
 `SURFER_STATE_DIR`, `SURFER_URL`, and `SURFER_HOME` provide the corresponding
 defaults. Terminal selections and recoverable edits live under
 `~/.local/state/supersurfer-terminal/` (or `$XDG_STATE_HOME`) separately from service
-state. Use a different `--home` to have independent selections on the same service.
+state. Use a different `--home` for independent selections and tmux sessions. The
+dashboard layout uses a new session identity so upgrading leaves older command
+prompts intact.
 
 ## Short commands
 
@@ -159,8 +210,8 @@ queue or board before deciding to retry.
 
 `surfer shell` opens the same prompt directly. `surfer queue` and `surfer board`
 print one snapshot; `surfer watch queue` and `surfer watch board` refresh every five
-seconds. This version uses text views and your editor, not a graphical node canvas.
-Use the desktop Surfboard editor for dragging nodes or viewing rich HTML reports.
+seconds. The default dashboard provides the coloured flowchart. Use the desktop editor for
+dragging nodes or viewing rich HTML reports.
 
 `--yes` skips the terminal confirmation for an explicitly requested apply, discard,
 or cancellation. It never changes service permissions or agent approval policy.

@@ -22,6 +22,10 @@ client. Its `chat` command reconnects to an existing owned conversation; changin
 interfaces does not create another worker or grant new authority. Terminal board
 edits are drafts until applied. Treat closing a terminal as disconnection, not a
 request to stop; explicit chat stops and queue cancellations remain distinct.
+The terminal's default dashboard exposes Jobs, a coloured Workflow flowchart and
+Agent chat. Users can click blocks to edit settings and connections, then review
+and apply their draft. The main view hides supporting blocks for readability;
+this never changes the board's actual nodes, requirements or tools.
 
 The desktop reports bounded SSH upload/setup progress; a connection error does
 not establish that a configured check or remote preview failed. Reconnect through
