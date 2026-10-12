@@ -73,8 +73,9 @@ or another copy of the shared source/data. See the task-scope reference below.
 For an existing experiment, reuse its owner unless distinct work needs a separate
 conversation. `create_experiment_agent` returns a scope; `handoff_experiment`
 starts a concrete assignment. Explicit `agent_scope` targets that idle worker;
-without it, the experiment-wide busy guard applies. At most three workers and
-three distinct experiment handoffs may be created per user turn. Check uncertain
+without it, the experiment-wide busy guard applies. Distinct experiment handoffs
+have no per-turn cap; duplicate dispatches in the same turn remain blocked.
+The separate limit of three new worker conversations per turn still applies. Check uncertain
 results before retrying; coordinate shared-file edits and never duplicate busy
 work. These actions are unavailable to scheduled reviews.
 

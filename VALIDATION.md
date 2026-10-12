@@ -1,3 +1,12 @@
+# Remove the three-handoff cap — October 12, 2026
+
+Manager and project-lead fixtures reproduce the former fourth-handoff rejection.
+Both now dispatch four distinct experiments in one user turn, preserve worker
+preferences/ownership and reject duplicate, busy, foreign or scheduled dispatches.
+After a new user turn, an idle worker can receive another assignment. No fixture
+run launch occurs. Agent instructions, tool descriptions and shipped lead/manager
+skills agree with the new behavior; worker-creation limits remain separate.
+
 # SuperSurfer 0.1.43 release
 
 Release scope is PR #39's direct workflow/source-receipt/steering fixes and PR #37's
