@@ -462,7 +462,7 @@ class SurfboardService:
             if fields.get("block_id"):return self.view_blocks.source(project,fields["block_id"])
             return self.view_blocks.list()
         if tool == "publish_view_block":
-            if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope)!="user":raise SurfboardError("Publishing a reusable block requires an active user task",403)
+            if not self.workflow_chat(scope).get("busy") or self.turn_origins.get(scope)!="user":raise SurfboardError("Publishing a reusable block requires an active user task",403)
             return self.view_blocks.publish(project,fields)
         if tool == "manage_todos":
             from . import todos
@@ -471,7 +471,7 @@ class SurfboardService:
             if operation == "read" and set(fields) <= {"operation", "experiment_id"}:
                 return todos.read(self, project["id"], item_id)
             if operation == "save" and set(fields) <= {"operation", "experiment_id", "markdown", "revision"} and {"markdown","revision"} <= set(fields):
-                if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+                if not self.workflow_chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
                     raise SurfboardError("Checklist editing requires an active user task", 403)
                 return todos.save(self, {"project_id":project["id"], "experiment_id":item_id, "markdown":fields["markdown"], "revision":fields["revision"]})
             raise SurfboardError("Read or save a checklist with its current revision")
@@ -488,7 +488,7 @@ class SurfboardService:
             result.update(saved_surfboards=library['library']['entries'], template_link=library['link'], workflow_tasks=[row for row in library['tasks'] if row['project_id'] == project['id'] and (not self.board_item(scope, arguments) or scope.startswith('surfboard:') or row['id'] == self.board_item(scope, arguments))])
             return result
         if tool in {"propose_surfboard", "apply_surfboard"}:
-            if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+            if not self.workflow_chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
                 raise SurfboardError("Workflow changes require an active user-requested conversation.", 403)
             item = self.board_item(scope, arguments)
             fields.pop("experiment_id", None)
@@ -507,7 +507,7 @@ class SurfboardService:
         if tool == "compile_latex":
             return self.latex_action({"project_id": project["id"], **fields}, scope)
         if tool == "run_board_action":
-            if not self.codex.chat(scope).get("busy"):
+            if not self.workflow_chat(scope).get("busy"):
                 raise SurfboardError("Board actions require an active conversation.", 409)
             if fields.get("operation", "start") in {"start", "stop"} and self.turn_origins.get(scope) != "user":
                 raise SurfboardError("Starting or stopping a board action requires user-requested work.", 403)
@@ -519,7 +519,7 @@ class SurfboardService:
         if tool == "list_project_artifacts":
             return self.artifacts.list(project, fields.get("path", ""))
         if tool == "publish_artifact":
-            if not self.codex.chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
+            if not self.workflow_chat(scope).get("busy") or self.turn_origins.get(scope) != "user":
                 raise SurfboardError("Publishing artifacts requires an active user task.", 403)
             if scope.startswith(("experiment:", "conversation:")):
                 item = self.experiment_for_scope(scope)
@@ -590,7 +590,7 @@ class SurfboardService:
             if fields.get("pending_edge"):
                 message += "\nClarify this pending connection with ask_user before resolving it: " + json.dumps(fields["pending_edge"])
             try:
-                if self.codex.chat(scope).get("busy"):
+                if self.workflow_chat(scope).get("busy"):
                     self.action("chat.steer", {"scope": scope, "text": message})
                 else:
                     self.action("chat.send", {"scope": scope, "text": message})

@@ -214,6 +214,8 @@ class Service(SurfboardService, EditorService, WritingService):
             from .backends import BackendRouter
             codex = BackendRouter(self.directory, self.store, self.context_provider, self._chat_scope, action_handler=self.agent_action)
         self.codex = codex
+        from .native_sessions import NativeSessions
+        self.native_sessions = NativeSessions(self)
         self.shutdown = threading.Event()
         self.board_runtime = BoardRuntime(self)
         self.latex = LatexCompiler(self)
@@ -1487,7 +1489,13 @@ class Service(SurfboardService, EditorService, WritingService):
                 note = f"The role's {reasoning} reasoning is unavailable for this model; the next turn uses {effort or 'the model default'} instead."
         return {"model": entry.get("model") or entry["id"], "reasoning": effort}, supported, note
 
+    def workflow_chat(self, scope):
+        return self.native_sessions.chat(scope) if scope.startswith("native:") else self.codex.chat(scope)
+
     def _chat_scope(self, scope):
+        if isinstance(scope, str) and scope.startswith("native:"):
+            row = self.native_sessions.binding(scope)
+            return {"role": row["role"], "cwd": row["cwd"], "project_id": row["project_id"], "experiment_id": row.get("experiment_id")}
         if not isinstance(scope, str) or len(scope) > 256:
             raise APIError("Unknown conversation scope")
         if scope == "manager":
@@ -1666,6 +1674,8 @@ class Service(SurfboardService, EditorService, WritingService):
         if op.startswith("workflow."):
             from .workflow_library import WorkflowLibrary
             return WorkflowLibrary(self).action(op, params)
+        if op.startswith("native."):
+            return self.native_sessions.action(op.removeprefix("native."), params)
         if op.startswith("surfboard."):
             return self.surfboard_action(op, params)
         if op == "settings.save":

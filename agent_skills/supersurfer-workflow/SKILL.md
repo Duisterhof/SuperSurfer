@@ -239,3 +239,20 @@ model catalogs and native-session availability are separate capabilities; a
 successful login does not prove this block's tools, extensions or data sources
 are ready. Preserve existing native ownership and uncertain action identities.
 See [conversation continuity](../supersurfer-worker/references/conversations.md).
+
+## Native VS Code preview
+
+A native Agent Host chat may have a scoped SuperSurfer attachment. Use only the
+advertised workflow tools and keep the native provider, model and session. Read
+`read_surfboard` for its bound task; use `propose_surfboard` and `apply_surfboard`
+with both versions for explicitly requested graph edits. Applying is configuration,
+not permission to execute actions. Do not hand the request to a duplicate service
+chat or manipulate a Codex cache. Native shell tools are not intercepted by board
+policy; use `run_board_action` for trustworthy required-check receipts. When
+`finish_workflow` is advertised, call it with evidence after completing the user's
+work; required checks must match the current source. Graph-only edits do not call
+for running the graph. Native approvals, questions and stop controls remain in the
+provider UI. A standalone host may continue the same requested task up to three
+times; an editor-owned host does not promise persistence after editor shutdown.
+Other native tools mentioned in this skill may be unavailable in this preview;
+never substitute direct scheduler access for an unadvertised queue tool.

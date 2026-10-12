@@ -1,3 +1,58 @@
+# Native VS Code workflow preview — October 12, 2026
+
+This is an experimental branch, not a release or a live workspace upgrade.
+The extension, detached companion, scoped backend tools and standard-library
+Python terminal client are implemented. VS Code 1.139's editor-owned native
+Codex chats can open beside the Surfboard in ordinary editor groups. Standalone
+remote Agent Host sessions currently use VS Code's Agents window. The requested
+complete persistent remote experience in ordinary editor tabs remains unfinished.
+The separate OpenAI Codex extension's private cache is not synchronized.
+
+Validation on macOS arm64:
+
+- `npm ci` succeeds with the new extension workspace and root lockfile.
+- Ten native backend tests pass: binding and task ownership, active-turn leases,
+  peer-origin rejection, draft CAS, idempotency, uncertain calls, required checks
+  for current source, read-only/detach behavior and fast board reads.
+- All 48 enabled Node tests pass (five optional SSH tests skipped), including
+  eleven native controller/transport regressions. These exercise same-chat
+  continuation, pause/cancel/error boundaries, uncertain delivery, edit-only
+  requests, contributed-tool ownership, attachment failure, a three-turn ceiling,
+  Unix-socket authentication and rejected action acknowledgements.
+- The ordinary Python suite ran 758 tests, with seven failures and 34 skips.
+  All seven failures are the known `test_node_workflow` macOS `rsync
+  --protect-args` failures, also reproduced on base commit fffbcc6 during the
+  preceding terminal work. The Node suite was therefore run separately.
+- A real VS Code Agent Host (AHP 0.9.0, VS Code commit
+  2242ebbb54efeeb0129e08e919e7e8d43033cd83) ran a deterministic Codex app-server
+  fixture. After disconnecting the initiating client, the companion executed
+  read_surfboard, the actual required local check and finish_workflow. A new
+  connection read the same completed chat without an active turn or replay.
+- The actual editor-native Codex tab displayed the same workflow-edit request,
+  three contributed-tool steps and the resulting graph-edit response. Native
+  window screenshot capture was unreliable, so the supplied screenshots show
+  the real extension webview in a browser harness, not a fabricated VS Code frame.
+- `tests/native-editor.browser.cjs` passes manual editing/apply, an edit sent to
+  the same native agent, preserved tests-before-preview dependency and live
+  saved-graph refresh. Screenshots were inspected for layout and readability.
+- The packaged VSIX installs into an isolated VS Code extensions directory.
+  Homebrew Python 3.14 runs `surfer-native agents` and `board 1` with no Python
+  dependencies or Conda environment. Skill validation and diff checks pass.
+
+The final `npm run package:mac` arm64 archive passed strict deep signature
+verification plus isolated launches of both the original app and the ZIP-extracted
+copy (`tests/mac-package.electron.cjs`). The setup renderer's sandbox check passed.
+The exact original bundle's extended attributes were inspected. This local build
+uses an ad-hoc signature, not Developer ID signing or notarization; local startup
+does not establish browser-download Gatekeeper acceptance.
+
+Provider responses use isolated deterministic fixtures. No authenticated model
+inference, Cursor/Claude integration, real GPU submission, live service restart,
+OS-reboot recovery or Tulip deployment is claimed. AHP 0.10 is offered during
+negotiation but only 0.9 received the complete workflow test. Native chat-opening
+commands are version-specific and the remote Agents-window route needs an
+end-to-end authenticated acceptance test before promotion from draft.
+
 # SuperSurfer 0.1.43 release
 
 Release scope is PR #39's direct workflow/source-receipt/steering fixes and PR #37's
