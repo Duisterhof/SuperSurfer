@@ -11,6 +11,11 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
 ## What can it do?
 
+- **Keep your native agent interface.** The [`surfer`](docs/terminal.md) preview
+  runs real Codex, Claude Code and Cursor terminals in easily split tmux panes.
+  Its `$supersurfer` skill also works from an existing IDE chat: read or draft a
+  Surfboard, then send authorized work to the persistent host agent. Manage GPU
+  jobs and edit the live flowchart in the companion dashboard.
 - **Build your own workflow.** Connect agents, instructions, checks, compute and
   results on a **Surfboard**. Start by telling an agent what you want to build,
   or choose a saved workflow. Review its views and steps, refine them in chat,
@@ -37,6 +42,18 @@ exclusions for source checks, and fixes recovery steering and editor shortcuts.
   follow-ups; remote agents and jobs keep running when you close the app.
 
 ## Install
+
+**Terminal preview:** inside your workspace host's Bash or Zsh shell, run:
+
+```bash
+source <(curl -fsSL https://raw.githubusercontent.com/Duisterhof/SuperSurfer/feat/tmux-terminal/install.sh)
+```
+
+Then run **`surfer`**. It uses standard Python 3.10+ and tmux; no pip or conda
+environment is needed. It connects to an existing workspace. Rerun the command
+to update. [Terminal guide](docs/terminal.md).
+
+**Desktop app:**
 
 1. [Download the latest release](https://github.com/Duisterhof/SuperSurfer/releases/latest) for **macOS** (Apple Silicon or Intel) or **Linux x64**.
 2. Extract it. On Mac, move **SuperSurfer.app** to Applications. On Linux, run **SuperSurfer-linux-x64/SuperSurfer**.

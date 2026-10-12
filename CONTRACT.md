@@ -1,3 +1,82 @@
+# Native terminals and IDE skill (unreleased)
+
+Native Codex/Claude/Cursor panes inherit the real PTY, provider login and controls;
+no scraped transcript or service polling drives their input/rendering. F2/F3 split,
+F4 zooms, F6 tiles, F7 picks panes, and mouse focus/resize remain standard tmux.
+Reconnect updates bindings without killing existing panes. New native chats do
+not attach to service-owned sessions. They persist through tmux detachment, with
+provider pickers for saved-history recovery after exit; reboot is not detachment.
+
+The shared explicit-invocation supersurfer skill uses a JSON CLI, without writing
+IDE/provider settings. It resolves multi-root project/task identity explicitly,
+reads the applied workflow and dispatches authorized work to the existing host
+owner. Its provider/model may differ from the frontend. Persistent execution and
+scoped action gates belong to the existing service. Skills do not enforce arbitrary
+shell commands, transfer current IDE chats, or add host service installation.
+Request receipts are written before dispatch, locked per ID, and retain ambiguous
+outcomes without replay. Status can follow the receipt's original owner. Existing
+service permissions, questions, exact-source and queue gates remain unchanged.
+
+Native MCP configuration is per-pane and captures its project/task at creation.
+Its only tools read the queue, read the board and propose version-checked drafts;
+it cannot apply, launch or impersonate a worker. Credentials stay on disk. The
+installer includes the same skill for all three providers, protects unrelated
+skill files and preserves the existing host service.
+
+Dashboard reads run in at most four background threads, one request per key, with
+bounded cache retention and error backoff. Results are consumed on the UI thread.
+Navigation never resets the request interval. Cached display data does not replace
+fresh service mutation validation or CAS versions. A server-side delay may still
+delay graph updates; native panes and ordinary dashboard input remain usable.
+
+# Terminal client (unreleased)
+
+The sourced Bash/Zsh installer makes `surfer` available immediately and in future
+shells through a user-local launcher and an idempotent PATH entry. It prefers
+ordinary Python 3.10+ with standard-library curses, checks tmux, downloads the
+client and license from one pinned revision and verifies their hashes before
+replacement. Existing alternative interpreters are optional fallbacks. It installs
+no Python packages or environment, leaves unrelated commands untouched, and never
+starts or changes the workspace service. Rerunning the installer updates the client.
+
+The default terminal window opens native provider CLIs through a launcher.
+The companion keyboard/mouse dashboard retains Jobs, Workflow and Agent views. Job selection uses stable IDs internally while displaying names.
+The workflow is a coloured, labelled flowchart whose main view hides supporting
+goal/notes/files/activity/timer blocks; Show all exposes the entire board. Hidden
+blocks are never removed. Selection scrolls larger diagrams. Mouse or keyboard
+selection opens a block editor; add, rename, settings, connect and remove operations
+all create version-checked drafts. Connection choices come from the server catalog.
+Apply reviews every changed field, including changes outside the main view, and
+requires explicit confirmation. JSON editing remains an advanced option.
+The workflow's persistent configurator conversation is always shown below the
+flowchart. Inline composition preserves independent background draft/chat refresh;
+changed blocks are marked and revealed, and unsent text survives refresh. Follow-up
+messages use the existing `surfboard.ask` send/steer path. Questions, approvals,
+stop and history are available in the same view. Block-edit dialogs temporarily
+pause refresh. Agent requests explicitly ask for drafts pending review/application.
+
+The standalone `surfer` Python client connects to an existing authenticated
+loopback workspace service. It uses a separate tmux server and does not install,
+start, restart or upgrade a service or provider. Queue edits use existing
+`queue.pause/resume` and `run.move/hold/ready/cancel` actions. No new submission
+path is added; read-only mode, scheduler ownership and exact-source PR/board gates
+remain service-enforced. Queue changes are workspace-wide. Cancellation requires
+terminal confirmation unless explicitly invoked with `--yes`.
+
+Project/task selections are terminal-local. Board editing preserves target, applied
+version and draft version; failed/invalid/conflicting edits remain recoverable on
+disk. Applying/discarding displays and confirms the current draft, and the service
+rejects version races. Project defaults do not rewrite existing task boards. The
+configurator command requests a draft rather than automatic application.
+
+Service chat uses existing scopes and provider settings. Provider pinning,
+one-time approvals, structured questions and service-side permissions still apply.
+Detaching or closing the terminal never stops agents/jobs; `/stop` explicitly
+stops a chat turn. Network uncertainty never automatically replays a mutation.
+Tokens are file-sourced, never CLI arguments, and HTTP redirects/proxies/external
+origins are disabled. Returned text cannot emit terminal control sequences.
+See [terminal usage](docs/terminal.md) for installation and known UI limits.
+
 # Release 0.1.43
 
 This release includes direct scoped agent workflow application, configurable

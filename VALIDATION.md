@@ -1,3 +1,116 @@
+# Native terminals and shared IDE skill — October 12, 2026 (unreleased)
+
+44 focused tests pass using isolated HTTP services, real tmux panes and disposable
+homes. Coverage includes side/below splitting, tiling and reconnect without
+replacing agents; per-provider launch arguments and scoped stdio MCP transport;
+version-conflicting drafts; bounded background reads under a stalled Surfboard;
+late responses losing to confirmed edits; multi-root project resolution; receipt
+locking/replay prevention and provider rejection; and the skill installed for
+Codex/Claude/Cursor without touching existing host service state. Saved-receipt
+status also passes through the real CLI subprocess.
+
+The ordinary Python suite ran 792 tests: 751 passed, 34 skipped, and the same seven
+previously reproduced Mac system-rsync `--protect-args` failures. Node checks pass
+37 with five optional SSH skips. Skill capability, compilation and whitespace
+checks pass. The Mac arm64 package and ZIP-extracted app pass strict signatures,
+isolated-profile launch, setup readiness and renderer sandbox checks. Signing is
+local/ad-hoc, not Developer ID signing/notarization. No quarantine attribute was
+present; downloaded-archive Gatekeeper behavior is not verified.
+
+Read-only inspection verified Tulip's installed native CLI options (Codex 0.162.1,
+Claude Code 2.1.259 and Cursor 2026.10.01). No authenticated provider prompt was
+submitted. Native CLI launch configuration and MCP calls use fixtures in tests;
+this is not evidence of a completed live provider conversation. The current VS
+Code build exposes Codex skill discovery and MCP integration; installation and
+runtime discovery on the host are checked separately. The live workspace's slow
+Surfboard endpoint remains a server-side limitation, not claimed fixed. The UI
+stays responsive while it waits. Existing service-owned sessions remain separate
+from native terminals; persistent skill work is explicitly handed to their owner.
+
+Public installer validation on Tulip passes with stock Python 3.10.12 in a
+disposable home: repeated installation, direct command in a fresh shell, all
+three provider skill directories, and the real native tmux/curses dashboard against
+an isolated empty HTTP service. A separate credential-free Codex app-server
+successfully discovers the installed supersurfer skill through `skills/list`.
+Only initialize/discovery RPCs run; no agent thread or provider inference starts.
+The initial discovery-test timeout came from a missing temporary CODEX_HOME
+folder and passed once that fixture was corrected. No user home, credentials,
+live service, agents or jobs were modified.
+
+All implementation checks pass at de813b8: stock Python 3.10 terminal/installer,
+Python 3.11/3.13 unit suites, browser workflows, Linux package and diagnostic check.
+Evidence: https://github.com/Duisterhof/SuperSurfer/actions/runs/38269313623
+
+# Terminal installer — October 12, 2026 (unreleased)
+
+Seven installer tests pass in disposable homes, covering direct command access in
+the installing shell, Bash/Zsh startup configuration, quoted/space-containing
+paths, standard Python preference, optional existing interpreter discovery,
+repeat installation, corrupt-download preservation and unrelated-command protection.
+The pinned client imports successfully under Tulip's stock Python 3.10.12 with
+standard-library curses. A dedicated Python 3.10 CI job runs the terminal and
+installer tests. No provider inference or live workspace changes are used.
+
+All 34 focused terminal/installer checks pass. The ordinary Python suite ran 782
+tests: 741 passed, 34 skipped, and the same seven previously verified Mac system-rsync
+failures. Node tests pass 37 with five optional SSH skips. Capability skills and
+whitespace checks pass. The Mac package is rebuilt with isolated native launch checks;
+final cross-platform checks run on the PR.
+
+# Terminal dashboard and flowchart — October 11, 2026 (unreleased)
+
+The default terminal now opens Jobs, Workflow and Agent screens. Visual inspection
+uses captures from a running demo service and real tmux/curses sessions, including
+the coloured flowchart and its block-editing dialog. Demo jobs and provider replies
+are simulated; no live workspace is changed. The desktop Terminal app is unavailable
+to computer automation, so PNGs render the captured terminal cells and ANSI colours.
+
+The 27-test focused suite passes, including persistent same-view workflow chat,
+live external draft changes in native tmux, reply/draft refresh that preserves
+unsent input, and real mouse input (using the pane's
+advertised X10/SGR protocol), dashboard startup/reconnect, adding a command check
+and its actual `requires` edge, named setting edits, complete change review,
+concurrent draft rejection and all earlier queue/chat protections. Before the two live-chat cases were added, the ordinary
+Python suite ran 773 tests: 732 passed, 34 skipped and the same seven previously
+verified system-rsync failures. Node tests pass 37, with five optional SSH skips.
+Capability-skill validation, Python compilation and whitespace checks pass.
+
+The Mac Apple Silicon package is rebuilt and tested with the same strict-signature,
+original/ZIP-extracted isolated-profile launch and sandbox checks described below.
+Full Linux checks run on the updated PR; real provider authentication is not tested.
+
+# Terminal client — October 11, 2026 (unreleased)
+
+The standalone `surfer` client passes 20 integration tests using the real workspace
+HTTP service and isolated fake provider/scheduler fixtures. Coverage includes a real
+tmux server, reconnect without duplicate panes, recovery of an exited control pane,
+queue ordering/hold/pause/resume, existing source/PR and read-only gates, durable
+selection, editor cancellation, conflicting drafts, exact-version application,
+task/project isolation, one-field and natural-language board edits, persistent chat
+delivery, terminal escape filtering and no automatic resend after uncertain delivery.
+No live service, model inference or real GPU job was used.
+
+The ordinary `npm test` Python stage ran 765 tests: 724 passed, 34 skipped and seven
+failed because this Mac's system rsync does not support `--protect-args`. All seven
+failures reproduce with the unchanged base code (`fffbcc6`) and its node-workflow
+tests. The first attempt also exposed existing macOS `/var` versus `/private/var`
+temporary-path assumptions; using canonical `TMPDIR=/private/tmp/supersurfer-terminal-tests`
+removed those failures. The final three added terminal cases were subsequently run
+in the passing 20-test focused suite. Node tests were run separately: 37 passed,
+five optional SSH tests skipped. Capability-skill validation and whitespace checks
+passed. Linux/native-provider authentication has not been tested on this Mac.
+
+Initial Linux CI exposed tmux 3.4's broken legacy percentage option. The client
+now uses `split-window -l 40%` and reports tmux's underlying errors; all 20 local
+terminal tests pass after the correction. Cross-platform CI runs on the PR.
+
+`npm run package:mac` built the Apple Silicon app and
+`dist/SuperSurfer-0.1.43-mac-arm64.zip`. The packaged-app regression opened both the
+original and ZIP-extracted app with isolated profiles; strict signatures, setup
+readiness and renderer sandbox checks passed. Extended attributes were inspected;
+no quarantine attribute was present. Signing is local/ad-hoc, not Developer ID
+signing or notarization. This is an unreleased local build with no version bump.
+
 # SuperSurfer 0.1.43 release
 
 Release scope is PR #39's direct workflow/source-receipt/steering fixes and PR #37's
