@@ -373,6 +373,16 @@ class SurfboardService:
                         "SUPERSURFER_AGENT_ROLE": role, "SUPERSURFER_ALLOWED_TOOLS": json.dumps(allowed)}}}
         return context
 
+    def recovery_check_allowed(self, scope, state, node_id):
+        """An owner may finish configured checks for its saved recovery task."""
+        if self.turn_origins.get(scope) != "recovery":
+            return False
+        record = self.recovery.get(self.recovery.active.get(scope))
+        if not record or not self.recovery.allowed(scope, record["runs"][-1]):
+            return False
+        action = state["compiled"].get("actions", {}).get(node_id, {})
+        return action.get("kind") == "check" and scope.startswith(("experiment:", "conversation:"))
+
     def board_gate(self, project, state, operation, arguments, scope=None):
         experiment_id = arguments.get("experiment_id")
         if scope and scope.startswith(("experiment:", "conversation:")):
@@ -382,10 +392,13 @@ class SurfboardService:
                 continue
             kind = requirement["kind"]
             if kind == "user_authorization":
-                if scope and self.turn_origins.get(scope) != "user" and scope not in self.recovery.submitting:
+                if (scope and self.turn_origins.get(scope) != "user" and scope not in self.recovery.submitting
+                        and not (operation.startswith("run_board_action:") and self.recovery_check_allowed(scope, state, operation.split(":", 1)[1]))):
                     raise SurfboardError("This step requires the user's requested work.", 403)
             elif kind == "check_passed":
                 if operation == "queue_run":
+                    if state["compiled"].get("actions", {}).get(requirement["action_id"], {}).get("source_manifest"):
+                        raise SurfboardError("A publication-only review cannot authorize a GPU run; configure a separate source check.", 409)
                     # Test evidence for this checkout cannot authorize another
                     # repository, another commit, or an older held run.
                     run = self.lookup("runs", arguments["run_id"], fresh=True) if arguments.get("run_id") else None
@@ -403,7 +416,8 @@ class SurfboardService:
                         raise SurfboardError("The held run has no verifiable exact commit.", 409)
                     if git("rev-parse", "--verify", revision + "^{commit}") != git("rev-parse", "HEAD") or git("status", "--porcelain"):
                         raise SurfboardError("The queued commit must match the clean checkout that passed the required check.", 409)
-                if not self.board_runtime.check_passed(project["id"], state["version"], requirement["action_id"], experiment_id, project["repo"]):
+                if not self.board_runtime.check_passed(project["id"], state["version"], requirement["action_id"], experiment_id, project["repo"],
+                        **({"publication": (operation, arguments)} if operation in {"publish_result", "publish_training_results"} else {})):
                     raise SurfboardError("Run check '" + requirement["action_id"] + "' successfully for this item and current source before continuing.", 409)
             elif operation != "queue_run" and kind in {"exact_commit", "verified_pr"}:
                 head = subprocess.run(["git", "-C", project["repo"], "rev-parse", "HEAD"], capture_output=True, text=True, timeout=15)
@@ -509,7 +523,8 @@ class SurfboardService:
         if tool == "run_board_action":
             if not self.workflow_chat(scope).get("busy"):
                 raise SurfboardError("Board actions require an active conversation.", 409)
-            if fields.get("operation", "start") in {"start", "stop"} and self.turn_origins.get(scope) != "user":
+            if (fields.get("operation", "start") in {"start", "stop"} and self.turn_origins.get(scope) != "user"
+                    and not self.recovery_check_allowed(scope, state, fields.get("node_id"))):
                 raise SurfboardError("Starting or stopping a board action requires user-requested work.", 403)
             return self.board_runtime.action(scope, project, state, fields)
         if tool == "inspect_project_activity":

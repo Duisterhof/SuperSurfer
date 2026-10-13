@@ -13,6 +13,20 @@ then a short explanatory schematic and requested domain visuals. Use the existin
 experiment's runs and artifacts. A reporting request does not authorize new runs
 or extra research to fill gaps.
 
+Results review should cover this report and its actual inputs, not every experiment
+in a shared repository. Use a configured publication manifest and declared
+checker/producer paths as described in the [Surfboard skill](../supersurfer-surfboard/SKILL.md#scoped-publication-review).
+Keep evidence hashes and screenshots current, then publish the exact reviewed
+payload. A content change requires another check; unrelated experiment edits do
+not. Do not delete evidence or weaken scientific checks to reduce scan size.
+
+Configured publication checks return a durable `starting` receipt before scanning
+source. Inspect its execution ID until terminal; `starting` is not approval to
+publish. If delivery is uncertain, reuse the identical request ID to retrieve
+that receipt, rather than submit another check. A saved recovery owner can run
+its task's configured check directly; ordinary scheduled or peer messages do
+not grant that authority. A failed scan remains a visible failed receipt.
+
 Results tools and declared live-data refresh work independently of whether the
 owning conversation uses Codex, Cursor or Claude Code. All providers receive the
 same scoped MCP publishing tools; preserve the existing report, run and owner

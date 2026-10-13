@@ -113,7 +113,7 @@ class Manager:
             "host.update": self.host_update,
             "run.submit": self.run_submit, "run.list": self.run_list, "run.show": self.run_show,
             "run.cancel": self.run_cancel, "run.logs": self.run_logs,
-            "run.add_candidate": self.run_add_candidate,
+            "run.add_candidate": self.run_add_candidate, "run.amend_source": self.run_amend_source,
             "run.queue": self.run_queue, "run.reorder": self.run_reorder,
             "run.move": self.run_move, "run.ready": self.run_ready, "run.hold": self.run_hold,
             "run.priority": self.run_priority, "run.review": self.run_review, "queue.status": self.queue_status,
@@ -123,7 +123,7 @@ class Manager:
         }
         if op not in handlers:
             raise ValueError(f"Unknown operation: {op}")
-        if op in {"run.ready", "run.review", "run.logs"}:
+        if op in {"run.ready", "run.review", "run.logs", "run.amend_source"}:
             result = await handlers[op](**params)
         else:
             async with self.command_lock:
@@ -134,7 +134,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1", "run.add_candidate.v1", "run.amend_source.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -832,6 +832,74 @@ class Manager:
         self.store.event("run.ready", {"id": row["id"]}, row["project_id"])
         self.wake_scheduler()
         return await self.run_show(row["id"])
+
+    async def run_amend_source(self, run, expected_revision, revision, pr_url, reason):
+        """Repair source before the first launch, retaining the original run contract."""
+        if any(not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{40}", value)
+               for value in (expected_revision, revision)):
+            raise ValueError("Source amendment requires exact old and new commit SHAs")
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 4000:
+            raise ValueError("Source amendment requires a diagnosed repair reason")
+        row = self.store.get("runs", run)
+        config = json.loads(row["config"])
+        receipt = config.get("source_amendment") or {}
+        if (row["revision"] == revision and receipt.get("previous_revision") == expected_revision
+                and receipt.get("revision") == revision and receipt.get("pr_url") == pr_url):
+            return {"run": await self.run_show(row["id"]), "unchanged": True}
+        if revision == expected_revision:
+            raise ValueError("Choose the repaired commit; the source has not changed")
+        def eligible(current):
+            # A queued return after runner admission is not a never-started run.
+            return (current["status"] == "queued" and current["revision"] == expected_revision
+                    and not current.get("job_dir") and not json.loads(current["allocated_gpus"])
+                    and not self.store.one("SELECT 1 FROM reservations WHERE run_id=?", (current["id"],))
+                    and not self.store.one("SELECT 1 FROM events WHERE kind='run.starting' AND json_extract(data,'$.id')=?", (current["id"],)))
+        if not eligible(row):
+            raise ValueError("Only a never-started queued run at the expected revision can amend source")
+        # Hold synchronously before verification yields to the scheduler. Failure
+        # intentionally leaves the original source held, never launching stale code.
+        pending = config.get("source_amendment_pending") or {}
+        resume_ready = row["ready"]
+        if pending.get("held_at") == row["updated"]:
+            resume_ready = pending.get("resume_ready", False)
+        held_at = time.time()
+        config["source_amendment_pending"] = {"held_at": held_at, "resume_ready": resume_ready}
+        self.store.execute("UPDATE runs SET ready=0,config=?,updated=? WHERE id=?", (json.dumps(config), held_at, row["id"]))
+        self.store.event("run.source_amendment_pending", {"id": row["id"], "revision": revision}, row["project_id"])
+        tasks = [task for key, task in self.placement_checks.items() if key[0] == row["id"]]
+        self.cancel_preparations(row["id"])
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        for key in list(self.placement_observations):
+            if key[0] == row["id"]:
+                self.placement_observations.pop(key, None)
+        project = self.store.get("projects", row["project_id"])
+        repo = config.get("source_repo") or config.get("repo") or project["repo"]
+        resolved = await asyncio.to_thread(git, repo, "rev-parse", revision + "^{commit}")
+        if resolved != revision:
+            raise ValueError("Repaired commit is not available in the run source repository")
+        config["pr_url"] = pr_url
+        config.pop("review_receipt", None)
+        origin = await self.project_review_repository(project)
+        if origin:
+            config["review_repository"] = origin
+        review.validate_pr(config)
+        config["review_receipt"] = await self.reviewer(project, config, revision)
+        latest = self.store.get("runs", row["id"])
+        if not eligible(latest) or latest["updated"] != held_at:
+            raise ValueError("Run changed during source verification; refresh this run before retrying")
+        receipt = {"previous_revision": expected_revision, "revision": revision,
+                   "pr_url": pr_url, "reason": reason.strip(), "at": time.time()}
+        config.pop("source_amendment_pending", None)
+        config["source_amendment"] = receipt
+        if isinstance(config.get("supersurfer_run_request"), dict):
+            config["supersurfer_run_request"]["revision"] = revision
+        with self.store.transaction():
+            self.store.execute("UPDATE runs SET revision=?,config=?,ready=?,error='',updated=? WHERE id=?",
+                               (revision, json.dumps(config), resume_ready, time.time(), row["id"]))
+            self.store.event("run.source_amended", {"id": row["id"], **receipt}, row["project_id"])
+        self.wake_scheduler(row["id"])
+        return {"run": await self.run_show(row["id"]), "unchanged": False}
 
     async def run_hold(self, run):
         row = self.queued_run(run)

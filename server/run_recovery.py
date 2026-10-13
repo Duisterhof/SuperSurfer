@@ -105,7 +105,7 @@ def compact_status(run, recovery, acquisitions):
     elif state == 'failed':
         next_steps = ['Inspect the failure and repair it before recover_run(retry); retry needs the enabled latest recovery attempt, explicit output argv and an exact-source PR.']
     elif state == 'queued':
-        next_steps = ['Inspect waiting_reason and candidate_hosts. For missing setup, reuse prepared paths or acquire_new_node for this same run_id. Project caps require waiting unless the user authorizes a change.']
+        next_steps = ['Inspect waiting_reason and candidate_hosts. For missing setup, reuse prepared paths or acquire_new_node for this same run_id. For a diagnosed source compatibility defect before first launch, use amend_source with exact old/new commits and a verified PR; command, data and resource requirements stay fixed. Project caps require waiting unless the user authorizes a change.']
         if any(row.get('status') == 'preparing' for row in acquisitions):
             next_steps.insert(0, 'Node preparation is still running; inspect its status without starting another transfer.')
     elif state in {'starting', 'running'}:
@@ -241,6 +241,31 @@ class RunRecovery:
             if not isinstance(task, str) or not task.strip() or len(task)>20000: raise ComputeError('A concrete existing user task is required')
             if run['status'] not in {'queued','starting','running','failed'}: raise ComputeError('Cannot recover a cancelled, lost or uncertain run', 409)
             return self.enable(scope, run, task)
+        if action == 'amend_source':
+            if set(fields) != {'action','run_id','expected_revision','revision','pr_url','reason'}:
+                raise ComputeError('amend_source requires run_id, expected_revision, revision, pr_url and reason')
+            if 'run.amend_source.v1' not in self.service.aml.call('ping').get('capabilities', []):
+                raise ComputeError('The workspace manager needs its source-amendment update before this repair', 409)
+            project = self.service.lookup('projects', run['project_id'], fresh=True)
+            board = self.service.board_record(project['id'], run['experiment_id'])
+            # Check the NEW source, not a previous run_id's passing receipt.
+            config = run.get('config', {})
+            request = dict(config.get('supersurfer_run_request') or {})
+            request.update(repo=config.get('source_repo') or config.get('repo') or project['repo'],
+                           revision=fields['revision'], pr_url=fields['pr_url'], experiment_id=run['experiment_id'])
+            self.submitting.add(scope)
+            try:
+                self.service.board_gate(project, board, 'queue_run', request, scope)
+            finally:
+                self.submitting.discard(scope)
+            try:
+                result = self.service.aml.call('run.amend_source', {
+                    'run':run['id'], **{key:fields[key] for key in ('expected_revision','revision','pr_url','reason')}})
+            except Exception as error:
+                raise ComputeError('Source amendment was not confirmed. Inspect this SAME run_id and retry the same fields; do not submit a replacement. Verification failure leaves the original source held. ' + str(error), 409) from error
+            finally:
+                self.service.aml.invalidate()
+            return {**result, 'run_id':run['id'], 'note':'Run identity, command, resources, data and recovery owner are preserved. Candidate checks must pass again for the repaired commit.'}
         record = self.get(run['id'])
         if not record or record['scope'] != scope: raise ComputeError('This conversation does not own run recovery', 403)
         if action == 'pause':

@@ -31,6 +31,16 @@ through passwords, codes or tokens pasted into chat. Cursor/Claude offer Ask/YOL
 with provider-native permissions, but no active-turn steering, Codex auto-review,
 effort or Fast controls. Await or stop a live turn before giving a new instruction.
 
+For a source compatibility defect in a never-started queued run, use
+`recover_run(action="amend_source", run_id=..., expected_revision=...,
+revision=..., pr_url=..., reason=...)`. Both revisions must be full commit SHAs.
+This updates the same run after exact-source PR verification; command, resources,
+data, output identity and recovery owner remain unchanged. Recheck/acquire nodes
+against the repaired revision. Verification failure leaves the original source
+held: inspect that run, repair the cause and retry the same fields. Do not invent
+a failed attempt, cancel/resubmit or start a duplicate merely to change source.
+This operation is available to scoped user work and the saved recovery owner.
+
 ## Configure before dispatching
 
 The chat-first workflow builder prepares a task's views, agents and requirements;
@@ -73,8 +83,9 @@ or another copy of the shared source/data. See the task-scope reference below.
 For an existing experiment, reuse its owner unless distinct work needs a separate
 conversation. `create_experiment_agent` returns a scope; `handoff_experiment`
 starts a concrete assignment. Explicit `agent_scope` targets that idle worker;
-without it, the experiment-wide busy guard applies. At most three workers and
-three distinct experiment handoffs may be created per user turn. Check uncertain
+without it, the experiment-wide busy guard applies. Distinct experiment handoffs
+have no per-turn cap; duplicate dispatches in the same turn remain blocked.
+The separate limit of three new worker conversations per turn still applies. Check uncertain
 results before retrying; coordinate shared-file edits and never duplicate busy
 work. These actions are unavailable to scheduled reviews.
 

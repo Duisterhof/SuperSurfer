@@ -119,6 +119,15 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(["apply_surfboard", "ask_user", "propose_surfboard", "read_surfboard"], compiled["tools_by_role"]["worker"])
         self.assertIn("share the worker runtime role", " ".join(compiled["warnings"]))
 
+    def test_publication_input_configuration_roundtrips_and_requires_exact_paths(self):
+        board = template('software')
+        config = node(board, 'checks')['config']
+        config.update(source_manifest='review/manifest.json', source_paths=['research/check.py'])
+        self.assertEqual('review/manifest.json', compile_board(board)['actions']['checks']['source_manifest'])
+        for paths in ([], ['../escape.py'], ['/absolute.py'], ['*.py']):
+            config['source_paths'] = paths
+            with self.subTest(paths=paths), self.assertRaises(SurfboardError): validate(board)
+
     def test_action_source_exclusions_are_validated_and_compiled(self):
         board = template('software')
         node(board, 'checks')['config']['source_exclude'] = ['outputs/**', 'measurements/*.json']
