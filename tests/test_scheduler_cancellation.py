@@ -53,7 +53,7 @@ class CandidateCancellationTests(unittest.TestCase):
             self.assertEqual(manager.store.get('runs',self.run_id)['status'],'queued')
         self.fixture.wait(scenario())
 
-    def test_outer_probe_timeout_marks_host_offline_and_preserves_occupancy(self):
+    def test_probe_timeout_marks_only_its_host_offline_and_preserves_occupancy(self):
         async def scenario():
             manager=self.fixture.manager;manager.transport=Transport()
             manager.store.execute("UPDATE hosts SET target='trinity-isolated-fixture',gpus='[\"0\"]' WHERE id='h1'")
@@ -67,11 +67,33 @@ class CandidateCancellationTests(unittest.TestCase):
             manager.host_capacity_changed.clear()
             with patch('aml.service.HOST_POLL_TIMEOUT',.025):await manager.refresh_host(host)
             self.assertFalse(manager.host_metrics['h1']['online'])
+            self.assertIn('probe exceeded',manager.host_metrics['h1']['error'])
             self.assertEqual(manager.store.get('hosts','h1')['status'],'offline')
             self.assertEqual(before,manager.store.rows('SELECT * FROM reservations'))
-            self.assertNotIn(host['target'],manager.transport.connection_failures)
+            self.assertIn(host['target'],manager.transport.connection_failures)
             self.assertFalse(manager.allocation_probe_due('h1',time.time()))
             self.assertTrue(manager.allocation_probe_due('h1',time.time()+ALLOCATION_PROBE_INTERVAL+1))
+        self.fixture.wait(scenario())
+
+    def test_probe_waiting_for_gateway_does_not_expire_before_contacting_node(self):
+        async def scenario():
+            manager=self.fixture.manager;manager.transport=Transport()
+            manager.store.execute("UPDATE hosts SET target='trinity-isolated-fixture' WHERE id='h1'")
+            host=manager.store.get('hosts','h1')
+            lock=asyncio.Lock();await lock.acquire()
+            manager.transport.gateway_locks['trinity']=lock
+            manager.transport._request=AsyncMock(return_value={'metrics':[]})
+            with patch('aml.service.HOST_POLL_TIMEOUT',.025):
+                probe=asyncio.create_task(manager.refresh_host(host))
+                try:
+                    await asyncio.sleep(.075)
+                    self.assertFalse(probe.done())
+                    manager.transport._request.assert_not_awaited()
+                finally:
+                    lock.release()
+                await asyncio.wait_for(probe,2)
+            self.assertTrue(manager.host_metrics['h1']['online'])
+            self.assertEqual(manager.transport.connection_failures,{})
         self.fixture.wait(scenario())
 
 
@@ -102,17 +124,16 @@ class TransportCancellationTests(unittest.IsolatedAsyncioTestCase):
     def assert_reaped(self,pid):
         with self.assertRaises(ProcessLookupError):os.kill(pid,0)
 
-    async def test_cancel_reaps_owned_subprocess_without_poisoning_gateway_history(self):
+    async def test_cancel_reaps_owned_subprocess_without_changing_peer_backoff(self):
         pidfile,_=self.local_sleep_command()
-        self.transport.gateway_failed_targets['trinity']={'trinity-other-failed-node'}
+        peer='trinity-other-failed-node';backoff=(time.monotonic()+300,'Fixture peer failure')
+        self.transport.connection_failures[peer]=backoff
         task=asyncio.create_task(self.transport.request(self.host,{'op':'admit'},timeout=10))
         pid=await self.child_pid(pidfile)
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):await task
         self.assert_reaped(pid)
-        self.assertEqual(self.transport.connection_failures,{})
-        self.assertEqual(self.transport.gateway_failures,{})
-        self.assertEqual(self.transport.gateway_failed_targets,{'trinity':{'trinity-other-failed-node'}})
+        self.assertEqual(self.transport.connection_failures,{peer:backoff})
 
     async def test_real_subprocess_timeout_keeps_node_backoff_and_reaps_process(self):
         pidfile,calls=self.local_sleep_command()
@@ -123,16 +144,19 @@ class TransportCancellationTests(unittest.IsolatedAsyncioTestCase):
             await self.transport.request(self.host,{'op':'admit'},timeout=.15)
         self.assertEqual(len(calls),1)
 
-    async def test_real_connection_errors_still_activate_shared_gateway_backoff(self):
+    async def test_connection_errors_back_off_failed_nodes_without_suppressing_healthy_peers(self):
         self.transport._request=AsyncMock(side_effect=ConnectionError('Fixture network unreachable'))
         for target in ('trinity-one','trinity-two'):
             with self.assertRaisesRegex(ConnectionError,'Fixture network unreachable'):
                 await self.transport.request({**self.host,'target':target},{'op':'probe'})
         self.assertEqual(set(self.transport.connection_failures),{'trinity-one','trinity-two'})
-        self.assertIn('trinity',self.transport.gateway_failures)
-        with self.assertRaisesRegex(ConnectionError,'SSH gateway backoff'):
-            await self.transport.request({**self.host,'target':'trinity-three'},{'op':'probe'})
-        self.assertEqual(self.transport._request.await_count,2)
+        self.transport._request.side_effect=None
+        self.transport._request.return_value={'metrics':[]}
+        self.assertEqual(await self.transport.request({**self.host,'target':'trinity-three'},{'op':'probe'}),{'metrics':[]})
+        self.assertEqual(self.transport._request.await_count,3)
+        with self.assertRaisesRegex(ConnectionError,'SSH node backoff'):
+            await self.transport.request({**self.host,'target':'trinity-one'},{'op':'probe'})
+        self.assertEqual(self.transport._request.await_count,3)
 
     async def test_cancel_while_waiting_for_gateway_lock_does_not_contact_host(self):
         lock=asyncio.Lock();await lock.acquire()
@@ -144,7 +168,6 @@ class TransportCancellationTests(unittest.IsolatedAsyncioTestCase):
         lock.release()
         self.transport._request.assert_not_awaited()
         self.assertEqual(self.transport.connection_failures,{})
-        self.assertEqual(self.transport.gateway_failures,{})
 
 
 if __name__=='__main__':unittest.main()

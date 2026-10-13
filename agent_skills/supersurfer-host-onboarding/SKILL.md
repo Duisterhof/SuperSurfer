@@ -86,7 +86,10 @@ free capacity. Refresh availability requests background probes, limited to once
 per ten seconds, and returns before every host answers. Routine idle probes remain
 five minutes apart. Check timestamps/errors; a reservation is not fresh telemetry.
 Intentional cancellation of an obsolete admission check creates no SSH outage
-backoff. Genuine connection failures and timeouts still retain bounded backoff.
+backoff. Genuine connection failures and timeouts retain a five-minute backoff
+for the affected node only; they do not establish an outage on other Trinity
+nodes. Probes allow 45 seconds and readiness checks 60 seconds after obtaining
+the serialized gateway slot. A queued probe is not evidence of failed access.
 Inspect the current candidate rather than repeatedly refreshing, re-registering
 the host or bypassing the scheduler because an older check was cancelled.
 The same **Refresh availability** and **Register machine** controls remain part of
