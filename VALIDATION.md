@@ -1172,3 +1172,23 @@ rerun locally; no live provider inference was repeated for this integration pass
 Four isolated Python regression tests cover archive/Restore persistence, unchanged scheduler records, version/read-only/lineage guards and active/uncertain/recovering/unfinished rejection. Real isolated HTTP/UI browser fixture verifies archive → reload → retained evidence → Restore and active-run visibility at 1440 and 650px with no execution mutations or JS errors. This is not a live VLA archive receipt. Full npm test: 762 Python tests passed; 48 Node passed, 5 skipped. Skill capability checker and diff whitespace checks passed. Local Linux packaging/launch evidence is recorded with the PR.
 
 Build: `npm run package:linux` succeeded on Linux x64, producing `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` (135 MiB). The packaged executable opened its isolated-profile setup screen under Xvfb without connecting to a workspace. Renderer sandbox/contextIsolation were configured and nodeIntegration was disabled. The headless environment required the OS-process `--no-sandbox` launch flag; this does not establish OS sandboxing, macOS signing, notarization or Gatekeeper behavior. Screenshots: `tests/reports/run-retirement/`. No runtime was installed, released or restarted.
+- Added eight isolated real-manager tests covering exact-commit repair without
+  changing identity/resources, retries, PR rejection, explicit hold/cancel races,
+  attempted-run rejection and scoped recovery authority.
+- Added blocked-source-scan and scan-failure receipt tests; configured recovery
+  checks retain role/task boundaries and do not enable previews or ordinary polls.
+- Full Python suite: 769 passed. Node suite: 48 passed, five optional SSH tests
+  skipped. The new native-extension tests used the declared ws dependency from an
+  isolated temporary installation; no live provider integration is claimed.
+- Agent skill validation and diff whitespace checks passed. Linux x64 packaging
+  and the isolated native Electron launch/persistence/sandbox checks passed.
+- User-approved follow-up raises the streamed source bound from 512 MiB to
+  1 GiB without changing exclusions or check coverage. The regression hashes a
+  513 MiB fixture and still rejects a source snapshot above 1 GiB.
+
+## Scoped publication receipts (0.1.43 patch)
+Regression coverage includes unrelated 2 GiB artifacts, changed report/evidence/render/code, missing/foreign/escaping/symlinked inputs, payload substitution and prohibition on GPU launch authorization. Live read-only measurement: 46 declared files, 24,579,666 bytes, 0.023 seconds for the Many projections report snapshot (warm filesystem; no check command or publication included).
+
+Validation: 776 Python tests and 48 Node tests passed (five optional SSH tests skipped); an additional full publication service regression passed with the 23-test Surfboard service suite. Initial use of unsupported system Python 3.10 failed two runtime prerequisites; rerun under Python 3.11 passed. Skills checker and diff whitespace checks passed.
+
+Linux x64 package and isolated native Electron startup passed. Deployed service 9ca51db685f74807, health 0.1.43 confirmed; migrated 17 VLA applied/default boards through versioned APIs. One board with a pending draft was left untouched to preserve the proposal. Scheduler and research processes were not restarted.

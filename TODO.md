@@ -475,3 +475,8 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 
 - Implemented reversible archive/Restore with evidence, lineage, version checks and conservative active/recovery visibility.
 - Actual VLA retirement/migration acceptance belongs to the existing presentation-cleanup owner; this app patch does not deploy itself or archive real runs.
+- [x] Repair never-started queued source without replacing run identity; let saved
+  recovery owners execute their configured checks and return publication-check
+  receipts before slow repository scans.
+
+- [x] Scope publication receipts to report/evidence/code and bind the actual published payload, avoiding unrelated experiment scans.

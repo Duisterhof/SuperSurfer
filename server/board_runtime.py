@@ -113,6 +113,13 @@ def _url(value):
     return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
+def action_snapshot(row):
+    if row.get("source_manifest"):
+        from .publication_source import publication_snapshot
+        return publication_snapshot(row["cwd"], row["source_manifest"], row.get("source_paths"), row.get("experiment_id"))
+    return source_fingerprint(row["cwd"], row.get("source_exclude", [])), None
+
+
 class BoardRuntime:
     def __init__(self, service):
         self.service = service
@@ -221,7 +228,6 @@ class BoardRuntime:
             cwd = Path(project["repo"]).expanduser().resolve()
             if not cwd.is_dir():
                 raise SurfboardError("Project repository is unavailable", 409)
-            source = source_fingerprint(cwd, action.get("source_exclude", []))
             identity = {"project_id": project["id"], "version": board_state["version"], "node_id": node_id,
                         "scope": scope, "experiment_id": item, "action": action, "cwd": str(cwd), "pr_url": args.get("pr_url")}
             signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -254,8 +260,10 @@ class BoardRuntime:
             row = {"id": "action_" + secrets.token_hex(12), "request_id": request_id, "request_fingerprint": signature,
                    "scope": scope, "project_id": project["id"], "experiment_id": item, "board_version": board_state["version"],
                    "node_id": node_id, "label": action.get("label", node_id), "kind": action["kind"], "argv": argv,
-                   "cwd": str(cwd), "timeout_seconds": timeout, "source_exclude": action.get("source_exclude", []), "source_fingerprint": source, "status": "starting",
+                   "cwd": str(cwd), "timeout_seconds": timeout, "source_exclude": action.get("source_exclude", []), "source_fingerprint": None, "status": "starting",
                    "created": now, "started": None, "finished": None, "returncode": None, "logs": "", "logs_truncated": False}
+            if action.get("source_manifest"):
+                row.update(source_manifest=action["source_manifest"], source_paths=action["source_paths"])
             if args.get("pr_url"):
                 row["pr_url"] = args["pr_url"]
             if port:
@@ -294,6 +302,14 @@ class BoardRuntime:
             if active["stop"].is_set():
                 row.update(status="cancelled", finished=time.time())
                 self._save(row)
+                return
+            # Save/return the durable receipt before potentially slow Git and
+            # filesystem reads. Retries/status/Stop must not wait for this scan.
+            row["source_fingerprint"], row["publication"] = action_snapshot(row)
+            with self.lock:
+                self._save(row)
+            if active["stop"].is_set():
+                row.update(status="cancelled", finished=time.time())
                 return
             env = dict(os.environ)
             # Do not propagate app/session bearer tokens into configured commands.
@@ -347,7 +363,7 @@ class BoardRuntime:
             if row["status"] == "timed_out":
                 row["error"] = "Configured action exceeded its timeout"
             if row["status"] == "succeeded":
-                row["source_fingerprint_after"] = source_fingerprint(row["cwd"], row.get("source_exclude", []))
+                row["source_fingerprint_after"], _ = action_snapshot(row)
                 row["source_unchanged"] = row["source_fingerprint_after"] == row["source_fingerprint"]
                 if not row["source_unchanged"]:
                     row["evidence_note"] = "Source changed during this action; it cannot satisfy a check prerequisite."
@@ -364,7 +380,7 @@ class BoardRuntime:
                 self.active.pop(key, None)
                 self.preview_tokens.pop(row.get("preview_token"), None)
 
-    def check_passed(self, project_id, version, nodeid, experiment_id, cwd):
+    def check_passed(self, project_id, version, nodeid, experiment_id, cwd, publication=None):
         with self.lock:
             rows = [row for row in self._records() if row["project_id"] == project_id and row["board_version"] == version
                     and row["node_id"] == nodeid and row["experiment_id"] == experiment_id and row["kind"] == "check"]
@@ -374,7 +390,13 @@ class BoardRuntime:
         if Path(row["cwd"]).resolve() != Path(cwd).resolve():
             return False
         try:
-            return source_fingerprint(cwd, row.get("source_exclude", [])) == row["source_fingerprint"]
+            fingerprint, binding = action_snapshot(row)
+            if binding and publication:
+                from .publication_source import payload_digest
+                tool, arguments = publication
+                if binding["tool"] != tool or binding["payload_digest"] != payload_digest(arguments):
+                    return False
+            return fingerprint == row["source_fingerprint"]
         except (OSError, SurfboardError, subprocess.SubprocessError):
             return False
 

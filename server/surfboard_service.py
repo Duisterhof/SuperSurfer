@@ -386,6 +386,8 @@ class SurfboardService:
                     raise SurfboardError("This step requires the user's requested work.", 403)
             elif kind == "check_passed":
                 if operation == "queue_run":
+                    if state["compiled"].get("actions", {}).get(requirement["action_id"], {}).get("source_manifest"):
+                        raise SurfboardError("A publication-only review cannot authorize a GPU run; configure a separate source check.", 409)
                     # Test evidence for this checkout cannot authorize another
                     # repository, another commit, or an older held run.
                     run = self.lookup("runs", arguments["run_id"], fresh=True) if arguments.get("run_id") else None
@@ -403,7 +405,8 @@ class SurfboardService:
                         raise SurfboardError("The held run has no verifiable exact commit.", 409)
                     if git("rev-parse", "--verify", revision + "^{commit}") != git("rev-parse", "HEAD") or git("status", "--porcelain"):
                         raise SurfboardError("The queued commit must match the clean checkout that passed the required check.", 409)
-                if not self.board_runtime.check_passed(project["id"], state["version"], requirement["action_id"], experiment_id, project["repo"]):
+                if not self.board_runtime.check_passed(project["id"], state["version"], requirement["action_id"], experiment_id, project["repo"],
+                        **({"publication": (operation, arguments)} if operation in {"publish_result", "publish_training_results"} else {})):
                     raise SurfboardError("Run check '" + requirement["action_id"] + "' successfully for this item and current source before continuing.", 409)
             elif operation != "queue_run" and kind in {"exact_commit", "verified_pr"}:
                 head = subprocess.run(["git", "-C", project["repo"], "rev-parse", "HEAD"], capture_output=True, text=True, timeout=15)

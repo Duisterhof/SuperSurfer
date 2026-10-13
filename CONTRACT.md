@@ -1027,3 +1027,9 @@ attribution are not advertised for Cursor/Claude.
 ## Reversible run presentation
 
 `run.presentation` accepts `run_id`, integer presentation `version` and `archived`. Archival additionally requires a concrete `reason`, `evidence`, and `unfinished_work: false`; an optional `parent_run_id` must belong to the same project. The service rejects active/uncertain statuses and enabled recovery grants. It writes only an owned presentation record with an append-only receipt history, never AML execution/configuration, checkpoints, curves or recovery state. State readback exposes the record as `run.presentation`; a later active/uncertain/recovering run is visible even if an older receipt archived it. Runs defaults to Active; Archived retains historical runs and Restore. Version conflicts require readback, not replay. Whole-task/report archival remains separate. This API/UI must be deployed normally before real archival is claimed.
+Board commands persist and return their execution receipt before scanning source.
+Slow scans run outside service/action locks; failures remain visible on that same
+receipt. Retries reconcile before any source scan. Only a successful check with
+unchanged source can satisfy publication requirements.
+
+Publication checks can opt into source_manifest + source_paths. Their receipt covers the task-specific schema-1 manifest, exact publisher/payload, declared evidence, screenshots and checker/producer code, not unrelated repository contents or Git metadata. Publication verifies the actual submitted payload against this receipt. Missing, changed, escaping or symlinked inputs fail closed. Ordinary checks preserve full-source semantics; a publication-only check cannot authorize a GPU launch.
