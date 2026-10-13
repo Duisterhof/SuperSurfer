@@ -21,7 +21,8 @@ from .util import git, name, process_ticks
 ACTIVE_RUNS = ("starting", "running", "unreachable", "orphaned", "cancelling")
 TERMINAL_RUNS = ("succeeded", "failed", "cancelled", "lost")
 TASK_STATES = ("pending", "working", "blocked", "done", "failed", "archived")
-HOST_POLL_TIMEOUT = 4
+HOST_POLL_TIMEOUT = 45
+CONTRACT_CHECK_TIMEOUT = 60
 HOST_POLL_INTERVAL = 300
 ACTIVE_RUN_POLL_INTERVAL = 10
 TRANSITION_POLL_INTERVAL = 1
@@ -529,8 +530,7 @@ class Manager:
         try:
             request = {"op": "probe", "check_gpu": True,
                        "gpu_required": bool(json.loads(host["gpus"]))}
-            probe = await asyncio.wait_for(
-                self.transport.request(host, request, timeout=HOST_POLL_TIMEOUT), HOST_POLL_TIMEOUT)
+            probe = await self.transport.request(host, request, timeout=HOST_POLL_TIMEOUT)
             snapshot = {**probe, "online": True, "updated": time.time(), "error": probe.get("gpu_error", "")}
             self.host_metrics[host["id"]] = snapshot
             self.store.execute("UPDATE hosts SET status='online',error=? WHERE id=?",
@@ -590,7 +590,7 @@ class Manager:
             # An explicit refresh retries failed hosts once; ordinary telemetry
             # retains its five-minute backoff and serialized gateway access.
             self.host_probe_attempts.clear()
-            for field in ("host_failures", "connection_failures", "gateway_failures", "gateway_failed_targets"):
+            for field in ("host_failures", "connection_failures"):
                 getattr(self.transport, field, {}).clear()
             self.request_host_refresh()
         rows = []
@@ -1256,7 +1256,7 @@ class Manager:
             if not mapping and not resolved.get("repo"):
                 raise ValueError("Register this project's repository on candidate " + host["name"])
             spec = {"repo": mapping["path"] if mapping else resolved["repo"], "revision": run["revision"], "root": host["root"], **resolved}
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=CONTRACT_CHECK_TIMEOUT)
             self.record_admission(key, result)
             codes = {item["code"] for item in result["blockers"]}
             if "code_missing" in codes and config.get("stage_source"):
@@ -1272,7 +1272,7 @@ class Manager:
                 await self.transport.stage_source(config["source_repo"], host, spec, timeout=600)
                 if not self.preparation_allowed(run["id"]):
                     raise asyncio.CancelledError()
-                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=CONTRACT_CHECK_TIMEOUT)
                 self.record_admission(key, result)
                 codes = {item["code"] for item in result["blockers"]}
                 self.staging_owner = None
@@ -1304,7 +1304,7 @@ class Manager:
                 else:
                     source_host = self.store.get("hosts", item["source_host"]) if item["source_host"] else None
                     await self.transport.copy_file(source_host, host, item, storage, timeout=600)
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=CONTRACT_CHECK_TIMEOUT)
             self.record_admission(key, result)
         except asyncio.CancelledError:
             self.placement_observations[key] = {"state": "blocked", "checked_at": time.time(),

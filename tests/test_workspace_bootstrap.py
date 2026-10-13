@@ -105,6 +105,23 @@ asyncio.run(test())
                 self.assertEqual(rpc(manager, 'ping')['pid'], identity['pid'])
                 self.assertTrue(rpc(manager, 'queue.status')['paused'])
                 self.assertFalse((home / '.codex').exists(), 'Connecting must not start Codex or create credentials')
+                # A real reconnect uses only the small preflight command; its
+                # stdin can stay open because no bundle bytes are requested.
+                cached_config=json.loads(config)
+                cached_config.update(check_existing=True,app_version=json.loads((SOURCE/'package.json').read_text())['version'])
+                cached=subprocess.Popen([sys.executable,'-c',DRIVER,str(SOURCE/'desktop/bootstrap.py'),json.dumps(cached_config)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                                        env={**os.environ,'HOME':str(home),'PYTHONPATH':'','SUPERSURFER_CODEX':'/nonexistent-fixture-codex'})
+                try:
+                    cached.wait(timeout=10)
+                    self.assertEqual(cached.returncode,0,cached.stderr.read().decode())
+                    receipt=json.loads(cached.stdout.read())
+                    self.assertTrue(receipt.pop('supersurfer_cached'))
+                    self.assertEqual(receipt,reconnect)
+                    self.assertEqual(rpc(manager,'ping')['pid'],identity['pid'])
+                    self.assertTrue(rpc(manager,'queue.status')['paused'])
+                finally:
+                    if cached.poll() is None:cached.kill();cached.wait()
+                    cached.stdin.close();cached.stdout.close();cached.stderr.close()
             finally:
                 owned = []
                 if (root / 'sidecar.pid').exists():
@@ -140,6 +157,42 @@ class BundleTransferTests(unittest.TestCase):
                 os.write(writer,b'complete bundle')
                 self.assertEqual(b'complete bundle',self.bootstrap.read_bundle(15,timeout=.2,stream=source))
             finally:os.close(writer)
+
+    def test_upload_idle_timeout_allows_steady_slow_progress_but_total_budget_still_binds(self):
+        import threading
+        for total,should_finish in ((1,True),(.12,False)):
+            reader,writer=os.pipe()
+            def send():
+                try:
+                    for byte in (b'a',b'b',b'c',b'd'):
+                        time.sleep(.05)
+                        os.write(writer,byte)
+                except BrokenPipeError:pass
+                finally:os.close(writer)
+            producer=threading.Thread(target=send);producer.start()
+            try:
+                with os.fdopen(reader,'rb') as source:
+                    if should_finish:self.assertEqual(self.bootstrap.read_bundle(4,timeout=.09,total_timeout=total,stream=source),b'abcd')
+                    else:
+                        with self.assertRaisesRegex(RuntimeError,'upload timed out'):
+                            self.bootstrap.read_bundle(4,timeout=.09,total_timeout=total,stream=source)
+            finally:producer.join(timeout=2)
+
+    def test_missing_or_different_workspace_does_not_reuse_credentials(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)/'workspace';release=root/'releases'/'fixture';state=root/'state'
+            config={'remoteRoot':str(root),'amlHome':str(root/'aml'),'remotePort':8765,'app_version':'fixture-version'}
+            self.assertIsNone(self.bootstrap.cached_workspace(config))
+            self.assertFalse(root.exists(),'Preflight must not create an installation')
+            (release/'server').mkdir(parents=True);(release/'server/engine.py').touch();state.mkdir()
+            (state/'release.json').write_text(json.dumps({'path':str(release)}))
+            info={'version':'other-version'}
+            with patch.object(self.bootstrap,'workspace_session',return_value=('fixture-token',info)),patch.object(self.bootstrap,'ensure_manager') as manager:
+                self.assertIsNone(self.bootstrap.cached_workspace(config));manager.assert_not_called()
+            (state/'release.json').write_text(json.dumps({'path':str(Path(temporary)/'outside')}))
+            with patch.object(self.bootstrap,'workspace_session') as session:
+                self.assertIsNone(self.bootstrap.cached_workspace(config));session.assert_not_called()
 
     def test_stalled_or_interrupted_upload_times_out_without_any_workspace_lock(self):
         for close_writer in (False,True):

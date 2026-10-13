@@ -84,7 +84,7 @@ class GatewayBackoffTests(unittest.TestCase):
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         return module.Transport()
 
-    def test_one_unreachable_node_does_not_hide_healthy_peers_and_two_failures_back_off_gateway(self):
+    def test_multiple_node_timeouts_do_not_hide_healthy_gateway_peers(self):
         async def scenario():
             t=self.transport();calls=[]
             async def request(host,payload,timeout):
@@ -94,12 +94,11 @@ class GatewayBackoffTests(unittest.TestCase):
             t._request=request
             with self.assertRaises(TimeoutError):await t.request({'target':'trinity-bad','failed':True},{})
             self.assertEqual(await t.request({'target':'trinity-good'},{}),{'ok':True})
-            self.assertFalse(t.gateway_failures)
             with self.assertRaisesRegex(ConnectionError,'node backoff'):await t.request({'target':'trinity-bad'},{})
             for target in ['trinity-offline1','trinity-offline2']:
                 with self.assertRaises(TimeoutError):await t.request({'target':target,'failed':True},{})
-            with self.assertRaisesRegex(ConnectionError,'gateway backoff'):await t.request({'target':'trinity-other'},{})
-            self.assertNotIn('trinity-other',calls)
+            self.assertEqual(await t.request({'target':'trinity-other'},{}),{'ok':True})
+            self.assertIn('trinity-other',calls)
         asyncio.run(scenario())
 
 class ManualRefreshTests(unittest.TestCase):

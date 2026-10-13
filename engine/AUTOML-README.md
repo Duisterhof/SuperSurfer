@@ -217,11 +217,17 @@ aml web serve --bind 127.0.0.1 --port 8080 --username aml \
     --evidence-root /path/to/repo
 ```
 
-The manager polls every registered host concurrently. Each poll has a four-second
-limit. Polls repeat every five seconds. Observations older than 15 seconds are
-unavailable for scheduling. Failed polls retain the last observation for display
-and mark it unknown. Refresh requests run in the background and return cached
-observations immediately. Queue and CLI requests do not wait for SSH polling.
+Idle host observations refresh every five minutes; allocation checks request
+fresher observations when needed. Each probe allows 45 seconds after its SSH
+gateway slot becomes available; candidate environment/source checks allow 60
+seconds. SSH connection establishment allows 15 seconds. Requests sharing the
+Trinity gateway remain serialized. Waiting for another request does not count
+as a failed probe. Connection errors and timeouts back off only the affected node
+for five minutes, preserving other candidates and existing GPU reservations.
+Failed polls retain the last observation for display and mark it unknown.
+Refresh requests run in the background and return cached observations immediately.
+Queue and CLI requests do not wait for SSH polling. Cached telemetry never
+replaces the final GPU occupancy check before launch.
 
 GPU rows show all observed indices, allowed indices, model, total and free VRAM,
 utilization, occupancy, reservation, sample age, and errors. Observing a GPU does
