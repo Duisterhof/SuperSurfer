@@ -390,7 +390,11 @@ http.server.HTTPServer(('127.0.0.1', int(sys.argv[1])), Handler).serve_forever()
         generated=self.repo/'outputs';generated.mkdir()
         artifact=generated/'checkpoint.pt'
         with artifact.open('wb') as stream:stream.truncate(513*1024*1024)
-        with self.assertRaisesRegex(SurfboardError,'512 MiB'):source_fingerprint(self.repo)
+        # A report just above the previous cap remains fully hashed.
+        included = source_fingerprint(self.repo)
+        self.assertNotEqual(included, source_fingerprint(self.repo, ['outputs/**']))
+        with artifact.open('r+b') as stream:stream.truncate(1025*1024*1024)
+        with self.assertRaisesRegex(SurfboardError,'1 GiB'):source_fingerprint(self.repo)
         before=source_fingerprint(self.repo,['outputs/**'])
         artifact.unlink();artifact.write_bytes(b'changed artifact')
         self.assertEqual(before,source_fingerprint(self.repo,['outputs/**']))

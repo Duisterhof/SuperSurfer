@@ -48,7 +48,7 @@ Action blocks accept `source_exclude`, up to 64 repository-relative glob pattern
 for untracked generated outputs. Tracked files always participate. These patterns
 are recorded with the check receipt and reused for completion/freshness checks;
 changing the board invalidates old receipts. Unexcluded source retains the
-512 MiB/50,000-file bounds. Exclude outputs, never actual inputs to the check.
+1 GiB/50,000-file bounds. Exclude outputs, never actual inputs to the check.
 
 Accepted direct steering or answers promote a background turn to user-requested
 work and clear inherited peer lineage. Rejected input leaves authority unchanged;

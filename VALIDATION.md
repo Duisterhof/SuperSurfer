@@ -1187,5 +1187,6 @@ rerun locally; no live provider inference was repeated for this integration pass
   isolated temporary installation; no live provider integration is claimed.
 - Agent skill validation and diff whitespace checks passed. Linux x64 packaging
   and the isolated native Electron launch/persistence/sandbox checks passed.
-- Live publication diagnosis also found a source snapshot above the existing
-  512 MiB bound. No exclusions or source-limit changes are included in this fix.
+- User-approved follow-up raises the streamed source bound from 512 MiB to
+  1 GiB without changing exclusions or check coverage. The regression hashes a
+  513 MiB fixture and still rejects a source snapshot above 1 GiB.
