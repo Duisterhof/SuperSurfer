@@ -53,7 +53,71 @@ def progress(message):
     print('SUPERSURFER_PROGRESS: ' + json.dumps({'message':message}),file=sys.stderr,flush=True)
 
 
-def read_bundle(expected=None, timeout=30, stream=None):
+def workspace_session(state, port, aml_home):
+    """Authenticate this exact workspace without starting providers or services."""
+    try:
+        token = (state / 'token').read_text().strip()
+    except FileNotFoundError:
+        token = None
+    request = urllib.request.Request(f'http://127.0.0.1:{port}/api/session', headers={'Authorization': 'Bearer ' + token} if token else {})
+    try:
+        with urllib.request.urlopen(request, timeout=2) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f'Remote port {port} is already serving a different or incompatible workspace (HTTP {error.code}). Use its matching remote folder or choose another port.') from error
+    except urllib.error.URLError as error:
+        if isinstance(error.reason, ConnectionRefusedError) or getattr(error.reason, 'errno', None) == errno.ECONNREFUSED:
+            return None, {}
+        raise RuntimeError(f'Remote port {port} did not answer the workspace check: {error.reason}. No second service was started.') from error
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f'Remote port {port} returned an invalid workspace response. No second service was started.') from error
+    if not isinstance(result, dict) or not result.get('ok') or not token or result.get('state_dir') != str(state.resolve()):
+        raise RuntimeError(f'Remote port {port} belongs to a different workspace. Choose its matching remote folder or another port.')
+    manager_home = result.get('aml_home')
+    if not manager_home and (state / 'release.json').is_file():
+        previous = json.loads((state / 'release.json').read_text()).get('command', [])
+        if '--aml-home' in previous:
+            manager_home = previous[previous.index('--aml-home') + 1]
+    if manager_home and Path(manager_home).expanduser().resolve() != aml_home.resolve():
+        raise RuntimeError(f'This workspace uses manager folder {manager_home}. Use that folder or choose a different workspace folder and port.')
+    return token, result
+
+
+def cached_workspace(config):
+    """Reuse a healthy matching app version; otherwise follow normal setup."""
+    version = config.get('app_version')
+    if not isinstance(version, str) or not version or len(version) > 64:
+        raise RuntimeError('Invalid workspace app version.')
+    root = Path(config['remoteRoot']).expanduser()
+    aml_home = Path(config.get('amlHome') or '~/.auto-ml').expanduser()
+    port = int(config.get('remotePort', 8765))
+    if not root.is_absolute() or not aml_home.is_absolute() or not 1024 <= port <= 65535:
+        raise RuntimeError('Choose absolute workspace folders and a port between 1024 and 65535.')
+    state = root / 'state'
+    metadata = state / 'release.json'
+    if not metadata.is_file():
+        return None
+    try:
+        installed = json.loads(metadata.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(installed, dict):
+        return None
+    if not installed.get('path'):
+        return None
+    release = Path(installed['path']).resolve()
+    if not release.is_relative_to((root / 'releases').resolve()) or not (release / 'server/engine.py').is_file():
+        return None
+    token, info = workspace_session(state, port, aml_home)
+    if not token or info.get('version') != version:
+        return None
+    if not info.get('read_only'):
+        ensure_manager(release, aml_home)
+    progress('Saved workspace is ready. Opening its private connection…')
+    return {'token': token, 'port': port, 'root': str(root), 'version': info.get('version')}
+
+
+def read_bundle(expected=None, timeout=30, stream=None, total_timeout=120):
     """Read a framed upload before taking any workspace/service lock.
 
     SSH EOF may be delayed by a wrapper or shared session. An explicit byte
@@ -63,9 +127,9 @@ def read_bundle(expected=None, timeout=30, stream=None):
     if expected is not None and (type(expected) is not int or not 0 < expected <= limit):
         raise RuntimeError('Invalid workspace bundle size.')
     source=stream or sys.stdin.buffer;descriptor=source.fileno();chunks=[];size=0
-    deadline=time.monotonic()+timeout
+    deadline=time.monotonic()+timeout;total_deadline=time.monotonic()+total_timeout;last_percent=0
     while expected is None or size < expected:
-        remaining=deadline-time.monotonic()
+        remaining=min(deadline,total_deadline)-time.monotonic()
         if remaining <= 0 or not select.select([descriptor],[],[],max(0,remaining))[0]:
             raise RuntimeError('Workspace upload timed out. No connection lock or service was changed. Retry the connection.')
         chunk=os.read(descriptor,min(1024*1024,(expected-size) if expected is not None else limit+1-size))
@@ -74,7 +138,13 @@ def read_bundle(expected=None, timeout=30, stream=None):
                 raise RuntimeError('Workspace upload was interrupted. No connection lock or service was changed. Retry the connection.')
             break
         chunks.append(chunk);size+=len(chunk)
+        deadline=time.monotonic()+timeout
         if size > limit:raise RuntimeError('Remote bundle is too large.')
+        if expected:
+            percent=size*100//expected
+            if percent >= last_percent+10:
+                progress(f'Uploading the workspace bundle… {percent}% received')
+                last_percent=percent
     if not size:raise RuntimeError('The workspace upload was empty. Retry the connection.')
     return b''.join(chunks)
 
@@ -120,34 +190,8 @@ def _install(payload):
         raise RuntimeError('Choose an absolute manager folder, or a path starting with ~/')
 
     def healthy():
-        try:
-            token = (state / 'token').read_text().strip()
-        except FileNotFoundError:
-            token = None
-        # Authenticate without waiting on the research manager or starting Codex.
-        request = urllib.request.Request(f'http://127.0.0.1:{port}/api/session', headers={'Authorization': 'Bearer ' + token} if token else {})
-        try:
-            with urllib.request.urlopen(request, timeout=2) as response:
-                result = json.load(response)
-        except urllib.error.HTTPError as error:
-            raise RuntimeError(f'Remote port {port} is already serving a different or incompatible workspace (HTTP {error.code}). Use its matching remote folder or choose another port.') from error
-        except urllib.error.URLError as error:
-            if isinstance(error.reason, ConnectionRefusedError) or getattr(error.reason, 'errno', None) == errno.ECONNREFUSED:
-                return None
-            raise RuntimeError(f'Remote port {port} did not answer the workspace check: {error.reason}. No second service was started.') from error
-        except (OSError, ValueError) as error:
-            raise RuntimeError(f'Remote port {port} returned an invalid workspace response. No second service was started.') from error
-        if not isinstance(result, dict) or not result.get('ok') or not token or result.get('state_dir') != str(state.resolve()):
-            raise RuntimeError(f'Remote port {port} belongs to a different workspace. Choose its matching remote folder or another port.')
-        manager_home = result.get('aml_home')
-        if not manager_home and (state / 'release.json').is_file():
-            metadata = json.loads((state / 'release.json').read_text())
-            previous = metadata.get('command', [])
-            if '--aml-home' in previous:
-                manager_home = previous[previous.index('--aml-home') + 1]
-        if manager_home and Path(manager_home).expanduser().resolve() != aml_home.resolve():
-            raise RuntimeError(f'This workspace uses manager folder {manager_home}. Use that folder or choose a different workspace folder and port.')
-        session_info.update(result)
+        token, info = workspace_session(state, port, aml_home)
+        session_info.update(info)
         return token
 
     token = healthy()
@@ -220,6 +264,10 @@ def main():
     root = Path(config['remoteRoot']).expanduser()
     if not root.is_absolute():
         raise RuntimeError('Choose an absolute remote folder, or a path starting with ~/')
+    if config.get('check_existing'):
+        ready = cached_workspace(config)
+        print(json.dumps({'supersurfer_cached': bool(ready), **(ready or {})}))
+        return
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     progress('SSH connected. Uploading the workspace bundle…')
     payload=read_bundle(config.get('bundle_size'))

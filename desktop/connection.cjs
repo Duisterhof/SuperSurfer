@@ -56,6 +56,14 @@ function parseSetupResponse(output) {
   }
   throw new Error('Remote setup did not return valid connection credentials. Check the remote service log.');
 }
+function parseCachedResponse(output) {
+  for (const line of String(output).split(/\r?\n/).reverse()) {
+    let value;try { value=JSON.parse(line.trim()); } catch { continue; }
+    if(value?.supersurfer_cached===false)return null;
+    if(value?.supersurfer_cached===true)return parseSetupResponse(line);
+  }
+  throw new Error('Could not verify the saved workspace. Retry the connection.');
+}
 const REQUIREMENTS_SCRIPT = `import json,sys,shutil,os,subprocess
 from pathlib import Path
 modern=sys.version_info >= (3,11)
@@ -164,13 +172,30 @@ async function connect(raw, onStatus = () => {}, { signal } = {}) {
   onStatus('Preparing your workspace…');
   const script = fs.readFileSync(path.join(__dirname, 'bootstrap.py'), 'utf8');
   const bundle = fs.readFileSync(path.join(__dirname, 'remote.tar.gz'));
+  onStatus('Checking your saved workspace…');
+  const cachedConfig={...config,check_existing:true,app_version:require('../package.json').version};
+  let cached;
+  try {
+    const output=config.mode==='local'
+      ? await collect(process.env.SUPERSURFER_PYTHON||'python3',['-c',script,JSON.stringify(cachedConfig)],undefined,90000,signal,onStatus)
+      : await collect('/usr/bin/ssh',[...BOOTSTRAP_SSH_OPTIONS,config.target,`python3 -c ${shellQuote(script)} ${shellQuote(JSON.stringify(cachedConfig))}`],undefined,90000,signal,onStatus);
+    cached=parseCachedResponse(output);
+  } catch(error) { throw connectionError(error,config); }
+  if(cached) {
+    signal?.throwIfAborted();
+    if(config.mode==='remote') {
+      onStatus('Saved workspace is ready. Opening the connection…');
+      try { return await startTunnel(config,cached,{signal}); } catch(error) { throw connectionError(error,config); }
+    }
+    return {config,origin:`http://127.0.0.1:${cached.port}`,token:cached.token,child:null,async openPort(port){previewPort(port,[cached.port]);return {url:'http://127.0.0.1:'+port,async close(){}};}};
+  }
   const setupConfig={...config,bundle_size:bundle.length};
   const remoteCommand = `python3 -c ${shellQuote(script)} ${shellQuote(JSON.stringify(setupConfig))}`;
   let result;
   if (config.mode === 'local') {
-    try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(setupConfig)], bundle, 90000, signal, onStatus); }
+    try { result = await collect(process.env.SUPERSURFER_PYTHON || 'python3', ['-c', script, JSON.stringify(setupConfig)], bundle, 240000, signal, onStatus); }
     catch (error) { throw connectionError(error,config); }
-  } else {try {result = await collect('/usr/bin/ssh', [...BOOTSTRAP_SSH_OPTIONS, config.target, remoteCommand], bundle, 90000, signal, onStatus);}catch(error){throw connectionError(error,config);}}
+  } else {try {result = await collect('/usr/bin/ssh', [...BOOTSTRAP_SSH_OPTIONS, config.target, remoteCommand], bundle, 240000, signal, onStatus);}catch(error){throw connectionError(error,config);}}
   signal?.throwIfAborted();
   const ready = parseSetupResponse(result);
   if (config.mode === 'local') {
@@ -182,4 +207,4 @@ async function connect(raw, onStatus = () => {}, { signal } = {}) {
   onStatus('Remote workspace is ready. Opening the connection…');
   try {return await startTunnel(config, ready, { signal });}catch(error){throw connectionError(error,config);}
 }
-module.exports = { previewPort, connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, parseRequirements, connectionError, checkRequirements, SSH_OPTIONS, BOOTSTRAP_SSH_OPTIONS, collect };
+module.exports = { previewPort, connect, startTunnel, validateConfig, shellQuote, parseSetupResponse, parseCachedResponse, parseRequirements, connectionError, checkRequirements, SSH_OPTIONS, BOOTSTRAP_SSH_OPTIONS, collect };

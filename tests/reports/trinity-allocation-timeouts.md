@@ -57,3 +57,26 @@ two failed destinations cannot suppress a healthy peer, deliberate cancellation
 does not create a failure cooldown, a real timeout reaps its owned subprocess,
 and an unsuccessful probe preserves active GPU reservations. Scheduler tests
 also cover one-time placement, source checks and resource limits.
+
+## Desktop upload follow-up
+
+After the scheduler restart, the user reported the Tulip GUI stuck at
+`SSH connected. Uploading the workspace bundle…`. The GUI service was healthy:
+authenticated session checks completed in about 1 ms and workspace state in
+under one second. No corresponding bootstrap/upload process remained on Tulip
+when inspected. The displayed stage alone does not prove an active transfer.
+
+The desktop still uploaded its entire 8.43 MiB bundle on every reconnect. Its
+remote reader applied a fixed 30-second deadline even to steadily progressing
+uploads. A deterministic slow-stream fixture reproduces that deadline failure.
+The corrected reader allows 30 seconds of inactivity, bounded by an independent
+120-second transfer limit, and reports bytes actually received. Cancelled desktop
+attempts also cannot overwrite the status of a later attempt.
+
+A new authenticated preflight reuses a healthy service of the same app version,
+with matching workspace/manager paths and verified installed engine metadata.
+Absent installations and different versions retain normal setup. An incompatible
+occupied port fails safely; no second service is launched. A real no-upload check
+against Tulip succeeded in 0.031 seconds, preserving the existing scheduler.
+This does not establish that the original Mac-to-Tulip transfer completed: the
+new reconnect behavior requires the patched desktop client.
