@@ -32,6 +32,44 @@ class SurfboardServiceTests(unittest.TestCase):
     def local(self, workflow='software', name='local-project', repo=None):
         return self.service.action('project.add', {'name': name, 'repo': str(repo or self.root/name), 'surfboard_template': workflow})
 
+    def test_publication_gate_accepts_reviewed_payload_and_rejects_substitution(self):
+        from test_publication_source import fixture
+        payload, _ = fixture(self.repo, self.exp['id'])
+        board = template()
+        board['nodes'].append({'id':'publication','kind':'check','label':'Publication','x':340,'y':600,
+            'config':{'argv':[sys.executable,'-c','print("checked")'],
+                      'source_manifest':'review/manifest.json','source_paths':['check.py']}})
+        board['edges'].append({'id':'publication-results','source':'publication','target':'results','relation':'requires'})
+        self.apply(board, experiment_id=self.exp['id'])
+        scope = 'experiment:' + self.exp['id']
+        self.service.action('chat.send', {'scope':scope, 'text':'Publish the requested comparison'})
+        receipt = self.service.agent_action(scope, 'supersurfer_run_board_action',
+            {'node_id':'publication','request_id':'publication-inputs-check-01'})
+        for _ in range(100):
+            receipt = self.service.agent_action(scope, 'supersurfer_run_board_action',
+                {'node_id':'publication','operation':'status','execution_id':receipt['id']})
+            if receipt['status'] in {'succeeded','failed'}: break
+            time.sleep(.02)
+        self.assertEqual('succeeded', receipt['status'], receipt)
+        with self.assertRaisesRegex(APIError, 'Run check'):
+            self.service.agent_action(scope, 'supersurfer_publish_result', {**payload,'html':'<p>Unreviewed</p>'})
+        (self.repo / 'another-experiment.txt').write_text('Unrelated concurrent work')
+        result = self.service.agent_action(scope, 'supersurfer_publish_result', payload)
+        self.assertEqual(payload['title'], result['title'])
+
+    def test_publication_only_check_cannot_authorize_gpu_launch(self):
+        board = template()
+        board['nodes'].append({'id':'publication','kind':'check','label':'Publication','x':340,'y':600,
+            'config':{'argv':[sys.executable,'-c','print("checked")'],
+                      'source_manifest':'review/manifest.json','source_paths':['check.py']}})
+        board['edges'].append({'id':'publication-run','source':'publication','target':'experiment','relation':'requires'})
+        self.apply(board, experiment_id=self.exp['id'])
+        state = self.service.surfboard('p1', self.exp['id'])
+        project = self.service.lookup('projects', 'p1')
+        from server.surfboards import SurfboardError
+        with self.assertRaisesRegex(SurfboardError, 'cannot authorize a GPU run'):
+            self.service.board_gate(project, state, 'queue_run', {'experiment_id': self.exp['id']})
+
     def test_recovery_owner_can_run_configured_check_without_generic_user_authority(self):
         board = template()
         board['nodes'].append({'id':'report_check','kind':'check','label':'Report check','x':340,'y':600,

@@ -204,6 +204,27 @@ not authorize weakening it. Never edit active state files or bypass a denied too
 On a version conflict, reread and reconcile. Applying configuration does not start
 an action, certify a check, alter an existing run contract or launch a run.
 
+
+### Scoped publication review
+
+For Results checks, configure `source_manifest` with the repository-relative
+schema-1 review manifest and `source_paths` with exact repository-relative checker,
+producer and local helper files. These two fields select publication scope; they
+do not remove the check. The service hashes the manifest, its payload,
+`evidence_files`, rendering screenshots and declared code. Optional `source_files`
+entries use the same `{path, sha256}` format as evidence, relative to the manifest.
+Include every input the report/check actually uses; unrelated experiments, Git
+history and generated archives are not part of this review. Never narrow a GPU
+source check to a publication manifest.
+
+The manifest must name the current `experiment_id`, `tool` (`publish_result` or
+`publish_training_results`), `payload`, `payload_sha256`, and nonempty
+`evidence_files`. Publication must use that exact tool and payload, including the
+existing report ID and concurrency hash. If content or declared inputs change,
+prepare the manifest again and run a new review. File paths must remain inside
+the repository without symlinks. Checks without these fields retain their full
+repository coverage. The bounded 1 GiB/50,000-input limits remain in force.
+
 A check/code/preview block can set `source_exclude` to repository-relative glob
 patterns for untracked generated outputs, for example `outputs/**` or a specific
 checkpoint directory. Inspect what those paths contain first. Tracked files always

@@ -77,6 +77,24 @@ class BoardRuntimeTests(unittest.TestCase):
     def passed(self, item="item-a", version=2):
         return self.runtime.check_passed(self.project["id"], version, "check", item, self.project["repo"])
 
+    def test_publication_receipt_binds_actual_payload_but_not_unrelated_source(self):
+        from test_publication_source import fixture
+        payload, _ = fixture(self.repo)
+        self.board['compiled']['actions']['check'].update(source_manifest='review/manifest.json', source_paths=['check.py'])
+        receipt = self.finished(self.start())
+        self.assertEqual('succeeded', receipt['status'])
+        self.assertEqual(5, receipt['publication']['input_count'])
+        def passed(tool='publish_result', args=payload):
+            return self.runtime.check_passed(self.project['id'], 2, 'check', 'item-a', self.repo, publication=(tool, args))
+        self.assertTrue(passed())
+        (self.repo / 'unrelated.txt').write_text('another experiment')
+        self.assertTrue(passed())
+        self.assertTrue(passed(args={**payload, 'experiment_id':'item-a'}))
+        self.assertFalse(passed(args={**payload, 'html':'unreviewed replacement'}))
+        self.assertFalse(passed(tool='publish_training_results'))
+        (self.repo / 'check.py').write_text('modified checker')
+        self.assertFalse(passed())
+
     def test_slow_source_scan_returns_receipt_and_retry_without_blocking(self):
         entered, release = threading.Event(), threading.Event()
         real = source_fingerprint

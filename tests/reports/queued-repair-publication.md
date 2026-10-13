@@ -12,3 +12,5 @@ retries, concurrent cancellation, previously attempted runs and owner authority.
 A deliberately blocked source scan verifies immediate durable receipts, responsive
 status and duplicate-free retries. No research jobs or account credentials appear
 in these fixtures or this report.
+
+The publication source scan included unrelated experiments in the shared repository: approximately 534 MiB across 14,648 files. Scoped manifest verification reads 46 declared inputs (23.4 MiB), retaining hashes of the actual report, measurements, screenshots and producer/checker code. It binds approval to the exact publication payload and leaves ordinary full-source checks unchanged.

@@ -477,3 +477,5 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Repair never-started queued source without replacing run identity; let saved
   recovery owners execute their configured checks and return publication-check
   receipts before slow repository scans.
+
+- [x] Scope publication receipts to report/evidence/code and bind the actual published payload, avoiding unrelated experiment scans.

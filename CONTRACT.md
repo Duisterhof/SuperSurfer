@@ -1038,3 +1038,5 @@ Board commands persist and return their execution receipt before scanning source
 Slow scans run outside service/action locks; failures remain visible on that same
 receipt. Retries reconcile before any source scan. Only a successful check with
 unchanged source can satisfy publication requirements.
+
+Publication checks can opt into source_manifest + source_paths. Their receipt covers the task-specific schema-1 manifest, exact publisher/payload, declared evidence, screenshots and checker/producer code, not unrelated repository contents or Git metadata. Publication verifies the actual submitted payload against this receipt. Missing, changed, escaping or symlinked inputs fail closed. Ordinary checks preserve full-source semantics; a publication-only check cannot authorize a GPU launch.
