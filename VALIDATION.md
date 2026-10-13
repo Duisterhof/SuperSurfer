@@ -1197,3 +1197,5 @@ Regression coverage includes unrelated 2 GiB artifacts, changed report/evidence/
 Validation: 776 Python tests and 48 Node tests passed (five optional SSH tests skipped); an additional full publication service regression passed with the 23-test Surfboard service suite. Initial use of unsupported system Python 3.10 failed two runtime prerequisites; rerun under Python 3.11 passed. Skills checker and diff whitespace checks passed.
 
 Linux x64 package and isolated native Electron startup passed. Deployed service 9ca51db685f74807, health 0.1.43 confirmed; migrated 17 VLA applied/default boards through versioned APIs. One board with a pending draft was left untouched to preserve the proposal. Scheduler and research processes were not restarted.
+
+Live Many projections receipt action_717b80272f0da703bc04102b passed on board version 7: 46 inputs / 24,579,666 bytes, source unchanged, all ten reviewer checks passed; creation-to-completion 0.309 seconds including the real configured checker. This verifies the deployed agent path, not just an offline snapshot.
