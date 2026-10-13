@@ -221,7 +221,6 @@ class BoardRuntime:
             cwd = Path(project["repo"]).expanduser().resolve()
             if not cwd.is_dir():
                 raise SurfboardError("Project repository is unavailable", 409)
-            source = source_fingerprint(cwd, action.get("source_exclude", []))
             identity = {"project_id": project["id"], "version": board_state["version"], "node_id": node_id,
                         "scope": scope, "experiment_id": item, "action": action, "cwd": str(cwd), "pr_url": args.get("pr_url")}
             signature = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -254,7 +253,7 @@ class BoardRuntime:
             row = {"id": "action_" + secrets.token_hex(12), "request_id": request_id, "request_fingerprint": signature,
                    "scope": scope, "project_id": project["id"], "experiment_id": item, "board_version": board_state["version"],
                    "node_id": node_id, "label": action.get("label", node_id), "kind": action["kind"], "argv": argv,
-                   "cwd": str(cwd), "timeout_seconds": timeout, "source_exclude": action.get("source_exclude", []), "source_fingerprint": source, "status": "starting",
+                   "cwd": str(cwd), "timeout_seconds": timeout, "source_exclude": action.get("source_exclude", []), "source_fingerprint": None, "status": "starting",
                    "created": now, "started": None, "finished": None, "returncode": None, "logs": "", "logs_truncated": False}
             if args.get("pr_url"):
                 row["pr_url"] = args["pr_url"]
@@ -294,6 +293,14 @@ class BoardRuntime:
             if active["stop"].is_set():
                 row.update(status="cancelled", finished=time.time())
                 self._save(row)
+                return
+            # Save/return the durable receipt before potentially slow Git and
+            # filesystem reads. Retries/status/Stop must not wait for this scan.
+            row["source_fingerprint"] = source_fingerprint(row["cwd"], row.get("source_exclude", []))
+            with self.lock:
+                self._save(row)
+            if active["stop"].is_set():
+                row.update(status="cancelled", finished=time.time())
                 return
             env = dict(os.environ)
             # Do not propagate app/session bearer tokens into configured commands.

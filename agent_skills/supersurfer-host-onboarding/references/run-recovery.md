@@ -23,6 +23,8 @@ flowchart TD
 ```
 
 A setup blocker is not itself a failed research run and does not call retry.
+For a source compatibility defect before any launch attempt, `amend_source`
+updates the reviewed commit in place and requires fresh candidate checks.
 Ready setup and currently available GPUs are separate; no check reserves devices
 or overrides budgets.
 
@@ -137,3 +139,7 @@ and preserve every earlier useful attempt and its measured/unavailable evidence.
 Do not replace the report with only the first training attempt, invent missing
 curves, or mark its required checkpoint complete through update_task. Follow
 [Results checkpoint guidance](../../supersurfer-results/references/results-checkpoint.md).
+
+A dedicated recovery owner may run the task’s configured check blocks, including
+publication review, without routing through the lead. This does not enable
+previews, arbitrary commands, other tasks or workflow edits.

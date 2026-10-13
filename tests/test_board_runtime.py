@@ -9,6 +9,8 @@ import sys
 import tempfile
 import time
 import unittest
+import threading
+from unittest.mock import patch
 
 from server.board_runtime import BoardRuntime, source_fingerprint, TERMINAL, MAX_LOG
 from server.store import Store
@@ -74,6 +76,38 @@ class BoardRuntimeTests(unittest.TestCase):
 
     def passed(self, item="item-a", version=2):
         return self.runtime.check_passed(self.project["id"], version, "check", item, self.project["repo"])
+
+    def test_slow_source_scan_returns_receipt_and_retry_without_blocking(self):
+        entered, release = threading.Event(), threading.Event()
+        real = source_fingerprint
+        def slow(*args, **kwargs):
+            entered.set()
+            if not release.wait(5): raise RuntimeError("test scan timed out")
+            return real(*args, **kwargs)
+        with patch("server.board_runtime.source_fingerprint", side_effect=slow) as fingerprint:
+            try:
+                start = time.monotonic()
+                receipt = self.start()
+                self.assertLess(time.monotonic() - start, 1)
+                self.assertTrue(entered.wait(1))
+                self.assertEqual(receipt["id"], self.start()["id"])
+                status = self.runtime.action(self.scope, self.project, self.board,
+                    {"node_id":"check", "operation":"status", "execution_id":receipt["id"]})
+                self.assertEqual("starting", status["status"])
+                self.assertIsNone(status["source_fingerprint"])
+                self.assertEqual(1, fingerprint.call_count)
+            finally:
+                release.set()
+            self.assertEqual("succeeded", self.finished(receipt)["status"])
+
+    def test_source_scan_failure_retains_reconcilable_failed_receipt(self):
+        with patch("server.board_runtime.source_fingerprint", side_effect=SurfboardError("source too large")):
+            receipt = self.start()
+            result = self.finished(receipt)
+            self.assertEqual("failed", result["status"])
+            self.assertIn("source too large", result["error"])
+            self.assertIsNone(result["started"])
+            self.assertEqual(receipt["id"], self.start()["id"])
 
     def test_check_records_actual_output_and_invalidates_on_source_or_item_revision(self):
         receipt = self.finished(self.start())

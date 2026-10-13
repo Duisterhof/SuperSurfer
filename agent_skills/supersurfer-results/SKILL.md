@@ -13,6 +13,13 @@ then a short explanatory schematic and requested domain visuals. Use the existin
 experiment's runs and artifacts. A reporting request does not authorize new runs
 or extra research to fill gaps.
 
+Configured publication checks return a durable `starting` receipt before scanning
+source. Inspect its execution ID until terminal; `starting` is not approval to
+publish. If delivery is uncertain, reuse the identical request ID to retrieve
+that receipt, rather than submit another check. A saved recovery owner can run
+its task's configured check directly; ordinary scheduled or peer messages do
+not grant that authority. A failed scan remains a visible failed receipt.
+
 Results tools and declared live-data refresh work independently of whether the
 owning conversation uses Codex, Cursor or Claude Code. All providers receive the
 same scoped MCP publishing tools; preserve the existing report, run and owner

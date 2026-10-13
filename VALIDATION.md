@@ -1174,3 +1174,18 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+## Queued source repairs and publication receipt latency
+
+- Added eight isolated real-manager tests covering exact-commit repair without
+  changing identity/resources, retries, PR rejection, explicit hold/cancel races,
+  attempted-run rejection and scoped recovery authority.
+- Added blocked-source-scan and scan-failure receipt tests; configured recovery
+  checks retain role/task boundaries and do not enable previews or ordinary polls.
+- Full Python suite: 769 passed. Node suite: 48 passed, five optional SSH tests
+  skipped. The new native-extension tests used the declared ws dependency from an
+  isolated temporary installation; no live provider integration is claimed.
+- Agent skill validation and diff whitespace checks passed. Linux x64 packaging
+  and the isolated native Electron launch/persistence/sandbox checks passed.
+- Live publication diagnosis also found a source snapshot above the existing
+  512 MiB bound. No exclusions or source-limit changes are included in this fix.

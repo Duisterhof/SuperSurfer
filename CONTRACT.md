@@ -1023,3 +1023,18 @@ provider-native rules; permitted workspace edits may run without a callback. CLI
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.
+
+Queued source repair uses `recover_run(amend_source)` with exact old/new commits,
+PR and repair reason. Only never-started queued runs qualify; source verification
+holds admission and failures leave the original source held. Successful repair
+preserves identity, command, data, resources and recovery ownership, invalidates
+candidate observations and restores prior release intent. Concurrent cancellation,
+hold or revision changes win. A repeated successful request only returns its receipt.
+Scoped user turns and the run's saved recovery owner may use this operation.
+Recovery owners may also execute applied check blocks within their own task, not
+preview blocks, arbitrary commands or unrelated workflows.
+
+Board commands persist and return their execution receipt before scanning source.
+Slow scans run outside service/action locks; failures remain visible on that same
+receipt. Retries reconcile before any source scan. Only a successful check with
+unchanged source can satisfy publication requirements.
