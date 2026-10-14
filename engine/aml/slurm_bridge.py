@@ -8,6 +8,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
@@ -100,7 +101,9 @@ class SlurmBridge:
         directory = Path(directory)
         content = script(spec, directory)
         fingerprint = hashlib.sha256(json.dumps(spec, sort_keys=True).encode()).hexdigest()
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if directory.stat().st_uid != os.getuid():raise ValueError("Receipt directory is not owned by this service user")
+        directory.chmod(0o700)
         with (directory / "slurm.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             intent_path = directory / "slurm.intent.json"
@@ -114,11 +117,12 @@ class SlurmBridge:
                 raise UncertainSubmission("Reconcile existing intent against squeue/sacct; do not resubmit")
             script_path = directory / "job.sh"
             script_path.write_text(content)
+            script_path.chmod(0o600)
             atomic(intent_path, {"run_id": spec["id"], "fingerprint": fingerprint,
                                  "request_id": spec["config"]["supersurfer_request_id"], "account": r["account"], "partition": r["partition"]})
             seconds = r["walltime_seconds"]
             argv = ["sbatch", "--parsable", "--account=" + r["account"],
-                    "--partition=" + r["partition"], "--nodes=1", "--ntasks=1",
+                    "--partition=" + r["partition"], "--nodes=1", "--ntasks=1", "--cpus-per-task=2",
                     "--gpus=" + r["gpu_type"] + ":1",
                     f"--time={seconds//3600:02}:{seconds//60%60:02}:{seconds%60:02}",
                     "--signal=B:TERM@60", "--job-name=" + spec["id"], "--comment=" + spec["id"],
@@ -131,7 +135,7 @@ class SlurmBridge:
                 receipt = {"run_id": spec["id"], "job_id": output.split(";")[0],
                            "fingerprint": fingerprint, "revision": spec["revision"],
                            "account": r["account"], "partition": r["partition"],
-                           "gpu_type": r["gpu_type"], "gpu_count": 1, "state": "queued"}
+                           "gpu_type": r["gpu_type"], "gpu_count": 1, "cpus_per_task": 2, "state": "queued"}
                 atomic(receipt_path, receipt)
                 return receipt
             except Exception as exc:
