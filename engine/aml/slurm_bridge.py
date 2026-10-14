@@ -121,7 +121,7 @@ class SlurmBridge:
                     "--partition=" + r["partition"], "--nodes=1", "--ntasks=1",
                     "--gpus=" + r["gpu_type"] + ":1",
                     f"--time={seconds//3600:02}:{seconds//60%60:02}:{seconds%60:02}",
-                    "--job-name=" + spec["id"], "--comment=" + spec["id"],
+                    "--signal=B:TERM@60", "--job-name=" + spec["id"], "--comment=" + spec["id"],
                     "--output=" + str(directory / "stdout.log"),
                     "--error=" + str(directory / "stderr.log"), str(script_path)]
             try:
