@@ -1,3 +1,13 @@
+# PSC Slurm queue integration — October 13, 2026
+
+- `npm test`: 796 Python tests passed; 49 Node tests passed, five opt-in SSH tests skipped.
+- `npm ci`, capability-skill validation and `git diff --check` pass.
+- `npm run package:linux` built `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+- `xvfb-run -a node tests/native-desktop.electron.cjs`: packaged app launched in an isolated profile; renderer sandbox and navigation persistence passed.
+- Live PSC read-only runner status and one-V100 `sbatch --test-only` accepted; neither submits a GPU job.
+- Preserves already-deployed handoff, queued-source repair and scoped-publication fixes.
+- [Redacted diagnostic](tests/reports/psc-slurm.md). Real smoke execution remains with its existing owner and current payload. Mac signing was not tested for this Linux/service update.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.
