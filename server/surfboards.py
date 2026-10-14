@@ -99,6 +99,9 @@ def catalog():
             fields.update(argv={"type": "array", "items": {"type": "string"}, "default": []},
                           timeout_seconds={"type": "integer", "minimum": 1, "maximum": 3600, "default": 300},
                           source_exclude={"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 1024}, "default": []})
+        if kind == "check":
+            fields.update(source_manifest={"type": "string", "maxLength": 1024},
+                          source_paths={"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 1024}})
         if kind == "preview":
             fields["port"] = {"type": "integer", "minimum": 1, "maximum": 65535, "description": "Optional local preview server port."}
         if kind in VIEW_KINDS:
@@ -330,10 +333,18 @@ def validate(board, *, allow_pending=False):
                 for pattern in value:
                     if pattern.startswith("/") or ".." in pattern.split("/") or "\\" in pattern or any(c in pattern for c in "\0\r\n"):
                         _fail(field_path, "use repository-relative patterns for untracked generated outputs")
+            elif field == "source_paths":
+                _strings(value, field_path, 64, 1024)
             elif field == "extra_source_files":
                 _strings(value, field_path, 64, 1024)
             else:
                 _strings(value, field_path, 200, 200, spec.get("items", {}).get("enum"))
+        if "source_manifest" in config or "source_paths" in config:
+            if not config.get("source_manifest") or not config.get("source_paths"):
+                _fail(path + ".config", "source_manifest requires nonempty source_paths for checker/producer code")
+            for relative in [config["source_manifest"], *config["source_paths"]]:
+                if not relative or relative.startswith("/") or ".." in relative.split("/") or any(c in relative for c in "\\\0\r\n*?[]"):
+                    _fail(path + ".config", "use exact repository-relative publication input paths")
         if kind == "agent":
             config.setdefault("role", "worker")
             if "tools" in config and set(config["tools"]) - ROLE_TOOLS[config["role"]]:
@@ -804,7 +815,8 @@ def compile_board(board):
         if node["kind"] in ACTION_KINDS:
             actions[key] = {"node_id": key, "kind": node["kind"], "label": node["label"],
                             "argv": node["config"].get("argv", []), "timeout_seconds": node["config"].get("timeout_seconds", 300),
-                            "source_exclude": node["config"].get("source_exclude", [])}
+                            "source_exclude": node["config"].get("source_exclude", []),
+                            **({"source_manifest": node["config"]["source_manifest"], "source_paths": node["config"]["source_paths"]} if node["config"].get("source_manifest") else {})}
             if "port" in node["config"]:
                 actions[key]["port"] = node["config"]["port"]
     def targets(node):
