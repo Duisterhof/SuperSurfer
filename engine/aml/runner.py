@@ -371,7 +371,7 @@ def validate_host_contract(spec):
         raise ValueError("Allocated GPUs are outside the declared node contract")
 
 
-def inspect_contract(spec):
+def inspect_contract(spec, timeout=2):
     config = spec["config"]
     blockers = []
     result = {"blockers": blockers, "inputs": []}
@@ -384,7 +384,7 @@ def inspect_contract(spec):
         return result
     try:
         subprocess.run(["git", "-C", spec["repo"], "cat-file", "-e", spec["revision"] + "^{commit}"],
-                       check=True, capture_output=True, timeout=2)
+                       check=True, capture_output=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError):
         block("code_missing", "Registered repository does not contain the exact recorded commit")
     environment = config.get("environment", {})
@@ -402,7 +402,7 @@ def inspect_contract(spec):
                     "print(json.dumps({name:m.version(name) for name in names}))")
             try:
                 output = subprocess.check_output([interpreter, "-c", code, json.dumps(list(environment.get("packages", {})))],
-                                                 stderr=subprocess.PIPE, text=True, timeout=2)
+                                                 stderr=subprocess.PIPE, text=True, timeout=timeout)
                 versions = json.loads(output)
                 for package, expected in environment.get("packages", {}).items():
                     if versions.get(package) != expected:
@@ -556,6 +556,14 @@ def handle(request):
                 raise
             return {"busy": [], "metrics": [], "gpu_error": str(exc)}
     directory = Path(request["directory"])
+    if op.startswith("slurm_"):
+        namespace = {"__name__": "aml_slurm_remote", "__package__": None,
+                     "atomic": atomic, "validate_review": validate_review, "inspect_contract": inspect_contract}
+        source = globals().get("AML_SLURM_SOURCE")
+        if source is None:
+            source = Path(__file__).with_name("slurm_bridge.py").read_text()
+        exec(compile(source, "aml-slurm", "exec"), namespace)
+        return namespace["handle"](request)
     if op == "launch":
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         with (directory / "launch.lock").open("w") as lock:

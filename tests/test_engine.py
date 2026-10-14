@@ -269,7 +269,7 @@ while not stop:
  with client:
   request=json.loads(client.makefile('rb').readline())
   op=request['op']
-  if op=='ping': result={'pid':os.getpid(),'home':str(home),'capabilities':['placement.host_contracts.v1','source.stage.v1','run.ready_with_review.v1','run.submit_idempotent.v1', 'run.add_candidate.v1']}
+  if op=='ping': result={'pid':os.getpid(),'home':str(home),'capabilities':['placement.host_contracts.v1','source.stage.v1','run.ready_with_review.v1','run.submit_idempotent.v1', 'run.add_candidate.v1', 'run.slurm.v1']}
   elif op=='status': result={'agents':[],'runs':[]}
   else:
    if op=='queue.pause': paused=True

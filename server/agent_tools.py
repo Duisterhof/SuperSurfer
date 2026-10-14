@@ -12,6 +12,7 @@ if not __package__:
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from server.training_results import SCHEMA as TRAINING_RESULTS_SCHEMA
+from server.slurm import SCHEMA as SLURM_SCHEMA
 
 MAX_REQUEST = 2 * 1024 * 1024
 REQUIREMENTS = {
@@ -34,6 +35,8 @@ TOOL = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "name": {"type": "string", "minLength": 1, "maxLength": 100},
+            "backend": {"type": "string", "enum": ["direct", "slurm"], "description": "Use slurm for an allocated PSC job; its registered control host has gpus=[] and Slurm assigns the physical device. Initial support is one V100, up to 15 minutes/100 smoke updates."},
+            "slurm": SLURM_SCHEMA,
             "host_id": {"type": "string", "minLength": 1, "maxLength": 150},
             "gpu_count": {"type": "integer", "minimum": 0, "maximum": 1024},
             "command": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"type": "string"}},

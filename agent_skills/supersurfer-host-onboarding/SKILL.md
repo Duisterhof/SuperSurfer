@@ -253,3 +253,11 @@ computer without changing it. This differs from a compute node's bundled runner
 Python 3.9+ and the project environment. Missing provider CLI guidance does not
 install one automatically or authorize collecting credentials. Fresh account
 choice persists all three role defaults; compute-only nodes still need no login.
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

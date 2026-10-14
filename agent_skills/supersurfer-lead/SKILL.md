@@ -224,3 +224,11 @@ released/started attempt; preserve failed/pending evidence and the worker owner.
 Complete with current attempt version and exact report SHA, never a status-only
 handoff. Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md);
 its bounded archive cleanup is separate from human reorder/Restore controls.
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

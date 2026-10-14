@@ -1,65 +1,44 @@
-# PSC Slurm bridge preparation
+# Managed PSC Slurm backend
 
-This patch is an **inactive backend primitive**, not a deployed scheduler or a
-claim that PSC training has launched. The existing live queue_run schema only
-supports physical hosts/project pools. No sbatch was invoked during development.
+The existing scoped `prepare_run` / `queue_run` tools accept `backend: "slurm"`.
+The manager advertises `run.slurm.v1`; the service rejects submission if that
+capability is missing. See the [agent contract](../agent_skills/supersurfer-host-onboarding/references/slurm.md)
+for all fields and an example.
 
-Bart's PSC request authorizes one GPU-shared V100 smoke, up to 900 seconds and a
-bounded number of optimizer updates. The adapter enforces one V100, registered
-run/experiment/request identities, matching exact-source PR receipt and an
-explicit --smoke-updates CLI bound. It preserves Slurm CUDA visibility and W&B
-environment, checks source HEAD/cleanliness inside the allocation and retains
-stdout/stderr. It never registers login-node GPUs or requests exclusive nodes.
+Initial support is deliberately the requested one-V100 GPU-shared smoke, with a
+900-second / 100-update ceiling. Other Slurm clusters and multi-GPU campaigns
+are not supported by this first integration. Data/environment setup is separate;
+Slurm does not copy those files for a job.
 
-Submission intent is fsynced before submission under an exclusive lock. A lost
-reply leaves an uncertain intent; retries never invoke sbatch again. Read-only
-sacct reconciliation requires one exact run-name/account/partition match and
-rejects missing/duplicate/mismatched receipts. Slurm exit codes override an
-apparently COMPLETED state. Tests use injected fake execution only.
+The normal registered experiment, active user request, source/PR, project budget
+and queue-pause checks still apply. Login registrations have no physical GPU
+indices. Allocation belongs to Slurm; the direct-host reservation algorithm is
+not used. The existing standalone runner transports the bridge over bounded SSH,
+so compute nodes do not need an AML installation.
 
-## Required service integration before use
+Before submission, CPU-only admission checks the prepared exact source,
+interpreter/package versions, declared data paths and disk capacity. Existing
+hash receipts are reused; this check does not assert new dataset provenance.
+A failed preflight waits at least 60 seconds before another attempt rather than
+looping on the login node. The batch script independently checks the reviewed
+checkout before executing the bounded command inside the allocation.
 
-1. Extend scoped queue_run validation with an explicit backend=slurm contract
-   (account, partition, GPU type/count, walltime, update bound, control alias,
-   remote source/environment/data/output requirements). Continue the existing
-   registered-experiment, user-intent, request fingerprint, source and PR gates.
-   A Slurm control endpoint must be represented separately from physical GPU
-   hosts. Do not invent physical indices or use direct-host reservation logic.
-2. Persist the held workspace run and its immutable Slurm contract using the
-   existing idempotent request binding. Validate actual association/quota and
-   source/data/package receipts on PSC; staged source must match the checked PR.
-3. Have the managed scheduler invoke this primitive using its bounded SSH
-   executor at the control endpoint, only after release. The primitive operates
-   in a durable private remote receipt directory. Import its Slurm job ID into
-   the same run config; poll accounting and native progress through managed
-   transport. Retain uncertain intent and reservations until reconciliation.
-4. Add scoped cancellation through the stored exact job ID (never job-name/user
-   sweeps), recovery and UI handling. Cancellation must stay pending until
-   Slurm terminal. GPU allocation belongs to Slurm, not login-node nvidia-smi.
-5. Exercise service-level tests covering the schema/PR/ownership gates, restart
-   after lost submission reply, accounting lag, cancellation and live telemetry.
-   Review/package/deploy the service integration through the app maintainer's
-   normal release process. The workspace manager cannot deploy it.
+Remote intent is written before `sbatch` under a lock. A lost reply never results
+in automatic resubmission: `squeue`/`sacct` reconcile the unique run-name, account,
+partition and job identity. Explicit submission rejection is terminal evidence.
+Pending allocation reasons, compute node and terminal exit status are stored on
+the original run. `stop_run` sends `scancel` only to its recorded job ID and waits
+for terminal confirmation. A durable cancellation marker prevents late launches.
 
-These are explicit remaining integration steps, not supplied by this primitive.
-No standalone submission CLI is provided, so it cannot serve as a shell bypass.
+W&B environment, logs and recorded start/end times remain associated with the
+run. Slurm's CUDA visibility is preserved. Pooled-node automatic acquisition and
+recovery are not applied to Slurm; the owning agent diagnoses a rejected/failed
+smoke using the same task and preserved receipts.
 
-## PSC evidence checked 2026-10-13
+Validation uses an isolated fake Slurm transport and CLI, including lost replies,
+accounting lag, cancellation races and PR/budget gates. A successful test or queue
+receipt is not proof that a real GPU training job has started. Live job IDs must
+be reported separately from fixture IDs.
 
-Login alias psc works as bduister. Actual Slurm association cis250005p; projects
-reports 14,798 remaining GPU SU (expires 2027-01-12). Project quota 46.37 TiB,
-18.08 TiB used; home quota 25 GiB, 8.45 GiB used. GPU-shared is up and offers
-v100-32 and v100-16. cuda-v100/12.9.2 module is available. The dedicated DTN
-rsync checksum dry-run successfully reconciles the prior source archive; no
-training jobs from the old smoke were found in squeue/sacct.
-
-Official guide: https://www.psc.edu/resources/bridges-2/user-guide/ . Transfers
-must originate locally and use data.bridges2.psc.edu. PSC Ocean is shared storage;
-compute-local staging should use the allocation's supported scratch directory,
-with checksum/readiness checks inside the Slurm allocation before CUDA.
-
-Current scientific source dependency: VLA_WAM PR93, head
-0096a9fd5b50e69f8bdc44068cb417e68ce978ff. Current trainer hardcodes BF16 and
-Trinity locality/ownership checks; it is not the smoke command. A separate
-reviewed bounded PSC adapter must preserve its JiT objectives and record any
-precision/batch adaptations explicitly. No scientific job is ready in this PR.
+References: [Slurm sbatch](https://slurm.schedmd.com/sbatch.html),
+[PSC Bridges-2 guide](https://www.psc.edu/resources/bridges-2/user-guide/).

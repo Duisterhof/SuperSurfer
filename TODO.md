@@ -1,3 +1,9 @@
+# Slurm follow-up
+
+- [x] Managed PSC one-V100 smoke submission, polling, identity recovery and cancellation.
+- [ ] Generalize Slurm resources and clusters after the bounded PSC smoke is verified.
+- [ ] Extend owner-bound automatic failed-run recovery to Slurm; direct-host pool recovery remains separate.
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.

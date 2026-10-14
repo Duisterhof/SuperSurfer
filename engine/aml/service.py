@@ -12,7 +12,7 @@ import signal
 import sqlite3
 import time
 
-from . import agents, placement, review, targets
+from . import agents, placement, review, targets, slurm_bridge
 from .db import Store, identifier
 from .transport import Transport
 from .util import git, name, process_ticks
@@ -135,7 +135,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -528,7 +528,8 @@ class Manager:
         if host["id"] in self.host_capacity_changed:
             self.host_capacity_probe_attempts[host["id"]] = self.host_probe_attempts[host["id"]]
         try:
-            request = {"op": "probe", "check_gpu": True,
+            slurm_control = self.store.one("SELECT id FROM runs WHERE host_id=? AND json_extract(config, '$.backend')='slurm' LIMIT 1", (host["id"],))
+            request = {"op": "probe", "check_gpu": not bool(slurm_control),
                        "gpu_required": bool(json.loads(host["gpus"]))}
             probe = await self.transport.request(host, request, timeout=HOST_POLL_TIMEOUT)
             snapshot = {**probe, "online": True, "updated": time.time(), "error": probe.get("gpu_error", "")}
@@ -672,8 +673,21 @@ class Manager:
         name(name_)
         if not isinstance(command, list) or not command or any(not isinstance(x, str) for x in command):
             raise ValueError("Command must be a nonempty argv array")
+        slurm = isinstance(config, dict) and config.get("backend") == "slurm"
+        if isinstance(config, dict) and config.get("backend", "direct") not in {"direct", "slurm"}:
+            raise ValueError("Unknown execution backend")
+        if slurm:
+            slurm_bridge.validate_resources(config.get("slurm"), gpu_count)
+            if json.loads(host["gpus"]):
+                raise ValueError("Slurm requires a separate control-host registration with no physical GPUs")
+            for key in ("slurm_repo", "slurm_python"):
+                placement.absolute_path(config.get(key), key)
+            if not config.get("supersurfer_request_id") or not config.get("supersurfer_experiment_id"):
+                raise ValueError("Slurm requires a registered experiment and durable request_id")
+            if any(k in config for k in ("host_contracts", "allowed_hosts", "gpu_indices", "allow_gpu_sharing")) or any(x is not None for x in (allowed_hosts, environment, inputs)):
+                raise ValueError("Slurm allocation cannot use direct-host GPU placement")
         portable = isinstance(config, dict) and "host_contracts" in config
-        if gpu_count < 0 or gpu_count > project["gpu_limit"] or (not portable and gpu_count > len(json.loads(host["gpus"]))):
+        if gpu_count < 0 or gpu_count > project["gpu_limit"] or (not portable and not slurm and gpu_count > len(json.loads(host["gpus"]))):
             raise ValueError("GPU request exceeds project or host limit")
         env = env or {}
         if (not isinstance(env, dict) or any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k) or
@@ -682,8 +696,12 @@ class Manager:
             raise ValueError("Environment must map variable names to strings; GPUs are set by the scheduler")
         if config is not None and not isinstance(config, dict):
             raise ValueError("Config must be a JSON object")
-        config = placement.normalize_contract(self.store, host, command, config, allowed_hosts,
-                                              environment, storage, inputs)
+        if slurm:
+            config = dict(config)
+            config["storage"] = {"directory": host["root"], "min_free_gib": (storage or {}).get("min_free_gib", 0)}
+        else:
+            config = placement.normalize_contract(self.store, host, command, config, allowed_hosts,
+                                                  environment, storage, inputs)
         if "host_contracts" in config and not any(len(contract.get("allowed_gpu_indices", json.loads(self.store.get("hosts", host_id)["gpus"]))) >= gpu_count for host_id, contract in config["host_contracts"].items()):
             raise ValueError("GPU request exceeds every declared host contract")
         origin = await self.project_review_repository(project)
@@ -727,7 +745,7 @@ class Manager:
             config["source_repo"] = repo
         mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                  (host["id"], project["id"]))
-        if not mapping:
+        if not mapping and not slurm:
             if host["target"]:
                 raise ValueError("Register this project's repository on the SSH host with aml host repo")
             self.store.execute("INSERT INTO host_repos VALUES(?,?,?)", (host["id"], project["id"], repo))
@@ -748,6 +766,9 @@ class Manager:
         row["ready"] = bool(row["ready"])
         self.add_placement_details(row)
         row["gpus"] = json.loads(row["allocated_gpus"])
+        if json.loads(row["config"]).get("backend") == "slurm":
+            row["slurm"] = json.loads(row["config"]).get("slurm_status", {})
+            row["backend"] = "slurm"
         if row["status"] == "queued":
             reasons, _ = self.run_wait(row)
             row["wait_reasons"] = [code for code, _ in reasons]
@@ -1036,8 +1057,12 @@ class Manager:
             self.run_inspections.add(run["id"])
             self.run_next_poll[run["id"]] = now + self.run_poll_interval(run, now, interval)
             try:
+                slurm = json.loads(run["config"]).get("backend") == "slurm"
+                operation = "cancel" if run["status"] == "cancelling" else "status"
                 state = await self.transport.request(host, {
-                    "op": "cancel" if run["status"] == "cancelling" else "status", "directory": run["job_dir"]})
+                    "op": ("slurm_" if slurm else "") + operation, "directory": run["job_dir"]}, timeout=120 if slurm else 45)
+                if slurm:
+                    self.record_slurm_status(run, state)
                 self.record_run_timing(run, state)
                 if "progress" in state:
                     current_config = json.loads(self.store.get("runs", run["id"])["config"])
@@ -1152,7 +1177,42 @@ class Manager:
             reasons.extend((item["code"], item["reason"]) for item in observation.get("blockers", []))
         return reasons, available
 
+    def slurm_wait(self, run):
+        reasons = []
+        preflight = json.loads(run["config"]).get("slurm_preflight", {})
+        if preflight.get("retry_at", 0) > time.time():
+            reasons.append(("slurm_preflight", preflight.get("error", "PSC preparation pending")))
+        try:
+            review.validate_receipt(json.loads(run["config"]), run["revision"])
+        except ValueError as exc:
+            reasons.append(("review_required", str(exc)))
+        if not run["ready"]:
+            reasons.append(("held", "Run is held pending exact-source PR verification and release"))
+        if self.store.one("SELECT paused FROM queue_control WHERE id=1")["paused"]:
+            reasons.append(("queue_paused", "Queue is paused"))
+        if run.get("task_id"):
+            if self.store.get("tasks", run["task_id"])["status"] == "archived":
+                reasons.append(("task_archived", "Task is archived"))
+            if not self.store.dependencies_done(run["task_id"]):
+                reasons.append(("dependencies", "Task dependencies are not done"))
+        project = self.store.get("projects", run["project_id"])
+        active = self.store.one("SELECT count(*) AS n,coalesce(sum(gpu_count),0) AS g FROM runs WHERE project_id=? AND status IN (?,?,?,?,?)", (run["project_id"], *ACTIVE_RUNS))
+        if active["n"] >= project["run_limit"]:
+            reasons.append(("run_limit", "Project concurrent run limit reached"))
+        if active["g"] + run["gpu_count"] > project["gpu_limit"]:
+            reasons.append(("gpu_limit", "Project GPU limit reached"))
+        return reasons, []
+
+    def record_slurm_status(self, run, state):
+        current = json.loads(self.store.get("runs", run["id"])["config"])
+        # Status is mutable evidence, never part of the frozen submission spec.
+        current["slurm_status"] = {**current.get("slurm_status", {}), **{k: state[k] for k in ("job_id", "slurm_state", "node_list", "reason", "error", "account", "partition") if k in state}}
+        self.store.execute("UPDATE runs SET config=? WHERE id=?", (json.dumps(current), run["id"]))
+
     def select_host(self, run):
+        if json.loads(run["config"]).get("backend") == "slurm":
+            reasons, available = self.slurm_wait(run)
+            return run["host_id"], reasons, available
         choices = []
         eligible = []
         portable = "host_contracts" in json.loads(run["config"])
@@ -1185,6 +1245,9 @@ class Manager:
         return reasons, available
 
     def add_placement_details(self, run):
+        if json.loads(run["config"]).get("backend") == "slurm":
+            run.update(allowed_host_names=[self.store.get("hosts", run["host_id"])["name"]], candidate_hosts=[], placement_state="slurm")
+            return
         hosts = [self.store.get("hosts", key) for key in placement.candidates(run)]
         run["allowed_host_names"] = [host["name"] for host in hosts]
         run["candidate_hosts"] = []
@@ -1330,8 +1393,10 @@ class Manager:
             if run is None:
                 return
             attempted.add(run["id"])
-            self.request_placement_checks(run)
-            if run["ready"]:
+            is_slurm = json.loads(run["config"]).get("backend") == "slurm"
+            if not is_slurm:
+                self.request_placement_checks(run)
+            if run["ready"] and not is_slurm:
                 # Poll only when a ready candidate could use refreshed capacity;
                 # coalescing and a per-host cooldown avoid the ticker probing.
                 refreshable = {"host_stale", "host_unknown", "host_unavailable", "gpu_busy"}
@@ -1361,21 +1426,32 @@ class Manager:
                 self.store.event("run.starting", {"id": current["id"], "gpus": gpus}, current["project_id"])
             mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                      (host["id"], current["project_id"]))
-            spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved["repo"], "revision": current["revision"],
+            spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved.get("repo", current.get("repo", "")), "revision": current["revision"],
                     **resolved, "gpus": gpus}
+            if is_slurm:
+                spec.update(repo=resolved["config"]["slurm_repo"], python=resolved["config"]["slurm_python"], gpu_count=current["gpu_count"])
+                spec["config"].pop("slurm_status", None)
+                spec["config"].pop("slurm_preflight", None)
             try:
-                result = await self.transport.request(host, {"op": "launch", "directory": job_dir, "spec": spec}, timeout=150)
+                result = await self.transport.request(host, {"op": "slurm_launch" if is_slurm else "launch", "directory": job_dir, "spec": spec}, timeout=150)
+                if is_slurm:
+                    self.record_slurm_status(current, result)
                 self.record_run_timing(current, result)
                 if result.get("state") == "blocked":
+                    if is_slurm:
+                        config = json.loads(self.store.get("runs", current["id"])["config"])
+                        config["slurm_preflight"] = {"retry_at": time.time() + 60, "error": result.get("error", "PSC preparation pending")}
+                        self.store.execute("UPDATE runs SET config=? WHERE id=?", (json.dumps(config), current["id"]))
                     with self.store.transaction():
                         latest = self.store.get("runs", current["id"])
                         next_status = "cancelled" if latest["status"] == "cancelling" else "queued"
                         self.store.execute("DELETE FROM reservations WHERE run_id=?", (current["id"],))
                         self.store.execute("UPDATE runs SET status=?,job_dir=NULL,allocated_gpus='[]',error=?,updated=? WHERE id=?",
                                            (next_status, result.get("error", "GPUs became busy"), time.time(), current["id"]))
-                    self.placement_observations.pop((current["id"], host["id"]), None)
-                    self.host_metrics.pop(host["id"], None)
-                    self.request_host_refresh()
+                    if not is_slurm:
+                        self.placement_observations.pop((current["id"], host["id"]), None)
+                        self.host_metrics.pop(host["id"], None)
+                        self.request_host_refresh()
                 elif result.get("state") in TERMINAL_RUNS:
                     self.finish_run(current, result)
                 elif result.get("state") in ACTIVE_RUNS:

@@ -229,3 +229,11 @@ For a requested research review, use enabled `check_experiment_results` with
 revise the current comparison, and complete with its exact current version/SHA.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 This is scoped reporting, not permission to take over another recovery owner.
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

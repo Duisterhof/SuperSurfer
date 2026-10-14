@@ -242,3 +242,11 @@ then complete with its exact version/SHA and measured-or-unavailable evidence.
 `update_task` cannot complete a stale checkpoint. New attempts/status/report
 changes reopen it, separately from the overall goal and authorized monitoring.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

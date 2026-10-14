@@ -40,7 +40,7 @@ from .tracking import Tracking
 from .wakeups import Wakeups
 from .results import Results
 from .coordination import AgentMessages
-from . import brief, telemetry
+from . import brief, telemetry, slurm
 from .surfboards import Surfboards, SurfboardError as APIError, template as board_template
 from .surfboard_service import SurfboardService, ALIASES
 from .board_runtime import BoardRuntime
@@ -604,6 +604,7 @@ class Service(SurfboardService, EditorService, WritingService):
         experiment = self.experiment_for_scope(scope) if kind in {"experiment", "conversation"} else None
         project = self.lookup("projects", experiment["project_id"] if experiment else key)
         instructions.append("Project compute pool: " + json.dumps(self.compute.get(project["id"])))
+        instructions.append("For the authorized PSC V100 smoke, queue_run also supports backend=slurm with a registered control host (gpus=[]), local repo/exact revision/PR, remote python and slurm={account,partition:GPU-shared,gpu_type:v100-32 or v100-16,walltime_seconds:1..900,max_updates:1..100,repo:absolute remote checkout}. Supply gpu_count=1, stable request_id, training telemetry and exactly matching --smoke-updates in command. Slurm assigns the GPU; do not onboard the login node as a physical GPU or use project-pool placement. Inspect the same run's slurm job_id/state/reason and stop_run for requested cancellation; never bypass with shell sbatch or retry an uncertain launch under a new ID.")
         instructions.append("For a configured compute pool, prepare_run/queue_run accepts use_project_pool=true, revision (the exact Git commit), "
             "command (an argv array), name, GPU/VRAM/storage needs and the PR. Python and data paths inherit each node's configuration unless explicitly overridden. "
             "Use {python} and {data} placeholders in command arguments; no host_id is needed. The scheduler chooses a compatible node, "
@@ -943,7 +944,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Run preparation is available only during a user-requested experiment conversation, never a scheduled review", 403)
             if name == "supersurfer_queue_run":
                 return self.queue_agent_run(scope, arguments)
-            fields = {"name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics"}
+            fields = {"name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics", "backend", "slurm"}
             if not isinstance(arguments, dict) or set(arguments) - fields:
                 raise APIError("Run preparation accepts only draft fields; project, experiment, actions and readiness cannot be supplied", 400)
             experiment = self.experiment_for_scope(scope)
@@ -1077,10 +1078,12 @@ class Service(SurfboardService, EditorService, WritingService):
             raise APIError("queue_run requires run parameters")
         owner_scope = scope
         existing = "run_id" in arguments
-        fields = {"run_id", "pr_url"} if existing else {"request_id", "name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics"}
+        fields = {"run_id", "pr_url"} if existing else {"request_id", "name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics", "backend", "slurm"}
         if set(arguments) - fields:
             raise APIError("queue_run accepts either run_id and pr_url, or new run fields with pr_url; scope and readiness cannot be supplied")
         request_id = arguments.get("request_id")
+        if arguments.get("backend") == "slurm" and not request_id:
+            raise APIError("Slurm submissions require a stable request_id")
         if request_id is not None and (not isinstance(request_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{16,100}", request_id)):
             raise APIError("request_id must be 16–100 letters, digits, underscores or hyphens")
         arguments = {key: value for key, value in arguments.items() if key != "request_id"}
@@ -1249,7 +1252,12 @@ class Service(SurfboardService, EditorService, WritingService):
         if experiment["project_id"] != project["id"]:
             raise APIError("Experiment belongs to another project")
         use_pool = params.get("use_project_pool", False)
-        if not use_pool and any(key in params for key in ("required_paths", "python_packages")):
+        is_slurm = params.get("backend") == "slurm"
+        if params.get("backend", "direct") not in {"direct", "slurm"} or ("slurm" in params and not is_slurm):
+            raise APIError("Select backend=slurm for a Slurm contract")
+        if is_slurm and use_pool:
+            raise APIError("Slurm chooses its compute node; use a control host_id, not use_project_pool")
+        if not use_pool and not is_slurm and any(key in params for key in ("required_paths", "python_packages")):
             raise APIError("Input requirements use project-pool contracts; set use_project_pool")
         if type(use_pool) is not bool:
             raise APIError("use_project_pool must be boolean")
@@ -1272,7 +1280,19 @@ class Service(SurfboardService, EditorService, WritingService):
             config["supersurfer_request_fingerprint"] = params["_request_fingerprint"]
         review_url = text_field(params, "pr_url", 2048, required=False)
         payload = {"project": project["id"], "name_": name, "gpu_count": count, "command": command, "config": config}
-        if use_pool:
+        if is_slurm:
+            if "run.slurm.v1" not in self.aml.call("ping").get("capabilities", []):
+                raise APIError("The workspace manager needs the Slurm backend update before submitting", 503)
+            host = self.lookup("hosts", text_field(params, "host_id", 150))
+            try:
+                resolved = slurm.contract(params, host)
+            except ValueError as exc:
+                raise APIError(str(exc)) from exc
+            config.update(resolved)
+            config.setdefault("supersurfer_request_id", "draft-" + uuid.uuid4().hex)
+            payload.update(host=host["id"], repo=text_field(params, "repo", 4096), revision=text_field(params, "revision", 80),
+                           storage={"directory": host["root"], "min_free_gib": storage})
+        elif use_pool:
             if params.get("host_id"):
                 raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
             resolved = self.compute.resolve_run(project["id"], params, project)

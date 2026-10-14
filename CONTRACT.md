@@ -1,3 +1,12 @@
+# Managed PSC Slurm smoke — October 13, 2026
+
+Scoped run tools support `backend=slurm` with a registered CPU-only control host,
+exact local/remote source paths, a verified PR, one V100 and bounded walltime and
+updates. The scheduler retains run/request identity, delegates GPU assignment to
+Slurm, records live job identity/state and cancels only the owned job. Lost
+submission replies never trigger a second `sbatch`. Direct-host scheduling remains
+the default. See [the contract](docs/psc-slurm-bridge.md).
+
 # Native VS Code workflow preview — October 12, 2026
 
 An authenticated host companion attaches an existing Agent Host session/chat to
