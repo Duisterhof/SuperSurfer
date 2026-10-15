@@ -1,3 +1,26 @@
+# Results scale persistence — October 15, 2026
+
+- Standard renderer browser regression: Log survives leaving/reopening Results,
+  reload and a changed report revision; a separate report defaults independently
+  to Linear. A delayed native restore does not overwrite a newer selection.
+- Existing live Results regression passes, including refresh, stale-data evidence,
+  unrelated-window rejection and removed-document response isolation.
+- Native Electron regression passes with isolated simulated hosts: saved report
+  scales survive process restart and a new loopback port, remain separate across
+  hosts, survive navigation writes and work from detached panels.
+- Python suite: 758 tests pass. Node suite: 49 pass, five optional SSH checks
+  skipped. Initial Node run lacked the new native-extension `ws` dependency;
+  after installing the current lockfile, the complete Node suite passes.
+- Skill consistency and whitespace checks pass. No role tools or agent workflow
+  permissions changed, so shipped capability skills and versions are unchanged.
+- Linux x64 local package builds at
+  `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`; packaged app startup, sandboxing and
+  settings persistence pass using an isolated profile under Xvfb. This is a
+  local fix build, not a new versioned release. Native Mac validation was not run.
+- Existing desktop builds receive tab/reload persistence from the updated web
+  bridge; persistence across changing SSH ports requires the updated desktop
+  preference bridge. Published report HTML/hashes and training runs are untouched.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.

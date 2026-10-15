@@ -7,9 +7,9 @@ const compiled=JSON.parse(execFileSync('python3',['-c','import json,sys;from ser
  const browser=await chromium.launch({executablePath:'/opt/google/chrome/chrome',headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage({viewport:{width:1600,height:1080}});page.setDefaultTimeout(12000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await install(page);
-  let slow=true,failed=false,version=1,force=0,polls=0;
+  let slow=true,failed=false,version=1,force=0,polls=0,reportId='training',reportHash='hash';
   const rows=[{_step:0,joint:0,loss:16,phase:'warmup'},{_step:1,joint:1,loss:14,phase:'joint',_timestamp:100},{_step:2,joint:2,loss:13,phase:'joint',_timestamp:200},{_step:3,joint:3,loss:12,phase:'joint',_timestamp:300},{_step:4,joint:3,'val/loss':13,'val/eef':24,_timestamp:400}];
-  await page.route('http://demo.test/api/results?*',route=>route.fulfill({json:{pages:[{id:'training',title:spec.title,sha256:'hash',updated:1,preview_url:'/result-preview/training',wandb_sources:compiled.wandb_sources}]}}));
+  await page.route('http://demo.test/api/results?*',route=>route.fulfill({json:{pages:[{id:reportId,title:spec.title,sha256:reportHash,updated:1,preview_url:'/result-preview/training',wandb_sources:compiled.wandb_sources}]}}));
   const html=compiled.html.replace('<head>','<head><script>'+fs.readFileSync(path.join(__dirname,'../ui/results-client.js'),'utf8')+'</script>');
   await page.route('http://demo.test/result-preview/training',route=>route.fulfill({contentType:'text/html',body:html,headers:{'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:"}}));
   await page.route('http://demo.test/api/result-data?*',route=>{const url=new URL(route.request().url());assert.equal(url.searchParams.get('background'),'1');assert.equal(url.searchParams.get('experiment_id'),'demo-e14');if(url.searchParams.get('refresh')==='1')force++;else polls++;
@@ -35,7 +35,19 @@ const compiled=JSON.parse(execFileSync('python3',['-c','import json,sys;from ser
   // Legend interaction remains functional after refresh/smoothing.
   await chart().locator('.legendtoggle').first().click();await page.waitForTimeout(350);assert.equal(await chart().evaluate(el=>el.data[1].visible),'legendonly');
   failed=true;version=3;await page.locator('[data-action="refresh-results"]').click();await fl().getByText('Some data is stale or unavailable:',{exact:false}).waitFor();assert.ok((await chart().evaluate(el=>el.data[0].y.length))>0);
-  const before=force;await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();assert.equal(force,before+1);
+  await fl().locator('#scale').selectOption('log');
+  const expectScale=async scale=>{await rf().waitForFunction(scale=>document.querySelector('#scale').value===scale&&document.querySelector('#training-chart-0')?.layout?.yaxis?.type===scale,scale);};
+  await expectScale('log');
+  const before=force;await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();assert.equal(force,before+1);await expectScale('log');
+  // Browser restart/refresh and republishing retain the report's preference.
+  reportHash='revised';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('log');
+  reportId='another-report';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('linear');
+  reportId='training';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('log');
+  // A delayed native preference must not undo a newer user selection.
+  await page.evaluate(()=>{window.superSurferDesktop={getResultScale:()=>new Promise(resolve=>window.finishScaleRead=resolve),setResultScale:async()=>{}};});
+  await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();
+  await fl().locator('#scale').selectOption('linear');await page.evaluate(()=>window.finishScaleRead('log'));await page.waitForTimeout(100);await expectScale('linear');
+  await page.evaluate(()=>delete window.superSurferDesktop);await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('linear');
   await page.setViewportSize({width:900,height:900});await fl().locator('#columns').selectOption('3');await page.waitForTimeout(150);
   assert.ok(await fl().locator('body').evaluate(el=>el.scrollWidth<=el.clientWidth+2));assert.equal(await fl().locator('#secondary').getAttribute('open'),null);
   if(process.env.SUPERSURFER_QA_OUTPUT)await page.screenshot({path:path.join(process.env.SUPERSURFER_QA_OUTPUT,'training-results-narrow.png')});assert.deepEqual(errors,[]);console.log('PASS canonical training Results: partial sources, live overlays, held-out data, decimal axes, smoothing/raw, zoom, legend, expand, refresh, stale recovery and narrow layout');

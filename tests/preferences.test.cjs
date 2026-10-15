@@ -13,3 +13,10 @@ test('custom experiment tabs survive native preference round trips',()=>{
 });
 
 test('task tabs survive native persistence and reject foreign values',()=>{const value=workspacePreference({taskTabs:{'vla/E15':'results','vla/E12':'runs','vla/_project':'compute','../bad':'editor','vla/E17':{},'vla/E18':'javascript:alert(1)'}});assert.deepEqual(value.taskTabs,{'vla/E15':'results','vla/E12':'runs','vla/_project':'compute'});});
+
+test('Results scales are report-specific, bounded and persist through native serialization',()=>{
+ const value=workspacePreference({resultScales:{'exp_a/report_a':'log','exp_a/report_b':'linear','exp_b/report_a':'linear','../bad':'log','exp_a/bad':'symlog','exp_a/object':{}}});
+ assert.deepEqual(workspacePreference(JSON.parse(JSON.stringify(value))).resultScales,{'exp_a/report_a':'log','exp_a/report_b':'linear','exp_b/report_a':'linear'});
+ assert.deepEqual(workspacePreference({resultScales:[]}).resultScales,{});
+ assert.equal(Object.keys(workspacePreference({resultScales:Object.fromEntries(Array.from({length:600},(_,i)=>['exp/report_'+i,'log']))}).resultScales).length,512);
+});

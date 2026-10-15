@@ -7,7 +7,7 @@ const { connect, validateConfig } = require('./connection.cjs');
 const { knownHosts } = require('./hosts.cjs');
 const { openProviderLogin } = require('./provider-login.cjs');
 const themes = require('./themes.cjs');
-const { workspacePreference } = require('./preferences.cjs');
+const { workspacePreference, resultScaleKey, resultScales } = require('./preferences.cjs');
 const { WindowStore, configKey, windowLabel } = require('./windows.cjs');
 const windows = new Map(), panelWindows = new Map();
 const contexts=()=>[...windows.values(),...panelWindows.values()];
@@ -229,8 +229,20 @@ else {
       return value;
     });
     ipcMain.handle('workspace:get',event => ownWindow(event).record.workspace);
+    ipcMain.handle('results:scale:get',(event,key) => {
+      const context=ownWindow(event),record=context.record||context.parent.record;
+      if(!resultScaleKey(key))throw new Error('Invalid Results preference.');
+      return record.workspace?.resultScales?.[key]||null;
+    });
+    ipcMain.handle('results:scale:set',(event,key,scale) => {
+      const context=ownWindow(event),record=context.record||context.parent.record;
+      if(!resultScaleKey(key)||!['linear','log'].includes(scale))throw new Error('Invalid Results scale.');
+      const values={...record.workspace?.resultScales};delete values[key];values[key]=scale;
+      record.workspace=workspacePreference({...record.workspace,resultScales:resultScales(values)});
+      store.save();return scale;
+    });
     ipcMain.handle('workspace:set',(event,value) => {
-      const context=ownWindow(event);context.record.workspace=workspacePreference(value);store.save();return context.record.workspace;
+      const context=ownWindow(event);context.record.workspace={...workspacePreference(value),resultScales:resultScales(context.record.workspace?.resultScales)};store.save();return context.record.workspace;
     });
     ipcMain.handle('connect',(event,config) => connectWindow(ownWindow(event,true),config));
     store.restore().forEach(makeWindow);

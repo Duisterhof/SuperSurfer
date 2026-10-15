@@ -1,3 +1,14 @@
+# Results scale preferences
+
+Standard training Results remember Linear/Log separately for each experiment and
+report ID, independent of the report revision or expiring preview URL. Existing
+published reports receive this behavior through the injected Results bridge;
+their reviewed HTML and hashes stay unchanged. The sandbox only sends validated
+scale choices to its own parent, which owns persistence. Browser views save the
+choice locally; desktop windows also save it with their workspace association so
+restarts and changed SSH tunnel ports retain it. Detached panels share their
+parent's preference. A delayed restore cannot overwrite a newer user choice.
+
 # Native VS Code workflow preview — October 12, 2026
 
 An authenticated host companion attaches an existing Agent Host session/chat to

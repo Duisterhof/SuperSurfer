@@ -1,8 +1,17 @@
 'use strict';
 
+function resultScaleKey(key) {
+  return typeof key === 'string' && /^[A-Za-z0-9_:-]{1,200}\/[A-Za-z0-9_:-]{1,200}$/.test(key);
+}
+function resultScales(value) {
+  return Object.fromEntries(Object.entries(value && typeof value === 'object' && !Array.isArray(value) ? value : {})
+    .filter(([key, scale]) => resultScaleKey(key) && ['linear', 'log'].includes(scale)).slice(-512));
+}
+
 function workspacePreference(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid workspace preference.');
   return {
+    resultScales: resultScales(value.resultScales),
     taskTabs: Object.fromEntries(Object.entries(value.taskTabs&&typeof value.taskTabs==='object'&&!Array.isArray(value.taskTabs)?value.taskTabs:{}).filter(([key,tab])=>/^[A-Za-z0-9_:-]{1,200}\/[A-Za-z0-9_:-]{1,200}$/.test(key)&&typeof tab==='string'&&/^(?:page:page_[a-f0-9]+|[A-Za-z0-9_][A-Za-z0-9_-]{0,63})$/.test(tab)).slice(-512)),
     view: ['workspace','compute','settings'].includes(value.view) ? value.view : 'workspace',
     tab: ['_files','_todos','overview','runs','results','compute','surfboard','artifacts','activity','editor','chat','documents','preview'].includes(value.tab) || /^(?:page:page_[a-f0-9]+|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/.test(value.tab || '') ? value.tab : 'overview',
@@ -23,4 +32,4 @@ function workspacePreference(value) {
   };
 }
 
-module.exports = { workspacePreference };
+module.exports = { workspacePreference, resultScaleKey, resultScales };
