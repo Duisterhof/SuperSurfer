@@ -5,6 +5,12 @@ The manager advertises `run.slurm.v1`; the service rejects submission if that
 capability is missing. See the [agent contract](../agent_skills/supersurfer-host-onboarding/references/slurm.md)
 for all fields and an example.
 
+Slurm calls require a control `host_id`, local `repo`, exact `revision`, remote
+`python` and `slurm` contract. Queue calls also require a stable `request_id`.
+`data_path`, `required_paths` and `python_packages` describe the prepared remote
+runtime. They are valid without `use_project_pool`; combining Slurm with pool
+placement is rejected before submission.
+
 Initial support is deliberately the requested one-V100 GPU-shared smoke, with a
 900-second / 100-update ceiling. Other Slurm clusters and multi-GPU campaigns
 are not supported by this first integration. Data/environment setup is separate;

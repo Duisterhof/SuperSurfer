@@ -1,6 +1,7 @@
 # Slurm follow-up
 
 - [x] Managed PSC one-V100 smoke submission, polling, identity recovery and cancellation.
+- [x] Accept the full Slurm environment contract at the actual MCP entry point, including manager and worker calls.
 - [ ] Generalize Slurm resources and clusters after the bounded PSC smoke is verified.
 - [ ] Extend owner-bound automatic failed-run recovery to Slurm; direct-host pool recovery remains separate.
 

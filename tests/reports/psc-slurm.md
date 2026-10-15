@@ -1,5 +1,16 @@
 # PSC managed Slurm submission
 
+October 15 follow-up: the actual MCP validator rejected the prepared one-V100
+request before HTTP dispatch. It removed Python and data requirements from
+every non-pool request, including Slurm, while service-level tests bypassed that
+validator. No run or Slurm job was created by these rejected calls.
+
+The validator now distinguishes Slurm from direct hosts, retains its declared
+environment fields, and requires exact source, interpreter, Slurm contract and
+queue request identity. Pool placement and scope injection remain invalid. New
+manager/worker MCP tests preserve the full submitted payload; queue integration
+tests now pass through the real validator before the service and scheduler.
+
 Redacted diagnostic, October 13, 2026. No credentials, private storage paths or scientific data are included.
 
 The PSC owner completed data and runtime preparation for an authorized bounded V100 smoke, but the live queue schema accepted only physical hosts/project pools. The inactive bridge could not be invoked by agent tools. No run or Slurm job had been created.

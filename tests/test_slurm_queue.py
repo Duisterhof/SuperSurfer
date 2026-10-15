@@ -8,6 +8,7 @@ import unittest
 
 import test_queue_recovery as fixtures
 from server.app import APIError
+from server import agent_tools
 from aml import runner
 from aml.slurm_bridge import SlurmBridge, handle
 from test_slurm_bridge import spec
@@ -20,8 +21,14 @@ class SlurmQueueTests(unittest.TestCase):
     wait = fixtures.QueueRecoveryTests.wait
     rpc = fixtures.QueueRecoveryTests.rpc
     new_service = fixtures.QueueRecoveryTests.new_service
-    queue = fixtures.QueueRecoveryTests.queue
     runs = fixtures.QueueRecoveryTests.runs
+
+    def queue(self, params=None):
+        arguments = params or self.params
+        # Exercise the agent's real validator before the service/scheduler path.
+        # Slurm needs an explicit Python even though it is not pool placement.
+        agent_tools.validate_arguments(agent_tools.QUEUE_TOOL, arguments)
+        return fixtures.QueueRecoveryTests.queue(self, arguments)
 
     def db(self, method, *args):
         async def call():

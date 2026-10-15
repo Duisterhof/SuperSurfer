@@ -575,11 +575,22 @@ def validate_arguments(tool, arguments):
             schema = {"properties": {key: properties[key] for key in ["run_id", "pr_url", *scope_fields]}, "required": ["run_id", "pr_url", *scope_fields]}
         else:
             pooled = arguments.get("use_project_pool") is True
-            keys = set(TOOL["inputSchema"]["properties"]) - ({"host_id"} if pooled else {"python", "data_path", *REQUIREMENTS})
+            slurm = arguments.get("backend") == "slurm"
+            if slurm and pooled:
+                raise ValueError("Slurm assigns nodes; do not use project-pool placement.")
+            keys = set(TOOL["inputSchema"]["properties"])
+            if pooled:
+                keys.discard("host_id")
+            elif not slurm:
+                keys -= {"python", "data_path", *REQUIREMENTS}
             if tool["name"] == "queue_run":
                 keys.add("request_id")
             required = [*TOOL["inputSchema"]["required"], *scope_fields, *(["pr_url"] if tool["name"] == "queue_run" else [])]
             required += ["use_project_pool", "revision"] if pooled else ["host_id", "repo"]
+            if slurm:
+                required += ["slurm", "python", "revision"]
+                if tool["name"] == "queue_run":
+                    required.append("request_id")
             schema = {"properties": {key: properties[key] for key in [*keys, *scope_fields]}, "required": required}
         validate_arguments({"name": "queue_variant", "inputSchema": schema}, arguments)
         if arguments.get("job_type") == "training" and "training_metrics" not in arguments:

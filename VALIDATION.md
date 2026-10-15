@@ -1,5 +1,20 @@
 # PSC Slurm queue integration — October 13, 2026
 
+October 15 validator repair:
+
+- The real saved one-V100 payload reproduced the MCP field rejection; the
+  corrected validator accepts its environment/data contract without dropping fields.
+- `npm test`: 797 Python tests and 49 Node tests passed; five opt-in SSH tests
+  skipped. The initial restricted run was stopped because isolated test services
+  require local socket access; the full suite passed with that access.
+- New regression coverage exercises manager/worker MCP payload forwarding and
+  the actual agent validator before service/scheduler integration.
+- Skill consistency and diff checks pass. Linux x64 package rebuilt and opened
+  with an isolated profile; native Electron sandbox/navigation checks pass.
+- Applied the validator repair to the active workspace release and reloaded its
+  cached tool processes. Interrupted active work resumed; pending user questions
+  were not answered. The original one-V100 request reached the managed queue.
+
 - `npm test`: 796 Python tests passed; 49 Node tests passed, five opt-in SSH tests skipped.
 - `npm ci`, capability-skill validation and `git diff --check` pass.
 - `npm run package:linux` built `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`.

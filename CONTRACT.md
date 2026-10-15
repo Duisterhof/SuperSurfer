@@ -5,7 +5,9 @@ exact local/remote source paths, a verified PR, one V100 and bounded walltime an
 updates. The scheduler retains run/request identity, delegates GPU assignment to
 Slurm, records live job identity/state and cancels only the owned job. Lost
 submission replies never trigger a second `sbatch`. Direct-host scheduling remains
-the default. See [the contract](docs/psc-slurm-bridge.md).
+the default. Agent-side validation preserves Slurm's explicit Python, data and
+package requirements even though Slurm does not use project-pool placement.
+See [the contract](docs/psc-slurm-bridge.md).
 
 # Native VS Code workflow preview — October 12, 2026
 
