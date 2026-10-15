@@ -33,6 +33,16 @@ Answer pending questions/approvals, wait, or stop before sending new work. Follo
 signs in through the official CLI in a trusted workspace-host terminal. Never
 request passwords, login codes or tokens in agent chat or `ask_user`.
 
+For a source compatibility defect in a never-started queued run, use
+`recover_run(action="amend_source", run_id=..., expected_revision=...,
+revision=..., pr_url=..., reason=...)`. Both revisions must be full commit SHAs.
+This updates the same run after exact-source PR verification; command, resources,
+data, output identity and recovery owner remain unchanged. Recheck/acquire nodes
+against the repaired revision. Verification failure leaves the original source
+held: inspect that run, repair the cause and retry the same fields. Do not invent
+a failed attempt, cancel/resubmit or start a duplicate merely to change source.
+This operation is available to scoped user work and the saved recovery owner.
+
 ## Workflow changes preserve this assignment
 
 A saved Surfboard supplies configuration, not another goal or execution grant.
@@ -242,3 +252,11 @@ then complete with its exact version/SHA and measured-or-unavailable evidence.
 `update_task` cannot complete a stale checkpoint. New attempts/status/report
 changes reopen it, separately from the overall goal and authorized monitoring.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

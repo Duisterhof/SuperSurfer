@@ -33,6 +33,16 @@ source. An editor review, trust choice, upload or layout change does not satisfy
 compute readiness or alter ownership. See [editor collaboration](../supersurfer-code-editor/SKILL.md)
 for source conflicts; page geometry is covered by [layout editing](../supersurfer-surfboard/references/view-layout.md).
 
+For a source compatibility defect in a never-started queued run, use
+`recover_run(action="amend_source", run_id=..., expected_revision=...,
+revision=..., pr_url=..., reason=...)`. Both revisions must be full commit SHAs.
+This updates the same run after exact-source PR verification; command, resources,
+data, output identity and recovery owner remain unchanged. Recheck/acquire nodes
+against the repaired revision. Verification failure leaves the original source
+held: inspect that run, repair the cause and retry the same fields. Do not invent
+a failed attempt, cancel/resubmit or start a duplicate merely to change source.
+This operation is available to scoped user work and the saved recovery owner.
+
 ## Reusing a workflow does not provision its hosts
 
 Saved Surfboards are reusable task definitions. Their names and compute blocks
@@ -253,3 +263,11 @@ computer without changing it. This differs from a compute node's bundled runner
 Python 3.9+ and the project environment. Missing provider CLI guidance does not
 install one automatically or authorize collecting credentials. Fresh account
 choice persists all three role defaults; compute-only nodes still need no login.
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

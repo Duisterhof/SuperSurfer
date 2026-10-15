@@ -111,6 +111,42 @@ class AgentToolsTests(unittest.TestCase):
             tool = next(t for t in agent_tools.available_tools() if t['name'] == 'register_compute_host')
             agent_tools.validate_arguments(tool, {'name': 'first', 'target': 'node', 'root': '/scratch', 'python': 'auto', 'gpus': [0]})
 
+    def test_slurm_queue_preserves_remote_environment_for_manager_and_worker(self):
+        draft = dict(request_id='psc-existing-smoke-001', name='PSC smoke', backend='slurm',
+            use_project_pool=False, host_id='control', repo='/local/reviewed', revision='a'*40,
+            gpu_count=1, storage_gib=100, python='/remote/env/bin/python', data_path='/remote/data',
+            required_paths=['/remote/data/manifest.json'], python_packages={'torch':'2.8.0'},
+            command=['/remote/env/bin/python','-m','smoke','--smoke-updates','10'],
+            slurm=dict(account='fixture', partition='GPU-shared', gpu_type='v100-32',
+                       walltime_seconds=900, max_updates=10, repo='/remote/source'),
+            job_type='training', training_metrics=dict(mfu_metric='train/mfu', mfu_unit='fraction',
+                       mfu_method='Measured FP32', source_path='smoke.py'),
+            pr_url='https://github.com/example/research/pull/8')
+        for role in ('manager','worker'):
+            with patch.dict(os.environ, {'SUPERSURFER_AGENT_ROLE':role}):
+                arguments = {**draft, 'experiment_id':'e1'} if role == 'manager' else draft
+                opener=Mock();opener.open.return_value=io.BytesIO(b'{"run_id":"r1"}')
+                with patch.object(agent_tools, 'build_opener', return_value=opener):
+                    result=self.call('queue_run',arguments)
+                self.assertFalse(result['isError'],result)
+                self.assertEqual(arguments,json.loads(opener.open.call_args.args[0].data)['arguments'])
+                # Hostless pool placement, scope injection and incomplete Slurm
+                # inputs still fail before network access. Ordinary direct runs
+                # do not acquire Slurm's environment overrides.
+                invalid=[{**arguments,'use_project_pool':True}, {**arguments,'project_id':'foreign'},
+                         {**arguments,'backend':'direct'}]
+                invalid += [{k:v for k,v in arguments.items() if k!=missing}
+                            for missing in ('python','slurm','revision','request_id','host_id','repo')]
+                with patch.object(agent_tools,'build_opener') as factory:
+                    for value in invalid:
+                        self.assertTrue(self.call('queue_run',value)['isError'],value)
+                    factory.assert_not_called()
+        with patch.dict(os.environ, {'SUPERSURFER_AGENT_ROLE':'worker'}):
+            held={k:v for k,v in draft.items() if k!='request_id'}
+            opener=Mock();opener.open.return_value=io.BytesIO(b'{"run_id":"held"}')
+            with patch.object(agent_tools,'build_opener',return_value=opener):
+                self.assertFalse(self.call('prepare_run',held)['isError'])
+
     def test_legacy_worker_role_remains_worker_only(self):
         with patch.dict(os.environ):
             os.environ.pop("SUPERSURFER_AGENT_ROLE", None)

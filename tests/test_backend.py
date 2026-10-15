@@ -426,7 +426,7 @@ class BackendTests(unittest.TestCase):
         self.manager.data["projects"] = []
         with self.assertRaises(APIError): self.service.agent_action("manager", "supersurfer_queue_run", arguments)
         self.assertFalse(any(op.startswith("run.") for op, _ in self.manager.calls))
-    def test_manager_handoff_preserves_native_ownership_and_limits_across_projects(self):
+    def test_manager_handoffs_exceed_three_and_preserve_ownership_across_projects(self):
         first = self.service.action("experiment.create", {"project_id": "p1", "name": "First", "summary": "Question"})
         project = {**self.manager.data["projects"][0], "id": "p2", "name": "second-project"}
         self.manager.data["projects"].append(project)
@@ -436,15 +436,17 @@ class BackendTests(unittest.TestCase):
         second = self.service.action("experiment.create", {"project_id": "p2", "name": "Second", "summary": "Question"})
         fourth = self.service.action("experiment.create", {"project_id": "p1", "name": "Fourth", "summary": "Question"})
         self.service.action("chat.settings", {"scope": "experiment:" + second["id"], "model": "model-b", "reasoning": "max", "fast_mode": True})
-        self.service.action("chat.send", {"scope": "manager", "text": "Hand off these three existing experiments"})
+        self.service.action("chat.send", {"scope": "manager", "text": "Hand off these four existing experiments"})
         for target in (first, native, second):
             result = self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": target["id"], "task": "Prepare its requested source and PR; do not queue yet", **({"agent_scope": "agent:a-native"} if target == native else {})})
             self.assertEqual(result["scope"], "agent:a-native" if target == native else "experiment:" + target["id"])
         self.assertEqual(self.service.codex.sent[-1][2]["model"], "model-b")
         self.assertTrue(self.service.codex.sent[-1][2]["fast_mode"])
         self.assertEqual(next(params for op, params in self.manager.calls if op == "agent.send")["expected_task_id"], "t-native")
-        for target in (first, fourth):
-            with self.assertRaises(APIError): self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": target["id"], "task": "Repeat"})
+        result = self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": fourth["id"], "task": "Prepare the fourth requested experiment"})
+        self.assertEqual("experiment:" + fourth["id"], result["scope"])
+        with self.assertRaisesRegex(APIError, "already.*handed off"):
+            self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": first["id"], "task": "Repeat"})
         self.assertFalse(any(op.startswith("run.") for op, _ in self.manager.calls))
     def test_start_working_requires_draft_idle_worker_and_write_access(self):
         queued = self.service.state()["experiments"][0]
@@ -476,7 +478,7 @@ class BackendTests(unittest.TestCase):
         self.assertIn(experiment["document_path"], sent[0]["content"])
         self.assertEqual(self.service.codex.sent, [])
         self.assertFalse(any(op.startswith("run.") for op, _ in self.manager.calls))
-    def test_lead_tools_confine_scope_origin_and_handoff_count(self):
+    def test_lead_handoffs_exceed_three_with_scope_origin_and_duplicate_guards(self):
         drafts = [self.service.action("experiment.create", {"project_id": "p1", "name": f"Draft {i}", "summary": "Question"}) for i in range(4)]
         self.manager.data["projects"].append({**self.manager.data["projects"][0], "id": "p2", "name": "other"})
         self.service.state(force=True)
@@ -493,16 +495,17 @@ class BackendTests(unittest.TestCase):
         with self.assertRaisesRegex(APIError, "already working"): self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
         self.assertEqual(self.service.turn_handoffs["project:p1"], set())
         self.service.codex.busy.remove("experiment:" + drafts[0]["id"])
-        for draft in drafts[:3]:
+        for draft in drafts:
             result = self.service.agent_action("project:p1", "supersurfer_handoff_experiment", {**args, "experiment_id": draft["id"]})
             self.assertEqual(result["scope"], "experiment:" + draft["id"])
-        for draft in (drafts[0], drafts[3]):
-            with self.assertRaises(APIError): self.service.agent_action("project:p1", "supersurfer_handoff_experiment", {**args, "experiment_id": draft["id"]})
-        self.assertEqual(len(self.service.codex.sent), 4)  # Lead + three workers.
+        self.service.codex.busy.remove("experiment:" + drafts[0]["id"])
+        with self.assertRaisesRegex(APIError, "already.*handed off"):
+            self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
+        self.assertEqual(len(self.service.codex.sent), 5)  # Lead + four workers.
         self.assertEqual({op for op, _ in self.manager.calls}, {"status"})
         self.service.codex.busy.remove("project:p1")
-        self.service.action("chat.send", {"scope": "project:p1", "text": "Now hand off the fourth ablation"})
-        self.service.agent_action("project:p1", "supersurfer_handoff_experiment", {**args, "experiment_id": drafts[3]["id"]})
+        self.service.action("chat.send", {"scope": "project:p1", "text": "Continue the first ablation"})
+        self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
     def test_lead_scope_and_status_edits_are_versioned_without_changing_runs(self):
         draft = self.service.action("experiment.create", {"project_id": "p1", "name": "Old name", "summary": "Old scope"})
         self.service.action("chat.send", {"scope": "project:p1", "text": "Narrow the experiment scope and mark it ready"})

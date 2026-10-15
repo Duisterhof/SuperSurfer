@@ -23,6 +23,8 @@ class Transport:
     def __init__(self, initial_backoff_seconds=0):
         source = Path(__file__).with_name("runner.py").read_bytes()
         encoded = base64.b64encode(source).decode()
+        slurm_source = Path(__file__).with_name("slurm_bridge.py").read_text()
+
         # This wrapper must parse on old system Python installations, before
         # the modern runner source is compiled. A host configuration error is
         # a structured runner error, not a shared SSH gateway outage.
@@ -32,7 +34,7 @@ class Transport:
                           " sys.exit(0)\n"
                           "s=base64.b64decode(" + repr(encoded) + ").decode(); "
                           "exec(compile(s,'aml-runner','exec'),"
-                          "{'__name__':'__main__','AML_RUNNER_SOURCE':s})")
+                          "{'__name__':'__main__','AML_RUNNER_SOURCE':s,'AML_SLURM_SOURCE':" + repr(slurm_source) + "})")
         self.gateway_locks = {}
         self.host_failures = {}
         self.connection_failures = {}

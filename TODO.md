@@ -1,3 +1,10 @@
+# Slurm follow-up
+
+- [x] Managed PSC one-V100 smoke submission, polling, identity recovery and cancellation.
+- [x] Accept the full Slurm environment contract at the actual MCP entry point, including manager and worker calls.
+- [ ] Generalize Slurm resources and clusters after the bounded PSC smoke is verified.
+- [ ] Extend owner-bound automatic failed-run recovery to Slurm; direct-host pool recovery remains separate.
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.
@@ -7,6 +14,9 @@
 - [ ] Native standalone remote chats inside ordinary VS Code editor tabs (currently an upstream view limitation).
 - [ ] Validate authenticated Codex inference, other providers, Cursor and a real Tulip installation before general release.
 - [ ] OS startup/reboot recovery, host-instance migration and packaged companion lifecycle upgrades.
+# Handoff cap removal
+
+- [x] Allow more than three distinct experiment handoffs per user turn; retain duplicate/busy/scope guards.
 
 # Completed in 0.1.43 — agent workflow control
 
@@ -470,3 +480,9 @@ Ongoing list of requested improvements. Unchecked items are planned, not impleme
 are complete; keep native macOS launch/Gatekeeper as the remaining packaging check.
 Cursor ACP does not expose usage receipts, and listed model IDs may be plan-restricted.
 Native multi-select questions currently direct the agent to scoped ask_user.
+
+- [x] Repair never-started queued source without replacing run identity; let saved
+  recovery owners execute their configured checks and return publication-check
+  receipts before slow repository scans.
+
+- [x] Scope publication receipts to report/evidence/code and bind the actual published payload, avoiding unrelated experiment scans.

@@ -213,8 +213,9 @@ def normalize(snapshot):
         row = {k: r.get(k) for k in ("id", "project_id", "task_id", "name", "status", "gpu_count", "host_id", "host_name", "priority", "queue_order", "revision", "error", "created", "updated", "started", "finished")}
         row.update(ready=bool(r.get("ready")), allocated_gpus=decoded(r.get("allocated_gpus", r.get("gpus")), []),
                    last_activity_at=latest_activity(r),
+                   backend=config.get("backend", "direct"), slurm=config.get("slurm_status", {}),
                    config=config, pr_url=config.get("pr_url"), wandb_url=config.get("wandb_url"),
-                   waiting_reason=r.get("wait_reason", ""), experiment_id=None,
+                   waiting_reason=r.get("wait_reason", "") or (config.get("slurm_status", {}).get("reason", "") if r.get("status") == "starting" else ""), experiment_id=None,
                    wait_reasons=wait_codes(r.get("wait_reasons")),
                    candidate_hosts=placement_candidates(r.get("candidate_hosts")),
                    placement_state=r.get("placement_state") if isinstance(r.get("placement_state"), str) else None,

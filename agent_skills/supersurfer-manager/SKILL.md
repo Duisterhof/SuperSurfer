@@ -32,6 +32,16 @@ settings; use the app's bounded retry flow. Do not kill unrelated SSH sessions o
 release another process's connection lock. Transport recovery grants no deployment
 capability and no new work or launch authorization.
 
+For a source compatibility defect in a never-started queued run, use
+`recover_run(action="amend_source", run_id=..., expected_revision=...,
+revision=..., pr_url=..., reason=...)`. Both revisions must be full commit SHAs.
+This updates the same run after exact-source PR verification; command, resources,
+data, output identity and recovery owner remain unchanged. Recheck/acquire nodes
+against the repaired revision. Verification failure leaves the original source
+held: inspect that run, repair the cause and retry the same fields. Do not invent
+a failed attempt, cancel/resubmit or start a duplicate merely to change source.
+This operation is available to scoped user work and the saved recovery owner.
+
 ## Saved workflows and coordination
 
 A request to redesign workflows is configuration work, not an assignment to launch
@@ -81,8 +91,9 @@ or another copy of the shared source/data. See the task-scope reference below.
 
 `create_experiment_agent` is for distinct requested work in an existing experiment.
 `handoff_experiment` uses an explicit idle `agent_scope` or the selected worker;
-omitting scope keeps the experiment-wide busy guard. At most three worker
-creations and three distinct experiment handoffs are allowed per user turn.
+omitting scope keeps the experiment-wide busy guard. Distinct experiment handoffs
+have no per-turn cap; duplicate dispatches in the same turn remain blocked.
+The separate limit of three new worker conversations per turn still applies.
 Preserve the worker's preferences and the user's actual preparation/launch intent.
 Never dispatch and queue the same work concurrently or replace a stopped owner.
 
@@ -229,3 +240,11 @@ For a requested research review, use enabled `check_experiment_results` with
 revise the current comparison, and complete with its exact current version/SHA.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 This is scoped reporting, not permission to take over another recovery owner.
+
+## Slurm allocations
+
+For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
+The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
+use a control host with no physical GPU registration, preserve the same request
+and run identities, and read its recorded Slurm job state. Preparation alone and
+suggested experiments do not authorize launches. Existing stops still apply.

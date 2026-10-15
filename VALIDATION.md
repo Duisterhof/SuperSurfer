@@ -1,3 +1,28 @@
+# PSC Slurm queue integration — October 13, 2026
+
+October 15 validator repair:
+
+- The real saved one-V100 payload reproduced the MCP field rejection; the
+  corrected validator accepts its environment/data contract without dropping fields.
+- `npm test`: 797 Python tests and 49 Node tests passed; five opt-in SSH tests
+  skipped. The initial restricted run was stopped because isolated test services
+  require local socket access; the full suite passed with that access.
+- New regression coverage exercises manager/worker MCP payload forwarding and
+  the actual agent validator before service/scheduler integration.
+- Skill consistency and diff checks pass. Linux x64 package rebuilt and opened
+  with an isolated profile; native Electron sandbox/navigation checks pass.
+- Applied the validator repair to the active workspace release and reloaded its
+  cached tool processes. Interrupted active work resumed; pending user questions
+  were not answered. The original one-V100 request reached the managed queue.
+
+- `npm test`: 796 Python tests passed; 49 Node tests passed, five opt-in SSH tests skipped.
+- `npm ci`, capability-skill validation and `git diff --check` pass.
+- `npm run package:linux` built `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+- `xvfb-run -a node tests/native-desktop.electron.cjs`: packaged app launched in an isolated profile; renderer sandbox and navigation persistence passed.
+- Live PSC read-only runner status and one-V100 `sbatch --test-only` accepted; neither submits a GPU job.
+- Preserves already-deployed handoff, queued-source repair and scoped-publication fixes.
+- [Redacted diagnostic](tests/reports/psc-slurm.md). Real smoke execution remains with its existing owner and current payload. Mac signing was not tested for this Linux/service update.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.
@@ -52,6 +77,14 @@ OS-reboot recovery or Tulip deployment is claimed. AHP 0.10 is offered during
 negotiation but only 0.9 received the complete workflow test. Native chat-opening
 commands are version-specific and the remote Agents-window route needs an
 end-to-end authenticated acceptance test before promotion from draft.
+# Remove the three-handoff cap — October 12, 2026
+
+Manager and project-lead fixtures reproduce the former fourth-handoff rejection.
+Both now dispatch four distinct experiments in one user turn, preserve worker
+preferences/ownership and reject duplicate, busy, foreign or scheduled dispatches.
+After a new user turn, an idle worker can receive another assignment. No fixture
+run launch occurs. Agent instructions, tool descriptions and shipped lead/manager
+skills agree with the new behavior; worker-creation limits remain separate.
 
 # SuperSurfer 0.1.43 release
 
@@ -1166,3 +1199,28 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+## Queued source repairs and publication receipt latency
+
+- Added eight isolated real-manager tests covering exact-commit repair without
+  changing identity/resources, retries, PR rejection, explicit hold/cancel races,
+  attempted-run rejection and scoped recovery authority.
+- Added blocked-source-scan and scan-failure receipt tests; configured recovery
+  checks retain role/task boundaries and do not enable previews or ordinary polls.
+- Full Python suite: 769 passed. Node suite: 48 passed, five optional SSH tests
+  skipped. The new native-extension tests used the declared ws dependency from an
+  isolated temporary installation; no live provider integration is claimed.
+- Agent skill validation and diff whitespace checks passed. Linux x64 packaging
+  and the isolated native Electron launch/persistence/sandbox checks passed.
+- User-approved follow-up raises the streamed source bound from 512 MiB to
+  1 GiB without changing exclusions or check coverage. The regression hashes a
+  513 MiB fixture and still rejects a source snapshot above 1 GiB.
+
+## Scoped publication receipts (0.1.43 patch)
+Regression coverage includes unrelated 2 GiB artifacts, changed report/evidence/render/code, missing/foreign/escaping/symlinked inputs, payload substitution and prohibition on GPU launch authorization. Live read-only measurement: 46 declared files, 24,579,666 bytes, 0.023 seconds for the Many projections report snapshot (warm filesystem; no check command or publication included).
+
+Validation: 776 Python tests and 48 Node tests passed (five optional SSH tests skipped); an additional full publication service regression passed with the 23-test Surfboard service suite. Initial use of unsupported system Python 3.10 failed two runtime prerequisites; rerun under Python 3.11 passed. Skills checker and diff whitespace checks passed.
+
+Linux x64 package and isolated native Electron startup passed. Deployed service 9ca51db685f74807, health 0.1.43 confirmed; migrated 17 VLA applied/default boards through versioned APIs. One board with a pending draft was left untouched to preserve the proposal. Scheduler and research processes were not restarted.
+
+Live Many projections receipt action_717b80272f0da703bc04102b passed on board version 7: 46 inputs / 24,579,666 bytes, source unchanged, all ten reviewer checks passed; creation-to-completion 0.309 seconds including the real configured checker. This verifies the deployed agent path, not just an offline snapshot.
