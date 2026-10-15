@@ -1,14 +1,18 @@
-# Results scale persistence — October 15, 2026
+# Results display persistence — October 15, 2026
 
 - Standard renderer browser regression: Log survives leaving/reopening Results,
   reload and a changed report revision; a separate report defaults independently
   to Linear. A delayed native restore does not overwrite a newer selection.
+- Hidden legend curves survive live refresh, scale/smoothing changes, navigation
+  and reload. Plot/trace reordering preserves the measured series; new curves and
+  other plots remain visible. Double-click isolation and show-all persist, and a
+  late native visibility read cannot overwrite a newer click.
 - Existing live Results regression passes, including refresh, stale-data evidence,
   unrelated-window rejection and removed-document response isolation.
 - Native Electron regression passes with isolated simulated hosts: saved report
-  scales survive process restart and a new loopback port, remain separate across
+  scales and hidden legends survive process restart and a new loopback port, remain separate across
   hosts, survive navigation writes and work from detached panels.
-- Python suite: 758 tests pass. Node suite: 49 pass, five optional SSH checks
+- Python suite: 758 tests pass. Node suite: 50 pass, five optional SSH checks
   skipped. Initial Node run lacked the new native-extension `ws` dependency;
   after installing the current lockfile, the complete Node suite passes.
 - Skill consistency and whitespace checks pass. No role tools or agent workflow

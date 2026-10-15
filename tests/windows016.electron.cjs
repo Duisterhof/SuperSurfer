@@ -50,14 +50,19 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   const shortcut=await app.evaluate(({Menu})=>Menu.getApplicationMenu().items.find(item=>item.label==='Rearrange').submenu.items.find(item=>item.label==='Toggle agent panel').accelerator);assert.equal(shortcut,'CmdOrCtrl+Shift+B');await menu('Toggle agent panel');await a.waitForFunction(()=>window.__workspaceCommands.includes('chat'));console.log('PASS agent-sidebar accelerator is exposed in the native menu and routes to the connected workspace');
   await a.evaluate(()=>superSurferDesktop.setWorkspace({projectId:'vla',tab:'page:page_abcdef',chatWidth:510}));
   await a.evaluate(()=>superSurferDesktop.setResultScale('exp_a/report_a','log'));
+  await a.evaluate(()=>superSurferDesktop.setResultLegend('exp_a/report_a',['hidden-series']));
   await a.evaluate(()=>superSurferDesktop.setWorkspace({projectId:'vla',tab:'results',chatWidth:510}));
   assert.equal(await a.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_a')),'log');
+  assert.deepEqual(await a.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_a')),['hidden-series']);
   await assert.rejects(a.evaluate(()=>superSurferDesktop.setResultScale('../bad','log')),/Invalid Results/);
+  await assert.rejects(a.evaluate(()=>superSurferDesktop.setResultLegend('../bad',[])),/Invalid Results/);
+  await assert.rejects(a.evaluate(()=>superSurferDesktop.setResultLegend('exp_a/report_a',['x'.repeat(1025)])),/Invalid Results/);
   await assert.rejects(a.evaluate(()=>superSurferDesktop.setResultScale('exp_a/report_a','symlog')),/Invalid Results/);
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setBounds({x:40,y:50,width:1120,height:740}));
   const newFromHeader=app.waitForEvent('window');await a.evaluate(()=>superSurferDesktop.newWindow());let b=await newFromHeader;await connect(b,'trinity');
   await b.evaluate(()=>superSurferDesktop.setWorkspace({projectId:'different',tab:'runs'}));
   assert.equal(await b.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_a')),null);
+  assert.equal(await b.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_a')),null);
   assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');assert.equal((await probe(b)).authorization,'Bearer fixture-token-trinity');
   const foreign=await b.evaluate(async origin=>fetch(origin+'/api/probe').then(r=>r.json()),new URL(a.url()).origin);assert.equal(foreign.authorization,null,'Other host must not receive this window’s credentials');
   const framed=await a.evaluate(async()=>{const frame=document.createElement('iframe');frame.src='/embedded';document.body.append(frame);await new Promise(resolve=>frame.onload=resolve);return frame.contentWindow.fetch('/api/probe').then(r=>r.json());});assert.equal(framed.authorization,null,'Embedded content must not receive native credentials');
@@ -66,7 +71,10 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal((await probe(panel)).authorization,'Bearer fixture-token-tulip');assert.equal(new URL(panel.url()).searchParams.get('panel_tile'),'pdf');
   assert.equal(await panel.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_a')),'log');
   await panel.evaluate(()=>superSurferDesktop.setResultScale('exp_a/report_b','linear'));
+  await panel.evaluate(()=>superSurferDesktop.setResultLegend('exp_a/report_b',[]));
+  assert.deepEqual(await panel.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_a')),['hidden-series']);
   assert.equal(await a.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_b')),'linear');
+  assert.deepEqual(await a.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_b')),[]);
   const embeddedProbe=await panel.evaluate(async()=>{const iframe=document.createElement('iframe');iframe.src='/embedded';document.body.append(iframe);await new Promise(resolve=>iframe.onload=resolve);return iframe.contentWindow.fetch('/api/probe').then(r=>r.json());});assert.equal(embeddedProbe.authorization,null);
   await a.evaluate(()=>{window.__closedPanels=[];superSurferDesktop.onPanelClosed(event=>window.__closedPanels.push(event.id));});const detached=await a.evaluate(()=>superSurferDesktop.listPanels());assert.equal(detached.length,1);assert.equal(detached[0].tile,'pdf');await panel.close();await a.waitForFunction(()=>window.__closedPanels.length===1);assert.equal(await a.evaluate(()=>superSurferDesktop.listPanels().then(rows=>rows.length)),0);assert.equal((await probe(a)).authorization,'Bearer fixture-token-tulip');console.log('PASS detached native panel shares the correct host, limits credentials to its main frame, and closes independently');
   await app.evaluate(async({BrowserWindow},origin)=>{const w=BrowserWindow.getAllWindows().find(w=>w.getTitle().startsWith('tulip'));await w.webContents.session.cookies.set({url:origin,name:'workspace-secret',value:'must-not-leak'});},new URL(a.url()).origin);
@@ -84,9 +92,12 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),asse
   assert.equal((await a.evaluate(()=>superSurferDesktop.getWorkspace())).projectId,'vla');assert.equal((await b.evaluate(()=>superSurferDesktop.getWorkspace())).projectId,'different');
   assert.notEqual(new URL(a.url()).origin,oldOrigin);
   assert.equal(await a.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_a')),'log');
+  assert.deepEqual(await a.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_a')),['hidden-series']);
   assert.equal(await a.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_b')),'linear');
+  assert.deepEqual(await a.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_b')),[]);
   assert.equal(await b.evaluate(()=>superSurferDesktop.getResultScale('exp_a/report_a')),null);
-  console.log('PASS report scales survive app restart and changed connection port, independent navigation writes, detached panels and host isolation');
+  assert.equal(await b.evaluate(()=>superSurferDesktop.getResultLegend('exp_a/report_a')),null);
+  console.log('PASS report scale and legend choices survive app restart and changed connection port, independent navigation writes, detached panels and host isolation');
   assert.deepEqual((await app.evaluate(()=>__fixture.calls)).sort(),['trinity','tulip']);
   const bounds=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle().startsWith('tulip')).getNormalBounds());assert.equal(bounds.width,1120);assert.equal(bounds.height,740);
   // A dropped tunnel reconnects once to the remembered host, without a form submission.

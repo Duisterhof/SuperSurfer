@@ -1,5 +1,8 @@
 # Results preferences
 
+- [x] Remember hidden legend curves per report, including live refresh, scale and
+  smoothing changes, reordered plots, show-all and detached desktop windows.
+
 - [x] Remember each training report's Linear/Log scale across navigation, refresh,
   republishing and desktop restart/reconnect, including detached panels.
 
