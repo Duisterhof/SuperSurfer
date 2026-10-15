@@ -1,3 +1,8 @@
+# Results preferences
+
+- [x] Remember each training report's Linear/Log scale across navigation, refresh,
+  republishing and desktop restart/reconnect, including detached panels.
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.
