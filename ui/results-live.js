@@ -1,9 +1,36 @@
-// The opaque sandbox can request only the selected report's declared W&B data.
+// The opaque sandbox can access only its selected report's data and view choices.
 export function connectLiveResults({api, selection, frame}) {
  let current=null;
  const cache=new Map();
+ const scaleKey=entry=>entry.experimentId+'/'+entry.id;
+ const storageKey=entry=>'supersurfer-result-scale:'+scaleKey(entry);
+ const validScale=scale=>scale==='linear'||scale==='log';
+ const legendStorageKey=entry=>'supersurfer-result-legend:'+scaleKey(entry);
+ const validLegend=value=>Array.isArray(value)&&value.length<=256&&value.every(key=>typeof key==='string'&&key.length<=1024);
  function active(entry){const page=selection();return current===entry&&frame()?.contentWindow===entry.window&&page?.id===entry.id&&page?.experimentId===entry.experimentId&&page?.sha256===entry.sha256&&page?.preview_url===entry.previewUrl;}
  function post(entry,data){if(active(entry))entry.window.postMessage({type:'supersurfer:results:data',instance:entry.instance,data},'*');}
+ async function restoreScale(entry){
+  let scale=null;
+  try{scale=localStorage.getItem(storageKey(entry));}catch{}
+  try{const saved=await window.superSurferDesktop?.getResultScale?.(scaleKey(entry));if(validScale(saved))scale=saved;}catch{}
+  if(active(entry)&&!entry.scaleChanged&&validScale(scale))entry.window.postMessage({type:'supersurfer:results:scale',instance:entry.instance,scale},'*');
+ }
+ function saveScale(entry,scale){
+  entry.scaleChanged=true;
+  try{localStorage.setItem(storageKey(entry),scale);}catch{}
+  window.superSurferDesktop?.setResultScale?.(scaleKey(entry),scale).catch(error=>console.warn('Could not save Results scale',error));
+ }
+ async function restoreLegend(entry){
+  let hidden=null;
+  try{hidden=JSON.parse(localStorage.getItem(legendStorageKey(entry)));}catch{}
+  try{const saved=await window.superSurferDesktop?.getResultLegend?.(scaleKey(entry));if(validLegend(saved))hidden=saved;}catch{}
+  if(active(entry)&&!entry.legendChanged&&validLegend(hidden))entry.window.postMessage({type:'supersurfer:results:legend',instance:entry.instance,hidden},'*');
+ }
+ function saveLegend(entry,hidden){
+  entry.legendChanged=true;
+  try{localStorage.setItem(legendStorageKey(entry),JSON.stringify(hidden));}catch{}
+  window.superSurferDesktop?.setResultLegend?.(scaleKey(entry),hidden).catch(error=>console.warn('Could not save Results legend',error));
+ }
  async function refresh(){
   const entry=current;if(!entry||!active(entry)||entry.loading)return;
   entry.loading=true;post(entry,{...cache.get(entry.key),loading:true,error:null});
@@ -24,9 +51,17 @@ export function connectLiveResults({api, selection, frame}) {
  }
  const onMessage=event=>{
   const page=selection(),message=event.data;
-  if(!page?.wandb_sources?.length||event.source!==frame()?.contentWindow||event.origin!=='null'||!message||!['supersurfer:results:subscribe','supersurfer:results:refresh'].includes(message.type)||typeof message.instance!=='string'||message.instance.length>100)return;
-  if(!current||current.window!==event.source||current.instance!==message.instance||current.id!==page.id||current.sha256!==page.sha256||current.previewUrl!==page.preview_url){
-   current={id:page.id,experimentId:page.experimentId,sha256:page.sha256,previewUrl:page.preview_url,revision:page.updated,key:page.experimentId+':'+page.id+':'+page.preview_url,window:event.source,instance:message.instance,loading:false,lastChecked:0};void refresh();
+  if(!page?.wandb_sources?.length||event.source!==frame()?.contentWindow||event.origin!=='null'||!message||!['supersurfer:results:subscribe','supersurfer:results:refresh','supersurfer:results:scale:set','supersurfer:results:legend:set'].includes(message.type)||typeof message.instance!=='string'||message.instance.length>100)return;
+  if(message.type==='supersurfer:results:scale:set'){
+   if(current&&active(current)&&current.instance===message.instance&&validScale(message.scale))saveScale(current,message.scale);
+   return;
+  }
+  if(message.type==='supersurfer:results:legend:set'){
+   if(current&&active(current)&&current.instance===message.instance&&validLegend(message.hidden))saveLegend(current,message.hidden);
+   return;
+  }
+  if(!current||current.window!==event.source||current.instance!==message.instance||current.id!==page.id||current.experimentId!==page.experimentId||current.sha256!==page.sha256||current.previewUrl!==page.preview_url){
+   current={id:page.id,experimentId:page.experimentId,sha256:page.sha256,previewUrl:page.preview_url,revision:page.updated,key:page.experimentId+':'+page.id+':'+page.preview_url,window:event.source,instance:message.instance,loading:false,lastChecked:0};void restoreScale(current);void restoreLegend(current);void refresh();
   }else if(message.type==='supersurfer:results:refresh'&&Date.now()-current.lastChecked>1000)void refresh();
  };
  window.addEventListener('message',onMessage);

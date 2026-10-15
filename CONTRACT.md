@@ -1,3 +1,21 @@
+# Results display preferences
+
+Standard training Results remember Linear/Log and hidden legend curves separately
+for each experiment and report ID, independent of the report revision or expiring preview URL. Existing
+published reports receive this behavior through the injected Results bridge;
+their reviewed HTML and hashes stay unchanged. The sandbox only sends validated
+display choices to its own parent, which owns persistence. Browser views save the
+choices locally; desktop windows also save it with their workspace association so
+restarts and changed SSH tunnel ports retain it. Detached panels share their
+parent's preferences. A delayed restore cannot overwrite a newer user choice.
+
+Legend choices use plot labels and the source URL/metric/split/filter identity,
+so reordering plots or traces and adding smoothing's raw companions does not
+hide another curve. Raw traces follow their main curve. Single-click toggles,
+double-click isolation and show-all persist through live updates and reopen.
+Choices do not change published measurements or another report's view. Renaming
+a plot or changing its measured series starts a new visibility identity.
+
 # Native VS Code workflow preview — October 12, 2026
 
 An authenticated host companion attaches an existing Agent Host session/chat to
