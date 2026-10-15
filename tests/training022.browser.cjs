@@ -10,13 +10,17 @@ const compiled=JSON.parse(execFileSync('python3',['-c','import json,sys;from ser
   let slow=true,failed=false,version=1,force=0,polls=0,reportId='training',reportHash='hash';
   const rows=[{_step:0,joint:0,loss:16,phase:'warmup'},{_step:1,joint:1,loss:14,phase:'joint',_timestamp:100},{_step:2,joint:2,loss:13,phase:'joint',_timestamp:200},{_step:3,joint:3,loss:12,phase:'joint',_timestamp:300},{_step:4,joint:3,'val/loss':13,'val/eef':24,_timestamp:400}];
   await page.route('http://demo.test/api/results?*',route=>route.fulfill({json:{pages:[{id:reportId,title:spec.title,sha256:reportHash,updated:1,preview_url:'/result-preview/training',wandb_sources:compiled.wandb_sources}]}}));
-  const html=compiled.html.replace('<head>','<head><script>'+fs.readFileSync(path.join(__dirname,'../ui/results-client.js'),'utf8')+'</script>');
+  let html=compiled.html.replace('<head>','<head><script>'+fs.readFileSync(path.join(__dirname,'../ui/results-client.js'),'utf8')+'</script>');
   await page.route('http://demo.test/result-preview/training',route=>route.fulfill({contentType:'text/html',body:html,headers:{'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:"}}));
   await page.route('http://demo.test/api/result-data?*',route=>{const url=new URL(route.request().url());assert.equal(url.searchParams.get('background'),'1');assert.equal(url.searchParams.get('experiment_id'),'demo-e14');if(url.searchParams.get('refresh')==='1')force++;else polls++;
    return route.fulfill({json:{loading:slow,sources:compiled.wandb_sources.map((s,i)=>({...s,rows:i&&slow?[]:rows,fetched_at:i&&slow?null:version*1000,observed_at:400,loading:!!i&&slow,stale:!!i&&failed,error:i&&failed?'Comparison source unavailable':null}))}});
   });
   await page.goto('http://demo.test/');const fl=()=>page.frameLocator('#result-preview');await fl().locator('#training-chart-0 .scatterlayer .trace').first().waitFor();
   const chart=()=>fl().locator('#training-chart-0'),rf=()=>page.frames().find(f=>f.url().includes('/result-preview/'));
+  const expectHidden=async(uid,hidden,index=0)=>{await fl().locator('#training-chart-'+index+'.js-plotly-plot').waitFor({state:'attached'});await rf().waitForFunction(({uid,hidden,index})=>{
+   const traces=document.getElementById('training-chart-'+index)?.data?.filter(t=>t.uid===uid||t.uid===uid+':raw');
+   return traces?.length&&traces.every(t=>(t.visible==='legendonly')===hidden);
+  },{uid,hidden,index});};
   assert.equal(force,1);
   let values=await chart().evaluate(el=>({x:el.data[0].x,y:el.data[0].y,axis:el.layout.yaxis,zoom:el._context.scrollZoom}));
   assert.deepEqual(values.x,[1,2,3]);assert.deepEqual(values.y,[14,13,12]);assert.equal(values.axis.type,'linear');assert.equal(values.axis.exponentformat,'none');assert.equal(values.zoom,true);
@@ -33,21 +37,43 @@ const compiled=JSON.parse(execFileSync('python3',['-c','import json,sys;from ser
   await fl().getByRole('button',{name:'Expand Native loss',exact:true}).click();assert.equal(await fl().locator('.panel.expanded').count(),1);await chart().click();await page.keyboard.press('Escape');assert.equal(await fl().locator('.panel.expanded').count(),0);
   await fl().locator('#secondary summary').click();await fl().locator('#training-chart-1 .scatterlayer .trace').first().waitFor();
   // Legend interaction remains functional after refresh/smoothing.
-  await chart().locator('.legendtoggle').first().click();await page.waitForTimeout(350);assert.equal(await chart().evaluate(el=>el.data[1].visible),'legendonly');
+  await chart().locator('.legendtoggle').first().click();await page.waitForTimeout(350);assert.equal(await chart().evaluate(el=>el.data[1].visible),'legendonly');await expectHidden('A:loss:training',true);
   failed=true;version=3;await page.locator('[data-action="refresh-results"]').click();await fl().getByText('Some data is stale or unavailable:',{exact:false}).waitFor();assert.ok((await chart().evaluate(el=>el.data[0].y.length))>0);
   await fl().locator('#scale').selectOption('log');
   const expectScale=async scale=>{await rf().waitForFunction(scale=>document.querySelector('#scale').value===scale&&document.querySelector('#training-chart-0')?.layout?.yaxis?.type===scale,scale);};
-  await expectScale('log');
-  const before=force;await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();assert.equal(force,before+1);await expectScale('log');
+  await expectScale('log');await expectHidden('A:loss:training',true);
+  const before=force;await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();assert.equal(force,before+1);await expectScale('log');await expectHidden('A:loss:training',true);
   // Browser restart/refresh and republishing retain the report's preference.
-  reportHash='revised';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('log');
-  reportId='another-report';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('linear');
-  reportId='training';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('log');
+  reportHash='revised';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('log');await expectHidden('A:loss:training',true);
+  reportId='another-report';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('linear');await expectHidden('A:loss:training',false);
+  reportId='training';await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('log');await expectHidden('A:loss:training',true);
   // A delayed native preference must not undo a newer user selection.
   await page.evaluate(()=>{window.superSurferDesktop={getResultScale:()=>new Promise(resolve=>window.finishScaleRead=resolve),setResultScale:async()=>{}};});
   await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();
   await fl().locator('#scale').selectOption('linear');await page.evaluate(()=>window.finishScaleRead('log'));await page.waitForTimeout(100);await expectScale('linear');
   await page.evaluate(()=>delete window.superSurferDesktop);await page.reload();await fl().locator('.js-plotly-plot').first().waitFor();await expectScale('linear');
+  // Smoothing toggles insert/remove raw companions without changing the choice.
+  await fl().locator('#smoothing').focus();await page.keyboard.press('Home');await expectHidden('A:loss:training',true);
+  await page.keyboard.press('ArrowRight');await expectHidden('A:loss:training',true);
+  // Native legend double-click isolation, then show-all, both survive reopening.
+  await chart().locator('.legendtoggle').nth(1).dblclick();await expectHidden('A:loss:training',true);await expectHidden('B:loss:training',true);await expectHidden('A:val/loss:validation',false);
+  await page.reload();await expectHidden('B:loss:training',true);
+  await chart().locator('.legendtoggle').nth(1).dblclick();await expectHidden('A:loss:training',false);await expectHidden('B:loss:training',false);
+  await page.reload();await expectHidden('A:loss:training',false);await expectHidden('B:loss:training',false);
+  // A newer click wins over a slow native read, just like the scale selection.
+  await page.evaluate(()=>{window.superSurferDesktop={getResultLegend:()=>new Promise(resolve=>window.finishLegendRead=resolve),setResultLegend:async()=>{}};});
+  await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();await fl().locator('.js-plotly-plot').first().waitFor();
+  await chart().locator('.legendtoggle').first().click();await expectHidden('A:loss:training',true);
+  await page.evaluate(()=>window.finishLegendRead([]));await page.waitForTimeout(100);await expectHidden('A:loss:training',true);
+  await page.evaluate(()=>delete window.superSurferDesktop);
+  // Reorder both plots and traces, and add a new series: keep the same measurement
+  // hidden, without hiding a different line at the old numeric index.
+  const revised=structuredClone(spec);revised.plots.reverse();revised.plots[1].traces.reverse();revised.plots[1].traces.unshift({source:'B',metric:'new-loss',x:'joint',split:'training'});
+  revised.plots.unshift({...structuredClone(spec.plots[0]),title:'Another comparison'});
+  const updated=JSON.parse(execFileSync('python3',['-c','import json,sys;from server.training_results import compile_report;print(json.dumps(compile_report(json.load(sys.stdin))))'],{cwd:path.resolve(__dirname,'..'),input:JSON.stringify(revised),encoding:'utf8',maxBuffer:4_000_000}));
+  const originalHtml=html;html=updated.html.replace('<head>','<head><script>'+fs.readFileSync(path.join(__dirname,'../ui/results-client.js'),'utf8')+'</script>');reportHash='reordered';
+  await page.reload();await expectHidden('A:loss:training',true,1);await expectHidden('B:loss:training',false,1);await expectHidden('B:new-loss:training',false,1);await expectHidden('A:loss:training',false,0);await expectHidden('A:val/eef:validation',false,2);
+  html=originalHtml;reportHash='restored';await page.reload();await expectHidden('A:loss:training',true);
   await page.setViewportSize({width:900,height:900});await fl().locator('#columns').selectOption('3');await page.waitForTimeout(150);
   assert.ok(await fl().locator('body').evaluate(el=>el.scrollWidth<=el.clientWidth+2));assert.equal(await fl().locator('#secondary').getAttribute('open'),null);
   if(process.env.SUPERSURFER_QA_OUTPUT)await page.screenshot({path:path.join(process.env.SUPERSURFER_QA_OUTPUT,'training-results-narrow.png')});assert.deepEqual(errors,[]);console.log('PASS canonical training Results: partial sources, live overlays, held-out data, decimal axes, smoothing/raw, zoom, legend, expand, refresh, stale recovery and narrow layout');
