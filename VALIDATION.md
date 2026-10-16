@@ -1,3 +1,23 @@
+# W&B Results refresh repair — October 16, 2026
+
+W&B rejects history-range GraphQL variables declared as `Int`; both published
+Results and the built-in metrics view now use the required `Int64` scalar.
+The initial sampled history remains combined with its recent tail and sparse
+validation. Existing cached observations survive genuine fetch failures.
+
+- All 759 Python tests pass; all 48 enabled Node tests pass (five optional SSH
+  checks skipped). The new regression exercises schema rejection for both
+  Results and metrics, with and without sparse validation.
+- Authenticated reads through the patched service reader returned 104 and 168
+  rows for two live trainers and two rows for a separate EEF writer, without
+  errors. These are real histories, not values synthesized from summaries.
+- Agent skill checks and `git diff --check` pass.
+- Built Linux x64 with `SUPERSURFER_PLATFORM=linux node scripts/package.cjs`.
+  `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` was produced. The packaged app opened
+  to the setup screen under Xvfb with a fresh isolated profile; no workspace was
+  connected by that package test. macOS signing/launch was not tested here.
+- Redacted reproduction: [W&B history diagnostics](tests/reports/wandb-history-int64.md).
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.
