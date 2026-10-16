@@ -1,3 +1,27 @@
+# Scheduler SSH connection reuse — October 16, 2026
+
+The real loopback OpenSSH regression performs 36 status checks across two fixture
+jobs with one authenticated connection. It verifies separate target aliases and
+manager instances, blocked inherited port forwards, master closure without a new
+login, idle expiry, reconnection after a closed master, and timeout/backoff without
+destroying a healthy master. Local requests create no SSH state; manager shutdown
+removes its private socket directory. All seven focused tests pass with
+`SUPERSURFER_SSHD_TEST=1 python3 -m unittest discover -s tests -p 'test_monitoring_ssh.py' -v`.
+
+The ordinary `npm test` run passed 764 Python tests (four opt-in SSH tests skipped)
+and 48 enabled Node tests (five optional SSH tests skipped). The additional closed-
+master reconnect regression was then included in the seven-test SSH run above.
+Existing scheduling, cancellation, outage backoff and reservations tests pass.
+Skill validation and `git diff --check` pass.
+
+`npm run package:linux` built `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` on Linux
+x64 using Node 24.5.0 and Python 3.11.13. The packaged app passed
+`xvfb-run -a node tests/native-desktop.electron.cjs`: isolated-profile launch,
+sandboxed/context-isolated renderer, saved preferences and untrusted-page denial.
+No production workspace, cluster node, provider, or training job was used in these
+tests. This is an unversioned local patch build, not a published release; the live
+manager and user SSH configuration have not been changed.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.
