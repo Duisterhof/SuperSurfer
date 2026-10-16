@@ -1,3 +1,12 @@
+# Scheduler connection overhead
+
+- [x] Reuse private SSH connections for AML checks and staging, with idle expiry,
+  bounded keepalives and orderly shutdown; preserve polling and failure semantics.
+- [ ] Batch status reads by worker and consider worker-originated status events.
+- [ ] Apply common admission and transfer limits to UI inspection and staging.
+- [ ] Migrate legacy remote-netcat jump configurations separately; shared SSH
+  connections do not remove existing orphaned forwarding processes.
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.

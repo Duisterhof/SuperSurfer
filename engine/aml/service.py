@@ -1480,6 +1480,9 @@ class Manager:
         for task in active:
             task.cancel()
         await asyncio.gather(*active, return_exceptions=True)
+        close_transport = getattr(self.transport, "close", None)
+        if close_transport is not None:
+            await close_transport()
         self.store.conn.close()
 
 

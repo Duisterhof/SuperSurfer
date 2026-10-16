@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
 import shlex
 import signal
 import sys
+import tempfile
 import time
 
 MAX_SOURCE_PACK_BYTES = 512 * 1024 * 1024
+SSH_IDLE_SECONDS = 600
 
 class HostConfigurationError(RuntimeError):
     """A node trust, interpreter or runner protocol error; other nodes can work."""
@@ -37,6 +40,8 @@ class Transport:
         self.connection_failures = {}
         self.gateway_failed_targets = {}
         self.initial_retry_at = time.monotonic() + initial_backoff_seconds if initial_backoff_seconds else 0
+        self.control_directory = None
+        self.closed = False
 
     def clear_host_failure(self, host):
         target = host.get("target")
@@ -44,11 +49,48 @@ class Transport:
         self.connection_failures.pop(target, None)
 
     def command(self, host, *arguments):
+        if self.closed:
+            raise RuntimeError("Transport is closed")
         command = [host["python"], "-c", self.bootstrap, *arguments]
         if host.get("target"):
-            command = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "ConnectionAttempts=1", "--", host["target"],
+            if self.control_directory is None:
+                # A private, short local path avoids Unix socket path limits and
+                # never attaches to the user's interactive SSH control masters.
+                self.control_directory = tempfile.TemporaryDirectory(prefix="ss-ssh-", dir="/tmp")
+            alias = hashlib.sha256(host["target"].encode()).hexdigest()[:12]
+            control = str(Path(self.control_directory.name) / (alias + "-%C.sock"))
+            command = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
+                       "-o", "ConnectionAttempts=1", "-o", "ClearAllForwardings=yes",
+                       "-o", "ControlMaster=auto", "-o", f"ControlPath={control}",
+                       "-o", f"ControlPersist={SSH_IDLE_SECONDS}",
+                       "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2", "--", host["target"],
                        shlex.join(command)]
         return command
+
+    async def close(self):
+        """Close only this manager's reusable connections, without logging in."""
+        self.closed = True
+        if self.control_directory is None:
+            return
+        directory, self.control_directory = self.control_directory, None
+
+        async def stop_master(socket):
+            process = await asyncio.create_subprocess_exec(
+                "ssh", "-F", os.devnull, "-S", str(socket), "-O", "exit", "localhost",
+                stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL)
+            try:
+                await asyncio.wait_for(process.wait(), 2)
+            finally:
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
+
+        try:
+            await asyncio.gather(*(stop_master(socket) for socket in Path(directory.name).glob("*.sock")),
+                                 return_exceptions=True)
+        finally:
+            directory.cleanup()
 
     async def request(self, host, payload, timeout=20):
         target = host.get("target")
