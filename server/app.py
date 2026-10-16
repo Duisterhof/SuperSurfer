@@ -21,7 +21,7 @@ import threading
 import time
 import uuid
 from urllib.parse import parse_qs, quote, unquote, urlsplit
-from . import results_review
+from . import results_review, monitoring
 
 from .chat_context import attachments as chat_attachments
 
@@ -193,6 +193,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.agent_tool_capabilities = {}
         self.agent_tool_scopes = {}
         self.turn_origins = {}
+        self.monitoring_scopes = set()
         self.turn_coordination = {}
         self.turn_handoffs = {}
         self.turn_agent_creations = {}
@@ -225,7 +226,8 @@ class Service(SurfboardService, EditorService, WritingService):
         self.message_event = threading.Event()
         self.messages = AgentMessages(self)
         self.message_thread = None
-        self.wakeups = Wakeups(self.store, self.wandb, stop_event=self.shutdown)
+        self.wakeups = Wakeups(self.store, self.wandb, stop_event=self.shutdown,
+                               scope_state=lambda scope: self.codex.chat(scope))
         self.wakeup_thread = None
         self.tracking = tracking or Tracking(self.store, self.wandb)
         self.tracking.stop_event = self.shutdown
@@ -386,7 +388,15 @@ class Service(SurfboardService, EditorService, WritingService):
                 if exc.status == 409:
                     return False
                 raise
-            preferences = self.chat_preferences(scope, strict=True)["effective"]
+            codex_monitor = self.backend_for(scope) == "codex"
+            preferences = self.chat_preferences(scope, strict=not codex_monitor)["effective"]
+            if codex_monitor:
+                # Do not inherit an expensive research model or Fast mode.
+                # Fail visibly if unavailable, never silently upgrade the monitor.
+                choice, _, _ = self._model_choice(monitoring.MODEL, monitoring.REASONING,
+                                                  explicit_reasoning=True,
+                                                  cwd=self._chat_scope(scope)["cwd"], backend="codex")
+                preferences = {**preferences, **choice, "fast_mode": False}
             self.turn_origins[scope] = "schedule"
             prompt = ("Perform this worker check explicitly scheduled by the user. Stay within the saved task; "
                       "inspect and debug only as requested. Report meaningful changes or failures and update the experiment document with evidence. "
@@ -394,9 +404,13 @@ class Service(SurfboardService, EditorService, WritingService):
                       "Do not launch or queue jobs, change GPU allocations, create agents, launch new work through peers, or add recurring tasks from this wakeup. "
                       "A metric trigger is an observation, not permission to start another experiment.\n\nSaved task:\n" + rule["task"] +
                       "\n\nWakeup evidence:\n" + json.dumps(trigger))
-            result = self.codex.send(scope, prompt, model=preferences["model"], reasoning=preferences["reasoning"],
-                                     fast_mode=preferences["fast_mode"], approval_mode=preferences["approval_mode"],
-                                     message_role="system", background_check={"rule_id": rule["id"], "kind": trigger.get("kind", "interval")})
+            self.monitoring_scopes.add(scope)
+            try:
+                result = self.codex.send(scope, prompt, model=preferences["model"], reasoning=preferences["reasoning"],
+                                         fast_mode=preferences["fast_mode"], approval_mode=preferences["approval_mode"],
+                                         message_role="system", background_check={"rule_id": rule["id"], "kind": trigger.get("kind", "interval")})
+            finally:
+                self.monitoring_scopes.discard(scope)
             if not result.get("accepted"):
                 raise APIError("Worker did not confirm acceptance of its wakeup", 409)
             return True
@@ -580,6 +594,8 @@ class Service(SurfboardService, EditorService, WritingService):
         return f"[Workspace time: {clock['current_time']} ({clock['timezone']})]\n\n{text}"
 
     def context_provider(self, scope):
+        if scope in self.monitoring_scopes:
+            return self.monitoring_context(scope)
         configured = self.board_context(scope)
         if configured is not None:
             return configured
@@ -653,6 +669,19 @@ class Service(SurfboardService, EditorService, WritingService):
             context["writable_roots"] = sorted({str(Path(e["document_path"]).parent) for e in documents})
         context["instructions"] = "\n\n".join(instructions)
         return self.with_agent_tools(scope, context)
+
+    def monitoring_context(self, scope):
+        """Same owner and enforced tool policy, without accumulated research data."""
+        experiment = self.experiment_for_scope(scope)
+        project = self.lookup("projects", experiment["project_id"])
+        context = {"cwd": str(Path(project["repo"]).expanduser().resolve()),
+                   "role": "worker", "name": experiment["name"] + " monitor",
+                   "experiment_id": experiment["id"], "document_path": experiment["document_path"],
+                   "base_instructions": monitoring.INSTRUCTIONS,
+                   "instructions": "Project and existing goal (preserve stop orders): " + json.dumps(
+                       {k: project.get(k) for k in ("id", "name", "goal")})
+                       + "\nOwned experiment: " + json.dumps({k: experiment.get(k) for k in ("id", "name", "summary")})}
+        return self.finish_board_context(scope, context)
 
     def with_agent_tools(self, scope, context):
         context["name"] = self.store.get("chat_name:" + scope, context["name"])

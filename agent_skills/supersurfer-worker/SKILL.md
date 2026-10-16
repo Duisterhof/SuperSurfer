@@ -158,8 +158,12 @@ An ordinary scheduled check never authorizes a new run, node/budget mutation,
 worker or schedule. A saved run-recovery grant is separate from these monitoring
 rules and stays confined to its lineage. Keep paused/removed rules stopped.
 On a routine check, skip “I'll check” narration and give one short outcome, leading
-with a new failure, milestone or decision needed. An unchanged check needs only a
-brief no-change outcome. Keep detailed metrics/provenance in the existing saved
+with a new failure, milestone or decision needed. Checks run in a fresh compact provider session; do not recover unrelated work
+from the research history or poll while waiting. The service suppresses unchanged
+observations and limits advancing-progress summaries to hourly. If a check does
+find no change, return once without rewriting evidence or task summaries merely
+to refresh timestamps. A blocker remains held until observed state/user input
+changes or the user explicitly rearms the rule. Keep detailed metrics/provenance in the existing saved
 evidence, not another long chat recap or manager update. The app groups its own
 checks compactly; grouping does not stop the monitoring task or hide your duty
 to surface an actionable change.

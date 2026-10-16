@@ -44,7 +44,10 @@ published 0.1.43 release.
   question and evidence together.
 - **Make room for your process.** Rearrange panels, split views, open separate
   windows and add reusable HTML blocks. Schedule reviews or metric/status
-  follow-ups; remote agents and jobs keep running when you close the app.
+  follow-ups; remote agents and jobs keep running when you close the app. Routine
+  checks inspect saved state first and stay quiet while nothing changes. Codex
+  checks use a compact, fresh session with a lower-cost model, preserving your
+  research conversation and its model settings.
 
 ## Install
 

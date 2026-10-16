@@ -25,6 +25,8 @@ class WakeupIntegrationTests(unittest.TestCase):
         self.manager = FakeManager(self.repo)
         self.service = Service(self.root / 'state', self.root / 'aml', aml=AMLClient(self.root / 'aml', rpc=self.manager),
                                codex=FakeCodex(), tracking=FakeTracking(), start_monitor=False)
+        self.service.codex.catalog.append({'id': 'gpt-6.1-sol', 'model': 'gpt-6.1-sol',
+                                           'supportedReasoningEfforts': [{'reasoningEffort': 'low'}]})
         state = self.service.state()
         self.experiment = state['experiments'][0]
         self.scope = 'experiment:' + self.experiment['id']
@@ -69,7 +71,7 @@ class WakeupIntegrationTests(unittest.TestCase):
         self.assertEqual(1, len(self.service.agent_action(self.scope, self.tool, {'action': 'list'})['rules']))
         self.assertFalse(any(op.startswith(('run.', 'queue.')) for op, _ in self.manager.calls))
 
-    def test_chat_model_effort_speed_and_permission_overrides_are_forwarded(self):
+    def test_monitor_uses_cheap_model_without_changing_research_preferences_or_permissions(self):
         scope = self.service.create_experiment_agent(self.experiment['id'], 'Monitor')['scope']
         self.service.action('chat.settings', {'scope': scope, 'model': 'model-b', 'reasoning': 'max', 'fast_mode': True, 'approval_mode': 'yolo'})
         rule = self.add(scope=scope)
@@ -77,9 +79,28 @@ class WakeupIntegrationTests(unittest.TestCase):
         self.assertEqual([rule['id']], self.tick())
         sent = self.service.codex.sent[-1]
         self.assertEqual(scope, sent[0])
-        self.assertEqual({'model': 'model-b', 'reasoning': 'max', 'fast_mode': True, 'approval_mode': 'yolo', 'message_role': 'system', 'background_check': {'rule_id': rule['id'], 'kind': 'interval'}}, sent[2])
+        self.assertEqual({'model': 'gpt-6.1-sol', 'reasoning': 'low', 'fast_mode': False, 'approval_mode': 'yolo', 'message_role': 'system', 'background_check': {'rule_id': rule['id'], 'kind': 'interval'}}, sent[2])
+        settings = self.service.store.chat_settings(scope)
+        self.assertEqual(('model-b', 'max', True), (settings['model'], settings['reasoning'], settings['fast_mode']))
         self.assertIn('Do not launch or queue jobs', sent[1])
         self.assertEqual('schedule', self.service.turn_origins[scope])
+
+    def test_monitor_context_omits_document_history_and_keeps_scoped_policy(self):
+        self.service.monitoring_scopes.add(self.scope)
+        context = self.service.context_provider(self.scope)
+        self.assertEqual(self.experiment['document_path'], context['document_path'])
+        self.assertIn('one bounded monitoring check', context['base_instructions'])
+        self.assertIn('Current managed tools', context['instructions'])
+        self.assertNotIn('required_tasks', context)
+        self.assertNotIn('Published HTML Results', context['instructions'])
+        self.assertNotIn('agent_skill', context)
+
+    def test_unavailable_monitor_model_never_falls_back_to_expensive_chat(self):
+        self.service.codex.catalog = [m for m in self.service.codex.catalog if m['id'] != 'gpt-6.1-sol']
+        rule = self.add(); self.now += 600
+        self.assertEqual([], self.tick())
+        self.assertEqual([], self.service.codex.sent)
+        self.assertIn('gpt-6.1-sol', self.service.wakeups.list(self.experiment['id'])[0]['error'])
 
     def test_another_owned_worker_blocks_overlap_and_saved_trigger_survives(self):
         rule = self.add()

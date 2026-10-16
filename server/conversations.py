@@ -295,6 +295,19 @@ class ConversationBridge:
             if message.get("streaming"):
                 message["streaming"] = False
                 message["status"] = status
+        if chat.get("research_session") is not None:
+            if not waiting:
+                # Keep the monitor's messages/evidence in the owning chat, but
+                # never replace or grow its native research conversation.
+                research = chat.pop("research_session")
+                chat["last_monitor"] = {"thread_id": chat.get("thread_id"),
+                                        "turn_id": chat.get("last_turn_id"),
+                                        "agent": copy.deepcopy(chat["agent"]), "status": status,
+                                        "summary": next((m["text"][-4000:] for m in reversed(chat["messages"])
+                                                         if m.get("role") == "assistant" and m.get("turn_id") == chat.get("last_turn_id")), "")}
+                chat.update(research)
+            self._save(chat)
+            return  # Scheduled checks must not start completion/continuation loops.
         request = chat.get("work_request", {})
         checks = request.get("checks", [])
         active_check = next((row for row in checks if row["id"] == request.get("active_check")), None)
@@ -403,6 +416,8 @@ class ConversationBridge:
         def run():
             try:
                 context = self._context(chat["scope"])
+                if chat.get("research_session") is not None:
+                    context["monitoring"] = True
                 agent = chat["agent"]
                 self._run(chat["scope"], message["id"], text, context, agent.get("model"), agent.get("reasoning"), agent.get("fast_mode", False), agent.get("approval_mode", "ask"))
             except Exception as exc:
@@ -548,11 +563,16 @@ class ConversationBridge:
             chat = self._chats.setdefault(scope, self._new_chat(scope, context))
             if chat["busy"]:
                 raise BridgeError("This agent is already working. Wait for it to finish or stop the current turn.", status=409)
-            requirements = context.get("required_tasks", [])
+            requirements = [] if background_check is not None else context.get("required_tasks", [])
             known = {task["id"] for task in chat.get("tasks", [])}
             new_keys = {row["key"] for row in requirements if chat.get("required_tasks", {}).get(row["key"]) not in known}
             if len(chat.get("tasks", [])) + len(new_keys) > 200:
                 raise BridgeError("This conversation's task log is full. Create a new conversation for this work; no turn was started.", 409)
+            if background_check is not None:
+                chat["research_session"] = {key: copy.deepcopy(chat[key]) for key in
+                                            ("thread_id", "agent", "work_request", "continuation_progress", "continuation_note", "stalled_turns") if key in chat}
+                chat["thread_id"] = None
+                context = {**context, "monitoring": True}
             chat.update(busy=True, status="starting", error=None, turn_id=None, cancel_requested=False, stalled_turns=0, continuation_progress=None, continuation_note=None)
             chat["agent"].update(name=context.get("name", chat["agent"]["name"]), role=context.get("role", chat["agent"]["role"]))
             chat["agent"].update(approval_mode=approval_mode, runtime_approval_mode=None, active_sandbox=None)
@@ -567,10 +587,11 @@ class ConversationBridge:
             if background_check is not None:
                 user_message["background_check"] = copy.deepcopy(background_check)
             user_message["status"] = "pending"
-            user_message["assignment"] = True
+            user_message["assignment"] = background_check is None
             for task in chat.get("tasks", []):
                 self._bind_task_assignment(chat, task)
-            chat["work_request"] = {"message_id": user_message["id"], "created": user_message["created"], "baseline": self._task_revisions(chat), "checks": []}
+            if background_check is None:
+                chat["work_request"] = {"message_id": user_message["id"], "created": user_message["created"], "baseline": self._task_revisions(chat), "checks": []}
             for requirement in requirements:
                 self._required_task(chat, requirement)
             chat["request_id"] = user_message["id"]

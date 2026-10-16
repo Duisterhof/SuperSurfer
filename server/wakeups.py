@@ -10,6 +10,7 @@ import time
 import uuid
 
 from .wandb import parse_target
+from . import monitoring
 
 
 class WakeupError(ValueError):
@@ -75,11 +76,12 @@ class Wakeups:
     worker. It must not turn a scheduled task into queue/agent authorization.
     Exceptions are ambiguous: pause the rule until explicitly rearmed.
     """
-    def __init__(self, store, reader, clock=time.time, stop_event=None):
+    def __init__(self, store, reader, clock=time.time, stop_event=None, scope_state=None):
         self.store, self.reader, self.clock = store, reader, clock
         self.stop_event = stop_event or threading.Event()
         self._tick_lock = threading.Lock()
         self._metrics = {}
+        self.scope_state = scope_state or (lambda scope: {})
         with self.store.lock:
             rules = self.store.get(KEY, [])
             changed = False
@@ -145,8 +147,10 @@ class Wakeups:
                             status='armed' if enabled else 'paused', next_at=now + condition['minutes'] * 60 if condition['kind'] == 'interval' and enabled else None,
                             bound_run_id=condition.get('run_id'), armed_at=now, trigger=None, claim=None, error=None,
                             last_checked_at=None, last_attempt_at=None, version=rule['version'] + 1, updated_at=now)
+                rule.pop('last_observation', None)
+                rule.pop('suppression_reason', None)
             elif action == 'pause':
-                rule.update(enabled=False, status='paused', next_at=None, trigger=None, error=None,
+                rule.update(enabled=False, status='paused', next_at=None, trigger=None, error=None, suppression_reason=None,
                             version=rule['version'] + 1, updated_at=now)
             else:
                 rules.remove(rule)
@@ -255,6 +259,22 @@ class Wakeups:
                     trigger = {'kind': condition['kind'], 'observed_at': now, 'source': 'schedule'}
                     changes = {'last_checked_at': now, 'error': None}
                     try:
+                        if condition['kind'] == 'interval':
+                            if not snapshot.get('manager_connected', snapshot.get('connected')) or not _finite(snapshot.get('updated_at')) or not -60 <= now - snapshot['updated_at'] <= SNAPSHOT_STALE_SECONDS:
+                                raise WakeupError('Run observations are unavailable or stale; waiting for a fresh snapshot')
+                            observed = monitoring.observation(rule, snapshot, self.scope_state(rule['scope']))
+                            previous = rule.get('last_observation')
+                            changed = not previous or previous['fingerprint'] != observed['fingerprint']
+                            progress_due = (previous and not observed['blocked']
+                                            and previous['progress_fingerprint'] != observed['progress_fingerprint']
+                                            and now - (rule.get('last_fired_at') or 0) >= monitoring.SUMMARY_SECONDS
+                                            and any(r['status'] in {'running', 'starting'} for r in observed['evidence']['runs']))
+                            if not changed and not progress_due:
+                                self._update(rule, {**changes, 'next_at': now + condition['minutes'] * 60,
+                                                   'suppression_reason': 'Waiting for changed observations; no model call.'})
+                                continue
+                            trigger['observation'] = observed
+                            changes['suppression_reason'] = None
                         if condition['kind'] != 'interval':
                             if not snapshot.get('manager_connected', snapshot.get('connected')) or not _finite(snapshot.get('updated_at')) or now - snapshot['updated_at'] > SNAPSHOT_STALE_SECONDS or snapshot['updated_at'] > now + 60:
                                 raise WakeupError('Run observations are unavailable or stale; waiting for a fresh snapshot')
@@ -292,7 +312,9 @@ class Wakeups:
                     self._update(claimed, {'status': 'pending', 'claim': None})
                     continue
                 interval = claimed['condition']['kind'] == 'interval'
-                self._update(claimed, {'status': 'armed' if interval else 'fired', 'enabled': interval,
+                observation = claimed['trigger'].get('observation')
+                self._update(claimed, {**({'last_observation': observation} if observation else {}),
+                                      'status': 'armed' if interval else 'fired', 'enabled': interval,
                                       'last_fired_at': self.clock(), 'next_at': self.clock() + claimed['condition']['minutes'] * 60 if interval else None,
                                       'claim': None, 'trigger': None, 'error': None})
                 started.append(claimed['id']); scopes.add(claimed['scope'])
