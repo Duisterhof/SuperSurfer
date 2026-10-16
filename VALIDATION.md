@@ -1,3 +1,31 @@
+# Monitoring credit controls — October 16, 2026
+
+This is a PR preview based on dfa22f1, not a release or live service upgrade.
+
+- 107 focused Python tests pass across wakeups, integration, Codex and CLI
+  providers. Fixtures cover unchanged/blocked state, hourly progress, changed
+  failures, stale observations, rearming, missing cheap models, fresh provider
+  sessions, preserved research state, stop/steer boundaries and restart recovery.
+- The full Python suite ran 765 tests: seven failures and 34 skips. All seven
+  failures are unchanged macOS `rsync --protect-args` incompatibilities in
+  `test_node_workflow`; the same seven reproduce on unmodified dfa22f1.
+- All 48 enabled Node tests pass; five optional SSH tests skip.
+- All four worker-wakeup browser stages pass with no JavaScript errors; the
+  waiting-state label and next-observation display are asserted. The screenshot
+  was inspected for layout.
+- Skill validation and whitespace checks pass.
+- `npm run package:mac` succeeds. Both original and ZIP-extracted Apple Silicon
+  apps pass strict signature verification, isolated-profile launch and sandboxed
+  setup-screen checks. This is an ad-hoc signed local preview, not a notarized
+  release or a browser-download Gatekeeper acceptance test.
+
+Provider checks use deterministic fixtures; no billed inference or live GPU job
+was started. No live workspace was restarted, modified or deployed. Other
+provider model choices remain unchanged. Savings depend on actual workloads;
+interval suppression observes saved run/task/question/user-input transitions,
+not arbitrary external files or services. Rearm after an unrepresented external
+change. Existing metric and run-status triggers retain their once-per-arm rules.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.

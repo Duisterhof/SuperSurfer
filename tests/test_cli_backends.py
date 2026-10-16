@@ -171,6 +171,19 @@ class CliBackendTests(unittest.TestCase):
             else:
                 self.assertTrue(any(x.get('method')=='authenticate' and x['params']['methodId']=='cursor_login' for x in records))
                 self.assertTrue(any(x.get('method')=='session/load' and x['params']['mcpServers'][0]['env'][0]['value'].endswith('manager') for x in records))
+    def test_monitor_starts_fresh_and_restores_owner_for_both_providers(self):
+        for backend in ('cursor', 'claude'):
+            with self.subTest(backend=backend):
+                b = self.bridge(backend)
+                b.send('manager', 'Research'); self.wait(lambda: not b.chat('manager')['busy'])
+                original = b.chat('manager')['thread_id']; before = len(self.records())
+                b.send('manager', 'Check current status', message_role='system', background_check={'rule_id': 'w'})
+                self.wait(lambda: not b.chat('manager')['busy'])
+                self.assertEqual(original, b.chat('manager')['thread_id'])
+                self.assertIn('last_monitor', b.chat('manager'))
+                records = self.records()[before:]
+                self.assertFalse(any(x.get('method') == 'session/load' for x in records))
+                self.assertFalse(any(any(a.startswith('--resume=') for a in x.get('args', [])) for x in records))
     def test_permission_is_once_scoped_and_redacts_sensitive_fields(self):
         for backend in ('cursor','claude'):
             b=self.bridge(backend);b.send('manager','approval');self.wait(lambda:bool(b.chat('manager')['approvals']));chat=b.chat('manager');approval=chat['approvals'][0]

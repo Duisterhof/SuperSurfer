@@ -256,3 +256,13 @@ provider UI. A standalone host may continue the same requested task up to three
 times; an editor-owned host does not promise persistence after editor shutdown.
 Other native tools mentioned in this skill may be unavailable in this preview;
 never substitute direct scheduler access for an unadvertised queue tool.
+
+## Scheduled checks
+
+A scheduled worker check is one bounded observation, not permission to resume
+all unfinished deliverables. It uses a fresh provider session while preserving
+the original conversation and its settings. Report meaningful changes once and
+return; do not keep a model alive polling or rewrite unchanged evidence. The
+service checks scheduler/task state first and suppresses unchanged blockers.
+For conditions outside that observed state, request a specific event rule or
+explicit rearm after the dependency is resolved. Preserve the applied gates.
