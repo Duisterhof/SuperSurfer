@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 import threading
 import time
@@ -9,6 +10,32 @@ from server.wandb import WandBReader
 SOURCE={'id':'method','url':'https://wandb.ai/team/project/runs/real-run','keys':['loss','phase','joint_updates','val/loss'],'sparse_metrics':[{'key':'val/loss','x_axis':'joint_updates'}]}
 
 class ResultDataTests(unittest.TestCase):
+    def test_history_ranges_match_wandb_int64_schema(self):
+        # Reproduce W&B's GraphQL validation: even a small integer value fails
+        # when the variable type is Int instead of the field's Int64 scalar.
+        queries=[]
+        def fetch(query, variables):
+            queries.append(query)
+            for parameter in re.findall(r'(?:minStep|maxStep):\$(\w+)', query):
+                if not re.search(r'\$'+parameter+r':\s*Int64!?\b', query):
+                    raise ValueError('HTTP 400: history range expects Int64')
+            if 'ReportRun' in query or 'query Curves' in query:
+                return {'project':{'run':{'name':'real-run','summaryMetrics':{'_step':1000},'history':[{'_step':1,'loss':2}]}}}
+            if 'RecentCurves' in query:
+                return {'project':{'r0':{'history':[{'_step':1000,'loss':.5}]}}}
+            return {'project':{'run':{'history':[{'_step':1000,'loss':.5}], 'sampledHistory':[[{'_step':500,'val/loss':.8,'joint_updates':500}]]}}}
+        reader=WandBReader(fetch)
+        for sparse in [[], SOURCE['sparse_metrics']]:
+            result=ResultData(reader).history({**SOURCE,'sparse_metrics':sparse},True)
+            self.assertIsNone(result['error'])
+            self.assertEqual(.5,result['rows'][-1]['loss'])
+            if sparse:self.assertEqual(.8,result['rows'][1]['val/loss'])
+        metrics=reader.metrics(SOURCE['url'],refresh=True)
+        self.assertIsNone(metrics['error'])
+        self.assertEqual(.5,metrics['series'][0]['points'][-1]['y'])
+        self.assertTrue(any('ReportTail' in q for q in queries))
+        self.assertTrue(any('RecentCurves' in q for q in queries))
+
     def setUp(self):
         self.calls=[];self.step=1000;self.fail=False
         def fetch(query, variables):

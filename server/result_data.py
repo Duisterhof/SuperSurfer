@@ -124,7 +124,9 @@ class ResultData:
                 sparse_param = ', $specs:[JSONString!]!' if specs else ''
                 if specs:
                     variables['specs'] = specs
-                query = 'query ReportTail($entity:String!, $project:String!, $run:String!, $min_step:Int!, $max_step:Int!' + sparse_param + ') { project(name:$project,entityName:$entity) { run(name:$run) { history(minStep:$min_step,maxStep:$max_step,samples:1500)' + sparse_query + ' } } }'
+                # W&B history bounds use its Int64 scalar, including small steps.
+                # GraphQL rejects Int variables before executing the query.
+                query = 'query ReportTail($entity:String!, $project:String!, $run:String!, $min_step:Int64!, $max_step:Int64!' + sparse_param + ') { project(name:$project,entityName:$entity) { run(name:$run) { history(minStep:$min_step,maxStep:$max_step,samples:1500)' + sparse_query + ' } } }'
                 tail = (self.reader.fetcher(query, variables).get('project') or {}).get('run')
                 if tail is None:
                     raise ValueError('The W&B run became unavailable during refresh')
