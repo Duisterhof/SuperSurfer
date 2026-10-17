@@ -199,8 +199,11 @@ run ID or W&B source/link. Missing measurements must be labeled unavailable or
 pending; identifier coverage alone does not prove scientific correctness. Actual
 train/validation overlays and requested domain comparisons remain mandatory role
 skill/completion-review work. The scoped check can archive redundant owned reports
-while preserving source, but cannot archive its reviewed comparison. No general
-agent reorder/unarchive tool is added. New attempts, status/source identity changes,
+while preserving source, but cannot archive its reviewed comparison. The same
+checkpoint accepts `restore_result_ids` for retained reports in that experiment,
+after verifying their exact saved bytes. It returns before/after archived flags,
+preserved report SHAs and the resulting presentation version. It provides no
+general reorder or cross-task Restore. New attempts, status/source identity changes,
 report edits or removal reopen review; disconnected manager observations cannot
 produce a fresh completion receipt. The check grants no launch authorization.
 

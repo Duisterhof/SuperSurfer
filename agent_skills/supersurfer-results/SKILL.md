@@ -246,7 +246,7 @@ reports, choose Move earlier/later or Remove in their tab menu, then Restore
 through Removed. Removal archives the report's presentation; saved HTML, declared
 W&B sources and measurements remain. Standalone organization controls use a presentation revision
 check and are human-only; the research checkpoint below separately permits
-bounded archive cleanup, not general reorder or Restore. `publish_result` can
+bounded archive and Restore cleanup, not general reorder. `publish_result` can
 revise the same stored report but preserves its archived state; do not publish a
 duplicate or claim an update unarchives it. Ordinary report listings omit
 archived reports, so absence from that list does not prove content was deleted.
@@ -256,7 +256,11 @@ against all returned attempts, not only the first training run or an earlier
 baseline. Inspect may read an owned report's HTML; complete binds the current
 attempt version, visible report ID/SHA and concrete summary. Missing/pending/failed
 measurements remain explicit entries. Optional archive_result_ids can hide only
-redundant other owned reports, keeping their source and unique evidence. Follow
+redundant other owned reports, keeping their source and unique evidence. Optional
+restore_result_ids restores retained reports from the same task after verifying
+their saved bytes; it requires a valid visible comparison and current attempt
+version. Inspect the returned before/after flags and report SHA, then read back
+the restored page and live bindings. No job state changes. Follow
 [Results checkpoint guidance](references/results-checkpoint.md) for scope, exact
 fields and the required task's reopen behavior. Nonresearch work and held-only
 drafts do not acquire this launch-related reporting checkpoint.

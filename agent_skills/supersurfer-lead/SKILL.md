@@ -223,4 +223,5 @@ with `experiment_id`. Revisit the existing comparison across every observed
 released/started attempt; preserve failed/pending evidence and the worker owner.
 Complete with current attempt version and exact report SHA, never a status-only
 handoff. Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md);
-its bounded archive cleanup is separate from human reorder/Restore controls.
+its bounded archive/Restore cleanup preserves owned report bytes and is separate
+from general human reorder controls. Keep the existing scientific worker owner.

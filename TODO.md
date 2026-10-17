@@ -490,3 +490,8 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Scope publication receipts to report/evidence/code and bind the actual published payload, avoiding unrelated experiment scans.
 
 Reviewed project comparison support now includes exact reusable-block publication gates and known-frame same-project Results navigation. Live VLA overview/archive acceptance remains with the original cleanup task until normal runtime integration, exact publication and Restore receipts.
+
+The existing research Results checkpoint now has bounded same-task
+`restore_result_ids` alongside archive cleanup, with retained-byte verification
+and before/after presentation receipts. Runtime integration and actual VLA
+Archive/Restore acceptance remain separate; the source patch changes no real run.

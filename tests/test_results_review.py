@@ -1,4 +1,5 @@
 """Results review uses actual attempt bindings and versioned published evidence."""
+import copy
 import unittest
 from unittest.mock import patch
 import test_conversations as fixtures
@@ -24,6 +25,59 @@ class ResultsReviewTests(unittest.TestCase):
     def evidence(self):
         return self.service.results.publish(self.exp['id'], {'title': 'Current comparison',
             'html': '<h1>Measured comparisons</h1><p>r1: training pending. r2: failed before measurement; unavailable.</p>'})
+
+    def test_owned_archive_restore_preserves_artifacts_and_execution(self):
+        status = self.launched()
+        baseline = self.service.results.publish(self.exp['id'], {'title': 'Unique baseline',
+            'html': '<p>Earlier measured baseline.</p><script>SuperSurferResults.subscribe(update)</script>',
+            'wandb_sources': [{'id': 'teacher', 'url': 'https://wandb.ai/test/research/runs/teacher',
+                              'keys': ['loss', 'samples_per_stream']}]})
+        original = results_review.read_report(self.service, self.exp['id'], baseline['id'])
+        report = self.evidence()
+        runs = copy.deepcopy(self.manager.data['runs'])
+        fields = {'version': status['version'], 'result_id': report['id'], 'sha256': report['sha256'],
+                  'summary': 'Canonical comparison preserves attempts; baseline is retained for reversible presentation cleanup.'}
+        archived = results_review.complete(self.service, self.exp['id'],
+                                           {**fields, 'archive_result_ids': [baseline['id']]})
+        transition = archived['presentation']['reports'][0]
+        self.assertEqual((False, True, True),
+                         (transition['before_archived'], transition['archived'], transition['changed']))
+        self.assertNotIn(baseline['id'], [row['id'] for row in self.service.results.list(self.exp['id'])])
+        scope = 'experiment:' + self.exp['id']
+        self.service.codex.busy.add(scope)
+        restored = self.service.agent_action(scope, 'supersurfer_check_experiment_results',
+            {**fields, 'action': 'complete', 'restore_result_ids': [baseline['id']]})
+        transition = restored['receipt']['presentation']['reports'][0]
+        self.assertEqual((True, False, True),
+                         (transition['before_archived'], transition['archived'], transition['changed']))
+        current = results_review.read_report(self.service, self.exp['id'], baseline['id'])
+        for key in ('sha256', 'html', 'wandb_sources'):
+            self.assertEqual(original[key], current[key])
+        self.assertEqual(baseline['sha256'], transition['sha256'])
+        self.assertEqual(runs, self.manager.data['runs'])
+        self.assertFalse(restored['needs_review'])
+        repeated = self.service.agent_action(scope, 'supersurfer_check_experiment_results',
+            {**fields, 'action': 'complete', 'restore_result_ids': [baseline['id']]})
+        self.assertFalse(repeated['receipt']['presentation']['reports'][0]['changed'])
+
+    def test_restore_rejects_foreign_overlap_and_tampered_retained_bytes(self):
+        status = self.launched()
+        report = self.evidence()
+        baseline = self.service.results.publish(self.exp['id'], {'title': 'Baseline', 'html': '<p>Retained evidence</p>'})
+        fields = {'version': status['version'], 'result_id': report['id'], 'sha256': report['sha256'],
+                  'summary': 'Reviewed all attempts with preserved baseline and explicit gaps.'}
+        for extra in ({'restore_result_ids': ['foreign']},
+                      {'archive_result_ids': [baseline['id']], 'restore_result_ids': [baseline['id']]},
+                      {'restore_result_ids': [baseline['id'], baseline['id']]},
+                      {'archive_result_ids': [report['id']]}):
+            with self.assertRaises(ValueError):
+                results_review.complete(self.service, self.exp['id'], {**fields, **extra})
+        results_review.complete(self.service, self.exp['id'], {**fields, 'archive_result_ids': [baseline['id']]})
+        (self.service.results.directory / (baseline['id'] + '.html')).write_text('Unexpected changed bytes')
+        with self.assertRaises(Conflict):
+            results_review.complete(self.service, self.exp['id'], {**fields, 'restore_result_ids': [baseline['id']]})
+        row = next(row for row in self.service.store.get('results:' + self.exp['id'], []) if row['id'] == baseline['id'])
+        self.assertTrue(row['archived'])
 
     def test_held_drafts_need_no_review_but_released_and_imported_attempts_do(self):
         self.assertFalse(results_review.inspect(self.service, self.exp['id'])['needs_review'])

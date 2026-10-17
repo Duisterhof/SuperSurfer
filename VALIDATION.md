@@ -1252,3 +1252,12 @@ integration disabled. The test used the disclosed --no-sandbox OS-process flag,
 so it does not prove OS sandboxing or Mac signing. This is a local fix build,
 not a release, installed workspace upgrade, live run Archive/Restore or original
 VLA preference migration receipt.
+
+The bounded research checkpoint now supports same-task `restore_result_ids`
+alongside archive cleanup. Focused service/tool tests verify Archive → Restore,
+unchanged exact HTML/SHA/live sources and run records, explicit unchanged repeat
+Restore, and rejection of foreign/duplicate/overlapping IDs and tampered retained
+bytes before flag mutation. Full suite passes780 Python tests and51 Node tests,
+with5 optional SSH skips; skills and whitespace checks pass. The Linux x64
+package rebuilt successfully. This is isolated preparation; the connected VLA
+runtime has not acquired the new tool field and no real report was archived.

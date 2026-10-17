@@ -136,7 +136,7 @@ User-only account/utility visibility controls add no visualization MCP capabilit
 The user can reorder Results report tabs and archive/restore them through their
 menus and Removed dropdown. This organizes presentation without deleting HTML,
 W&B sources or measured evidence. Publishing a revision preserves that report's
-archive state; this visualizer has no reorder/unarchive MCP capability. Preserve
+archive state; publishing is not a reorder or Restore operation. Preserve
 the report ID rather than creating another publication to make it visible.
 
 Enabled research `check_experiment_results` verifies the current comparison covers
@@ -145,8 +145,9 @@ entries. Keep earlier useful methods, not merely the first recovery's curves.
 For a requested data-connection change, use scoped `read_surfboard`,
 `propose_surfboard` and `apply_surfboard`, then resolve the applied inputs. Keep
 report publication separate from configuring the visualizer.
-Its completion can archive redundant other reports while retaining their source;
-this is bounded cleanup, not general report reorder or unarchive. Read
+Its completion can archive redundant other reports or Restore retained owned
+reports while verifying their saved bytes. This is bounded cleanup, not general
+report reorder or cross-task control. Read
 [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 
 ## Visualizer templates are not result snapshots
