@@ -1,5 +1,6 @@
 """Protocol integration tests use a real fake stdio process, never inference."""
 import json
+import sqlite3
 from datetime import datetime
 import os
 from pathlib import Path
@@ -260,6 +261,57 @@ class CodexBridgeTests(unittest.TestCase):
         direct = [message for message in chat['messages'] if message['role'] == 'user'][-1]
         self.assertEqual('user', direct['origin'])
         self.assertNotIn('background_check', direct)
+
+    def test_monitor_sessions_preserve_research_thread_and_do_not_continue_its_tasks(self):
+        self.bridge.send('project:vla', 'Explain', model='model-b', reasoning='high')
+        research = self.finished(); original = research['thread_id']
+        with self.bridge._lock:
+            self.bridge._chats['project:vla']['tasks'] = [{'id': 'unfinished', 'status': 'working', 'title': 'Research', 'summary': 'Keep this work'}]
+        before = len(self.requests())
+        for _ in range(2):
+            self.bridge.send('project:vla', 'Check status', model='model-a', reasoning='low',
+                             message_role='system', background_check={'rule_id': 'w', 'kind': 'interval'})
+            chat = self.finished()
+            self.assertEqual(original, chat['thread_id'])
+            self.assertEqual('model-b', chat['agent']['model'])
+            self.assertNotEqual(original, chat['last_monitor']['thread_id'])
+            self.assertEqual('working', chat['tasks'][0]['status'])
+        requests = self.requests()[before:]
+        self.assertEqual(2, sum(r.get('method') == 'thread/start' for r in requests))
+        self.assertFalse(any(r.get('method') == 'thread/resume' for r in requests))
+        turns = [r for r in requests if r.get('method') == 'turn/start']
+        self.assertEqual(2, len(turns))
+        self.assertTrue(all('supersurfer-tasks' not in r['params']['additionalContext'] for r in turns))
+        with self.bridge._lock:
+            self.bridge._chats['project:vla']['tasks'] = []
+        self.bridge.send('project:vla', 'Continue research'); self.finished()
+        self.assertEqual(original, [r for r in self.requests() if r.get('method') == 'thread/resume'][-1]['params']['threadId'])
+
+    def test_monitor_failure_and_stop_restore_research_session(self):
+        self.bridge.send('project:vla', 'Explain'); original = self.finished()['thread_id']
+        self.bridge.send('project:vla', 'hold', message_role='system', background_check={'rule_id': 'w'})
+        self.wait_for(lambda: self.bridge.chat('project:vla')['status'] == 'working')
+        with self.assertRaisesRegex(CodexError, 'monitoring check'):
+            self.bridge.steer('project:vla', 'New research task')
+        self.bridge.stop('project:vla'); self.finished()
+        self.assertEqual(original, self.bridge.chat('project:vla')['thread_id'])
+
+    def test_restart_restores_research_after_an_inflight_monitor_without_replay(self):
+        self.bridge.send('project:vla', 'Explain'); research = self.finished()
+        self.bridge.close()
+        with sqlite3.connect(self.root / 'state' / 'codex.sqlite3') as db:
+            chat = json.loads(db.execute('SELECT body FROM chats WHERE scope=?', ('project:vla',)).fetchone()[0])
+            chat['research_session'] = {'thread_id': chat['thread_id'], 'agent': chat['agent'], 'work_request': chat['work_request']}
+            chat.update(thread_id='interrupted-monitor', agent={**chat['agent'], 'model': 'monitor-model'}, busy=True, status='working')
+            db.execute('UPDATE chats SET body=? WHERE scope=?', (json.dumps(chat), 'project:vla'))
+        before = len(self.requests()); self.bridge = self.new_bridge()
+        restored = self.bridge.chat('project:vla')
+        self.assertEqual(research['thread_id'], restored['thread_id'])
+        self.assertEqual('interrupted', restored['last_monitor']['status'])
+        self.assertEqual(before, len(self.requests()))
+        self.bridge.send('project:vla', 'crash', message_role='system', background_check={'rule_id': 'w'})
+        self.finished()
+        self.assertEqual(research['thread_id'], self.bridge.chat('project:vla')['thread_id'])
 
     def test_expired_account_requires_login_even_when_account_metadata_remains(self):
         self.bridge.send('project:vla', 'hold')

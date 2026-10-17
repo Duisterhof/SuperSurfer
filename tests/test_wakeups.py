@@ -54,7 +54,7 @@ class WakeupTests(unittest.TestCase):
     def start(self, rule, trigger):
         self.sent.append((rule, trigger)); return True
 
-    def test_interval_survives_restart_coalesces_missed_ticks_and_repeats_after_acceptance(self):
+    def test_interval_survives_restart_coalesces_and_only_repeats_for_changed_evidence(self):
         rule = self.add()
         self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
         self.advance(1800)
@@ -63,10 +63,55 @@ class WakeupTests(unittest.TestCase):
         self.assertEqual(self.now + 600, self.rule(rule['id'])['next_at'])
         self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
         self.advance(600)
+        self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        self.assertIn('no model call', self.rule(rule['id'])['suppression_reason'])
+        self.run['status'] = 'failed'
+        self.advance(600)
         self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
         self.assertEqual(2, len(self.sent))
         self.assertEqual('schedule', self.sent[0][1]['source'])
         self.assertEqual([], self.calls)
+
+    def test_terminal_checks_stay_quiet_across_restart_and_note_rewrites(self):
+        self.run['status'] = 'failed'
+        chat = {'tasks': [{'id': 'task1', 'status': 'blocked', 'blocker_kind': 'decision', 'summary': 'Choose repair'}]}
+        self.wakeups.scope_state = lambda _: chat
+        rule = self.add(); self.advance(600)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+        self.wakeups = Wakeups(self.store, self.reader, clock=lambda: self.now, scope_state=lambda _: chat)
+        for _ in range(8):
+            self.advance(3600)
+            chat['tasks'][0].update(updated=self.now, summary='Still waiting at ' + str(self.now))
+            self.run['updated'] = self.now
+            self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        chat['messages'] = [{'id': 'answer', 'role': 'user', 'origin': 'user'}]
+        self.advance(600)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+
+    def test_active_progress_is_bounded_but_failure_and_new_runs_are_not_delayed(self):
+        self.run['config']['progress'] = {'step': 10, 'observed_at': self.now}
+        rule = self.add(); self.advance(600); self.wakeups.tick(self.snapshot, self.start)
+        for step in range(20, 70, 10):
+            self.run['config']['progress'].update(step=step, observed_at=self.now)
+            self.advance(600)
+            self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        self.advance(600)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+        self.run['status'] = 'failed'; self.advance(600)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+        self.snapshot['runs'].append({**self.run, 'id': 'new', 'status': 'running'})
+        self.advance(600)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+
+    def test_interval_stale_snapshot_waits_without_inference_and_rearm_resets_baseline(self):
+        rule = self.add(); self.advance(600)
+        self.snapshot['updated_at'] = self.now - 100
+        self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        self.snapshot['updated_at'] = self.now
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+        self.wakeups.configure(self.scope, self.experiment['id'], {'action': 'update', 'id': rule['id']})
+        self.advance(600)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
 
     def test_busy_worker_retains_trigger_until_definitely_accepted(self):
         rule = self.add({'kind': 'run_status', 'status': 'running', 'run_id': 'r1'})

@@ -25,6 +25,35 @@
   bridge; persistence across changing SSH ports requires the updated desktop
   preference bridge. Published report HTML/hashes and training runs are untouched.
 
+# Monitoring credit controls — October 16, 2026
+
+This is a PR preview based on dfa22f1, not a release or live service upgrade.
+
+- 107 focused Python tests pass across wakeups, integration, Codex and CLI
+  providers. Fixtures cover unchanged/blocked state, hourly progress, changed
+  failures, stale observations, rearming, missing cheap models, fresh provider
+  sessions, preserved research state, stop/steer boundaries and restart recovery.
+- The full Python suite ran 765 tests: seven failures and 34 skips. All seven
+  failures are unchanged macOS `rsync --protect-args` incompatibilities in
+  `test_node_workflow`; the same seven reproduce on unmodified dfa22f1.
+- All 48 enabled Node tests pass; five optional SSH tests skip.
+- All four worker-wakeup browser stages pass with no JavaScript errors; the
+  waiting-state label and next-observation display are asserted. The screenshot
+  was inspected for layout.
+- Skill validation and whitespace checks pass.
+- `npm run package:mac` succeeds. Both original and ZIP-extracted Apple Silicon
+  apps pass strict signature verification, isolated-profile launch and sandboxed
+  setup-screen checks. This is an ad-hoc signed local preview, not a notarized
+  release or a browser-download Gatekeeper acceptance test.
+
+Provider checks use deterministic fixtures; no billed inference or live GPU job
+was started. No live workspace was restarted, modified or deployed. Other
+provider model choices remain unchanged. Savings depend on actual workloads;
+interval suppression observes saved run/task/question/user-input transitions,
+not arbitrary external files or services. Rearm after an unrepresented external
+change. Existing metric and run-status triggers retain their once-per-arm rules.
+
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.
@@ -1261,3 +1290,14 @@ bytes before flag mutation. Full suite passes780 Python tests and51 Node tests,
 with5 optional SSH skips; skills and whitespace checks pass. The Linux x64
 package rebuilt successfully. This is isolated preparation; the connected VLA
 runtime has not acquired the new tool field and no real report was archived.
+
+The retirement branch now includes the already-installed monitoring dependency
+11c3e93. Its monitoring, wakeups, Codex, CLI backend and conversation modules
+match the connected runtime byte for byte. This prevents an upgrade from
+regressing existing monitoring behavior; no live service or saved rule changed.
+The integrated suite passes789 Python tests and51 Node tests, with5 optional
+SSH skips. Skill validation, the scoped wakeup browser checks and canonical
+training Results browser checks pass. The Linux x64 package rebuilt and opened
+an isolated setup profile under Xvfb with context isolation and renderer sandbox
+enabled, Node integration disabled and no connected workspace. The test retained
+the disclosed OS --no-sandbox flag. No deployment or live retirement is claimed.

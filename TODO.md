@@ -6,6 +6,14 @@
 - [x] Remember each training report's Linear/Log scale across navigation, refresh,
   republishing and desktop restart/reconnect, including detached panels.
 
+# Monitoring credit controls (PR preview)
+
+- [x] Use Sol with low reasoning and Standard speed for scheduled Codex checks.
+- [x] Suppress unchanged interval checks; summarize advancing runs at most hourly.
+- [x] Use compact, disposable monitoring sessions while preserving research sessions and policy.
+- [x] Show when an interval rule is waiting for changed observations.
+
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.
