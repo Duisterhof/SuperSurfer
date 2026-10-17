@@ -150,7 +150,10 @@ class SlurmBridge:
             if spec["config"].get("backend") == "stanford_slurm":
                 argv.insert(-1, "--mem=" + str(r["memory_gib"]) + "G")
                 argv.insert(-1, "--no-requeue")
-                probe = self.execute([argv[0], "--test-only", *argv[2:]])
+                try:
+                    probe = self.execute([argv[0], "--test-only", *argv[2:]])
+                except Exception as exc:
+                    return {"state": "blocked", "error": "Stanford estimate unknown; no job submitted: " + str(exc)}
                 if re.search(r"Preempts:\s*\S", probe):
                     return {"state": "blocked", "error": "Stanford estimate reports preemption; no job submitted", "estimate": probe}
             atomic(intent_path, {"run_id": spec["id"], "fingerprint": fingerprint,

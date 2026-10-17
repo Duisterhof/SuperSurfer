@@ -74,3 +74,11 @@ class RetryIntentTest(unittest.TestCase):
         self.assertFalse(r['use_project_pool']);self.assertNotIn('job_id',str(r));self.assertNotIn('gpu_count',r['slurm'])
         run['config'].pop('supersurfer_run_request')
         with self.assertRaises(ComputeError):retry_intent(None,run)
+
+class EstimateFailureTest(unittest.TestCase):
+    def test_timeout_is_unknown_not_submission(self):
+        def execute(argv):raise TimeoutError('test-only deadline')
+        with tempfile.TemporaryDirectory() as root:
+            r=SlurmBridge(execute).submit(stanford(),root)
+            self.assertEqual(r['state'],'blocked');self.assertIn('unknown',r['error'])
+            self.assertFalse(Path(root,'slurm.intent.json').exists())
