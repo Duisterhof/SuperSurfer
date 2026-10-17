@@ -1399,3 +1399,14 @@ an isolated setup profile under Xvfb with context isolation and renderer sandbox
 enabled, Node integration disabled and no connected workspace. The test retained
 the disclosed OS --no-sandbox flag. No deployment or live retirement is claimed.
 Live Many projections receipt action_717b80272f0da703bc04102b passed on board version 7: 46 inputs / 24,579,666 bytes, source unchanged, all ten reviewer checks passed; creation-to-completion 0.309 seconds including the real configured checker. This verifies the deployed agent path, not just an offline snapshot.
+
+Full installed-baseline reconciliation adds original commits229155c (W&B
+Int64),87ac800 (private monitoring SSH),69c7f86 (installed PSC Slurm and
+queued-source recovery ancestry), and46073a9 (installed compile-on-save).
+No new execution backend is introduced. All installed engine Python files
+match byte for byte; of71 installed Python sources,63 are unchanged and8
+declared Results service modules contain this PR's presentation changes.
+The new integrated suite passes828 Python tests (5 skipped) and52 Node tests
+(5 optional SSH skips). Real isolated archive/Restore, owned block navigation
+and canonical Results browser checks pass. Skills/whitespace validation passes.
+Linux x64 packaging succeeds. No installed workspace or research process changed.
