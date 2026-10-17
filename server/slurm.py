@@ -6,10 +6,12 @@ SCHEMA = {
     'required': ['account', 'partition', 'gpu_type', 'walltime_seconds', 'max_updates', 'repo'],
     'properties': {
         'account': {'type': 'string', 'pattern': '^[A-Za-z0-9_-]+$'},
-        'partition': {'type': 'string', 'enum': ['GPU-shared']},
-        'gpu_type': {'type': 'string', 'enum': ['v100-16', 'v100-32']},
+        'partition': {'type': 'string', 'enum': ['GPU-shared', 'viscam']},
+        'gpu_type': {'type': 'string', 'enum': ['v100-16', 'v100-32', '3090', 'a5000', 'a6000', 'a40', 'l40s']},
         'walltime_seconds': {'type': 'integer', 'minimum': 1, 'maximum': 900},
         'max_updates': {'type': 'integer', 'minimum': 1, 'maximum': 100},
+        'cpus_per_task': {'type': 'integer', 'minimum': 1, 'maximum': 8},
+        'memory_gib': {'type': 'integer', 'minimum': 1, 'maximum': 64},
         'repo': {'type': 'string', 'description': 'Absolute prepared source checkout on PSC at revision; top-level repo is the local clean worktree used for PR verification.'},
     },
 }
@@ -23,7 +25,9 @@ def absolute(value, label):
 
 def contract(params, host):
     resource = params.get('slurm')
-    if not isinstance(resource, dict) or set(resource) != set(SCHEMA['required']):
+    stanford = params.get('backend') == 'stanford_slurm'
+    expected = set(SCHEMA['required']) | ({'cpus_per_task', 'memory_gib'} if stanford else set())
+    if not isinstance(resource, dict) or set(resource) != expected:
         raise ValueError('Slurm requires account, partition, gpu_type, walltime_seconds, max_updates and remote repo')
     if host.get('gpus'):
         raise ValueError('Register a Slurm control host with gpus=[]; Slurm assigns the GPU')
@@ -31,7 +35,13 @@ def contract(params, host):
         raise ValueError('PSC smoke requires exactly one GPU')
     if not isinstance(resource['account'], str) or not re.fullmatch(r'[A-Za-z0-9_-]+', resource['account']):
         raise ValueError('Invalid Slurm account')
-    if resource['partition'] != 'GPU-shared' or resource['gpu_type'] not in {'v100-16', 'v100-32'}:
+    if stanford:
+        if resource['account'] != 'viscam' or resource['partition'] != 'viscam' or resource['gpu_type'] not in {'3090','a5000','a6000','a40','l40s'}:
+            raise ValueError('Stanford smoke requires approved viscam profile and compatible GPU')
+        for key, maximum in (('cpus_per_task',8), ('memory_gib',64)):
+            if type(resource[key]) is not int or not 1 <= resource[key] <= maximum:
+                raise ValueError('Invalid bounded Stanford ' + key)
+    elif resource['partition'] != 'GPU-shared' or resource['gpu_type'] not in {'v100-16', 'v100-32'}:
         raise ValueError('PSC smoke requires GPU-shared and a V100')
     for key, maximum in (('walltime_seconds', 900), ('max_updates', 100)):
         if type(resource[key]) is not int or not 1 <= resource[key] <= maximum:
@@ -57,6 +67,6 @@ def contract(params, host):
     packages = params.get('python_packages', {})
     if not isinstance(packages, dict) or any(not re.fullmatch(r'[A-Za-z0-9_.-]+', k) or not isinstance(v, str) or not v for k, v in packages.items()):
         raise ValueError('python_packages must map distribution names to exact versions')
-    return {'backend': 'slurm', 'slurm': {k: v for k, v in resource.items() if k != 'repo'} | {'gpu_count': 1},
+    return {'backend': 'stanford_slurm' if stanford else 'slurm', 'slurm': {k: v for k, v in resource.items() if k != 'repo'} | {'gpu_count': 1},
             'slurm_repo': repo, 'slurm_python': interpreter,
             'environment': {'executables': [interpreter], 'python': interpreter, 'packages': packages, 'paths': paths}}

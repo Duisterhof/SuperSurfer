@@ -9,7 +9,25 @@ from .aml import ManagerError
 from .compute import ComputeError
 
 RETRY_FIELDS = {'name','gpu_count','command','repo','storage_gib','min_free_mib','use_project_pool','revision',
-                'python','data_path','required_paths','python_packages','job_type','training_metrics'}
+                'python','data_path','required_paths','python_packages','job_type','training_metrics','backend','slurm','host_id'}
+
+
+def retry_intent(service, run):
+    """Preserve reviewed Slurm routing; never infer a direct/pool replacement."""
+    config = run.get('config') or {}
+    if config.get('backend') not in {'slurm', 'stanford_slurm'}:
+        return service.nodes.intent(run)
+    environment = config.get('environment') or {}
+    request = copy.deepcopy(config.get('supersurfer_run_request') or {})
+    if not request:
+        raise ComputeError('Slurm recovery requires its saved original submission request; no inferred replacement', 409)
+    request.update(backend=config['backend'], use_project_pool=False, host_id=run['host_id'],
+                   gpu_count=run['gpu_count'], revision=run['revision'])
+    request['slurm'] = {**config['slurm'], 'repo':config['slurm_repo']}
+    request['slurm'].pop('gpu_count',None)
+    request['python'] = config['slurm_python']
+    # Only original immutable requirements; never slurm_status/job_id/old writer.
+    return request
 
 
 def retry_name(original, attempt):
@@ -213,7 +231,7 @@ class RunRecovery:
             return None
         try:
             args = json.loads(prior['fingerprint'])['arguments']
-            request = {key:value for key,value in self.service.nodes.intent(run).items() if key in RETRY_FIELDS}
+            request = {key:value for key,value in retry_intent(self.service, run).items() if key in RETRY_FIELDS}
             original_name = request.get('name') or run['name']
             request.update(name=original_name[:75] + ' · recovery ' + str(record['attempts']+1),
                            command=args['command'], revision=args['revision'], request_id=request_id)
@@ -280,7 +298,7 @@ class RunRecovery:
         if not isinstance(reason, str) or not reason.strip() or len(reason)>4000: raise ComputeError('Retry requires the diagnosed failure and repair in reason')
         # New attempt = new source review, W&B identity and scheduler run. Resources
         # and original experimental scope cannot be widened through this endpoint.
-        request = self.service.nodes.intent(run)
+        request = retry_intent(self.service, run)
         request = {key:value for key,value in request.items() if key in RETRY_FIELDS}
         if not fields.get('command'): raise ComputeError('Retry requires explicit argv with a fresh output destination or a verified resume command')
         request.update(command=fields['command'], revision=fields.get('revision', run['revision']), pr_url=fields.get('pr_url') or run.get('pr_url'))
