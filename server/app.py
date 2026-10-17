@@ -1289,6 +1289,7 @@ class Service(SurfboardService, EditorService, WritingService):
             except ValueError as exc:
                 raise APIError(str(exc)) from exc
             config.update(resolved)
+            config["supersurfer_run_request"] = {key:value for key,value in params.items() if not key.startswith("_")}
             config.setdefault("supersurfer_request_id", "draft-" + uuid.uuid4().hex)
             payload.update(host=host["id"], repo=text_field(params, "repo", 4096), revision=text_field(params, "revision", 80),
                            storage={"directory": host["root"], "min_free_gib": storage})

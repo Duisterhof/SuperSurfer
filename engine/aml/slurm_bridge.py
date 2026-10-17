@@ -149,6 +149,7 @@ class SlurmBridge:
                     "--error=" + str(directory / "stderr.log"), str(script_path)]
             if spec["config"].get("backend") == "stanford_slurm":
                 argv.insert(-1, "--mem=" + str(r["memory_gib"]) + "G")
+                argv.insert(-1, "--no-requeue")
                 probe = self.execute([argv[0], "--test-only", *argv[2:]])
                 if re.search(r"Preempts:\s*\S", probe):
                     return {"state": "blocked", "error": "Stanford estimate reports preemption; no job submitted", "estimate": probe}

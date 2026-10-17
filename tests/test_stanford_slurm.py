@@ -62,3 +62,15 @@ class StanfordTest(unittest.TestCase):
         with self.assertRaises(ValueError):validate(d)
         d=stanford();d['env']['CUDA_VISIBLE_DEVICES']='0'
         with self.assertRaises(ValueError):script(d,'/job')
+
+class RetryIntentTest(unittest.TestCase):
+    def test_saved_slurm_contract_preserved_and_legacy_fails_closed(self):
+        from server.run_recovery import retry_intent
+        from server.compute import ComputeError
+        resource=stanford()['config']['slurm']
+        run={'host_id':'stanford-control','gpu_count':1,'revision':'a'*40,'config':{'backend':'stanford_slurm','slurm':resource,'slurm_repo':'/prepared/code','slurm_python':'/prepared/env/bin/python','supersurfer_run_request':{'repo':'/local/exact','required_paths':['/exact/data'],'job_type':'training','training_metrics':{'mfu_metric':'train/mfu'},'command':['/prepared/env/bin/python','--smoke-updates','10']},'slurm_status':{'job_id':'OLD'}}}
+        r=retry_intent(None,run)
+        self.assertEqual(r['backend'],'stanford_slurm');self.assertEqual(r['host_id'],'stanford-control');self.assertEqual(r['slurm']['memory_gib'],32)
+        self.assertFalse(r['use_project_pool']);self.assertNotIn('job_id',str(r));self.assertNotIn('gpu_count',r['slurm'])
+        run['config'].pop('supersurfer_run_request')
+        with self.assertRaises(ComputeError):retry_intent(None,run)
