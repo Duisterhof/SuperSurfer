@@ -74,6 +74,34 @@ const compiled=JSON.parse(execFileSync('python3',['-c','import json,sys;from ser
   const originalHtml=html;html=updated.html.replace('<head>','<head><script>'+fs.readFileSync(path.join(__dirname,'../ui/results-client.js'),'utf8')+'</script>');reportHash='reordered';
   await page.reload();await expectHidden('A:loss:training',true,1);await expectHidden('B:loss:training',false,1);await expectHidden('B:new-loss:training',false,1);await expectHidden('A:loss:training',false,0);await expectHidden('A:val/eef:validation',false,2);
   html=originalHtml;reportHash='restored';await page.reload();await expectHidden('A:loss:training',true);
+  // A reviewed one-to-one title rename carries the old hidden choice. New
+  // metrics, unrelated saved keys and ambiguous mappings remain independent.
+  const renamed=structuredClone(spec);renamed.plots[0].title='Teacher-conditioned action';
+  const key=(s,p,t)=>JSON.stringify([p.title,p.x_label,p.y_label,s.sources.find(x=>x.id===t.source).url,t.metric,t.split,t.x,t.where?.key??null,t.where?.equals??null]);
+  const oldKey=key(spec,spec.plots[0],spec.plots[0].traces[0]),newKey=key(renamed,renamed.plots[0],renamed.plots[0].traces[0]);
+  renamed.legend_aliases=[{from:oldKey,to:newKey}];
+  const renameCompiled=JSON.parse(execFileSync('python3',['-c','import json,sys;from server.training_results import compile_report;s=json.load(sys.stdin);a=s.pop("legend_aliases");p=compile_report(s);start=\'<script type="application/json" id="training-spec">\';i=p["html"].index(start)+len(start);j=p["html"].index("</script>",i);v=json.loads(p["html"][i:j]);v["legend_aliases"]=a;p["html"]=p["html"][:i]+json.dumps(v)+p["html"][j:];print(json.dumps(p))'],{cwd:path.resolve(__dirname,'..'),input:JSON.stringify(renamed),encoding:'utf8',maxBuffer:4_000_000}));
+  html=renameCompiled.html.replace('<head>','<head><script>'+fs.readFileSync(path.join(__dirname,'../ui/results-client.js'),'utf8')+'</script>');reportHash='renamed';
+  await page.reload();await expectHidden('A:loss:training',true);await expectHidden('B:loss:training',false);
+  await chart().locator('.legendtoggle').first().click();await expectHidden('A:loss:training',false);
+  await page.reload();await expectHidden('A:loss:training',false);
+  // Re-selecting hidden then exercising smoothing and stale refresh preserves
+  // the canonical UID and does not resurrect the obsolete title key.
+  await chart().locator('.legendtoggle').first().click();await expectHidden('A:loss:training',true);
+  await fl().locator('#smoothing').fill('0.2');await fl().locator('#smoothing').dispatchEvent('input');await expectHidden('A:loss:training',true);
+  await fl().locator('#smoothing').fill('0');await fl().locator('#smoothing').dispatchEvent('input');await expectHidden('A:loss:training',true);
+  version++;await page.locator('[data-action="refresh-results"]').click();await expectHidden('A:loss:training',true);
+  // Wrong-metric and ambiguous declarations cannot hide an unrelated curve.
+  const invalid=[{from:oldKey,to:key(renamed,renamed.plots[0],renamed.plots[0].traces[2])},
+    {from:oldKey,to:newKey},{from:oldKey,to:newKey}];
+  html=html.replace(/(<script type="application\/json" id="training-spec">)(.*?)(<\/script>)/s,(_,start,data,end)=>{
+   const parsed=JSON.parse(data);parsed.legend_aliases=invalid;return start+JSON.stringify(parsed)+end;
+  });
+  await page.evaluate(oldKey=>{window.superSurferDesktop={getResultLegend:async()=>[oldKey],setResultLegend:async()=>{}};},oldKey);
+  await page.locator('[data-tab="overview"]').click();await page.locator('[data-tab="results"]').click();
+  await expectHidden('A:loss:training',false);await expectHidden('B:loss:training',false);
+  const activeFrame=rf();await activeFrame.evaluate(()=>window.postMessage({type:'supersurfer:results:legend',instance:'forged',hidden:['invalid']},'*'));
+  await expectHidden('B:loss:training',false);await page.evaluate(()=>delete window.superSurferDesktop);
   await page.setViewportSize({width:900,height:900});await fl().locator('#columns').selectOption('3');await page.waitForTimeout(150);
   assert.ok(await fl().locator('body').evaluate(el=>el.scrollWidth<=el.clientWidth+2));assert.equal(await fl().locator('#secondary').getAttribute('open'),null);
   if(process.env.SUPERSURFER_QA_OUTPUT)await page.screenshot({path:path.join(process.env.SUPERSURFER_QA_OUTPUT,'training-results-narrow.png')});assert.deepEqual(errors,[]);console.log('PASS canonical training Results: partial sources, live overlays, held-out data, decimal axes, smoothing/raw, zoom, legend, expand, refresh, stale recovery and narrow layout');

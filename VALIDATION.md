@@ -1235,3 +1235,20 @@ optional SSH tests skipped. The isolated real-service block-navigation browser
 check passed, as did the archive/Restore fixture. These fixtures do not establish
 live VLA retirement, deployed navigation or a scientific overview publication.
 The connected runtime still requires supported integration of this PR.
+
+The preference-preserving revision includes the existing scale/legend commits
+8e54dc9 and ce77076 before adding strictly one-to-one renamed-heading aliases.
+The real browser fixture passes old-hidden → renamed page → shown → reload,
+raw/smoothed companions, stale refresh, unrelated curves and rejected
+wrong-metric/duplicate aliases and wrong-frame messages. Canonical UIDs remain
+unchanged. Full verification passes778 Python tests and51 Node tests, with5
+optional SSH tests skipped; skill check and diff check pass. An initial suite
+invocation selected unsupported Python3.10 via a shortened PATH and failed two
+environment/version checks; the supported Python environment rerun passes.
+
+The updated Linux x64 package opens an isolated setup profile under Xvfb with
+no workspace connected; renderer contextIsolation/sandbox configured and Node
+integration disabled. The test used the disclosed --no-sandbox OS-process flag,
+so it does not prove OS sandboxing or Mac signing. This is a local fix build,
+not a release, installed workspace upgrade, live run Archive/Restore or original
+VLA preference migration receipt.

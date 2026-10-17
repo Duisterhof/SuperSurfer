@@ -18,18 +18,32 @@
  document.addEventListener('DOMContentLoaded',restoreScale,{once:true});
  // Remember visibility by plot and measured series, not Plotly's array index.
  // Indices change when a report adds a curve, reorders plots or enables smoothing.
- let hidden=new Set(),legendChanged=false;
+ let hidden=new Set(),legendChanged=false,aliases=[];
+ const preferenceKey=(spec,plot,trace)=>JSON.stringify([plot.title,plot.x_label,plot.y_label,spec.sources.find(s=>s.id===trace.source)?.url,trace.metric,trace.split,trace.x,trace.where?.key??null,trace.where?.equals??null]);
+ function migrateHidden(){
+  for(const alias of aliases)if(hidden.has(alias.from)){
+   hidden.delete(alias.from);hidden.add(alias.to);
+  }
+ }
  const charts=new Map();
  function connectLegends(){
   const node=document.getElementById('training-spec');if(!node)return;
   let spec;try{spec=JSON.parse(node.textContent);}catch{return;}
+  const current=new Set(spec.plots.flatMap(plot=>plot.traces.map(trace=>preferenceKey(spec,plot,trace))));
+  const proposed=Array.isArray(spec.legend_aliases)?spec.legend_aliases:[];
+  aliases=proposed.filter(alias=>{
+   if(!alias||typeof alias.from!=='string'||typeof alias.to!=='string'||!current.has(alias.to)||current.has(alias.from))return false;
+   if(proposed.filter(a=>a?.from===alias.from).length!==1||proposed.filter(a=>a?.to===alias.to).length!==1)return false;
+   try{const from=JSON.parse(alias.from),to=JSON.parse(alias.to);return from.length===9&&to.length===9&&JSON.stringify(from.slice(3))===JSON.stringify(to.slice(3));}catch{return false;}
+  });
+  migrateHidden();
   function attach(){
    for(const [index,plot] of spec.plots.entries()){
     const chart=document.getElementById('training-chart-'+index);
     if(!chart?.on||charts.has(chart))continue;
     const keys=new Map(plot.traces.map(trace=>[
      trace.source+':'+trace.metric+':'+trace.split,
-     JSON.stringify([plot.title,plot.x_label,plot.y_label,spec.sources.find(s=>s.id===trace.source)?.url,trace.metric,trace.split,trace.x,trace.where?.key??null,trace.where?.equals??null])
+     preferenceKey(spec,plot,trace)
     ]));
     const key=trace=>keys.get(trace.uid)||keys.get(trace.uid?.replace(/:raw$/,''));
     let restoring=false,timer;
@@ -76,7 +90,7 @@
   }
   if(event.data.type==='supersurfer:results:legend'){
    if(!legendChanged&&Array.isArray(event.data.hidden)){
-    hidden=new Set(event.data.hidden);for(const schedule of charts.values())schedule();
+    hidden=new Set(event.data.hidden);migrateHidden();for(const schedule of charts.values())schedule();
    }
    return;
   }

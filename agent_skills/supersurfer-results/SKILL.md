@@ -268,6 +268,14 @@ exposure, checkpoint distinctions, media and parent-managed preferences. Do not
 fork another dashboard per study. A composed custom HTML payload still requires
 the project's exact-payload quality gate and stored readback.
 
+Plot/axis headings participate in saved legend keys. Stable trace UIDs and a
+new-revision reopen test alone do not prove migration of old choices. A shared
+renderer may generate reviewed one-to-one `legend_aliases` from hashed original
+and current specs with unchanged writer/metric/split/x/filter/transforms and
+cohort/aggregation proof. Do not transfer ambiguous merges or hide new metrics.
+Test old-hidden → renamed revision → shown again → reload, smoothing/raw and
+stale refresh; declare supporting-runtime and unresolved historical limitations.
+
 The user-facing Runs browser supports reversible presentation archival through
 `run.presentation` in builds containing that API. It records reason, evidence,
 lineage and a version; it does not change execution state or stop a run. Active,

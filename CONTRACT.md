@@ -1052,6 +1052,19 @@ unchanged source can satisfy publication requirements.
 
 Publication checks can opt into source_manifest + source_paths. Their receipt covers the task-specific schema-1 manifest, exact publisher/payload, declared evidence, screenshots and checker/producer code, not unrelated repository contents or Git metadata. Publication verifies the actual submitted payload against this receipt. Missing, changed, escaping or symlinked inputs fail closed. Ordinary checks preserve full-source semantics; a publication-only check cannot authorize a GPU launch.
 
+## Results preferences across clarified headings
+
+Scale and hidden-curve choices remain scoped to the report. A reviewed renderer
+may declare one-to-one `training-spec.legend_aliases` for changed plot/axis
+headings of the same writer/metric/split/x/filter. The bridge rejects missing
+targets, changed measured series and duplicate/ambiguous mappings. Migration
+retains unrelated keys and canonicalizes a renamed key in memory before saving
+the next user choice, so showing the curve again persists across reload. Source
+review must additionally attest unchanged numeric transforms/cohort/aggregation;
+the VLA composer generates these aliases from hashed original/current specs.
+Opaque frames have no storage access and cannot set another report's preferences.
+Plotly raw smoothing cleanup escapes canonical UIDs instead of changing them.
+
 ## Reviewed reusable comparisons and navigation
 
 A Results check requirement also gates `publish_view_block`. A schema-1 publication manifest names that exact publisher and its owning project, task, payload, evidence, renders and producer/checker paths. Review receipts bind submitted block ID/version and the distinction between omitted assets (preserve copied media) and an explicit replacement map; every supplied asset byte participates. Wrong publishers/projects, changed source/payload/assets, stale block versions and foreign block ownership fail closed. A publication-only check cannot authorize execution.
