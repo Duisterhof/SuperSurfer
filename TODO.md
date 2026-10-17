@@ -13,6 +13,14 @@
 - [x] Use compact, disposable monitoring sessions while preserving research sessions and policy.
 - [x] Show when an interval rule is waiting for changed observations.
 
+# Scheduler connection overhead
+
+- [x] Reuse private SSH connections for AML checks and staging, with idle expiry,
+  bounded keepalives and orderly shutdown; preserve polling and failure semantics.
+- [ ] Batch status reads by worker and consider worker-originated status events.
+- [ ] Apply common admission and transfer limits to UI inspection and staging.
+- [ ] Migrate legacy remote-netcat jump configurations separately; shared SSH
+  connections do not remove existing orphaned forwarding processes.
 
 # Native VS Code preview
 

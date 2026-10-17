@@ -15,6 +15,22 @@ hide another curve. Raw traces follow their main curve. Single-click toggles,
 double-click isolation and show-all persist through live updates and reopen.
 Choices do not change published measurements or another report's view. Renaming
 a plot or changing its measured series starts a new visibility identity.
+# Reuse scheduler SSH connections — October 16, 2026
+
+Remote AML requests and staging commands reuse an OpenSSH connection per target
+alias and resolved host/port/user within the manager. Control sockets live in a
+private local temporary directory; unrelated user or manager connections are
+never reused or closed. Inherited port forwards are disabled. Connections expire
+after ten idle minutes, use bounded server-alive checks, and are explicitly closed
+on orderly manager shutdown. Existing authentication and host-key checks apply.
+
+Run polling cadence, per-request deadlines, failure backoff, resource reservations
+and cancellation intent remain unchanged. Checks still execute commands on the
+worker; connection reuse removes repeated authentication and gateway connection
+setup, not the checks themselves. No failed operation is automatically replayed.
+SSH routing remains user-configured: a legacy jump command using remote `nc`
+must be migrated separately to native `ProxyJump`/`ssh -W` forwarding. Runtime
+inspection outside AML and arbitrary agent shell commands do not use this pool.
 
 # Native VS Code workflow preview — October 12, 2026
 

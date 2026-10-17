@@ -50,6 +50,14 @@ Use `inspect_project_compute` for pool version/defaults, per-node paths, registe
 hosts, saved observations, `gpu_limit`, `run_limit`, active counts and `queue_paused`.
 This reads existing state rather than probing or reserving GPUs.
 
+The manager already monitors owned runs and reuses its own SSH connections for
+remote checks and staging. Prefer these observations over additional shell polling
+loops; reuse does not authorize extra probes, transfers or setup. Connection
+timeouts retain the scheduler's backoff and ownership. User SSH routing still
+applies: legacy remote-netcat jump commands need a separate, authorized migration
+to native SSH forwarding. Do not claim connection reuse repairs a storage outage
+or removes already abandoned processes.
+
 - A full project budget or paused queue is separate from physical capacity.
   Adding a free node does not override it. Preserve active jobs and finish useful
   independent preparation; do not manufacture a diagnostic launch.
