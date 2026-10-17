@@ -1166,3 +1166,9 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+## Reversible run presentation — 2026-10-17
+
+Four isolated Python regression tests cover archive/Restore persistence, unchanged scheduler records, version/read-only/lineage guards and active/uncertain/recovering/unfinished rejection. Real isolated HTTP/UI browser fixture verifies archive → reload → retained evidence → Restore and active-run visibility at 1440 and 650px with no execution mutations or JS errors. This is not a live VLA archive receipt. Full npm test: 762 Python tests passed; 48 Node passed, 5 skipped. Skill capability checker and diff whitespace checks passed. Local Linux packaging/launch evidence is recorded with the PR.
+
+Build: `npm run package:linux` succeeded on Linux x64, producing `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` (135 MiB). The packaged executable opened its isolated-profile setup screen under Xvfb without connecting to a workspace. Renderer sandbox/contextIsolation were configured and nodeIntegration was disabled. The headless environment required the OS-process `--no-sandbox` launch flag; this does not establish OS sandboxing, macOS signing, notarization or Gatekeeper behavior. Screenshots: `tests/reports/run-retirement/`. No runtime was installed, released or restarted.

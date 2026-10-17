@@ -1023,3 +1023,7 @@ provider-native rules; permitted workspace edits may run without a callback. CLI
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.
+
+## Reversible run presentation
+
+`run.presentation` accepts `run_id`, integer presentation `version` and `archived`. Archival additionally requires a concrete `reason`, `evidence`, and `unfinished_work: false`; an optional `parent_run_id` must belong to the same project. The service rejects active/uncertain statuses and enabled recovery grants. It writes only an owned presentation record with an append-only receipt history, never AML execution/configuration, checkpoints, curves or recovery state. State readback exposes the record as `run.presentation`; a later active/uncertain/recovering run is visible even if an older receipt archived it. Runs defaults to Active; Archived retains historical runs and Restore. Version conflicts require readback, not replay. Whole-task/report archival remains separate. This API/UI must be deployed normally before real archival is claimed.

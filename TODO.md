@@ -470,3 +470,8 @@ Ongoing list of requested improvements. Unchecked items are planned, not impleme
 are complete; keep native macOS launch/Gatekeeper as the remaining packaging check.
 Cursor ACP does not expose usage receipts, and listed model IDs may be plan-restricted.
 Native multi-select questions currently direct the agent to scoped ask_user.
+
+## Run presentation retirement
+
+- Implemented reversible archive/Restore with evidence, lineage, version checks and conservative active/recovery visibility.
+- Actual VLA retirement/migration acceptance belongs to the existing presentation-cleanup owner; this app patch does not deploy itself or archive real runs.

@@ -246,3 +246,21 @@ redundant other owned reports, keeping their source and unique evidence. Follow
 [Results checkpoint guidance](references/results-checkpoint.md) for scope, exact
 fields and the required task's reopen behavior. Nonresearch work and held-only
 drafts do not acquire this launch-related reporting checkpoint.
+
+When a user requests a shared project Results template, use its versioned
+contract and single reusable composer around the standard training renderer.
+Preserve existing report/source/chart identities, measured cohorts, sample
+exposure, checkpoint distinctions, media and parent-managed preferences. Do not
+fork another dashboard per study. A composed custom HTML payload still requires
+the project's exact-payload quality gate and stored readback.
+
+The user-facing Runs browser supports reversible presentation archival through
+`run.presentation` in builds containing that API. It records reason, evidence,
+lineage and a version; it does not change execution state or stop a run. Active,
+uncertain or recovery-enabled runs cannot be archived. A terminal run with
+unfinished evaluation/analysis must remain visible. Archived runs retain their
+evidence and are available under Archived with Restore. This is distinct from
+report removal and whole-task archival. It is not an agent tool or authority to
+call a user-only action through another route. Do not claim it is installed
+until the connected runtime advertises/implements it; a source patch or JSON
+inventory alone is not live archival.
