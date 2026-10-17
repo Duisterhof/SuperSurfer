@@ -1192,3 +1192,19 @@ Regression coverage includes unrelated 2 GiB artifacts, changed report/evidence/
 Validation: 776 Python tests and 48 Node tests passed (five optional SSH tests skipped); an additional full publication service regression passed with the 23-test Surfboard service suite. Initial use of unsupported system Python 3.10 failed two runtime prerequisites; rerun under Python 3.11 passed. Skills checker and diff whitespace checks passed.
 
 Linux x64 package and isolated native Electron startup passed. Deployed service 9ca51db685f74807, health 0.1.43 confirmed; migrated 17 VLA applied/default boards through versioned APIs. One board with a pending draft was left untouched to preserve the proposal. Scheduler and research processes were not restarted.
+
+## VLA presentation integration preparation — 2026-10-17
+
+PR 53 now also supports source-bound `publish_view_block` receipts and read-only
+same-project navigation from an owned overview block to an existing Results ID.
+The strict gate binds publisher, project, current block ID/version, exact payload
+and supplied asset bytes; omitted assets preserve their existing identities.
+Negative tests reject substituted tools/projects/drafts and stale versions.
+Known sandbox frames alone can request navigation; arbitrary frames, origins,
+foreign projects and execution messages are rejected.
+
+The extended full suite passed: 778 Python tests and 49 Node tests, with five
+optional SSH tests skipped. The isolated real-service block-navigation browser
+check passed, as did the archive/Restore fixture. These fixtures do not establish
+live VLA retirement, deployed navigation or a scientific overview publication.
+The connected runtime still requires supported integration of this PR.

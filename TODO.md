@@ -480,3 +480,5 @@ Native multi-select questions currently direct the agent to scoped ask_user.
   receipts before slow repository scans.
 
 - [x] Scope publication receipts to report/evidence/code and bind the actual published payload, avoiding unrelated experiment scans.
+
+Reviewed project comparison support now includes exact reusable-block publication gates and known-frame same-project Results navigation. Live VLA overview/archive acceptance remains with the original cleanup task until normal runtime integration, exact publication and Restore receipts.

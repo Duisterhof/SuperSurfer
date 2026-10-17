@@ -17,6 +17,7 @@ import {createLatexPanel} from './latex-panel.js';
 import {projectCapacity,capacityWaitReason} from './run-capacity.js';
 import {createRepositoryExplorer, createAgentChanges} from './code-tiles.js';
 import {connectLiveResults} from './results-live.js';
+import {connectBlockNavigation} from './block-navigation.js';
 import {renderChatTimeline} from './chat-checks.js';
 import {createTileLayout} from './tile-layout.js';
 import {createPdfPreview} from './pdf-preview.js';
@@ -882,7 +883,7 @@ function configuredViewBody(kind,{right=false}={}){
  return '<p class="muted">Choose a view from your layout.</p>';
 }
 function syncConfiguredEditors(){
- for(const element of $$('[data-html-block]')){if(element.dataset.loadingBlock===element.dataset.htmlBlock)continue;element.dataset.loadingBlock=element.dataset.htmlBlock;api('view-block?id='+encodeURIComponent(element.dataset.htmlBlock)).then(block=>{if(!element.isConnected)return;const iframe=document.createElement('iframe');iframe.title=block.title;iframe.src=block.url;iframe.sandbox='allow-scripts allow-downloads';iframe.referrerPolicy='no-referrer';iframe.className='html-block-frame';element.replaceChildren(iframe);}).catch(error=>{element.textContent=error.message;delete element.dataset.loadingBlock;});}
+ for(const element of $$('[data-html-block]')){if(element.dataset.loadingBlock===element.dataset.htmlBlock)continue;element.dataset.loadingBlock=element.dataset.htmlBlock;api('view-block?id='+encodeURIComponent(element.dataset.htmlBlock)).then(block=>{if(!element.isConnected)return;const iframe=document.createElement('iframe');iframe.title=block.title;iframe.src=block.url;iframe.sandbox='allow-scripts allow-downloads';iframe.referrerPolicy='no-referrer';iframe.className='html-block-frame';iframe.dataset.blockProject=block.project_id;element.replaceChildren(iframe);}).catch(error=>{element.textContent=error.message;delete element.dataset.loadingBlock;});}
 
  const todosRoot=$('#todos-root');if(todosRoot)todosView.mount(todosRoot,{projectId:state.projectId,experimentId:state.experimentId});else todosView.unmount();
  const portsRoot=$('#ports-block-root');if(portsRoot)portsPanel.mount(portsRoot,{projectId:state.projectId});else portsPanel.unmount();
@@ -981,6 +982,7 @@ function showEditBrief(){
  $('#brief-form').addEventListener('submit',async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');button.disabled=true;try{await action('experiment.brief.save',{experiment_id:x.id,version:brief.version,...Object.fromEntries(new FormData(event.currentTarget))});closeModal();await fetchExperiment(true);}catch(error){$('#brief-error').hidden=false;$('#brief-error').textContent=error.message;button.disabled=false;}});
 }
 const markdownPages=new Map(),resultPages=new Map(),resultSelections=new Map(),resultPageRequests=new Map();
+connectBlockNavigation({frames:()=>$$('.html-block-frame[data-block-project]'),projectId:()=>state.projectId,experiment:id=>state.data?.experiments.find(item=>item.id===id),open:async(item,resultId)=>{await navigate({view:'workspace',projectId:item.project_id,experimentId:item.id,tab:'results'});await loadResultPages(true);if(resultId){if(resultPages.get(item.id)?.pages.some(page=>page.id===resultId))resultSelections.set(item.id,resultId);else toast('Requested report is archived or unavailable; showing current Results.');}renderMain();await liveResults.refresh();}});
 const liveResults=connectLiveResults({api,frame:()=>$('#result-preview'),selection:()=>state.view==='workspace'&&pageHasTile('results')?{...chosenResultPage(),experimentId:state.experimentId}:null});
 async function loadMarkdownPage(experimentId,pageId){
  const key=experimentId+':'+pageId;if(markdownPages.get(key)?.loading)return;

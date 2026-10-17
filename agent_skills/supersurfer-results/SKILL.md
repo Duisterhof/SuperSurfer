@@ -278,3 +278,7 @@ report removal and whole-task archival. It is not an agent tool or authority to
 call a user-only action through another route. Do not claim it is installed
 until the connected runtime advertises/implements it; a source patch or JSON
 inventory alone is not live archival.
+
+Scientific reusable comparison blocks use their exact `publish_view_block` publisher in a scoped manifest when the connected runtime supports it. Keep the actual block ID/current version and copied media; omitting assets preserves them, while an explicit map replaces them and binds its bytes. Never mislabel a block as a report to obtain a receipt. Wrong publisher/project or stale version fails. The owning Results check requirement applies to this publication too; it grants no execution authority.
+
+Owned blocks can use the documented same-project `supersurfer:block:open-results` message (request ID, actual experiment ID and optional current report ID), after a capability response. Only a known block frame/current project is accepted; no app credentials enter the sandbox. Do not invent app query/hash routes or persist temporary preview URLs on older runtimes.

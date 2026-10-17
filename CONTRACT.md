@@ -1033,3 +1033,9 @@ receipt. Retries reconcile before any source scan. Only a successful check with
 unchanged source can satisfy publication requirements.
 
 Publication checks can opt into source_manifest + source_paths. Their receipt covers the task-specific schema-1 manifest, exact publisher/payload, declared evidence, screenshots and checker/producer code, not unrelated repository contents or Git metadata. Publication verifies the actual submitted payload against this receipt. Missing, changed, escaping or symlinked inputs fail closed. Ordinary checks preserve full-source semantics; a publication-only check cannot authorize a GPU launch.
+
+## Reviewed reusable comparisons and navigation
+
+A Results check requirement also gates `publish_view_block`. A schema-1 publication manifest names that exact publisher and its owning project, task, payload, evidence, renders and producer/checker paths. Review receipts bind submitted block ID/version and the distinction between omitted assets (preserve copied media) and an explicit replacement map; every supplied asset byte participates. Wrong publishers/projects, changed source/payload/assets, stale block versions and foreign block ownership fail closed. A publication-only check cannot authorize execution.
+
+A known opaque reusable-block frame may send `{type: "supersurfer:block:open-results", request_id, experiment_id, result_id?}`. Only the block/current project and a real experiment in that same project are accepted. `supersurfer:block:capabilities` returns `supersurfer:block:navigation` with the matching request ID. The response contains no credentials or execution actions. Unknown frames/origins and cross-project targets cannot navigate. Existing navigation preserves draft buffers and uses the current report listing; archived/unavailable IDs fall back visibly to current Results. Older runtimes need an honest unavailable fallback rather than invented URLs or expiring preview links.
