@@ -23,12 +23,22 @@ from datetime import datetime, timezone
 RESOURCE_KEYS = {"account", "partition", "gpu_type", "gpu_count", "walltime_seconds", "max_updates"}
 
 
-def validate_resources(resource, gpu_count):
-    if not isinstance(resource, dict) or set(resource) != RESOURCE_KEYS:
+def validate_resources(resource, gpu_count, backend="slurm"):
+    stanford = backend == "stanford_slurm"
+    if backend not in {"slurm", "stanford_slurm"}:
+        raise ValueError("Unknown Slurm backend")
+    expected = RESOURCE_KEYS | ({"cpus_per_task", "memory_gib"} if stanford else set())
+    if not isinstance(resource, dict) or set(resource) != expected:
         raise ValueError("Explicit Slurm account/partition/GPU/time/update bounds required")
     if not isinstance(resource["account"], str) or not re.fullmatch(r"[A-Za-z0-9_-]+", resource["account"]):
         raise ValueError("Invalid Slurm account")
-    if resource["partition"] != "GPU-shared" or resource["gpu_type"] not in {"v100-16", "v100-32"}:
+    if stanford:
+        if resource["account"] != "viscam" or resource["partition"] != "viscam" or resource["gpu_type"] not in {"3090","a5000","a6000","a40","l40s"}:
+            raise ValueError("Invalid bounded Stanford profile")
+        for key, maximum in (("cpus_per_task",8),("memory_gib",64)):
+            if type(resource[key]) is not int or not 1 <= resource[key] <= maximum:
+                raise ValueError("Invalid Stanford resource " + key)
+    elif resource["partition"] != "GPU-shared" or resource["gpu_type"] not in {"v100-16", "v100-32"}:
         raise ValueError("PSC smoke requires GPU-shared and a V100")
     if type(resource["gpu_count"]) is not int or resource["gpu_count"] != 1 or type(gpu_count) is not int or gpu_count != 1:
         raise ValueError("PSC smoke requires exactly one GPU")
@@ -45,7 +55,7 @@ class UncertainSubmission(RuntimeError):
 
 def validate(spec):
     validate_review(spec)
-    resource = validate_resources(spec.get("config", {}).get("slurm"), spec.get("gpu_count"))
+    resource = validate_resources(spec.get("config", {}).get("slurm"), spec.get("gpu_count"), spec.get("config", {}).get("backend", "slurm"))
     if not re.fullmatch(r"run_[a-zA-Z0-9]+", str(spec.get("id", ""))):
         raise ValueError("Registered run identity required")
     config = spec["config"]
@@ -129,16 +139,21 @@ class SlurmBridge:
             script_path = directory / "job.sh"
             script_path.write_text(content)
             script_path.chmod(0o600)
-            atomic(intent_path, {"run_id": spec["id"], "fingerprint": fingerprint,
-                                 "request_id": spec["config"]["supersurfer_request_id"], "account": r["account"], "partition": r["partition"], "created_at": time.time()})
             seconds = r["walltime_seconds"]
             argv = ["sbatch", "--parsable", "--account=" + r["account"],
-                    "--partition=" + r["partition"], "--nodes=1", "--ntasks=1", "--cpus-per-task=2",
+                    "--partition=" + r["partition"], "--nodes=1", "--ntasks=1", "--cpus-per-task=" + str(r.get("cpus_per_task",2)),
                     "--gpus=" + r["gpu_type"] + ":1",
                     f"--time={seconds//3600:02}:{seconds//60%60:02}:{seconds%60:02}",
                     "--signal=B:TERM@60", "--job-name=" + spec["id"], "--comment=" + spec["id"],
                     "--output=" + str(directory / "stdout.log"),
                     "--error=" + str(directory / "stderr.log"), str(script_path)]
+            if spec["config"].get("backend") == "stanford_slurm":
+                argv.insert(-1, "--mem=" + str(r["memory_gib"]) + "G")
+                probe = self.execute([argv[0], "--test-only", *argv[2:]])
+                if re.search(r"Preempts:\s*\S", probe):
+                    return {"state": "blocked", "error": "Stanford estimate reports preemption; no job submitted", "estimate": probe}
+            atomic(intent_path, {"run_id": spec["id"], "fingerprint": fingerprint,
+                                 "request_id": spec["config"]["supersurfer_request_id"], "account": r["account"], "partition": r["partition"], "created_at": time.time()})
             try:
                 output = self.execute(argv).strip()
                 if not re.fullmatch(r"[1-9][0-9]*(;[A-Za-z0-9_-]+)?", output):
@@ -146,7 +161,7 @@ class SlurmBridge:
                 receipt = {"run_id": spec["id"], "job_id": output.split(";")[0],
                            "fingerprint": fingerprint, "revision": spec["revision"],
                            "account": r["account"], "partition": r["partition"],
-                           "gpu_type": r["gpu_type"], "gpu_count": 1, "cpus_per_task": 2, "state": "starting", "slurm_state": "PENDING"}
+                           "gpu_type": r["gpu_type"], "gpu_count": 1, "cpus_per_task": r.get("cpus_per_task",2), "state": "starting", "slurm_state": "PENDING"}
                 atomic(receipt_path, receipt)
                 return receipt
             except subprocess.CalledProcessError as exc:
@@ -270,7 +285,7 @@ def execute(argv):
     # All operations are metadata-only on the login node. Training runs only
     # inside the batch allocation. Keep deadlines below the SSH request limit.
     result = subprocess.run(argv, capture_output=True, text=True, timeout=15, check=True)
-    return result.stdout
+    return result.stdout + (result.stderr if "--test-only" in argv else "")
 
 
 def handle(request):
@@ -291,7 +306,8 @@ def handle(request):
             return bridge.inspect(directory)
         return receipt
     spec["root"] = str(directory.parent)
-    check = inspect_contract(spec, timeout=20)
+    stanford = spec.get("config", {}).get("backend") == "stanford_slurm"
+    check = {"blockers": []} if stanford else inspect_contract(spec, timeout=20)
     if check["blockers"]:
         return {"state": "blocked", "error": "; ".join(b["reason"] for b in check["blockers"])}
     if execute(["git", "-C", spec["repo"], "rev-parse", "HEAD"]).strip() != spec["revision"] or execute(["git", "-C", spec["repo"], "status", "--porcelain"]).strip():

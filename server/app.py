@@ -1082,7 +1082,7 @@ class Service(SurfboardService, EditorService, WritingService):
         if set(arguments) - fields:
             raise APIError("queue_run accepts either run_id and pr_url, or new run fields with pr_url; scope and readiness cannot be supplied")
         request_id = arguments.get("request_id")
-        if arguments.get("backend") == "slurm" and not request_id:
+        if arguments.get("backend") in {"slurm", "stanford_slurm"} and not request_id:
             raise APIError("Slurm submissions require a stable request_id")
         if request_id is not None and (not isinstance(request_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{16,100}", request_id)):
             raise APIError("request_id must be 16–100 letters, digits, underscores or hyphens")
@@ -1252,8 +1252,8 @@ class Service(SurfboardService, EditorService, WritingService):
         if experiment["project_id"] != project["id"]:
             raise APIError("Experiment belongs to another project")
         use_pool = params.get("use_project_pool", False)
-        is_slurm = params.get("backend") == "slurm"
-        if params.get("backend", "direct") not in {"direct", "slurm"} or ("slurm" in params and not is_slurm):
+        is_slurm = params.get("backend") in {"slurm", "stanford_slurm"}
+        if params.get("backend", "direct") not in {"direct", "slurm", "stanford_slurm"} or ("slurm" in params and not is_slurm):
             raise APIError("Select backend=slurm for a Slurm contract")
         if is_slurm and use_pool:
             raise APIError("Slurm chooses its compute node; use a control host_id, not use_project_pool")
@@ -1281,7 +1281,7 @@ class Service(SurfboardService, EditorService, WritingService):
         review_url = text_field(params, "pr_url", 2048, required=False)
         payload = {"project": project["id"], "name_": name, "gpu_count": count, "command": command, "config": config}
         if is_slurm:
-            if "run.slurm.v1" not in self.aml.call("ping").get("capabilities", []):
+            if ("run.stanford_slurm.v1" if params.get("backend") == "stanford_slurm" else "run.slurm.v1") not in self.aml.call("ping").get("capabilities", []):
                 raise APIError("The workspace manager needs the Slurm backend update before submitting", 503)
             host = self.lookup("hosts", text_field(params, "host_id", 150))
             try:

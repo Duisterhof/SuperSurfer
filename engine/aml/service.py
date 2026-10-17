@@ -135,7 +135,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -528,7 +528,7 @@ class Manager:
         if host["id"] in self.host_capacity_changed:
             self.host_capacity_probe_attempts[host["id"]] = self.host_probe_attempts[host["id"]]
         try:
-            slurm_control = self.store.one("SELECT id FROM runs WHERE host_id=? AND json_extract(config, '$.backend')='slurm' LIMIT 1", (host["id"],))
+            slurm_control = self.store.one("SELECT id FROM runs WHERE host_id=? AND json_extract(config, '$.backend') IN ('slurm','stanford_slurm') LIMIT 1", (host["id"],))
             request = {"op": "probe", "check_gpu": not bool(slurm_control),
                        "gpu_required": bool(json.loads(host["gpus"]))}
             probe = await self.transport.request(host, request, timeout=HOST_POLL_TIMEOUT)
@@ -673,11 +673,11 @@ class Manager:
         name(name_)
         if not isinstance(command, list) or not command or any(not isinstance(x, str) for x in command):
             raise ValueError("Command must be a nonempty argv array")
-        slurm = isinstance(config, dict) and config.get("backend") == "slurm"
-        if isinstance(config, dict) and config.get("backend", "direct") not in {"direct", "slurm"}:
+        slurm = isinstance(config, dict) and config.get("backend") in {"slurm", "stanford_slurm"}
+        if isinstance(config, dict) and config.get("backend", "direct") not in {"direct", "slurm", "stanford_slurm"}:
             raise ValueError("Unknown execution backend")
         if slurm:
-            slurm_bridge.validate_resources(config.get("slurm"), gpu_count)
+            slurm_bridge.validate_resources(config.get("slurm"), gpu_count, config.get("backend", "slurm"))
             if json.loads(host["gpus"]):
                 raise ValueError("Slurm requires a separate control-host registration with no physical GPUs")
             for key in ("slurm_repo", "slurm_python"):
@@ -766,9 +766,9 @@ class Manager:
         row["ready"] = bool(row["ready"])
         self.add_placement_details(row)
         row["gpus"] = json.loads(row["allocated_gpus"])
-        if json.loads(row["config"]).get("backend") == "slurm":
+        if json.loads(row["config"]).get("backend") in {"slurm", "stanford_slurm"}:
             row["slurm"] = json.loads(row["config"]).get("slurm_status", {})
-            row["backend"] = "slurm"
+            row["backend"] = json.loads(row["config"]).get("backend")
         if row["status"] == "queued":
             reasons, _ = self.run_wait(row)
             row["wait_reasons"] = [code for code, _ in reasons]
@@ -1125,7 +1125,7 @@ class Manager:
             self.run_inspections.add(run["id"])
             self.run_next_poll[run["id"]] = now + self.run_poll_interval(run, now, interval)
             try:
-                slurm = json.loads(run["config"]).get("backend") == "slurm"
+                slurm = json.loads(run["config"]).get("backend") in {"slurm", "stanford_slurm"}
                 operation = "cancel" if run["status"] == "cancelling" else "status"
                 state = await self.transport.request(host, {
                     "op": ("slurm_" if slurm else "") + operation, "directory": run["job_dir"]}, timeout=120 if slurm else 45)
@@ -1278,7 +1278,7 @@ class Manager:
         self.store.execute("UPDATE runs SET config=? WHERE id=?", (json.dumps(current), run["id"]))
 
     def select_host(self, run):
-        if json.loads(run["config"]).get("backend") == "slurm":
+        if json.loads(run["config"]).get("backend") in {"slurm", "stanford_slurm"}:
             reasons, available = self.slurm_wait(run)
             return run["host_id"], reasons, available
         choices = []
@@ -1313,7 +1313,7 @@ class Manager:
         return reasons, available
 
     def add_placement_details(self, run):
-        if json.loads(run["config"]).get("backend") == "slurm":
+        if json.loads(run["config"]).get("backend") in {"slurm", "stanford_slurm"}:
             run.update(allowed_host_names=[self.store.get("hosts", run["host_id"])["name"]], candidate_hosts=[], placement_state="slurm")
             return
         hosts = [self.store.get("hosts", key) for key in placement.candidates(run)]
@@ -1461,7 +1461,7 @@ class Manager:
             if run is None:
                 return
             attempted.add(run["id"])
-            is_slurm = json.loads(run["config"]).get("backend") == "slurm"
+            is_slurm = json.loads(run["config"]).get("backend") in {"slurm", "stanford_slurm"}
             if not is_slurm:
                 self.request_placement_checks(run)
             if run["ready"] and not is_slurm:
@@ -1478,6 +1478,11 @@ class Manager:
                 current = self.store.get("runs", run["id"])
                 if current["status"] != "queued":
                     continue
+                if json.loads(current["config"]).get("backend") == "stanford_slurm":
+                    # Initial onboarding budget is aggregate across projects/hosts.
+                    active_stanford = self.store.one("SELECT id FROM runs WHERE id!=? AND status IN ('starting','running','cancelling','unreachable') AND json_extract(config, '$.backend')='stanford_slurm' LIMIT 1", (current["id"],))
+                    if active_stanford:
+                        continue
                 selected_host, reasons, available = self.select_host(current)
                 if reasons:
                     continue
