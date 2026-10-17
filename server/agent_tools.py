@@ -12,6 +12,7 @@ if not __package__:
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from server.training_results import SCHEMA as TRAINING_RESULTS_SCHEMA
+from server.slurm import SCHEMA as SLURM_SCHEMA
 
 MAX_REQUEST = 2 * 1024 * 1024
 REQUIREMENTS = {
@@ -34,6 +35,8 @@ TOOL = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "name": {"type": "string", "minLength": 1, "maxLength": 100},
+            "backend": {"type": "string", "enum": ["direct", "slurm"], "description": "Use slurm for an allocated PSC job; its registered control host has gpus=[] and Slurm assigns the physical device. Initial support is one V100, up to 15 minutes/100 smoke updates."},
+            "slurm": SLURM_SCHEMA,
             "host_id": {"type": "string", "minLength": 1, "maxLength": 150},
             "gpu_count": {"type": "integer", "minimum": 0, "maximum": 1024},
             "command": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"type": "string"}},
@@ -57,7 +60,7 @@ TOOL = {
 }
 HANDOFF_TOOL = {
     "name": "handoff_experiment",
-    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing experiment in this project. Supply agent_scope to target a specific worker conversation, including one returned by create_experiment_agent; otherwise use the selected owned worker. These workers have prepare_run and queue_run. Preserve the user's actual preparation or explicit queue/run request in task. A handoff itself does not release a run. Busy workers and retired native sessions are rejected. At most three distinct experiment handoffs per user turn; no unsolicited ideas or recurring reviews.",
+    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing experiment in this project. Supply agent_scope to target a specific worker conversation, including one returned by create_experiment_agent; otherwise use the selected owned worker. These workers have prepare_run and queue_run. Preserve the user's actual preparation or explicit queue/run request in task. A handoff itself does not release a run. Busy workers and retired native sessions are rejected. No per-turn cap on distinct experiments; duplicate handoffs in the same turn are rejected. No unsolicited ideas or recurring reviews.",
     "inputSchema": {
         "type": "object", "additionalProperties": False,
         "properties": {
@@ -175,7 +178,7 @@ MANAGER_QUEUE_TOOL = {
 }
 MANAGER_HANDOFF_TOOL = {
     **HANDOFF_TOOL,
-    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing registered experiment. Supply experiment_id and task, optionally agent_scope returned by create_experiment_agent to target a specific worker. Default dispatch uses the selected owned worker, which has prepare_run/queue_run; retired native sessions cannot receive work. Preserve the user's actual preparation or explicit queue/run authorization. Busy workers are rejected; at most three distinct experiment handoffs per user turn. The handoff itself does not release a run. No unsolicited ideas or recurring reviews.",
+    "description": "Hand off one user-requested task to a SuperSurfer worker for an existing registered experiment. Supply experiment_id and task, optionally agent_scope returned by create_experiment_agent to target a specific worker. Default dispatch uses the selected owned worker, which has prepare_run/queue_run; retired native sessions cannot receive work. Preserve the user's actual preparation or explicit queue/run authorization. Busy workers and duplicate handoffs in the same turn are rejected; distinct experiments have no per-turn handoff cap. The handoff itself does not release a run. No unsolicited ideas or recurring reviews.",
 }
 MANAGER_CREATE_AGENT_TOOL = {
     **CREATE_AGENT_TOOL,
@@ -378,10 +381,11 @@ ACQUIRE_NODE_TOOL = {
             "data_source":{"type":"string","maxLength":4096},"data_host_id":{"type":"string","maxLength":150}}}}}}
 RECOVER_RUN_TOOL = {
     "name":"recover_run",
-    "description":"Inspect durable node acquisition and recovery status for this run. Status returns compact current state, blockers, recent setup results and reusable node paths; include_details=true returns full source/probe receipts when needed. enable saves its existing user task and grants this conversation bounded wakeups for queue blockers/failures; new worker queue_run requests enable this automatically. Recovery can check/acquire nodes, register necessary hosts and retry the same failed task without manager relays. pause revokes future recovery and stops setup transfers, leaving the research run untouched. retry requires a confirmed failed latest attempt, diagnosed repair reason, explicit argv with fresh outputs or verified resume, and an exact-source PR; it preserves resources and creates a linked attempt with new W&B identity. At most three retries; cancelled/lost/uncertain jobs cannot retry. Preserve protocol and the user's scope. Ordinary monitoring wakeups get no mutation grant. Chat Stop and run cancellation pause recovery.",
+    "description":"Inspect durable node acquisition and recovery status for this run. Status returns compact current state, blockers, recent setup results and reusable node paths; include_details=true returns full source/probe receipts when needed. enable saves its existing user task and grants this conversation bounded wakeups for queue blockers/failures; new worker queue_run requests enable this automatically. Recovery can check/acquire nodes, register necessary hosts and retry the same failed task without manager relays. amend_source repairs a never-started queued run in place: supply expected_revision, revision (exact SHAs), pr_url and diagnosed reason. It preserves command, data, resources, run/request/W&B identity and recovery owner, verifies the new source PR and invalidates node checks. A verification failure leaves the old source held; inspect this run and retry identical fields. Leads/managers can amend within their user-authorized scope; recovery workers need the saved grant. Preserve the scientific protocol. pause revokes future recovery and stops setup transfers, leaving the research run untouched. retry requires a confirmed failed latest attempt, diagnosed repair reason, explicit argv with fresh outputs or verified resume, and an exact-source PR; it preserves resources and creates a linked attempt with new W&B identity. At most three retries; cancelled/lost/uncertain jobs cannot retry. Preserve protocol and the user's scope. Ordinary monitoring wakeups get no mutation grant. Chat Stop and run cancellation pause recovery.",
     "inputSchema":{"type":"object","additionalProperties":False,"required":["run_id","action"],"properties":{
-        "run_id":{"type":"string","minLength":1,"maxLength":150},"action":{"type":"string","enum":["status","enable","pause","retry"]},
+        "run_id":{"type":"string","minLength":1,"maxLength":150},"action":{"type":"string","enum":["status","enable","pause","retry","amend_source"]},
         "include_details":{"type":"boolean","description":"Only for status: include full source, probe and acquisition receipts instead of the compact default."},
+        "expected_revision":{"type":"string","pattern":"^[a-f0-9]{40}$"},
         "task":{"type":"string","minLength":1,"maxLength":20000},"revision":{"type":"string","pattern":"^[a-f0-9]{40}$"},
         "pr_url":{"type":"string","maxLength":2048},"command":{"type":"array","minItems":1,"items":{"type":"string"}},
         "reason":{"type":"string","minLength":1,"maxLength":4000}}}}
@@ -423,7 +427,7 @@ APPLY_BOARD_TOOL = _board_tool("apply_surfboard", "Apply the exact saved Surfboa
     "expected_draft_version": {"type":"integer", "minimum":1}}, ["expected_version", "expected_draft_version"])
 DATA_BOARD_TOOL = _board_tool("inspect_board_data", "Read actual project experiment/run/W&B/artifact metadata visible through a connected W&B or visualizer block. Honors project, current-item or selected-experiment sharing; never fabricates curves.", {
     **_PROJECT, "node_id": {"type": "string", "maxLength": 100}, "experiment_id": {"type": "string", "maxLength": 180}}, ["node_id"])
-ACTION_BOARD_TOOL = _board_tool("run_board_action", "Start, inspect or stop an applied board command in this project's repository. Commands come from the graph, never arbitrary argv supplied here. Requires the user's task; checks record actual process evidence. Reuse request_id after uncertainty and inspect execution_id until terminal.", {
+ACTION_BOARD_TOOL = _board_tool("run_board_action", "Start, inspect or stop an applied board command in this project's repository. Commands come from the graph, never arbitrary argv supplied here. Requires the user's task, or an active saved recovery owner for configured check blocks only. Checks return a durable starting receipt before source scanning and record actual process evidence. Reuse request_id after uncertainty and inspect execution_id until terminal; starting does not mean passed.", {
     **_PROJECT, "node_id": {"type": "string", "maxLength": 100},
     "operation": {"type": "string", "enum": ["start", "status", "stop"]},
     "request_id": {"type": "string", "minLength": 16, "maxLength": 100},
@@ -572,11 +576,22 @@ def validate_arguments(tool, arguments):
             schema = {"properties": {key: properties[key] for key in ["run_id", "pr_url", *scope_fields]}, "required": ["run_id", "pr_url", *scope_fields]}
         else:
             pooled = arguments.get("use_project_pool") is True
-            keys = set(TOOL["inputSchema"]["properties"]) - ({"host_id"} if pooled else {"python", "data_path", *REQUIREMENTS})
+            slurm = arguments.get("backend") == "slurm"
+            if slurm and pooled:
+                raise ValueError("Slurm assigns nodes; do not use project-pool placement.")
+            keys = set(TOOL["inputSchema"]["properties"])
+            if pooled:
+                keys.discard("host_id")
+            elif not slurm:
+                keys -= {"python", "data_path", *REQUIREMENTS}
             if tool["name"] == "queue_run":
                 keys.add("request_id")
             required = [*TOOL["inputSchema"]["required"], *scope_fields, *(["pr_url"] if tool["name"] == "queue_run" else [])]
             required += ["use_project_pool", "revision"] if pooled else ["host_id", "repo"]
+            if slurm:
+                required += ["slurm", "python", "revision"]
+                if tool["name"] == "queue_run":
+                    required.append("request_id")
             schema = {"properties": {key: properties[key] for key in [*keys, *scope_fields]}, "required": required}
         validate_arguments({"name": "queue_variant", "inputSchema": schema}, arguments)
         if arguments.get("job_type") == "training" and "training_metrics" not in arguments:
@@ -616,7 +631,7 @@ def call_tool(name, arguments):
     try:
         # Human answers can arrive after the desktop disconnects. Only this
         # question call waits; action calls retain their short transport bound.
-        with opener.open(request, timeout=86410 if name == "ask_user" else 180 if name == "queue_run" else 120 if name == "check_available_node" else 90 if name in {"inspect_compute_host", "onboard_project_node", "configure_project_compute"} else 45) as response:
+        with opener.open(request, timeout=86410 if name == "ask_user" else 180 if name in {"queue_run", "recover_run"} else 120 if name == "check_available_node" else 90 if name in {"inspect_compute_host", "onboard_project_node", "configure_project_compute"} else 45) as response:
             payload = response.read(MAX_REQUEST + 1)
         if len(payload) > MAX_REQUEST:
             raise ValueError("The service response exceeded the limit.")

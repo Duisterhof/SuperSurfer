@@ -95,6 +95,30 @@ sandboxed/context-isolated renderer, saved preferences and untrusted-page denial
 No production workspace, cluster node, provider, or training job was used in these
 tests. This is an unversioned local patch build, not a published release; the live
 manager and user SSH configuration have not been changed.
+# PSC Slurm queue integration — October 13, 2026
+
+October 15 validator repair:
+
+- The real saved one-V100 payload reproduced the MCP field rejection; the
+  corrected validator accepts its environment/data contract without dropping fields.
+- `npm test`: 797 Python tests and 49 Node tests passed; five opt-in SSH tests
+  skipped. The initial restricted run was stopped because isolated test services
+  require local socket access; the full suite passed with that access.
+- New regression coverage exercises manager/worker MCP payload forwarding and
+  the actual agent validator before service/scheduler integration.
+- Skill consistency and diff checks pass. Linux x64 package rebuilt and opened
+  with an isolated profile; native Electron sandbox/navigation checks pass.
+- Applied the validator repair to the active workspace release and reloaded its
+  cached tool processes. Interrupted active work resumed; pending user questions
+  were not answered. The original one-V100 request reached the managed queue.
+
+- `npm test`: 796 Python tests passed; 49 Node tests passed, five opt-in SSH tests skipped.
+- `npm ci`, capability-skill validation and `git diff --check` pass.
+- `npm run package:linux` built `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+- `xvfb-run -a node tests/native-desktop.electron.cjs`: packaged app launched in an isolated profile; renderer sandbox and navigation persistence passed.
+- Live PSC read-only runner status and one-V100 `sbatch --test-only` accepted; neither submits a GPU job.
+- Preserves already-deployed handoff, queued-source repair and scoped-publication fixes.
+- [Redacted diagnostic](tests/reports/psc-slurm.md). Real smoke execution remains with its existing owner and current payload. Mac signing was not tested for this Linux/service update.
 
 # Native VS Code workflow preview — October 12, 2026
 
@@ -150,6 +174,14 @@ OS-reboot recovery or Tulip deployment is claimed. AHP 0.10 is offered during
 negotiation but only 0.9 received the complete workflow test. Native chat-opening
 commands are version-specific and the remote Agents-window route needs an
 end-to-end authenticated acceptance test before promotion from draft.
+# Remove the three-handoff cap — October 12, 2026
+
+Manager and project-lead fixtures reproduce the former fourth-handoff rejection.
+Both now dispatch four distinct experiments in one user turn, preserve worker
+preferences/ownership and reject duplicate, busy, foreign or scheduled dispatches.
+After a new user turn, an idle worker can receive another assignment. No fixture
+run launch occurs. Agent instructions, tool descriptions and shipped lead/manager
+skills agree with the new behavior; worker-creation limits remain separate.
 
 # SuperSurfer 0.1.43 release
 
@@ -1270,6 +1302,8 @@ rerun locally; no live provider inference was repeated for this integration pass
 Four isolated Python regression tests cover archive/Restore persistence, unchanged scheduler records, version/read-only/lineage guards and active/uncertain/recovering/unfinished rejection. Real isolated HTTP/UI browser fixture verifies archive → reload → retained evidence → Restore and active-run visibility at 1440 and 650px with no execution mutations or JS errors. This is not a live VLA archive receipt. Full npm test: 762 Python tests passed; 48 Node passed, 5 skipped. Skill capability checker and diff whitespace checks passed. Local Linux packaging/launch evidence is recorded with the PR.
 
 Build: `npm run package:linux` succeeded on Linux x64, producing `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` (135 MiB). The packaged executable opened its isolated-profile setup screen under Xvfb without connecting to a workspace. Renderer sandbox/contextIsolation were configured and nodeIntegration was disabled. The headless environment required the OS-process `--no-sandbox` launch flag; this does not establish OS sandboxing, macOS signing, notarization or Gatekeeper behavior. Screenshots: `tests/reports/run-retirement/`. No runtime was installed, released or restarted.
+## Queued source repairs and publication receipt latency
+
 - Added eight isolated real-manager tests covering exact-commit repair without
   changing identity/resources, retries, PR rejection, explicit hold/cancel races,
   attempted-run rejection and scoped recovery authority.
@@ -1343,3 +1377,4 @@ training Results browser checks pass. The Linux x64 package rebuilt and opened
 an isolated setup profile under Xvfb with context isolation and renderer sandbox
 enabled, Node integration disabled and no connected workspace. The test retained
 the disclosed OS --no-sandbox flag. No deployment or live retirement is claimed.
+Live Many projections receipt action_717b80272f0da703bc04102b passed on board version 7: 46 inputs / 24,579,666 bytes, source unchanged, all ten reviewer checks passed; creation-to-completion 0.309 seconds including the real configured checker. This verifies the deployed agent path, not just an offline snapshot.

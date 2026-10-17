@@ -231,7 +231,7 @@ checkpoint directory. Inspect what those paths contain first. Tracked files alwa
 participate; all other untracked source still participates. Do not exclude actual
 code or inputs the check is meant to cover merely to obtain a passing receipt.
 Use this setting when generated artifacts exceed the bounded source receipt; no
-artifact deletion, relocation or source-limit increase is required. The 512 MiB
+artifact deletion, relocation or source-limit increase is required. The 1 GiB
 bound still covers all participating files; excluding a tracked checkpoint will
 not solve it. Apply the updated board, then run its check and inspect the real receipt before claiming
 that enforcement is working.

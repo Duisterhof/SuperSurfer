@@ -40,7 +40,7 @@ from .tracking import Tracking
 from .wakeups import Wakeups
 from .results import Results
 from .coordination import AgentMessages
-from . import brief, telemetry
+from . import brief, telemetry, slurm
 from .surfboards import Surfboards, SurfboardError as APIError, template as board_template
 from .surfboard_service import SurfboardService, ALIASES
 from .board_runtime import BoardRuntime
@@ -613,7 +613,7 @@ class Service(SurfboardService, EditorService, WritingService):
             instructions.append("Project compute pools: " + json.dumps([self.compute.get(p["id"]) for p in state["projects"]]))
             project_ids = {project["id"] for project in state["projects"]}
             instructions.append("Registered experiments: " + json.dumps([{**{key: experiment.get(key) for key in ("id", "project_id", "name", "summary", "status", "worker_id", "work_scope")}, **self.experiment_agent_context(experiment["id"])} for experiment in state["experiments"] if experiment["project_id"] in project_ids]))
-            instructions.append("Your primary responsibility is shared compute, host registration, queue/resource coordination, cross-project dependencies and explicit workspace-wide user requests. Keep research decisions, dataset interpretation, protocol details and Results ownership with the project lead and workers. A peer update does not make you their research supervisor or an extra approval gate. Route misplaced domain requests to the owning lead without independently duplicating scientific review. Preserve explicit user tasks addressed to you.\nAs workspace manager, complete an explicit user queue/run request with queue_run, always naming the registered experiment_id. Include either {experiment_id,run_id,pr_url} for an existing held run, or experiment_id plus complete new-run fields and the exact-source PR. This verifies and releases through AutoML; do not tell the user to perform the manual queue/verify/release steps after you can complete them. For requested code or PR preparation, use handoff_experiment with experiment_id and a concrete task; it preserves worker ownership and model settings. You may hand off at most three distinct experiments. Queue explicitly requested arms using a stable request_id per new run; reuse that ID on retry. Reuse a known run_id after a partial failure. These tools work across registered projects; never use shell commands or arbitrary scheduler APIs as a substitute. New research ideas still require the user's decision.")
+            instructions.append("Your primary responsibility is shared compute, host registration, queue/resource coordination, cross-project dependencies and explicit workspace-wide user requests. Keep research decisions, dataset interpretation, protocol details and Results ownership with the project lead and workers. A peer update does not make you their research supervisor or an extra approval gate. Route misplaced domain requests to the owning lead without independently duplicating scientific review. Preserve explicit user tasks addressed to you.\nAs workspace manager, complete an explicit user queue/run request with queue_run, always naming the registered experiment_id. Include either {experiment_id,run_id,pr_url} for an existing held run, or experiment_id plus complete new-run fields and the exact-source PR. This verifies and releases through AutoML; do not tell the user to perform the manual queue/verify/release steps after you can complete them. For requested code or PR preparation, use handoff_experiment with experiment_id and a concrete task; it preserves worker ownership and model settings. There is no per-turn cap on distinct experiment handoffs. Do not redispatch an experiment already handed off in this turn. Queue explicitly requested arms using a stable request_id per new run; reuse that ID on retry. Reuse a known run_id after a partial failure. These tools work across registered projects; never use shell commands or arbitrary scheduler APIs as a substitute. New research ideas still require the user's decision.")
             instructions.append("Current queue and run observations: " + json.dumps({"queue": state["queue"], "runs": self.run_context(state["runs"]), "hosts": state["hosts"], "observed_at": state["updated_at"], "connected": state.get("manager_connected", state["connected"])}))
             return self.with_agent_tools(scope, {"cwd": str(directory), "instructions": "\n\n".join(instructions), "name": "SuperSurfer manager", "role": "manager"})
         kind, separator, key = scope.partition(":")
@@ -622,6 +622,7 @@ class Service(SurfboardService, EditorService, WritingService):
         experiment = self.experiment_for_scope(scope) if kind in {"experiment", "conversation"} else None
         project = self.lookup("projects", experiment["project_id"] if experiment else key)
         instructions.append("Project compute pool: " + json.dumps(self.compute.get(project["id"])))
+        instructions.append("For the authorized PSC V100 smoke, queue_run also supports backend=slurm with a registered control host (gpus=[]), local repo/exact revision/PR, remote python and slurm={account,partition:GPU-shared,gpu_type:v100-32 or v100-16,walltime_seconds:1..900,max_updates:1..100,repo:absolute remote checkout}. Supply gpu_count=1, stable request_id, training telemetry and exactly matching --smoke-updates in command. Slurm assigns the GPU; do not onboard the login node as a physical GPU or use project-pool placement. Inspect the same run's slurm job_id/state/reason and stop_run for requested cancellation; never bypass with shell sbatch or retry an uncertain launch under a new ID.")
         instructions.append("For a configured compute pool, prepare_run/queue_run accepts use_project_pool=true, revision (the exact Git commit), "
             "command (an argv array), name, GPU/VRAM/storage needs and the PR. Python and data paths inherit each node's configuration unless explicitly overridden. "
             "Use {python} and {data} placeholders in command arguments; no host_id is needed. The scheduler chooses a compatible node, "
@@ -667,7 +668,7 @@ class Service(SurfboardService, EditorService, WritingService):
         else:
             documents = [e for e in self.state()["experiments"] if e["project_id"] == project["id"]]
             instructions.append("Project experiment documents: " + json.dumps([{**{key: e.get(key) for key in ("id", "name", "summary", "version", "status", "worker_id", "work_scope")}, **self.experiment_agent_context(e["id"]), "path": e["document_path"]} for e in documents]))
-            instructions.append("When the user explicitly asks you to delegate existing experiment work, use the scoped handoff_experiment MCP tool with experiment_id and a concrete task. It dispatches the existing worker owner and allows at most three distinct handoffs per user turn. Never delegate unsolicited research ideas, create experiments autonomously, or bypass the scoped communication tools. Use message_agent for direct coordination and replies. Use update_experiment to change the name, summary (brief research scope), markdown protocol or planning status of experiments in this project when requested. Supply the current document version; on a conflict reread the experiment and reconcile instead of overwriting. Valid planning statuses are draft, preparing, ready, paused and completed; they never release, pause or modify GPU runs. Active runs prevent changing the experiment planning status. Keep scope summaries and the full document consistent. Suggest new research ideas for the user to choose.")
+            instructions.append("When the user explicitly asks you to delegate existing experiment work, use the scoped handoff_experiment MCP tool with experiment_id and a concrete task. It dispatches the existing worker owner without a per-turn cap on distinct experiments; do not repeat a handoff already dispatched this turn. Never delegate unsolicited research ideas, create experiments autonomously, or bypass the scoped communication tools. Use message_agent for direct coordination and replies. Use update_experiment to change the name, summary (brief research scope), markdown protocol or planning status of experiments in this project when requested. Supply the current document version; on a conflict reread the experiment and reconcile instead of overwriting. Valid planning statuses are draft, preparing, ready, paused and completed; they never release, pause or modify GPU runs. Active runs prevent changing the experiment planning status. Keep scope summaries and the full document consistent. Suggest new research ideas for the user to choose.")
             context["writable_roots"] = sorted({str(Path(e["document_path"]).parent) for e in documents})
         context["instructions"] = "\n\n".join(instructions)
         return self.with_agent_tools(scope, context)
@@ -958,8 +959,8 @@ class Service(SurfboardService, EditorService, WritingService):
                     raise APIError("Unexpected experiment tool fields")
                 if name == "supersurfer_handoff_experiment":
                     handed_off = self.turn_handoffs.setdefault(scope, set())
-                    if experiment["id"] in handed_off or len(handed_off) >= 3:
-                        raise APIError("At most three distinct experiment handoffs are allowed per user turn; this experiment may already have been handed off", 409)
+                    if experiment["id"] in handed_off:
+                        raise APIError("This experiment has already been handed off in this turn; inspect its progress before sending more work", 409)
                     task = text_field(arguments, "task", 20000)
                     # Count after preflight, before dispatch; uncertain delivery must not retry silently.
                     return self.start_experiment_work(experiment["id"], task, draft_only=False, before_dispatch=lambda: handed_off.add(experiment["id"]), agent_scope=arguments.get("agent_scope"), handoff=True)
@@ -974,7 +975,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("Run preparation is available only during a user-requested experiment conversation, never a scheduled review", 403)
             if name == "supersurfer_queue_run":
                 return self.queue_agent_run(scope, arguments)
-            fields = {"name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics"}
+            fields = {"name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics", "backend", "slurm"}
             if not isinstance(arguments, dict) or set(arguments) - fields:
                 raise APIError("Run preparation accepts only draft fields; project, experiment, actions and readiness cannot be supplied", 400)
             experiment = self.experiment_for_scope(scope)
@@ -1108,10 +1109,12 @@ class Service(SurfboardService, EditorService, WritingService):
             raise APIError("queue_run requires run parameters")
         owner_scope = scope
         existing = "run_id" in arguments
-        fields = {"run_id", "pr_url"} if existing else {"request_id", "name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics"}
+        fields = {"run_id", "pr_url"} if existing else {"request_id", "name", "host_id", "gpu_count", "command", "repo", "pr_url", "storage_gib", "min_free_mib", "use_project_pool", "revision", "python", "data_path", "required_paths", "python_packages", "job_type", "training_metrics", "backend", "slurm"}
         if set(arguments) - fields:
             raise APIError("queue_run accepts either run_id and pr_url, or new run fields with pr_url; scope and readiness cannot be supplied")
         request_id = arguments.get("request_id")
+        if arguments.get("backend") == "slurm" and not request_id:
+            raise APIError("Slurm submissions require a stable request_id")
         if request_id is not None and (not isinstance(request_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{16,100}", request_id)):
             raise APIError("request_id must be 16–100 letters, digits, underscores or hyphens")
         arguments = {key: value for key, value in arguments.items() if key != "request_id"}
@@ -1280,7 +1283,12 @@ class Service(SurfboardService, EditorService, WritingService):
         if experiment["project_id"] != project["id"]:
             raise APIError("Experiment belongs to another project")
         use_pool = params.get("use_project_pool", False)
-        if not use_pool and any(key in params for key in ("required_paths", "python_packages")):
+        is_slurm = params.get("backend") == "slurm"
+        if params.get("backend", "direct") not in {"direct", "slurm"} or ("slurm" in params and not is_slurm):
+            raise APIError("Select backend=slurm for a Slurm contract")
+        if is_slurm and use_pool:
+            raise APIError("Slurm chooses its compute node; use a control host_id, not use_project_pool")
+        if not use_pool and not is_slurm and any(key in params for key in ("required_paths", "python_packages")):
             raise APIError("Input requirements use project-pool contracts; set use_project_pool")
         if type(use_pool) is not bool:
             raise APIError("use_project_pool must be boolean")
@@ -1303,7 +1311,19 @@ class Service(SurfboardService, EditorService, WritingService):
             config["supersurfer_request_fingerprint"] = params["_request_fingerprint"]
         review_url = text_field(params, "pr_url", 2048, required=False)
         payload = {"project": project["id"], "name_": name, "gpu_count": count, "command": command, "config": config}
-        if use_pool:
+        if is_slurm:
+            if "run.slurm.v1" not in self.aml.call("ping").get("capabilities", []):
+                raise APIError("The workspace manager needs the Slurm backend update before submitting", 503)
+            host = self.lookup("hosts", text_field(params, "host_id", 150))
+            try:
+                resolved = slurm.contract(params, host)
+            except ValueError as exc:
+                raise APIError(str(exc)) from exc
+            config.update(resolved)
+            config.setdefault("supersurfer_request_id", "draft-" + uuid.uuid4().hex)
+            payload.update(host=host["id"], repo=text_field(params, "repo", 4096), revision=text_field(params, "revision", 80),
+                           storage={"directory": host["root"], "min_free_gib": storage})
+        elif use_pool:
             if params.get("host_id"):
                 raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
             resolved = self.compute.resolve_run(project["id"], params, project)

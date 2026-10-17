@@ -31,6 +31,16 @@ setup, not the checks themselves. No failed operation is automatically replayed.
 SSH routing remains user-configured: a legacy jump command using remote `nc`
 must be migrated separately to native `ProxyJump`/`ssh -W` forwarding. Runtime
 inspection outside AML and arbitrary agent shell commands do not use this pool.
+# Managed PSC Slurm smoke — October 13, 2026
+
+Scoped run tools support `backend=slurm` with a registered CPU-only control host,
+exact local/remote source paths, a verified PR, one V100 and bounded walltime and
+updates. The scheduler retains run/request identity, delegates GPU assignment to
+Slurm, records live job identity/state and cancels only the owned job. Lost
+submission replies never trigger a second `sbatch`. Direct-host scheduling remains
+the default. Agent-side validation preserves Slurm's explicit Python, data and
+package requirements even though Slurm does not use project-pool placement.
+See [the contract](docs/psc-slurm-bridge.md).
 
 # Native VS Code workflow preview — October 12, 2026
 
@@ -82,7 +92,7 @@ Action blocks accept `source_exclude`, up to 64 repository-relative glob pattern
 for untracked generated outputs. Tracked files always participate. These patterns
 are recorded with the check receipt and reused for completion/freshness checks;
 changing the board invalidates old receipts. Unexcluded source retains the
-512 MiB/50,000-file bounds. Exclude outputs, never actual inputs to the check.
+1 GiB/50,000-file bounds. Exclude outputs, never actual inputs to the check.
 
 Accepted direct steering or answers promote a background turn to user-requested
 work and clear inherited peer lineage. Rejected input leaves authority unchanged;
@@ -917,7 +927,7 @@ All owned roles get `ask_user {questions:[...]}` for one to three concise questi
 The workspace manager gets:
 
 - `queue_run` with mandatory `experiment_id`, plus either `{run_id,pr_url}` for an existing held run or the complete new-run fields and `pr_url`. The target must be an existing registered experiment; the server derives its project and rejects run/experiment mismatches. The tool performs the same exact-source PR verification and AutoML readiness sequence as the worker tool. New-run requests may supply a stable `request_id` (16–100 ASCII letters, digits, underscores or hyphens), one per explicitly requested arm. Its scope/experiment-bound receipt persists across restarts. Reusing an ID with changed intent returns 409. Requests without an ID retain the legacy one-new-run-per-turn limit. Existing run retries use only `experiment_id`, `run_id` and `pr_url`.
-- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment across registered projects. It selects or explicitly targets an owned worker and preserves that conversation's settings, allows at most three distinct handoffs per user turn, and retains the same busy/duplicate/uncertain-work guards. This can forward an explicit queue/run request or preparation-only work without broadening it. The manager has no `update_experiment` or `prepare_run` tool.
+- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment across registered projects. It selects or explicitly targets an owned worker and preserves that conversation's settings, has no per-turn cap on distinct experiment handoffs, and retains the same busy/duplicate/uncertain-work guards. This can forward an explicit queue/run request or preparation-only work without broadening it. The manager has no `update_experiment` or `prepare_run` tool.
 
 All owned roles get `inspect_project_compute`, `inspect_compute_host`, `register_compute_host` and `onboard_project_node`. Manager calls require `project_id`; leads derive their project, workers derive it from their experiment. Active scheduled turns may inspect but cannot register/onboard. Workers cannot replace pools or shared defaults. Only managers/leads get `configure_project_compute`.
 
@@ -931,7 +941,7 @@ Node source staging accepts the exact root of a bare Git repository as well as a
 
 Project leads get:
 
-- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment in their project. The selected owned conversation and its model choices are preserved. At most three distinct handoffs are allowed per user turn; duplicate, busy or uncertain work is rejected. A lead may forward the user's explicit queue/run request but cannot invoke the worker's queue tool itself.
+- `handoff_experiment {experiment_id,task,agent_scope?}` for concrete user-requested work on an existing experiment in their project. The selected owned conversation and its model choices are preserved. Distinct experiments have no per-turn handoff cap; duplicate, busy or uncertain work is rejected. A lead may forward the user's explicit queue/run request but cannot invoke the worker's queue tool itself.
 - `update_experiment {experiment_id,version,name?,summary?,markdown?,status?}` for versioned scope, explanation and planning updates. Status is draft, preparing, ready, paused or completed. Execution-state conflicts and stale versions are rejected. Planning `ready` is not run readiness.
 
 Experiment workers get:
@@ -1066,6 +1076,16 @@ attribution are not advertised for Cursor/Claude.
 ## Reversible run presentation
 
 `run.presentation` accepts `run_id`, integer presentation `version` and `archived`. Archival additionally requires a concrete `reason`, `evidence`, and `unfinished_work: false`; an optional `parent_run_id` must belong to the same project. The service rejects active/uncertain statuses and enabled recovery grants. It writes only an owned presentation record with an append-only receipt history, never AML execution/configuration, checkpoints, curves or recovery state. State readback exposes the record as `run.presentation`; a later active/uncertain/recovering run is visible even if an older receipt archived it. Runs defaults to Active; Archived retains historical runs and Restore. Version conflicts require readback, not replay. Whole-task/report archival remains separate. This API/UI must be deployed normally before real archival is claimed.
+Queued source repair uses `recover_run(amend_source)` with exact old/new commits,
+PR and repair reason. Only never-started queued runs qualify; source verification
+holds admission and failures leave the original source held. Successful repair
+preserves identity, command, data, resources and recovery ownership, invalidates
+candidate observations and restores prior release intent. Concurrent cancellation,
+hold or revision changes win. A repeated successful request only returns its receipt.
+Scoped user turns and the run's saved recovery owner may use this operation.
+Recovery owners may also execute applied check blocks within their own task, not
+preview blocks, arbitrary commands or unrelated workflows.
+
 Board commands persist and return their execution receipt before scanning source.
 Slow scans run outside service/action locks; failures remain visible on that same
 receipt. Retries reconcile before any source scan. Only a successful check with

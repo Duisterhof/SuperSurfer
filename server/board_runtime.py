@@ -76,8 +76,8 @@ def source_fingerprint(cwd, source_exclude=()):
             digest.update(os.fsencode(os.readlink(path)))
         elif stat.S_ISREG(info.st_mode):
             consumed += info.st_size
-            if consumed > 512 * 1024 * 1024:
-                raise SurfboardError("Source receipt exceeds 512 MiB; configure this block’s source_exclude for untracked generated outputs, or ignore those outputs in Git", 409)
+            if consumed > 1024 * 1024 * 1024:
+                raise SurfboardError("Source receipt exceeds 1 GiB; configure this block’s source_exclude for untracked generated outputs, or ignore those outputs in Git", 409)
             descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
             with os.fdopen(descriptor, "rb") as stream:
                 opened = os.fstat(stream.fileno())

@@ -15,6 +15,14 @@ test('SSH banners and trailing messages do not hide successful setup', () => {
   assert.throws(() => parseSetupResponse('Connected\n{"token":"too-short","port":8765}'));
   assert.throws(() => parseSetupResponse(JSON.stringify({ ...ready, port: 99999 })));
 });
+test('cached reconnect distinguishes a missing installation from authenticated readiness',()=>{
+ const {parseCachedResponse}=require('../desktop/connection.cjs');
+ assert.equal(parseCachedResponse('Welcome\n{"supersurfer_cached":false}\n'),null);
+ const ready={supersurfer_cached:true,token:'test-session-token-1234567890',port:8765};
+ assert.deepEqual(parseCachedResponse('Banner\n'+JSON.stringify(ready)),ready);
+ assert.throws(()=>parseCachedResponse('{"supersurfer_cached":true,"token":"invalid","port":8765}'));
+ assert.throws(()=>parseCachedResponse('Connection succeeded without a workspace reply'));
+});
 test('remote shell arguments preserve literal code and whitespace', () => {
   const { execFileSync } = require('node:child_process');
   const value = "some ' $(touch never) `echo no` folder\nnext";

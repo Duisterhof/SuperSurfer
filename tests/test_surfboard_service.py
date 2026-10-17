@@ -70,6 +70,32 @@ class SurfboardServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(SurfboardError, 'cannot authorize a GPU run'):
             self.service.board_gate(project, state, 'queue_run', {'experiment_id': self.exp['id']})
 
+    def test_recovery_owner_can_run_configured_check_without_generic_user_authority(self):
+        board = template()
+        board['nodes'].append({'id':'report_check','kind':'check','label':'Report check','x':340,'y':600,
+            'config':{'argv':[sys.executable,'-c','print("checked")'],'timeout_seconds':20}})
+        board['edges'].extend([
+            {'id':'code-check','source':'code','target':'report_check','relation':'feeds'},
+            {'id':'check-results','source':'report_check','target':'results','relation':'requires'}])
+        self.apply(board, experiment_id=self.exp['id'])
+        scope = 'experiment:' + self.exp['id']
+        self.service.action('chat.send', {'scope':scope,'text':'Finish the requested run and report'})
+        self.service.recovery.save({'id':'r1','scope':scope,'runs':['r1'],'enabled':True})
+        self.service.recovery.active[scope] = 'r1'
+        state = self.service.board_record('p1', self.exp['id'])
+        args = {'node_id':'report_check','operation':'start','request_id':'recovery-report-check-01'}
+        for origin in ('schedule','peer'):
+            self.service.turn_origins[scope] = origin
+            with self.assertRaises(APIError): self.service.agent_action(scope,'supersurfer_run_board_action',args)
+        self.service.turn_origins[scope] = 'recovery'
+        # Isolate only the subprocess runner; exercise actual role/board/origin guards.
+        with patch.object(self.service.board_runtime, 'action', return_value={'status':'starting'}) as execute:
+            self.assertEqual('starting',self.service.agent_action(scope,'supersurfer_run_board_action',args)['status'])
+            execute.assert_called_once()
+        self.assertFalse(self.service.recovery_check_allowed(scope, {'compiled':{'actions':{'preview':{'kind':'preview'}}}}, 'preview'))
+        self.service.recovery.save({'id':'r1','scope':scope,'runs':['r1'],'enabled':False})
+        with self.assertRaises(APIError): self.service.agent_action(scope,'supersurfer_run_board_action',args)
+
     def test_existing_research_resolves_implicit_without_migration(self):
         state = self.service.surfboard('p1')
         self.assertTrue(state['implicit'])

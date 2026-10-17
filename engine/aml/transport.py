@@ -14,6 +14,8 @@ import time
 
 MAX_SOURCE_PACK_BYTES = 512 * 1024 * 1024
 SSH_IDLE_SECONDS = 600
+SSH_CONNECT_TIMEOUT = 15
+RECEIVER_READY_TIMEOUT = 45
 
 class HostConfigurationError(RuntimeError):
     """A node trust, interpreter or runner protocol error; other nodes can work."""
@@ -24,6 +26,8 @@ class Transport:
     def __init__(self, initial_backoff_seconds=0):
         source = Path(__file__).with_name("runner.py").read_bytes()
         encoded = base64.b64encode(source).decode()
+        slurm_source = Path(__file__).with_name("slurm_bridge.py").read_text()
+
         # This wrapper must parse on old system Python installations, before
         # the modern runner source is compiled. A host configuration error is
         # a structured runner error, not a shared SSH gateway outage.
@@ -33,12 +37,10 @@ class Transport:
                           " sys.exit(0)\n"
                           "s=base64.b64decode(" + repr(encoded) + ").decode(); "
                           "exec(compile(s,'aml-runner','exec'),"
-                          "{'__name__':'__main__','AML_RUNNER_SOURCE':s})")
+                          "{'__name__':'__main__','AML_RUNNER_SOURCE':s,'AML_SLURM_SOURCE':" + repr(slurm_source) + "})")
         self.gateway_locks = {}
-        self.gateway_failures = {}
         self.host_failures = {}
         self.connection_failures = {}
-        self.gateway_failed_targets = {}
         self.initial_retry_at = time.monotonic() + initial_backoff_seconds if initial_backoff_seconds else 0
         self.control_directory = None
         self.closed = False
@@ -59,7 +61,7 @@ class Transport:
                 self.control_directory = tempfile.TemporaryDirectory(prefix="ss-ssh-", dir="/tmp")
             alias = hashlib.sha256(host["target"].encode()).hexdigest()[:12]
             control = str(Path(self.control_directory.name) / (alias + "-%C.sock"))
-            command = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
+            command = ["ssh", "-T", "-o", "BatchMode=yes", "-o", f"ConnectTimeout={SSH_CONNECT_TIMEOUT}",
                        "-o", "ConnectionAttempts=1", "-o", "ClearAllForwardings=yes",
                        "-o", "ControlMaster=auto", "-o", f"ControlPath={control}",
                        "-o", f"ControlPersist={SSH_IDLE_SECONDS}",
@@ -92,10 +94,10 @@ class Transport:
         finally:
             directory.cleanup()
 
-    async def request(self, host, payload, timeout=20):
+    async def request(self, host, payload, timeout=45):
         target = host.get("target")
         if not target:
-            return await self._request(host, payload, timeout)
+            return await asyncio.wait_for(self._request(host, payload, timeout), timeout)
         # Trinity worker aliases share one SSH gateway. Serialize its control
         # requests. One unreachable node must not block healthy peers behind it.
         gateway = "trinity" if target.startswith("trinity-") else target
@@ -107,30 +109,28 @@ class Transport:
             node_retry, node_error = self.connection_failures.get(target, (0, ""))
             if time.monotonic() < node_retry:
                 raise ConnectionError("SSH node backoff (five minutes) for " + target + ": " + node_error)
-            retry_at, error = self.gateway_failures.get(gateway, (0, ""))
-            if self.initial_retry_at > retry_at:
-                retry_at, error = self.initial_retry_at, "Manager startup quiet period"
-            if time.monotonic() < retry_at:
-                raise ConnectionError("SSH gateway backoff (five minutes): " + error)
+            if time.monotonic() < self.initial_retry_at:
+                raise ConnectionError("Manager startup quiet period")
             try:
-                result = await self._request(host, payload, timeout)
+                # The deadline starts after admission to the gateway, rather
+                # than counting time waiting behind another node's request.
+                result = await asyncio.wait_for(self._request(host, payload, timeout), timeout)
             except HostConfigurationError as exc:
                 self.host_failures[target] = (time.monotonic() + 300, str(exc))
                 raise
             # Replacing an obsolete admission check deliberately cancels it.
             # _request reaps its process; cancellation is not a node outage.
-            except (ConnectionError, TimeoutError) as exc:
-                failure = (time.monotonic() + 300, str(exc) or "SSH request timed out or was cancelled")
-                self.connection_failures[target] = failure
-                failed = self.gateway_failed_targets.setdefault(gateway, set())
-                failed.add(target)
-                # Two distinct failures without an intervening success indicate
-                # a shared outage. Keep both the node and gateway retry bounded.
-                if len(failed) >= 2:
-                    self.gateway_failures[gateway] = failure
+            except TimeoutError as exc:
+                # A slow runner or cold SSH handshake is node-specific
+                # evidence, not proof that every peer's gateway is down.
+                error = f"{payload.get('op', 'Runner request')} exceeded {timeout:g}s on {target}"
+                self.connection_failures[target] = (time.monotonic() + 300, error)
+                raise TimeoutError(error) from exc
+            except ConnectionError as exc:
+                # A relay can reset individual destinations while other nodes
+                # remain reachable. Do not infer a gateway outage from peers.
+                self.connection_failures[target] = (time.monotonic() + 300, str(exc))
                 raise
-            self.gateway_failures.pop(gateway, None)
-            self.gateway_failed_targets.pop(gateway, None)
             self.connection_failures.pop(target, None)
             self.host_failures.pop(target, None)
             return result
@@ -181,7 +181,7 @@ class Transport:
         source = None
         async def transfer():
             nonlocal source
-            first = await asyncio.wait_for(destination.stdout.readline(), 4)
+            first = await asyncio.wait_for(destination.stdout.readline(), RECEIVER_READY_TIMEOUT)
             if not first or not json.loads(first).get("ready"):
                 error = (await destination.stderr.read()).decode(errors="replace")
                 raise RuntimeError(error.strip() or "Destination refused staging")
@@ -230,7 +230,7 @@ class Transport:
         source = None
         async def transfer():
             nonlocal source
-            first = await asyncio.wait_for(destination.stdout.readline(), 10)
+            first = await asyncio.wait_for(destination.stdout.readline(), RECEIVER_READY_TIMEOUT)
             if not first:
                 _, error = await destination.communicate()
                 raise RuntimeError(error.decode(errors="replace")[-2000:] or "Node refused source staging")

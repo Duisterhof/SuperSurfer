@@ -12,7 +12,7 @@ import signal
 import sqlite3
 import time
 
-from . import agents, placement, review, targets
+from . import agents, placement, review, targets, slurm_bridge
 from .db import Store, identifier
 from .transport import Transport
 from .util import git, name, process_ticks
@@ -21,7 +21,8 @@ from .util import git, name, process_ticks
 ACTIVE_RUNS = ("starting", "running", "unreachable", "orphaned", "cancelling")
 TERMINAL_RUNS = ("succeeded", "failed", "cancelled", "lost")
 TASK_STATES = ("pending", "working", "blocked", "done", "failed", "archived")
-HOST_POLL_TIMEOUT = 4
+HOST_POLL_TIMEOUT = 45
+CONTRACT_CHECK_TIMEOUT = 60
 HOST_POLL_INTERVAL = 300
 ACTIVE_RUN_POLL_INTERVAL = 10
 TRANSITION_POLL_INTERVAL = 1
@@ -113,7 +114,7 @@ class Manager:
             "host.update": self.host_update,
             "run.submit": self.run_submit, "run.list": self.run_list, "run.show": self.run_show,
             "run.cancel": self.run_cancel, "run.logs": self.run_logs,
-            "run.add_candidate": self.run_add_candidate,
+            "run.add_candidate": self.run_add_candidate, "run.amend_source": self.run_amend_source,
             "run.queue": self.run_queue, "run.reorder": self.run_reorder,
             "run.move": self.run_move, "run.ready": self.run_ready, "run.hold": self.run_hold,
             "run.priority": self.run_priority, "run.review": self.run_review, "queue.status": self.queue_status,
@@ -123,7 +124,7 @@ class Manager:
         }
         if op not in handlers:
             raise ValueError(f"Unknown operation: {op}")
-        if op in {"run.ready", "run.review", "run.logs"}:
+        if op in {"run.ready", "run.review", "run.logs", "run.amend_source"}:
             result = await handlers[op](**params)
         else:
             async with self.command_lock:
@@ -134,7 +135,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -527,10 +528,10 @@ class Manager:
         if host["id"] in self.host_capacity_changed:
             self.host_capacity_probe_attempts[host["id"]] = self.host_probe_attempts[host["id"]]
         try:
-            request = {"op": "probe", "check_gpu": True,
+            slurm_control = self.store.one("SELECT id FROM runs WHERE host_id=? AND json_extract(config, '$.backend')='slurm' LIMIT 1", (host["id"],))
+            request = {"op": "probe", "check_gpu": not bool(slurm_control),
                        "gpu_required": bool(json.loads(host["gpus"]))}
-            probe = await asyncio.wait_for(
-                self.transport.request(host, request, timeout=HOST_POLL_TIMEOUT), HOST_POLL_TIMEOUT)
+            probe = await self.transport.request(host, request, timeout=HOST_POLL_TIMEOUT)
             snapshot = {**probe, "online": True, "updated": time.time(), "error": probe.get("gpu_error", "")}
             self.host_metrics[host["id"]] = snapshot
             self.store.execute("UPDATE hosts SET status='online',error=? WHERE id=?",
@@ -590,7 +591,7 @@ class Manager:
             # An explicit refresh retries failed hosts once; ordinary telemetry
             # retains its five-minute backoff and serialized gateway access.
             self.host_probe_attempts.clear()
-            for field in ("host_failures", "connection_failures", "gateway_failures", "gateway_failed_targets"):
+            for field in ("host_failures", "connection_failures"):
                 getattr(self.transport, field, {}).clear()
             self.request_host_refresh()
         rows = []
@@ -672,8 +673,21 @@ class Manager:
         name(name_)
         if not isinstance(command, list) or not command or any(not isinstance(x, str) for x in command):
             raise ValueError("Command must be a nonempty argv array")
+        slurm = isinstance(config, dict) and config.get("backend") == "slurm"
+        if isinstance(config, dict) and config.get("backend", "direct") not in {"direct", "slurm"}:
+            raise ValueError("Unknown execution backend")
+        if slurm:
+            slurm_bridge.validate_resources(config.get("slurm"), gpu_count)
+            if json.loads(host["gpus"]):
+                raise ValueError("Slurm requires a separate control-host registration with no physical GPUs")
+            for key in ("slurm_repo", "slurm_python"):
+                placement.absolute_path(config.get(key), key)
+            if not config.get("supersurfer_request_id") or not config.get("supersurfer_experiment_id"):
+                raise ValueError("Slurm requires a registered experiment and durable request_id")
+            if any(k in config for k in ("host_contracts", "allowed_hosts", "gpu_indices", "allow_gpu_sharing")) or any(x is not None for x in (allowed_hosts, environment, inputs)):
+                raise ValueError("Slurm allocation cannot use direct-host GPU placement")
         portable = isinstance(config, dict) and "host_contracts" in config
-        if gpu_count < 0 or gpu_count > project["gpu_limit"] or (not portable and gpu_count > len(json.loads(host["gpus"]))):
+        if gpu_count < 0 or gpu_count > project["gpu_limit"] or (not portable and not slurm and gpu_count > len(json.loads(host["gpus"]))):
             raise ValueError("GPU request exceeds project or host limit")
         env = env or {}
         if (not isinstance(env, dict) or any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k) or
@@ -682,8 +696,12 @@ class Manager:
             raise ValueError("Environment must map variable names to strings; GPUs are set by the scheduler")
         if config is not None and not isinstance(config, dict):
             raise ValueError("Config must be a JSON object")
-        config = placement.normalize_contract(self.store, host, command, config, allowed_hosts,
-                                              environment, storage, inputs)
+        if slurm:
+            config = dict(config)
+            config["storage"] = {"directory": host["root"], "min_free_gib": (storage or {}).get("min_free_gib", 0)}
+        else:
+            config = placement.normalize_contract(self.store, host, command, config, allowed_hosts,
+                                                  environment, storage, inputs)
         if "host_contracts" in config and not any(len(contract.get("allowed_gpu_indices", json.loads(self.store.get("hosts", host_id)["gpus"]))) >= gpu_count for host_id, contract in config["host_contracts"].items()):
             raise ValueError("GPU request exceeds every declared host contract")
         origin = await self.project_review_repository(project)
@@ -723,11 +741,11 @@ class Manager:
         if await asyncio.to_thread(git, repo, "status", "--porcelain"):
             raise ValueError("Commit changes before submitting an experiment")
         revision = await asyncio.to_thread(git, repo, "rev-parse", (revision or "HEAD") + "^{commit}")
-        if "host_contracts" in config:
+        if "host_contracts" in config or slurm:
             config["source_repo"] = repo
         mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                  (host["id"], project["id"]))
-        if not mapping:
+        if not mapping and not slurm:
             if host["target"]:
                 raise ValueError("Register this project's repository on the SSH host with aml host repo")
             self.store.execute("INSERT INTO host_repos VALUES(?,?,?)", (host["id"], project["id"], repo))
@@ -748,6 +766,9 @@ class Manager:
         row["ready"] = bool(row["ready"])
         self.add_placement_details(row)
         row["gpus"] = json.loads(row["allocated_gpus"])
+        if json.loads(row["config"]).get("backend") == "slurm":
+            row["slurm"] = json.loads(row["config"]).get("slurm_status", {})
+            row["backend"] = "slurm"
         if row["status"] == "queued":
             reasons, _ = self.run_wait(row)
             row["wait_reasons"] = [code for code, _ in reasons]
@@ -832,6 +853,74 @@ class Manager:
         self.store.event("run.ready", {"id": row["id"]}, row["project_id"])
         self.wake_scheduler()
         return await self.run_show(row["id"])
+
+    async def run_amend_source(self, run, expected_revision, revision, pr_url, reason):
+        """Repair source before the first launch, retaining the original run contract."""
+        if any(not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{40}", value)
+               for value in (expected_revision, revision)):
+            raise ValueError("Source amendment requires exact old and new commit SHAs")
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 4000:
+            raise ValueError("Source amendment requires a diagnosed repair reason")
+        row = self.store.get("runs", run)
+        config = json.loads(row["config"])
+        receipt = config.get("source_amendment") or {}
+        if (row["revision"] == revision and receipt.get("previous_revision") == expected_revision
+                and receipt.get("revision") == revision and receipt.get("pr_url") == pr_url):
+            return {"run": await self.run_show(row["id"]), "unchanged": True}
+        if revision == expected_revision:
+            raise ValueError("Choose the repaired commit; the source has not changed")
+        def eligible(current):
+            # A queued return after runner admission is not a never-started run.
+            return (current["status"] == "queued" and current["revision"] == expected_revision
+                    and not current.get("job_dir") and not json.loads(current["allocated_gpus"])
+                    and not self.store.one("SELECT 1 FROM reservations WHERE run_id=?", (current["id"],))
+                    and not self.store.one("SELECT 1 FROM events WHERE kind='run.starting' AND json_extract(data,'$.id')=?", (current["id"],)))
+        if not eligible(row):
+            raise ValueError("Only a never-started queued run at the expected revision can amend source")
+        # Hold synchronously before verification yields to the scheduler. Failure
+        # intentionally leaves the original source held, never launching stale code.
+        pending = config.get("source_amendment_pending") or {}
+        resume_ready = row["ready"]
+        if pending.get("held_at") == row["updated"]:
+            resume_ready = pending.get("resume_ready", False)
+        held_at = time.time()
+        config["source_amendment_pending"] = {"held_at": held_at, "resume_ready": resume_ready}
+        self.store.execute("UPDATE runs SET ready=0,config=?,updated=? WHERE id=?", (json.dumps(config), held_at, row["id"]))
+        self.store.event("run.source_amendment_pending", {"id": row["id"], "revision": revision}, row["project_id"])
+        tasks = [task for key, task in self.placement_checks.items() if key[0] == row["id"]]
+        self.cancel_preparations(row["id"])
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        for key in list(self.placement_observations):
+            if key[0] == row["id"]:
+                self.placement_observations.pop(key, None)
+        project = self.store.get("projects", row["project_id"])
+        repo = config.get("source_repo") or config.get("repo") or project["repo"]
+        resolved = await asyncio.to_thread(git, repo, "rev-parse", revision + "^{commit}")
+        if resolved != revision:
+            raise ValueError("Repaired commit is not available in the run source repository")
+        config["pr_url"] = pr_url
+        config.pop("review_receipt", None)
+        origin = await self.project_review_repository(project)
+        if origin:
+            config["review_repository"] = origin
+        review.validate_pr(config)
+        config["review_receipt"] = await self.reviewer(project, config, revision)
+        latest = self.store.get("runs", row["id"])
+        if not eligible(latest) or latest["updated"] != held_at:
+            raise ValueError("Run changed during source verification; refresh this run before retrying")
+        receipt = {"previous_revision": expected_revision, "revision": revision,
+                   "pr_url": pr_url, "reason": reason.strip(), "at": time.time()}
+        config.pop("source_amendment_pending", None)
+        config["source_amendment"] = receipt
+        if isinstance(config.get("supersurfer_run_request"), dict):
+            config["supersurfer_run_request"]["revision"] = revision
+        with self.store.transaction():
+            self.store.execute("UPDATE runs SET revision=?,config=?,ready=?,error='',updated=? WHERE id=?",
+                               (revision, json.dumps(config), resume_ready, time.time(), row["id"]))
+            self.store.event("run.source_amended", {"id": row["id"], **receipt}, row["project_id"])
+        self.wake_scheduler(row["id"])
+        return {"run": await self.run_show(row["id"]), "unchanged": False}
 
     async def run_hold(self, run):
         row = self.queued_run(run)
@@ -1036,8 +1125,12 @@ class Manager:
             self.run_inspections.add(run["id"])
             self.run_next_poll[run["id"]] = now + self.run_poll_interval(run, now, interval)
             try:
+                slurm = json.loads(run["config"]).get("backend") == "slurm"
+                operation = "cancel" if run["status"] == "cancelling" else "status"
                 state = await self.transport.request(host, {
-                    "op": "cancel" if run["status"] == "cancelling" else "status", "directory": run["job_dir"]})
+                    "op": ("slurm_" if slurm else "") + operation, "directory": run["job_dir"]}, timeout=120 if slurm else 45)
+                if slurm:
+                    self.record_slurm_status(run, state)
                 self.record_run_timing(run, state)
                 if "progress" in state:
                     current_config = json.loads(self.store.get("runs", run["id"])["config"])
@@ -1152,7 +1245,42 @@ class Manager:
             reasons.extend((item["code"], item["reason"]) for item in observation.get("blockers", []))
         return reasons, available
 
+    def slurm_wait(self, run):
+        reasons = []
+        preflight = json.loads(run["config"]).get("slurm_preflight", {})
+        if preflight.get("retry_at", 0) > time.time():
+            reasons.append(("slurm_preflight", preflight.get("error", "PSC preparation pending")))
+        try:
+            review.validate_receipt(json.loads(run["config"]), run["revision"])
+        except ValueError as exc:
+            reasons.append(("review_required", str(exc)))
+        if not run["ready"]:
+            reasons.append(("held", "Run is held pending exact-source PR verification and release"))
+        if self.store.one("SELECT paused FROM queue_control WHERE id=1")["paused"]:
+            reasons.append(("queue_paused", "Queue is paused"))
+        if run.get("task_id"):
+            if self.store.get("tasks", run["task_id"])["status"] == "archived":
+                reasons.append(("task_archived", "Task is archived"))
+            if not self.store.dependencies_done(run["task_id"]):
+                reasons.append(("dependencies", "Task dependencies are not done"))
+        project = self.store.get("projects", run["project_id"])
+        active = self.store.one("SELECT count(*) AS n,coalesce(sum(gpu_count),0) AS g FROM runs WHERE project_id=? AND status IN (?,?,?,?,?)", (run["project_id"], *ACTIVE_RUNS))
+        if active["n"] >= project["run_limit"]:
+            reasons.append(("run_limit", "Project concurrent run limit reached"))
+        if active["g"] + run["gpu_count"] > project["gpu_limit"]:
+            reasons.append(("gpu_limit", "Project GPU limit reached"))
+        return reasons, []
+
+    def record_slurm_status(self, run, state):
+        current = json.loads(self.store.get("runs", run["id"])["config"])
+        # Status is mutable evidence, never part of the frozen submission spec.
+        current["slurm_status"] = {**current.get("slurm_status", {}), **{k: state[k] for k in ("job_id", "slurm_state", "node_list", "reason", "error", "account", "partition") if k in state}}
+        self.store.execute("UPDATE runs SET config=? WHERE id=?", (json.dumps(current), run["id"]))
+
     def select_host(self, run):
+        if json.loads(run["config"]).get("backend") == "slurm":
+            reasons, available = self.slurm_wait(run)
+            return run["host_id"], reasons, available
         choices = []
         eligible = []
         portable = "host_contracts" in json.loads(run["config"])
@@ -1185,6 +1313,9 @@ class Manager:
         return reasons, available
 
     def add_placement_details(self, run):
+        if json.loads(run["config"]).get("backend") == "slurm":
+            run.update(allowed_host_names=[self.store.get("hosts", run["host_id"])["name"]], candidate_hosts=[], placement_state="slurm")
+            return
         hosts = [self.store.get("hosts", key) for key in placement.candidates(run)]
         run["allowed_host_names"] = [host["name"] for host in hosts]
         run["candidate_hosts"] = []
@@ -1256,7 +1387,7 @@ class Manager:
             if not mapping and not resolved.get("repo"):
                 raise ValueError("Register this project's repository on candidate " + host["name"])
             spec = {"repo": mapping["path"] if mapping else resolved["repo"], "revision": run["revision"], "root": host["root"], **resolved}
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=CONTRACT_CHECK_TIMEOUT)
             self.record_admission(key, result)
             codes = {item["code"] for item in result["blockers"]}
             if "code_missing" in codes and config.get("stage_source"):
@@ -1272,7 +1403,7 @@ class Manager:
                 await self.transport.stage_source(config["source_repo"], host, spec, timeout=600)
                 if not self.preparation_allowed(run["id"]):
                     raise asyncio.CancelledError()
-                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=CONTRACT_CHECK_TIMEOUT)
                 self.record_admission(key, result)
                 codes = {item["code"] for item in result["blockers"]}
                 self.staging_owner = None
@@ -1304,7 +1435,7 @@ class Manager:
                 else:
                     source_host = self.store.get("hosts", item["source_host"]) if item["source_host"] else None
                     await self.transport.copy_file(source_host, host, item, storage, timeout=600)
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=CONTRACT_CHECK_TIMEOUT)
             self.record_admission(key, result)
         except asyncio.CancelledError:
             self.placement_observations[key] = {"state": "blocked", "checked_at": time.time(),
@@ -1330,8 +1461,10 @@ class Manager:
             if run is None:
                 return
             attempted.add(run["id"])
-            self.request_placement_checks(run)
-            if run["ready"]:
+            is_slurm = json.loads(run["config"]).get("backend") == "slurm"
+            if not is_slurm:
+                self.request_placement_checks(run)
+            if run["ready"] and not is_slurm:
                 # Poll only when a ready candidate could use refreshed capacity;
                 # coalescing and a per-host cooldown avoid the ticker probing.
                 refreshable = {"host_stale", "host_unknown", "host_unavailable", "gpu_busy"}
@@ -1361,21 +1494,32 @@ class Manager:
                 self.store.event("run.starting", {"id": current["id"], "gpus": gpus}, current["project_id"])
             mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                      (host["id"], current["project_id"]))
-            spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved["repo"], "revision": current["revision"],
+            spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved.get("repo", current.get("repo", "")), "revision": current["revision"],
                     **resolved, "gpus": gpus}
+            if is_slurm:
+                spec.update(repo=resolved["config"]["slurm_repo"], python=resolved["config"]["slurm_python"], gpu_count=current["gpu_count"])
+                spec["config"].pop("slurm_status", None)
+                spec["config"].pop("slurm_preflight", None)
             try:
-                result = await self.transport.request(host, {"op": "launch", "directory": job_dir, "spec": spec}, timeout=150)
+                result = await self.transport.request(host, {"op": "slurm_launch" if is_slurm else "launch", "directory": job_dir, "spec": spec}, timeout=150)
+                if is_slurm:
+                    self.record_slurm_status(current, result)
                 self.record_run_timing(current, result)
                 if result.get("state") == "blocked":
+                    if is_slurm:
+                        config = json.loads(self.store.get("runs", current["id"])["config"])
+                        config["slurm_preflight"] = {"retry_at": time.time() + 60, "error": result.get("error", "PSC preparation pending")}
+                        self.store.execute("UPDATE runs SET config=? WHERE id=?", (json.dumps(config), current["id"]))
                     with self.store.transaction():
                         latest = self.store.get("runs", current["id"])
                         next_status = "cancelled" if latest["status"] == "cancelling" else "queued"
                         self.store.execute("DELETE FROM reservations WHERE run_id=?", (current["id"],))
                         self.store.execute("UPDATE runs SET status=?,job_dir=NULL,allocated_gpus='[]',error=?,updated=? WHERE id=?",
                                            (next_status, result.get("error", "GPUs became busy"), time.time(), current["id"]))
-                    self.placement_observations.pop((current["id"], host["id"]), None)
-                    self.host_metrics.pop(host["id"], None)
-                    self.request_host_refresh()
+                    if not is_slurm:
+                        self.placement_observations.pop((current["id"], host["id"]), None)
+                        self.host_metrics.pop(host["id"], None)
+                        self.request_host_refresh()
                 elif result.get("state") in TERMINAL_RUNS:
                     self.finish_run(current, result)
                 elif result.get("state") in ACTIVE_RUNS:

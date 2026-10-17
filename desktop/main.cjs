@@ -64,7 +64,9 @@ async function connectWindow(context, raw) {
     const config = validateConfig(raw);
     if(context.connection&&configKey(context.connection.config)!==configKey(config)&&[...panelWindows.values()].some(row=>row.parent===context))throw new Error('Close this workspace’s separate panels before changing its host, or use New Window for the other host.');
     sendStatus(context, 'connecting', `Connecting to ${config.mode === 'local' ? 'this machine' : config.target}…`);
-    next = await connect(config, message => sendStatus(context, 'connecting', message), {signal:attempt.signal});
+    next = await connect(config, message => {
+      if(context.attempt===attempt&&!attempt.signal.aborted&&!context.window.isDestroyed())sendStatus(context,'connecting',message);
+    }, {signal:attempt.signal});
     if (attempt.signal.aborted || context.attempt !== attempt || context.window.isDestroyed()) { next.child?.kill();return {error:'Connection cancelled.'}; }
     const changedHost = context.record.config && configKey(context.record.config) !== configKey(next.config);
     if (changedHost) await context.window.webContents.session.clearStorageData();

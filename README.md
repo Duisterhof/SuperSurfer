@@ -56,6 +56,12 @@ published 0.1.43 release.
 3. Open the app and choose **This machine** or connect to a **remote machine over SSH**. The workspace host needs **Python 3.11+, Git and one AI provider’s CLI**.
 4. Choose **Codex**, **Cursor** or **Claude** on the first-machine screen and sign in on that computer. This choice becomes the default for new agents. Connect a project, then create its first task. SuperSurfer creates its service and workspace data folders automatically.
 
+Reopening a saved workspace reuses its healthy installed service when its app
+version matches, without uploading the bundle again. First-time setup and version
+changes upload with received-byte progress. A stalled upload stops after 30 seconds
+without incoming bytes; all uploads also have an overall deadline. **Cancel connection**
+ends only the connection attempt and preserves remote work.
+
 **Settings → Coding backends** shows all three providers with sign-in and sign-out. You only need one. Existing conversations stay with their original provider; sign-out keeps their history and requires that provider’s turns to be idle.
 
 **Connecting Cursor:** install its CLI on the computer running the workspace; the Cursor desktop app alone is insufficient. On Mac, choose **Cursor → Set up → Install Cursor CLI in Terminal**, finish installation, then **Check again → Sign in**. For a remote workspace, open the sign-in link printed in Terminal in your Mac’s browser. If Terminal cannot open, SuperSurfer shows the complete command for the correct host. Other platforms show that command and the official installation guide.

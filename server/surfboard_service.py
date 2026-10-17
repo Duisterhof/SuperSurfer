@@ -373,6 +373,16 @@ class SurfboardService:
                         "SUPERSURFER_AGENT_ROLE": role, "SUPERSURFER_ALLOWED_TOOLS": json.dumps(allowed)}}}
         return context
 
+    def recovery_check_allowed(self, scope, state, node_id):
+        """An owner may finish configured checks for its saved recovery task."""
+        if self.turn_origins.get(scope) != "recovery":
+            return False
+        record = self.recovery.get(self.recovery.active.get(scope))
+        if not record or not self.recovery.allowed(scope, record["runs"][-1]):
+            return False
+        action = state["compiled"].get("actions", {}).get(node_id, {})
+        return action.get("kind") == "check" and scope.startswith(("experiment:", "conversation:"))
+
     def board_gate(self, project, state, operation, arguments, scope=None):
         experiment_id = arguments.get("experiment_id")
         if scope and scope.startswith(("experiment:", "conversation:")):
@@ -382,7 +392,8 @@ class SurfboardService:
                 continue
             kind = requirement["kind"]
             if kind == "user_authorization":
-                if scope and self.turn_origins.get(scope) != "user" and scope not in self.recovery.submitting:
+                if (scope and self.turn_origins.get(scope) != "user" and scope not in self.recovery.submitting
+                        and not (operation.startswith("run_board_action:") and self.recovery_check_allowed(scope, state, operation.split(":", 1)[1]))):
                     raise SurfboardError("This step requires the user's requested work.", 403)
             elif kind == "check_passed":
                 if operation == "queue_run":
@@ -512,7 +523,8 @@ class SurfboardService:
         if tool == "run_board_action":
             if not self.workflow_chat(scope).get("busy"):
                 raise SurfboardError("Board actions require an active conversation.", 409)
-            if fields.get("operation", "start") in {"start", "stop"} and self.turn_origins.get(scope) != "user":
+            if (fields.get("operation", "start") in {"start", "stop"} and self.turn_origins.get(scope) != "user"
+                    and not self.recovery_check_allowed(scope, state, fields.get("node_id"))):
                 raise SurfboardError("Starting or stopping a board action requires user-requested work.", 403)
             return self.board_runtime.action(scope, project, state, fields)
         if tool == "inspect_project_activity":
