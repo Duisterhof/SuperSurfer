@@ -177,6 +177,12 @@ another build. Source changes require a new request ID, not a replay of the old
 build. Compilation does not save dirty buffers, commit files or publish artifacts.
 The snapshot is read-only, outputs are separate, and network/shell access is disabled.
 Timeout, log/source/output and recent-build retention limits are enforced.
+The compiler accepts up to 512 MiB of source and a 512 MiB PDF. A source-size
+failure names the input that exhausted the total allowance; narrow the source
+folder when unrelated repository files are included. A repository PDF tile bound
+to a file path displays that saved file, not the compiler's latest build. For
+compile-on-save, use the connected compiler PDF panel and a main file that reads
+the editable source directly; a generated source copy will not track later edits.
 If the applied compiler step requires checks, a commit or a verified PR, the
 copied source must still match the admitted source. A concurrent-edit rejection
 requires checking the current saved source again; do not bypass the board's gate.

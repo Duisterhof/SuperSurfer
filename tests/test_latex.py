@@ -81,6 +81,16 @@ class LatexSourceTests(unittest.TestCase):
         link.unlink();os.link(outside, link)
         with self.assertRaises(SurfboardError):source_snapshot(self.service.project, extra_source_files=['draft/link.tex'])
 
+    def test_source_size_boundary_identifies_the_file_that_exceeds_the_budget(self):
+        expected = source_snapshot(self.service.project)['bytes']
+        with patch('server.latex.MAX_SOURCE_BYTES', expected):
+            self.assertEqual(expected, source_snapshot(self.service.project)['bytes'])
+        with patch('server.latex.MAX_SOURCE_BYTES', expected - 1):
+            with self.assertRaises(SurfboardError) as error:
+                source_snapshot(self.service.project)
+        self.assertEqual(413, error.exception.status)
+        self.assertIn('sections/body.tex', str(error.exception))
+
     def test_symlink_parent_file_hardlink_and_size_are_rejected(self):
         outside=self.directory/'outside';outside.write_text('outside fixture')
         link=self.service.repo/'linked.tex';link.symlink_to(outside)
@@ -138,8 +148,8 @@ class LatexCompilationTests(unittest.TestCase):
             self.skipTest('Linux user namespaces are unavailable in this test process')
     def start(self,**fields):
         return self.compiler.action('project:paper-project',self.service.project,{'request_id':'compile-request-'+str(time.time_ns()),**fields})
-    def done(self,build_id):
-        deadline=time.monotonic()+10
+    def done(self,build_id,timeout=10):
+        deadline=time.monotonic()+timeout
         while time.monotonic()<deadline:
             row=self.service.store.get('latex_build:'+build_id)
             # Terminal metadata can be visible while the worker is still pruning
@@ -148,6 +158,22 @@ class LatexCompilationTests(unittest.TestCase):
                 if row['status'] in TERMINAL and build_id not in self.compiler.active:return row
             time.sleep(.01)
         self.fail('Build did not finish within test deadline')
+
+    def test_image_rich_paper_can_exceed_old_source_and_pdf_limits(self):
+        for name in ('embedded.bin', 'other-input.bin'):
+            with (self.service.repo / name).open('wb') as stream:
+                stream.truncate(55 * 1024 * 1024)
+        self.service.write('main.tex', r'''\pdfcompresslevel=0
+\documentclass{article}
+\begin{document}
+\immediate\pdfobj stream file{embedded.bin}
+Large paper preview.
+\end{document}
+''')
+        row = self.done(self.start()['build_id'], timeout=60)
+        self.assertEqual('succeeded', row['status'], row.get('error', row['logs']))
+        self.assertGreater(row['source_bytes'], 100 * 1024 * 1024)
+        self.assertGreater(row['pdf_size'], 50 * 1024 * 1024)
     def test_ignored_main_can_be_repaired_and_extra_inputs_bind_receipts_and_freshness(self):
         self.service.write('.gitignore', 'draft/\n')
         self.service.write('draft/main.tex', r'\documentclass{article}\begin{document}\input{body.tex}\end{document}')

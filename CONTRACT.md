@@ -571,7 +571,7 @@ before any Python/SSH probe and project validation before creating a directory.
   including private state. They use fixed pdfLaTeX/BibTeX commands in a networkless
   bubblewrap namespace with read-only source, writable isolated output, no shell
   escape and no home directory. Unsupported containment fails explicitly.
-- Source is bounded to 100 MiB/10,000 files, logs 256 KiB, PDF 50 MiB, output 100 MiB/2,000
+- Source is bounded to 512 MiB/10,000 files, logs 256 KiB, PDF 512 MiB, output 1,024 MiB/2,000
   files, process address space 1 GiB and configured wall time1–300 seconds (default 120).
   At most four builds run per workspace and one per repository/paper path. Source
   snapshots and scratch outputs are cleaned; retain 20 recent builds per paper plus
