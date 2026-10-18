@@ -65,6 +65,31 @@ class AMLClient:
         except (OSError, ValueError, KeyError) as exc:
             raise ManagerError(f"AutoML manager unavailable at {self.home}: {exc}") from exc
 
+    def status_snapshot(self):
+        # Preserve every full run contract without letting accumulated historical
+        # configs exceed the per-response transport limit. No history is dropped.
+        try:
+            snapshot = self.call("status", {"run_limit": 50, "run_offset": 0})
+        except ManagerError as exc:
+            if not exc.definitive or "unexpected keyword argument" not in str(exc) or "run_limit" not in str(exc):
+                raise
+            return self.call("status")  # Compatible older managers.
+        if not isinstance(snapshot, dict) or "runs_total" not in snapshot:
+            return snapshot
+        total = snapshot["runs_total"]
+        runs = list(snapshot.get("runs", []))
+        if type(total) is not int or total < len(runs):
+            raise ManagerError("Invalid paged AutoML status")
+        while len(runs) < total:
+            page = self.call("status", {"run_limit": 50, "run_offset": len(runs)})
+            if page.get("runs_offset") != len(runs) or not page.get("runs"):
+                raise ManagerError("Incomplete paged AutoML status")
+            runs.extend(page["runs"][:total - len(runs)])
+        if len({run["id"] for run in runs}) != total:
+            raise ManagerError("Duplicate run in paged AutoML status")
+        return {key: value for key, value in snapshot.items()
+                if key not in {"runs_total", "runs_offset", "runs"}} | {"runs": runs}
+
     def status(self, force=False):
         # Display readers can use timestamped cached evidence while another
         # request refreshes it. Explicit fresh checks still wait and fail closed.
@@ -75,7 +100,7 @@ class AMLClient:
             interval = max(self.cache_seconds, 5) if self.error else self.cache_seconds
             if force or time.monotonic() - self.last_attempt >= interval:
                 try:
-                    snapshot = self.call("status")
+                    snapshot = self.status_snapshot()
                     if not isinstance(snapshot, dict) or "projects" not in snapshot:
                         raise ManagerError("AutoML returned an invalid status response")
                     self.snapshot, self.updated_at, self.error = snapshot, time.time(), None

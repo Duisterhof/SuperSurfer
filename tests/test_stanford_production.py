@@ -21,7 +21,7 @@ def production():
                     walltime_seconds=86400, until_stopped=True,
                     allow_preemption=True, checkpoint_grace_seconds=120)
     result['command'] = [result['python'], '-m', 'reviewed_entry',
-                         '--until-stopped', '--checkpoint-on-signal']
+                         '--config', 'experiments/fresh/config.json']
     return result
 
 
@@ -56,7 +56,7 @@ class ProductionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate(value)
         value = production()
-        value['command'].remove('--checkpoint-on-signal')
+        value['command'].extend(['--smoke-updates', '10'])
         with self.assertRaises(ValueError):
             validate(value)
 
@@ -72,6 +72,7 @@ class ProductionTests(unittest.TestCase):
             value = production()
             receipt = bridge.submit(value, directory)
             self.assertEqual(receipt['job_id'], '123456')
+            self.assertEqual(receipt['gpu_count'], 7)
             self.assertEqual(bridge.submit(value, directory), receipt)
             self.assertEqual(len(calls), 2)
             argv = calls[1]

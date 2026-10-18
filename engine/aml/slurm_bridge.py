@@ -94,8 +94,8 @@ def validate(spec):
     # The reviewed native entry point must enforce this same bound; the adapter
     # cannot turn an unbounded training command into a smoke by metadata alone.
     if resource.get("profile") == "seven_l40s_training_v1":
-        if command.count("--until-stopped") != 1 or command.count("--checkpoint-on-signal") != 1:
-            raise ValueError("Production entry requires until-stopped and checkpoint-on-signal CLI contracts")
+        # Full-state signal handling and until-stop semantics belong to the
+        # reviewed scientific entry/config, not mandatory invented CLI flags.
         if any(x.startswith("--smoke-updates") for x in command):
             raise ValueError("Production cannot use a smoke update bound")
     else:
@@ -187,7 +187,7 @@ class SlurmBridge:
                 receipt = {"run_id": spec["id"], "job_id": output.split(";")[0],
                            "fingerprint": fingerprint, "revision": spec["revision"],
                            "account": r["account"], "partition": r["partition"],
-                           "gpu_type": r["gpu_type"], "gpu_count": 1, "cpus_per_task": r.get("cpus_per_task",2), "state": "starting", "slurm_state": "PENDING"}
+                           "gpu_type": r["gpu_type"], "gpu_count": r["gpu_count"], "cpus_per_task": r.get("cpus_per_task",2), "state": "starting", "slurm_state": "PENDING"}
                 atomic(receipt_path, receipt)
                 return receipt
             except subprocess.CalledProcessError as exc:

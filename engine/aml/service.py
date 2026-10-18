@@ -143,9 +143,20 @@ class Manager:
                 for table in ("projects", "agents", "tasks", "runs", "native_sessions")}
         return targets.resolve(rows, target, project, default_project, conversation, kinds)
 
-    async def status(self, project=None):
+    async def status(self, project=None, run_offset=0, run_limit=None):
+        if type(run_offset) is not int or run_offset < 0:
+            raise ValueError("Invalid status run offset")
+        if run_limit is not None and (type(run_limit) is not int or not 1 <= run_limit <= 100):
+            raise ValueError("Status run limit must be between 1 and 100")
+        runs = await self.run_list(project, offset=run_offset, limit=run_limit)
+        page = {}
+        if run_limit is not None:
+            project_filter = " WHERE project_id=?" if project else ""
+            project_args = (self.project(project)["id"],) if project else ()
+            total = self.store.one("SELECT count(*) AS count FROM runs" + project_filter, project_args)["count"]
+            page = {"runs_total": total, "runs_offset": run_offset}
         return {"projects": await self.project_list(), "tasks": await self.task_list(project),
-                "agents": await self.agent_list(project), "runs": await self.run_list(project),
+                "agents": await self.agent_list(project), "runs": runs, **page,
                 "hosts": await self.host_list(), "queue": await self.queue_status(),
                 "gpus": await self.gpu_status()}
 
@@ -778,11 +789,16 @@ class Manager:
             row["wait_reason"] = ""
         return row
 
-    async def run_list(self, project=None):
+    async def run_list(self, project=None, offset=0, limit=None):
+        args = (self.project(project)["id"],) if project else ()
+        pagination = ""
+        if limit is not None:
+            pagination = " LIMIT ? OFFSET ?"
+            args += (limit, offset)
         rows = self.store.rows("SELECT r.*,p.name AS project_name,h.name AS host_name FROM runs r "
                                "JOIN projects p ON p.id=r.project_id JOIN hosts h ON h.id=r.host_id" +
-                               (" WHERE r.project_id=?" if project else "") + " ORDER BY r.created",
-                               (self.project(project)["id"],) if project else ())
+                               (" WHERE r.project_id=?" if project else "") + " ORDER BY r.created,r.id" + pagination,
+                               args)
         return [self.run_details(row) for row in rows]
 
     async def run_show(self, run):

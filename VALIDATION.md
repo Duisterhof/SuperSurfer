@@ -1,3 +1,19 @@
+# Stanford production and complete status history — October 17, 2026
+
+- 828 Python tests pass, including complete history aggregation beyond 16 MiB,
+  stale-snapshot preservation on page failure and old-manager compatibility.
+- 49 Node tests pass; five optional SSH tests are skipped. The initial Node run
+  found a missing isolated `ws` dependency; rerunning with its prepared dependency
+  path passed without modifying the shared environment.
+- 27 Stanford tests pass, preserving smoke bounds, exact production resources,
+  scheduler-only reclamation, source review, lost-reply deduplication and recovery.
+- Linux x64 packaging passed. The packaged app opened in an isolated profile;
+  native Electron sandbox, navigation persistence and untrusted-page denial passed.
+- Five shipped capability skills were substantively reviewed and revised;
+  both 0.1.43 version markers and the skill/diff checks pass.
+- No research GPU was launched by these tests. Production data/source admission,
+  actual seven-GPU optimizer progress and measured telemetry remain owner duties.
+
 # PSC Slurm queue integration — October 13, 2026
 
 October 15 validator repair:

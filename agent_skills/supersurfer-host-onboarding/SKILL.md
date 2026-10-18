@@ -7,7 +7,8 @@ metadata:
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.43. Necessary bounded node preparation belongs to the
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
 or ask the manager. Leads remain in their project, workers in their experiment's
@@ -267,7 +268,47 @@ choice persists all three role defaults; compute-only nodes still need no login.
 ## Slurm allocations
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](references/slurm.md).
-The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
-use a control host with no physical GPU registration, preserve the same request
-and run identities, and read its recorded Slurm job state. Preparation alone and
-suggested experiments do not authorize launches. Existing stops still apply.
+Stanford uses `backend: "stanford_slurm"`, account/partition `viscam` and its
+approved GPU types. Omitting `slurm.profile` retains the one-GPU,
+900-second/100-update smoke with explicit 1–8 CPUs, 1–64 GiB RAM and matching
+`--smoke-updates`. Production requires `profile: "seven_l40s_training_v1"`,
+`gpu_type: "l40s"`, top-level `gpu_count: 7`, `cpus_per_task: 28`,
+`memory_gib: 112`, `walltime_seconds: 86400` and `checkpoint_grace_seconds: 120`.
+It also requires `until_stopped: true` and `allow_preemption: true`; omit
+`max_updates` and smoke bounds. These exact values do not authorize another
+resource profile. Both paths retain exact-source PR, experiment/request identity
+and individual training telemetry requirements.
+
+Reuse the authorized registered SSH control host with `gpus: []`; Slurm assigns
+physical devices. Do not onboard the login endpoint into a project GPU pool or
+use `acquire_new_node` for an allocation. Top-level `repo` is the local clean
+worktree for exact-source PR verification. `slurm.repo`, `python`, required input
+paths and command argv refer to the prepared remote payload; use explicit paths.
+Manager-owned staging/placement and scientist-owned source/checkpoint work must
+meet at one submission owner, not two queue requests.
+
+Stanford login-node work is restricted to metadata, Git identity and Slurm control;
+do not run imports, builds, preprocessing, checksums or scientific jobs there.
+Use the approved transfer endpoint and durable paths, obey required site/storage
+coordination, and finish immutable source/runtime/data staging before allocation.
+Do not infer ready data from a manifest alone. In the reviewed allocated entry
+point, stage bulk source/runtime/data/caches/outputs to approved allocation-local
+scratch, then verify source/config, runtime/precision, full input identity,
+headroom and locality before CUDA. Preserve original bytes and durable sealed
+outputs; a control-host path check does not prove allocated readiness.
+
+The scientist must implement the actual distributed launch and checkpoint/signal
+path, including bootstrap-to-child propagation and complete raw/EMA/optimizer/
+RNG/sampler recovery. Preserve Slurm's `CUDA_VISIBLE_DEVICES`; never set a login
+GPU mask or assume physical device IDs. An allocation walltime bounds resources,
+not an until-stopped scientific assignment. Slurm requeue remains disabled;
+continuation requires authorized scoped recovery and a verified full checkpoint.
+
+Only select production's required `allow_preemption: true` under the user's
+explicit scheduler reclamation authorization. It permits a read-only estimate's
+`Preempts` result; smoke and unknown estimates remain blocked. This never permits
+cancelling another user's job, dummy allocations or sleeper jobs.
+Inspect the same run's recorded Slurm ID/state/reason and reconcile uncertain
+submission rather than changing request identity. Use scoped `stop_run` for an
+authorized cancellation, never shell `sbatch` or broad `scancel`. Deployment of a
+missing backend capability remains an app-maintainer operation, not node setup.

@@ -78,8 +78,8 @@ def contract(params, host):
     if not isinstance(command, list) or not command or command[0] != interpreter or any(not isinstance(x, str) or any(c in x for c in ('\n', '\0')) for x in command):
         raise ValueError('Slurm command must be explicit argv starting with the configured Python')
     if production:
-        if command.count('--until-stopped') != 1 or command.count('--checkpoint-on-signal') != 1:
-            raise ValueError('Production entry requires until-stopped and checkpoint-on-signal CLI contracts')
+        # The exact reviewed entry/config owns its training budget and full-state
+        # signal handler. The transport must not invent framework-specific flags.
         if any(x.startswith('--smoke-updates') for x in command):
             raise ValueError('Production cannot use a smoke update bound')
     else:

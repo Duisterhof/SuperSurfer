@@ -29,11 +29,11 @@ The production Slurm object is explicit:
 ```
 
 Set top-level `gpu_count=7`. The profile rejects other GPU counts, types,
-CPU/RAM values, walltimes and checkpoint grace values. The command must contain
-exactly one `--until-stopped` and one `--checkpoint-on-signal`. It must not contain
-a smoke update bound. These flags are a reviewed source contract: the scientific
-owner must implement and test them, including propagation through any bootstrap
-and distributed child processes. The bridge does not implement trainer recovery
+CPU/RAM values, walltimes and checkpoint grace values. The command must not contain
+a smoke update bound. The scientific owner must verify until-stop configuration
+and complete checkpoint signal handling in the exact reviewed source, including
+propagation through bootstrap and distributed child processes. The bridge does
+not prescribe framework-specific CLI flags and does not implement trainer recovery
 by killing or replacing scientific processes.
 
 Twenty-four hours is the allocation walltime, not a scientific exposure endpoint.
