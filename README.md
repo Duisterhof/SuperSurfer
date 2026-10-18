@@ -106,3 +106,8 @@ Bundled dependencies retain their own licenses and notices; see
 [third-party notices](LICENSES/THIRD-PARTY.md). Distributing the combined app with
 Apache-2.0 components such as PDF.js uses the GPLv3 option. Distributors must
 provide the corresponding source and build instructions required by that license.
+
+A user-requested pending Stanford allocation can be replanned through the managed
+recovery tool without touching a job that has started. The operation keeps the
+reviewed scientific source and data, records cancellation proof, and creates one
+linked replacement within the existing recovery limit.

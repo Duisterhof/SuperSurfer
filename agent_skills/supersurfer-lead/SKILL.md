@@ -7,7 +7,7 @@ metadata:
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
 Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
@@ -286,3 +286,15 @@ of TERM grace; omit `max_updates` and smoke flags. Keep scientific ownership wit
 the worker, exact rank/global-batch/precision admission with the source, and a
 single submission owner. This lead still cannot queue. A read-only estimate grants
 no allocation or new research authority.
+
+An explicit user-origin placement change can use the existing submission owner's
+`recover_run` action `replan_pending`; it is not a fresh queue request or a general
+resource-edit capability. Preserve that owner and follow
+[the pending replan contract](../supersurfer-host-onboarding/SKILL.md#replanning-a-never-started-stanford-allocation).
+Only its latest enabled flexible lineage and the exact expected pending Slurm job
+and source revision qualify. Source/PR/data remain fixed; the only command change
+is the existing `--ranks` value matching the new bounded GPU count. The service
+must prove pending-only cancellation and terminal no-start status before one
+idempotent linked child, using the existing recovery budget. A race-started job,
+uncertain outcome, stop or exhausted budget blocks replacement. Scheduled checks
+cannot initiate this operation or turn a placement suggestion into authorization.

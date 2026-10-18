@@ -100,6 +100,8 @@ def compact_status(run, recovery, acquisitions):
             'updated_at', 'last_wake', 'task'), 'recovery')
         grant.update(current_run_id=recovery['runs'][-1], max_attempts=3,
                      is_latest_attempt=recovery['runs'][-1] == run['id'])
+        grant['pending_replans'] = [{k:p.get(k) for k in ('parent_run_id', 'child_run_id', 'phase', 'fields')}
+                                   for p in recovery.get('pending_replans', [])]
     recent = sorted(acquisitions, key=lambda row: row.get('updated_at', 0), reverse=True)[:4]
     summaries = []
     for row in recent:
@@ -244,6 +246,9 @@ class RunRecovery:
 
     def action(self, scope, run, fields):
         action = fields.get('action', 'status')
+        if action == 'replan_pending':
+            from .run_replan import replan
+            return replan(self, scope, run, fields)
         if action == 'status':
             if set(fields) - {'action','run_id','include_details'}: raise ComputeError('Status accepts run_id and optional include_details')
             if type(fields.get('include_details', False)) is not bool:
@@ -328,9 +333,18 @@ class RunRecovery:
             for record in service.store.get('run_recovery', []):
                 run = runs.get(record['runs'][-1]); scope = record['scope']
                 if not record['enabled'] or not run: continue
-                if run['status'] in {'succeeded','cancelled'}:
+                from .run_replan import pending_plan, PENDING_PHASES
+                plan = pending_plan(record, run['id'])
+                replanning = bool(plan and plan['phase'] in PENDING_PHASES)
+                if replanning and (run.get('started') is not None or run['status'] in {'running', 'succeeded', 'failed'}):
+                    plan.update(phase='aborted', error='Original attempt started or changed; preserve it')
+                    self.save(record)
+                    replanning = False
+                if run['status'] in {'succeeded','cancelled'} and not replanning:
                     record.update(enabled=False); self.save(record); continue
-                if run['status'] == 'failed' and record['attempts'] < 3:
+                if replanning:
+                    problem = ['pending_replan', run['status'], plan['phase']]
+                elif run['status'] == 'failed' and record['attempts'] < 3:
                     problem = ['failed', run.get('error')]
                 elif run['status'] == 'queued' and run.get('ready') and time.time() - (run.get('created') or time.time()) >= 120:
                     problem = ['queued', run.get('waiting_reason')]
@@ -363,6 +377,10 @@ class RunRecovery:
                         'reconciles any existing submission; do not use a fresh queue request or delete the receipt. '
                         'This changes no resource, protocol, approval or retry limit. Saved retry fields: ' +
                         json.dumps({'run_id':run['id'],'command':legacy_retry['command'],'revision':legacy_retry['revision']}))
+                if replanning:
+                    prompt += ('\nAn explicit user resource replan is already saved. Reconcile it using '
+                               'recover_run with these EXACT immutable fields; no separate stop or new request: '
+                               + json.dumps(plan['fields']))
                 try:
                     response = service.codex.send(scope, prompt, **{key:preferences[key] for key in ('model','reasoning','fast_mode','approval_mode')})
                     if not response.get('accepted'):

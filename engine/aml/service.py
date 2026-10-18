@@ -113,7 +113,7 @@ class Manager:
             "host.add": self.host_add, "host.list": self.host_list, "host.repo": self.host_repo,
             "host.update": self.host_update,
             "run.submit": self.run_submit, "run.list": self.run_list, "run.show": self.run_show,
-            "run.cancel": self.run_cancel, "run.logs": self.run_logs,
+            "run.cancel": self.run_cancel, "run.cancel_pending": self.run_cancel_pending, "run.logs": self.run_logs,
             "run.add_candidate": self.run_add_candidate, "run.amend_source": self.run_amend_source,
             "run.queue": self.run_queue, "run.reorder": self.run_reorder,
             "run.move": self.run_move, "run.ready": self.run_ready, "run.hold": self.run_hold,
@@ -135,7 +135,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.stanford_slurm.training.v1", "run.stanford_slurm.training.flexible.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.stanford_slurm.training.v1", "run.stanford_slurm.training.flexible.v1", "run.cancel_pending.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -1067,6 +1067,36 @@ class Manager:
             self.host_capacity_changed.add(host["id"])
         self.wake_scheduler(run["id"])
 
+    async def run_cancel_pending(self, run, expected_job_id):
+        row = self.store.get('runs', run)
+        config = json.loads(row['config'])
+        if (config.get('backend') != 'stanford_slurm'
+                or config.get('slurm', {}).get('profile') != 'single_node_training_v1'
+                or row['status'] not in {'starting', 'cancelled'} or row.get('started') is not None
+                or not row.get('job_dir')
+                or config.get('slurm_status', {}).get('job_id') != expected_job_id):
+            raise ValueError('Exact never-started flexible Stanford job required')
+        review.validate_receipt(config, row['revision'])
+        host = self.store.get('hosts', row['host_id'])
+        state = await self.transport.request(host, {'op':'slurm_cancel_pending',
+            'directory':row['job_dir'], 'expected_job_id':expected_job_id}, timeout=120)
+        current = self.store.get('runs', run)
+        if current.get('started') is not None or state.get('started') is not None:
+            raise ValueError('Job started during replan; no replacement is permitted')
+        proof = None
+        if (state.get('state') == 'cancelled' and state.get('job_id') == expected_job_id
+                and state.get('never_started') and state.get('owned_pending_cancel')):
+            config = json.loads(current['config'])
+            config['slurm_pending_cancel_proof'] = state
+            self.store.execute('UPDATE runs SET config=? WHERE id=?', (json.dumps(config), run))
+            self.record_slurm_status(current, state)
+            self.finish_run(current, state)
+            proof = state
+        # A pending-only cancellation never sets status=cancelling: ordinary
+        # reconciliation must not turn it into unconditional cancellation.
+        result = self.store.get('runs', run)
+        return {**result, 'pending_cancel_proof':proof}
+
     async def run_cancel(self, run):
         row = self.store.get("runs", run)
         if row["status"] in TERMINAL_RUNS:
@@ -1145,6 +1175,10 @@ class Manager:
                 operation = "cancel" if run["status"] == "cancelling" else "status"
                 state = await self.transport.request(host, {
                     "op": ("slurm_" if slurm else "") + operation, "directory": run["job_dir"]}, timeout=120 if slurm else 45)
+                if self.store.get('runs', run['id'])['status'] in TERMINAL_RUNS:
+                    # A concurrent pending-only cancellation has newer terminal
+                    # proof. A stale status reply cannot revive its parent.
+                    return
                 if slurm:
                     self.record_slurm_status(run, state)
                 self.record_run_timing(run, state)

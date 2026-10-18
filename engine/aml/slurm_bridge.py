@@ -250,10 +250,10 @@ class SlurmBridge:
             atomic(receipt_path, result)
             return result
 
-    def status(self, job_id):
+    def status(self, job_id, accounting_only=False):
         if not re.fullmatch(r"[1-9][0-9]*", str(job_id)):
             raise ValueError("Invalid Slurm job ID")
-        output = self.execute(["squeue", "--noheader", "--jobs=" + str(job_id), "--format=%i|%T|%N|%R|%S"])
+        output = "" if accounting_only else self.execute(["squeue", "--noheader", "--jobs=" + str(job_id), "--format=%i|%T|%N|%R|%S"])
         rows = [line.strip().split("|") for line in output.splitlines()]
         rows = [r for r in rows if len(r) >= 4 and r[0] == str(job_id)]
         if len(rows) > 1:
@@ -279,6 +279,8 @@ class SlurmBridge:
         if len(rows) != 1:
             raise UncertainSubmission("Waiting for Slurm accounting; retain existing job")
         row = rows[0]
+        if accounting_only and len(row) < 6:
+            raise UncertainSubmission('Incomplete accounting cannot prove a never-started job')
         state = row[1].split()[0].rstrip("+")
         mapped = {"PENDING": "starting", "RUNNING": "running", "COMPLETING": "running", "SUSPENDED": "running",
                   "COMPLETED": "succeeded", "CANCELLED": "cancelled", "FAILED": "failed", "BOOT_FAIL": "failed",
@@ -295,10 +297,54 @@ class SlurmBridge:
                 try:
                     result[key] = datetime.fromisoformat(row[index]).timestamp()
                 except ValueError:
-                    pass
+                    if accounting_only:
+                        raise UncertainSubmission('Invalid accounting timestamp; retain existing job')
         if result["state"] == "failed":
             result["error"] = "Slurm " + state + " (exit " + row[2] + ")"
         return result
+
+    def cancel_pending(self, directory, expected_job_id):
+        """Never stop a race-started job or infer cancellation from lost output."""
+        directory = Path(directory)
+        if not re.fullmatch(r'[1-9][0-9]*', str(expected_job_id)):
+            raise ValueError('Exact pending Slurm job ID required')
+        with (directory / 'slurm.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if (directory / 'slurm.cancel.json').exists():
+                raise ValueError('Explicit run cancellation cannot become a resource replan')
+            receipt = json.loads((directory / 'slurm.receipt.json').read_text())
+            if receipt.get('job_id') != expected_job_id:
+                raise ValueError('Pending Slurm job identity differs')
+            marker_path = directory / 'slurm.pending-replan.json'
+            marker = json.loads(marker_path.read_text()) if marker_path.exists() else None
+            if marker and marker['job_id'] != expected_job_id:
+                raise ValueError('Saved pending cancellation identity differs')
+            state = self.status(expected_job_id, accounting_only=True)
+            if state.get('started') is not None:
+                raise ValueError('Job has started; preserve it without replacement')
+            if state['state'] == 'cancelled' and marker:
+                return {**receipt, **state, 'never_started':True, 'owned_pending_cancel':True}
+            if state.get('slurm_state') != 'PENDING':
+                raise ValueError('Only a confirmed never-started PENDING job may be replanned')
+            # Accounting Start must be absent, and a prior requeue must not hide
+            # an earlier allocation. StartTime in scontrol can be a future estimate.
+            raw = self.execute(['scontrol', 'show', 'job', '--oneliner', expected_job_id])
+            detail = dict(re.findall(r'\b([A-Za-z][A-Za-z0-9_]*)=([^\s]+)', raw))
+            if (detail.get('JobId') != expected_job_id or detail.get('JobState') != 'PENDING'
+                    or detail.get('RunTime') != '00:00:00' or detail.get('Restarts') != '0'):
+                raise ValueError('Job started, requeued or changed; preserve existing allocation')
+            if not marker:
+                atomic(marker_path, {'job_id':expected_job_id, 'run_id':receipt['run_id'],
+                                     'requested_at':time.time(), 'never_started_detail':detail})
+            # Slurm applies this filter when cancelling. If the job starts after
+            # our inspection, it no longer matches and must remain untouched.
+            self.execute(['scancel', '--state=PENDING', '--', expected_job_id])
+            state = self.status(expected_job_id, accounting_only=True)
+            if state.get('started') is not None:
+                raise ValueError('Job started during pending cancellation; no replacement')
+            if state['state'] == 'cancelled':
+                return {**receipt, **state, 'never_started':True, 'owned_pending_cancel':True}
+            return {**receipt, **state, 'never_started':False, 'owned_pending_cancel':False}
 
     def inspect(self, directory, cancel=False):
         directory = Path(directory)
@@ -337,6 +383,8 @@ def execute(argv):
 def handle(request):
     bridge = SlurmBridge(execute)
     directory = Path(request["directory"])
+    if request['op'] == 'slurm_cancel_pending':
+        return bridge.cancel_pending(directory, request['expected_job_id'])
     if request["op"] in {"slurm_status", "slurm_cancel"}:
         return bridge.inspect(directory, cancel=request["op"] == "slurm_cancel")
     if request["op"] != "slurm_launch":

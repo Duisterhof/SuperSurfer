@@ -7,7 +7,7 @@ metadata:
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
 A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
@@ -83,6 +83,19 @@ effective global batch and measured exposure/throughput. Its resource contract
 and test-only estimate establish neither launch nor optimizer progress. Qualify
 hardware comparisons and keep missing measurements pending; hardware changes
 permit neither invented curves nor rewriting older source bindings.
+
+An explicitly requested `recover_run` action `replan_pending` can replace a
+never-started flexible Stanford allocation only after the service proves that
+the exact pending job was cancelled without starting. Retain that cancelled
+attempt, reason and linked-child receipt; label it as unstarted placement, not a
+scientific failure, new seed or zero-valued measurement. This action preserves
+source/PR/data and changes only bounded placement plus the existing `--ranks`
+value. Report the actual accepted job and allocated hardware separately from
+test estimates and requested ranks; neither a cancellation receipt nor a linked
+child proves CUDA admission, checkpoint creation or optimizer progress. Preserve
+each verified writer/attempt identity without inventing a writer for an unstarted
+job. The existing recovery budget and ownership remain, and reporting/polling
+cannot initiate a replan, cancel work or authorize another launch.
 
 ## Reuse the reporting workflow, preserve the evidence
 

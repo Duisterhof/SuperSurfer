@@ -7,7 +7,7 @@ metadata:
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
 Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
@@ -307,6 +307,22 @@ supports 1–8 GPUs of one explicit type on one node under installed
 Validate actual rank mapping, effective global batch, precision and hardware
 telemetry in the exact reviewed source before the owned submission. The profile
 does not adapt model code or certify VRAM. Preserve strict full-state resume
-compatibility; a linked retry retains its original resource contract. Do not
+compatibility; an ordinary failed-attempt retry retains its resource contract. Do not
 create a second queue request when the manager owns submission. Supporting this
 profile grants no new autonomous launch authority.
+
+For an explicit user-origin placement change before any start, the existing
+submission owner may request `recover_run` action `replan_pending` on its latest
+enabled flexible lineage. Follow
+[the pending replan contract](../supersurfer-host-onboarding/SKILL.md#replanning-a-never-started-stanford-allocation):
+pin the exact expected Slurm job ID/full source revision, retain source/PR/data,
+and change only bounded placement fields plus the existing `--ranks` value to
+match 1–8 GPUs. The reviewed scientific code must already support that rank and
+hardware layout without changing effective batch or recipe. If the manager owns
+submission, supply that concrete scientific constraint and leave the replan there.
+The service conditionally cancels only a still-pending job, confirms terminal
+`CANCELLED` with no start, then submits one idempotent linked child under the
+existing recovery budget. A race-started job must not be stopped or duplicated.
+Reconcile uncertain replies using the same replan identity; do not use shell
+scheduler commands, manual state edits or a new initial queue request. Ordinary
+polling/recovery wakeups cannot initiate a replan or override an existing stop.

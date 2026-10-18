@@ -1071,3 +1071,29 @@ receipt. Retries reconcile before any source scan. Only a successful check with
 unchanged source can satisfy publication requirements.
 
 Publication checks can opt into source_manifest + source_paths. Their receipt covers the task-specific schema-1 manifest, exact publisher/payload, declared evidence, screenshots and checker/producer code, not unrelated repository contents or Git metadata. Publication verifies the actual submitted payload against this receipt. Missing, changed, escaping or symlinked inputs fail closed. Ordinary checks preserve full-source semantics; a publication-only check cannot authorize a GPU launch.
+
+## Never-started Stanford allocation replacement
+
+`recover_run(action=replan_pending)` requires the latest enabled recovery owner,
+an explicit user-origin initial request, exact source SHA and Slurm job ID, a
+reason, GPU count and bounded resource overrides. It applies only to the existing
+flexible single-node training profile. Account, source, dataset, protocol, effective
+batch and telemetry remain fixed; only allocation resources and the explicit
+reviewed `--ranks` value change. The normal queue, exact-source PR verification,
+Surfboard gates and existing three-attempt recovery ceiling remain in force.
+
+The service saves the immutable intent before asking the engine to cancel only
+a PENDING job. The bridge checks accounting Start and current job/restart identity,
+then uses Slurm's PENDING-state cancellation filter. A race-started allocation is
+preserved. Only exact terminal CANCELLED accounting with no start and the owned
+replan receipt permits a child. Incomplete accounting, connectivity errors and
+lost replies retain the saved intent without another submission identity. Reuse
+identical fields to reconcile. A saved plan can resume under its active recovery
+grant; new resource choices require another explicit user task. Explicit Stop
+or pause disables continuation, including while cancellation is in flight.
+
+The engine advertises `run.cancel_pending.v1`; older engines reject this operation
+before cancellation. Ordinary cancellation and failed-run retry remain separate.
+No test-only scheduler estimate reserves capacity or establishes scientific
+readiness. Actual hardware, rank mapping, local inputs and native training
+admission still belong to the experiment's reviewed launch path.

@@ -7,7 +7,7 @@ metadata:
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
 Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
@@ -330,3 +330,38 @@ rank/precision/VRAM admission; transport syntax alone proves neither. Preserve
 exact-source/data/local-scratch and single-owner submit/reconcile rules. A
 test-only estimate reserves nothing; this profile adds no launch, deployment or
 other-job cancellation authority.
+
+### Replanning a never-started Stanford allocation
+
+Use `recover_run` with `action: "replan_pending"` only for an explicit user-origin
+placement change to the latest enabled owner-bound Stanford
+`single_node_training_v1` lineage. Read the current run and supply its exact
+expected Slurm job ID and full source revision; do not target an older parent or
+infer them from a test estimate. An ordinary scheduled check or saved recovery
+wakeup cannot initiate this placement change. Preserve the existing submission
+owner, registered experiment, source/verified PR and immutable data identity.
+
+The revised layout is still one node with 1–8 homogeneous typed GPUs. Overrides
+are restricted to GPU type, `viscam`/`sc-loprio` partition, CPUs, memory and
+walltime within the flexible profile's limits. The existing argv is preserved
+except the existing `--ranks` value, which must equal the new GPU count. Source
+and scientific settings cannot change in this operation. Verify that the exact
+source already supports the new rank mapping, effective global batch, precision,
+memory and telemetry before requesting it; allocated admission remains required.
+
+The service checks that the exact job is never-started `PENDING`, then the engine
+uses a cancellation conditional on that exact job still being pending. It must
+confirm terminal `CANCELLED` with no start and persist owned cancellation proof
+before creating one linked child. If the job starts during the race, leave it
+running and do not create a replacement. An unknown state, missing terminal
+proof or uncertain cancellation/submission remains unresolved; inspect the same
+request's durable receipt instead of issuing a second request. Reuse the same
+replan identity after interruption. The replacement retains the lineage and
+uses its existing recovery budget, capped at three attempts, with ownership,
+stops, uncertainty guards and exact-source/review gates intact; a replan does not
+reset attempts.
+
+This managed transition is distinct from cancelling a run through `stop_run` and
+starting a new initial queue request. Do not perform `scancel`, `scontrol`,
+`sbatch`, database edits or ad hoc retries yourself. A native session without
+this scoped action must report that capability gap; it cannot emulate it.
