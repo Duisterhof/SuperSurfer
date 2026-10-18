@@ -679,7 +679,7 @@ def handle(request):
                 images = [{"type": "image", "mimeType": "image/png", "data": preview["data"]} for preview in previews]
             response["result"] = {"content": [{"type": "text", "text": json.dumps(result)}, *images], "isError": False}
         except Exception as error:
-            response["result"] = {"content": [{"type": "text", "text": str(error)}], "isError": True}
+            response["result"] = {"content": [{"type": "text", "text": str(error)[:12000]}], "isError": True}
     else:
         response["error"] = {"code": -32601, "message": "Method not found"}
     return response

@@ -21,23 +21,15 @@ boundaries nor preparation, queue, recovery or delegation authority.
 Use `working` for unfinished/recoverable work, `completed` with verified evidence,
 or `blocked` with `blocker_kind` decision/permission/external and the real blocker.
 External blockers require `attempts` describing checks and recovery. Unspecified
-or recoverable blockers stay working. The runtime can continue working tasks
-across turns; three turn endings without progress stop stalled work. Record real
-progress, not cosmetic edits to evade that guard. A status answer needs no new
-task. Preserve scope and avoid replaying uncertain actions on continuation.
+or recoverable blockers stay working. Automatic continuation and completion reviews are disabled. Leave unfinished
+work pending on its existing task at turn end; do not loop, invent progress or
+poll unchanged evidence to keep the conversation running.
 
-A persistent monitoring task uses `watching` only with an actual enabled
-`wakeup_id` owned by that conversation. Only experiment workers configure their
-wakeups; leads/managers cannot borrow a worker's ID. Interval rules recur without
-overlap; metric/run-status events fire once per explicit arm. A specified run ID
-pins the run; otherwise the newest current/future run is tracked. Uncertain wakeup
-delivery pauses for inspection. Do not recreate paused/removed rules. Scheduled
-checks allow the saved observation/analysis only, not runs, compute mutations,
-new workers or more schedules. Dedicated run-recovery wakeups are separate: their
-saved owner/lineage grant permits only the bounded operations described in
-[run recovery](../../supersurfer-host-onboarding/references/run-recovery.md), never
-a generic user-origin turn. Do not attach their grant as a monitoring wakeup ID.
-Publishing live curves needs no wakeup.
+Scheduled LLM checks and recovery reviews are disabled by default and fail closed,
+including for saved monitoring rules. A saved `wakeup_id` is not proof of active
+dispatch. Preserve rules and ownership without replacing suppressed wakes with
+self-messages or extra workers. Code telemetry and live Results refresh continue
+without model turns. This does not add deterministic evaluation scheduling.
 
 A successfully delivered human steer or accepted question answer makes that live
 conversation user-origin, including when it began as a scheduled or recovery
@@ -47,25 +39,10 @@ run. A rejected steer, expired question, peer message or automatic continuation
 does not confer that authority. Preserve queue receipts, run IDs and handoff
 budgets: fresh direction does not reset uncertain work or authorize wider actions.
 
-Routine scheduled checks should produce one concise outcome, without announcing
-that the check is starting or restating its instructions. Lead with a new failure,
-milestone or decision; otherwise state briefly that nothing material changed.
-Keep detailed measurements and provenance in the existing evidence/report rather
-than repeating them in chat. Do not create a task, handoff or manager notification
-for every poll. The app groups its own background checks in a collapsed activity
-card with the latest outcome visible and history expandable. That presentation
-does not complete or pause the saved monitoring rule. Direct user messages and
-steering remain separate instructions; answer them normally and preserve priority.
-Agent-to-agent coordination is also shown in collapsed activity cards, with the
-sender and latest outcome visible; expand them for evidence and the original
-exchange. This does not change delivery, priority or authority. Direct user work
-and its response stay separate, and failed/uncertain deliveries remain explicit.
-Application-generated continuation and deliverable-review prompts appear in
-collapsed Activity rows with their full history retained. They resume the saved
-assignment; they are not a new user request, launch grant or completion claim.
-Grouping is application-owned, not a text prefix or metadata an agent should forge.
-Keep a necessary peer answer concise and link the existing evidence instead of
-copying a long status report into every conversation.
+Peer messages remain in the inbox without activating a recipient by default.
+Read relevant messages during authorized work, answer a concrete dependency once,
+and leave unrelated ownership intact. User-requested checks should report new
+failures, milestones or decisions concisely, without repeated status recaps.
 
 `ask_user` gathers one to three essential decisions, not credentials or permission
 grants. Await its result; keep waiting if an execution wrapper yields a running

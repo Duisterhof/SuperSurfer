@@ -33,8 +33,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(task['status'], 'working')
         with patch.object(self.bridge, '_followup') as followup:
             self.end(chat)
-            self.assertEqual(followup.call_count, 1)
-            self.assertIn('locate original missing artifacts', followup.call_args.args[1])
+            followup.assert_not_called()
 
     def test_legacy_blocked_record_gets_recovery_but_stop_does_not(self):
         chat = self.hold()
@@ -42,7 +41,7 @@ class RecoveryTests(unittest.TestCase):
             self.bridge._chats['project:vla']['tasks'] = [{'id': 'old-task', 'title': 'Launch', 'status': 'blocked', 'summary': 'Missing file'}]
         with patch.object(self.bridge, '_followup') as followup:
             self.end(chat)
-            followup.assert_called_once()
+            followup.assert_not_called()
         chat = self.hold()
         with patch.object(self.bridge, '_followup') as followup:
             self.bridge.stop('project:vla')

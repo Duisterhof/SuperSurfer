@@ -364,6 +364,9 @@ class SurfboardService:
         else:
             allowed = [tool["name"] for tool in ROLE_TOOLS[role]]
             context["instructions"] += "\nProjects can use different surfboards. Read read_surfboard(project_id) before acting; its managed capabilities and requirements also apply to manager requests for that project."
+        # Delegated activation is unavailable; creation and inbox tools remain.
+        allowed = [name for name in allowed if name not in {"handoff_experiment", "handoff_work_item"}]
+        context["instructions"] += "\nToken containment overrides older workflow guidance: no automatic agent activations, completion reviews, peer steering or handoff execution. Messages are inbox-only, including answers. Scheduled checks record observations without starting models. Do not wait/poll for another agent or repeat unchanged failed operations. Preserve unfinished work for the user's next turn."
         if self.agent_tool_endpoint and not self.read_only:
             import sys
             context["mcp_servers"] = {"supersurfer": {"command": sys.executable,

@@ -30,6 +30,9 @@ or overrides budgets.
 
 ## Tools and authority
 
+Scheduled model checks and recovery reviews are disabled by default and fail
+closed. The turn-specific limits below do not themselves activate a model turn.
+
 | Role/turn | Available workflow | Boundary |
 |---|---|---|
 | Worker user task | Check/acquire/recover within its experiment; pooled queueing saves its recovery owner | Actual user request and existing resource/protocol limits |
@@ -99,9 +102,9 @@ scheduler's bounded backoff; this cancellation fix does not authorize bypassing 
 Worker queueing automatically enables recovery for a pooled run. To enable an
 existing unowned run explicitly, use `recover_run` with `action: "enable"`, its
 `run_id` and the concrete existing user `task`. Enable requires user-origin work;
-another conversation's ownership cannot be silently replaced. Recovery wakeups
-continue that owner on placement problems or failures without creating a generic
-worker-monitoring rule. Do not manufacture a `wakeup_id` for them.
+another conversation's ownership cannot be silently replaced. Recovery reviews
+are disabled by default and fail closed. Preserve pending recovery for bounded
+user-triggered work; do not manufacture a `wakeup_id` or poll to reactivate it.
 
 For the latest **confirmed failed** attempt, `action: "retry"` requires `reason`
 explaining the diagnosed repair and explicit argv `command` using fresh outputs

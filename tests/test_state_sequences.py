@@ -68,6 +68,6 @@ class StateSequenceTests(unittest.TestCase):
             for _ in range(13): self.service.messages.drain()
         messages = self.service.messages.list(scope, {})['messages']
         self.assertEqual(12, len(messages))
-        self.assertTrue(all(message['status'] == 'delivered' for message in messages))
-        self.assertEqual(12, len([sent for sent in self.service.codex.sent if sent[0] == 'manager']))
+        self.assertTrue(all(message['status'] == 'recorded' for message in messages))
+        self.assertEqual(0, len([sent for sent in self.service.codex.sent if sent[0] == 'manager']))
         self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))

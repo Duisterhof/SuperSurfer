@@ -7,7 +7,17 @@ metadata:
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026. Token-containment policy reviewed.
+
+Automatic continuation and completion-review turns are disabled. Scheduled LLM
+checks, recovery reviews and peer-message wakes are disabled by default and fail
+closed. Peer messages remain in the inbox without activating their recipient.
+Complete bounded user-triggered work; leave unfinished work pending with its
+existing identity and a concrete next step. Do not create keep-going loops,
+repeat checks on unchanged evidence or supervise another owner's assigned work.
+Code telemetry and live-data refresh continue without model turns; this policy
+does not add deterministic evaluation scheduling.
+
 Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
@@ -67,8 +77,8 @@ when available authorized routes cannot resolve it. Inspect prior state before
 retries so coordination cannot duplicate uncertain execution.
 Record the original requested outcome before work and compare final evidence
 against that outcome, including later clarifications. A progress milestone does
-not complete remaining implementation. During an application completion review,
-reopen incomplete work on its existing task ID rather than repeating a prior claim.
+not complete remaining implementation. At the end of the bounded turn,
+record incomplete work on its existing task ID for the next user-triggered turn.
 
 For a real missing capability or resource conflict, use
 [coordination](../supersurfer-worker/references/coordination.md). A `request` asks
@@ -336,7 +346,6 @@ reconciles the existing recovery request after uncertainty, and counts one linke
 child within the same three-attempt budget. Pending, running, cancelled or
 uncertain jobs cannot use this confirmed-failure route. Ordinary retry without
 these allocation fields retains its previous resource contract.
-An enabled failed flexible lineage below the three-attempt cap can redeliver its
-existing owner recovery turn after five minutes, including after a workspace
-restart. This restores the existing scoped grant, not a new user request or run;
-busy, paused and explicit Stop guards remain binding.
+Recovery reviews are disabled by default, including after a workspace restart.
+Preserve the existing owner, scoped grant and pending task for user-triggered
+work; busy, paused and explicit Stop guards remain binding.

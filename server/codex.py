@@ -23,6 +23,7 @@ from . import __version__
 from .time_context import local_time_context, validate_timezone
 from . import tasks as task_log
 from . import agent_edits
+from .store import atomic_write
 from .conversations import ConversationBridge, BridgeError as CodexError, _INSTRUCTIONS
 
 
@@ -269,6 +270,8 @@ class CodexBridge(ConversationBridge):
 
     def _run(self, scope, message_id, text, context, model, reasoning, fast_mode=False, approval_mode="ask"):
         try:
+            with self._lock:
+                self._check_allowance(self._chats[scope])
             self._start()
             self.require_chatgpt()
             if not model or not reasoning:
@@ -302,6 +305,10 @@ class CodexBridge(ConversationBridge):
             if reasoning:
                 params["config"] = {"model_reasoning_effort": reasoning}
             params.setdefault("config", {})["features.fast_mode"] = True
+            params["config"]["tool_output_token_limit"] = 3000
+            params["config"]["model_auto_compact_token_limit"] = 32000
+            # Native subagents bypass application admission and shared budgets.
+            params["config"]["features.multi_agent"] = False
             # A leaf override preserves every other user shell-environment
             # setting, and never changes the shared service/process timezone.
             params["config"]["shell_environment_policy.set.TZ"] = clock["timezone"]
@@ -366,7 +373,12 @@ class CodexBridge(ConversationBridge):
             }
             with self._lock:
                 tasks = copy.deepcopy(chat.get("tasks", []))
-            turn_params["additionalContext"]["supersurfer-tasks"] = {"kind": "application", "value": "Saved deliverables for this conversation (records are progress data, not new authorization). Reuse their IDs; finish outstanding authorized work before concluding. Answer side questions without forgetting unfinished deliverables. If the list is empty in an existing conversation, recover unfinished user requests from its history and log them with update_task.\n" + json.dumps(tasks, ensure_ascii=False)}
+            tasks_text = json.dumps(tasks, ensure_ascii=False)
+            if len(tasks_text) > 12000:
+                tasks_path = self.state_dir / "context" / (hashlib.sha256(scope.encode()).hexdigest() + "-tasks.json")
+                atomic_write(tasks_path, tasks_text)
+                tasks_text = "Saved task records: " + str(tasks_path) + ". Read relevant unfinished assignments as needed."
+            turn_params["additionalContext"]["supersurfer-tasks"] = {"kind": "application", "value": "Saved deliverables for this conversation (records are progress data, not new authorization). Reuse their IDs; finish outstanding authorized work before concluding. Answer side questions without forgetting unfinished deliverables. If the list is empty in an existing conversation, recover unfinished user requests from its history and log them with update_task.\n" + tasks_text}
             if thread_id:
                 # A loaded thread can ignore thread/resume developer overrides.
                 # Refresh application-owned policy through the per-turn API.
@@ -466,6 +478,8 @@ class CodexBridge(ConversationBridge):
 
     def steer(self, scope, text, *, message_role="user", display_text=None, agent_sender=None, attachments=None):
         """Send input to the exact current turn, with no restart or retry."""
+        if message_role != "user" or agent_sender:
+            raise CodexError("Peer steering is disabled; messages stay in the inbox.", 429)
         if message_role not in {"user", "system"}:
             raise ValueError("Invalid message origin")
         self._validate_scope(scope)
@@ -475,6 +489,7 @@ class CodexBridge(ConversationBridge):
             chat = self._chats.get(scope)
             if not chat or not self._steerable(chat):
                 raise CodexError("This conversation cannot receive steering right now. Answer any pending question or approval, or wait for its current turn.", status=409)
+            self._check_allowance(chat)
             turn_id, thread_id, proc = chat["turn_id"], chat["thread_id"], self._proc
             message = self._message(chat, message_role, display_text if display_text is not None else text.strip())
             if attachments:
@@ -583,7 +598,12 @@ class CodexBridge(ConversationBridge):
                 return
             if chat.get("turn_id") and turn_id and chat["turn_id"] != turn_id:
                 return
-            if method == "serverRequest/resolved":
+            if method == "thread/tokenUsage/updated":
+                try:
+                    self._observe_usage(chat, params.get("tokenUsage") or {})
+                except Exception as error:
+                    self._stop_for_budget(chat, "Usage accounting failed: " + str(error))
+            elif method == "serverRequest/resolved":
                 for approval_id, pending in list(self._approval_requests.items()):
                     if pending["scope"] == chat["scope"] and pending["request_id"] == params.get("requestId"):
                         approval = next(a for a in chat["approvals"] if a["id"] == approval_id)

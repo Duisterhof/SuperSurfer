@@ -30,32 +30,6 @@ class ExperimentCreationTests(unittest.TestCase):
     def count(self):
         return len(self.service.state()['experiments'])
 
-    def test_lead_creates_complete_draft_then_hands_off_to_initial_worker(self):
-        self.activate()
-        self.service.action('settings.save', {'models': {'worker': 'model-b'}, 'approval_mode': 'yolo'})
-        created = self.create()
-        experiment, scope = created['experiment'], created['agent_scope']
-        self.assertEqual(experiment['project_id'], 'p1')
-        self.assertEqual(experiment['status'], 'draft')
-        self.assertIn(self.args()['summary'], Path(experiment['document_path']).read_text())
-        self.assertEqual(experiment['wandb_sync']['status'], 'synced')
-        self.assertTrue(experiment['wandb_url'])
-        self.assertEqual(len(self.service.codex.sent), 1)  # Only the lead was started.
-        agents = self.service.experiment_agents(experiment['id'])
-        self.assertEqual([agent['scope'] for agent in agents['agents']], [scope])
-        context = self.service.context_provider(scope)
-        self.assertEqual(context['experiment_id'], experiment['id'])
-        self.assertIn(experiment['wandb_url'], context['instructions'])
-        self.assertIn('queue_run', context['instructions'])
-        result = self.service.agent_action('project:p1', 'supersurfer_handoff_experiment', {
-            'experiment_id': created['experiment_id'], 'agent_scope': scope, 'task': 'Prepare the requested evaluation; do not queue it yet.'})
-        self.assertTrue(result['accepted'])
-        self.assertEqual(result['scope'], scope)
-        self.assertEqual(result['experiment']['status'], 'preparing')
-        self.assertEqual(self.service.codex.sent[-1][2]['model'], 'model-b')
-        self.assertEqual(self.service.codex.sent[-1][2]['approval_mode'], 'yolo')
-        self.assertIn('Prepare the requested evaluation', self.service.codex.sent[-1][1])
-        self.assertTrue(all(op == 'status' for op, _ in self.manager.calls))
 
     def test_retry_survives_restart_and_does_not_revert_later_edits(self):
         self.activate()
@@ -136,30 +110,6 @@ class ExperimentCreationTests(unittest.TestCase):
                 self.create(**changes)
         self.assertEqual(self.count(), 1)
 
-    def test_http_capability_creates_then_dispatches_without_manual_ui(self):
-        self.activate()
-        server = create_server(self.service, port=0)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            token = self.service.agent_tool_capability('project:p1')
-            def call(name, arguments):
-                request = Request(f'http://127.0.0.1:{server.server_port}/api/agent-tool',
-                    data=json.dumps({'name': name, 'arguments': arguments}).encode(),
-                    headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
-                with urlopen(request, timeout=5) as response:
-                    return json.load(response)
-            created = call('create_experiment', self.args())
-            result = call('handoff_experiment', {'experiment_id': created['experiment_id'],
-                'agent_scope': created['agent_scope'], 'task': 'Prepare a PR for the requested evaluation.'})
-            self.assertTrue(result['accepted'])
-            self.assertEqual(result['scope'], created['agent_scope'])
-            self.assertEqual(self.count(), 2)
-            self.assertEqual(len(self.service.codex.sent), 2)
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(2)
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ import json
 from .codex import CodexBridge
 from .cli_backends import CliBridge, PROVIDERS, provider_name
 from .conversations import BridgeError
+from .agent_budget import AgentBudget, BudgetError, AUTOMATIC_REASON
 
 
 class BackendRouter:
@@ -13,8 +14,11 @@ class BackendRouter:
         self.context_provider, self.scope_provider = context_provider, scope_provider
         self.action_handler = action_handler
         self.lock = threading.RLock()
+        self.budget = AgentBudget(directory / "agent-usage.sqlite3")
+        self._budget_stop = threading.Event()
         self.account_locks = {name: threading.RLock() for name in PROVIDERS}
         self.bridges = {"codex": CodexBridge(directory / "codex", context_provider, action_handler)}
+        self.bridges["codex"].budget = self.budget
         self.bindings = store.get("backend_bindings", {})
         with store.lock:
             for key, value in store.db.execute("SELECT key,value FROM kv WHERE key LIKE 'backend_binding:%'"):
@@ -24,12 +28,15 @@ class BackendRouter:
             if row.get("message_count") or row.get("thread_id"):
                 self.bindings.setdefault(row["scope"], "codex")
         store.put("backend_bindings", self.bindings)
+        self._budget_thread = threading.Thread(target=self._watch_budgets, daemon=True, name="supersurfer-budget-watchdog")
+        self._budget_thread.start()
 
     def provider(self, backend):
         backend = provider_name(backend)
         with self.lock:
             if backend not in self.bridges:
                 self.bridges[backend] = CliBridge(backend, self.directory / backend, self.context_provider, self.action_handler)
+            self.bridges[backend].budget = self.budget
             return self.bridges[backend]
 
     def backend_for(self, scope):
@@ -88,6 +95,8 @@ class BackendRouter:
         return self.provider(backend).model_defaults(cwd)
 
     def send(self, scope, text, **kwargs):
+        if kwargs.pop("activation_source", None) != "user" or kwargs.get("message_role", "user") != "user" or kwargs.get("agent_sender") or kwargs.get("background_check") is not None:
+            raise BudgetError(AUTOMATIC_REASON)
         selected = self.backend_for(scope)
         with self.lock:
             backend = self.bindings.get(scope, selected)
@@ -144,6 +153,23 @@ class BackendRouter:
             raise AttributeError(name)
         return lambda scope, *args, **kwargs: getattr(self.provider(self.backend_for(scope)), name)(scope, *args, **kwargs)
 
+    def _watch_budgets(self):
+        while not self._budget_stop.wait(1):
+            with self.lock:
+                bridges = list(self.bridges.values())
+            for bridge in bridges:
+                with bridge._lock:
+                    for chat in bridge._chats.values():
+                        if not chat.get("busy") or chat.get("status") == "awaiting_input":
+                            continue
+                        try:
+                            bridge._check_allowance(chat)
+                        except BridgeError as error:
+                            bridge._stop_for_budget(chat, str(error))
+
     def close(self):
+        self._budget_stop.set()
+        self._budget_thread.join(timeout=2)
         for bridge in list(self.bridges.values()):
             bridge.close()
+        self.budget.close()

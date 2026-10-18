@@ -7,7 +7,17 @@ metadata:
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026. Token-containment policy reviewed.
+
+Automatic continuation and completion-review turns are disabled. Scheduled LLM
+checks, recovery reviews and peer-message wakes are disabled by default and fail
+closed. Peer messages remain in the inbox without activating their recipient.
+Complete bounded user-triggered work; leave unfinished work pending with its
+existing identity and a concrete next step. Do not create keep-going loops,
+repeat checks on unchanged evidence or supervise another owner's assigned work.
+Code telemetry and live-data refresh continue without model turns; this policy
+does not add deterministic evaluation scheduling.
+
 A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
@@ -106,9 +116,9 @@ each attempt; unchanged source and an accepted retry do not establish successful
 resume, optimizer progress or comparable throughput. Do not score a technical
 setup error as a scientific failure, invent missing measurements or splice retries
 into one uninterrupted curve. Reporting and ordinary polling authorize no retry.
-An existing failed flexible lineage's five-minute recovery redelivery restores
-owner continuity after a workspace restart; it is not a new run, measured
-progress or permission to republish a scientific result.
+A failed lineage retains its owner across a workspace restart, but recovery
+reviews are disabled by default. Pending recovery is not measured progress or
+permission to republish a scientific result.
 
 ## Reuse the reporting workflow, preserve the evidence
 
@@ -225,7 +235,7 @@ Available cached measurements appear immediately while sources refresh separatel
 one slow source need not hide successful sources. This requires no worker turn,
 wakeup, manager review or republishing. It is refresh on opening/request, not a
 promise of continuous sampling while the page stays open.
-If the user separately requested periodic analysis, put the new measured evidence
+Scheduled model analysis is disabled by default. On a user-requested check, put new measured evidence
 in the existing report and keep chat to one short outcome. Skip start-of-check
 narration and repeated metric tables; lead with actionable failures, milestones
 or decisions. An unchanged check does not require another report, publishing

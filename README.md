@@ -113,3 +113,12 @@ reviewed scientific source and data, records cancellation proof, and creates one
 linked replacement within the existing recovery limit. A confirmed failed
 flexible allocation can use the same bounded resource policy through linked
 retry; it needs no cancellation.
+
+### Agent usage
+
+Agents run when you start them. Peer messages stay in an inbox; unfinished tasks
+and scheduled observations do not automatically buy more model turns. Existing
+agent wakeups are paused on upgrade. Training and ordinary telemetry continue.
+Settings shows usage and rolling allowances. Per-turn time/tool limits and
+provider usage circuit breakers bound interactive work; these are not exact
+billing caps. See CONTRACT.md for provider-specific accounting limits.
