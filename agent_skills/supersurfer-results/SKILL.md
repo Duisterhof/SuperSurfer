@@ -7,7 +7,8 @@ metadata:
 
 # Experiment Results
 
-Reviewed for SuperSurfer 0.1.43. A Results page should make the scientific comparison
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+A Results page should make the scientific comparison
 immediately readable: key measured losses, methods and actual held-out evidence,
 then a short explanatory schematic and requested domain visuals. Use the existing
 experiment's runs and artifacts. A reporting request does not authorize new runs
@@ -61,6 +62,20 @@ Use the app's bounded connection retry and inspect the existing report and sourc
 status after access returns. Keep previously available samples with their genuine
 ages; do not republish, invent fresh measurements or allocate another writer to
 repair transport. Connection recovery never authorizes a replacement run.
+
+For Slurm evidence, distinguish an estimate, an accepted job ID, allocated GPU
+work and measured optimizer progress. Stanford's `seven_l40s_training_v1`
+profile requests exactly seven L40S GPUs for 24 hours; omitting the profile keeps
+the bounded one-GPU smoke. Smoke success does not establish production training
+or scientific completion. A permitted `Preempts` estimate records the user's
+scheduler policy, not measured displacement, compute readiness or training performance.
+Until-stopped science may span verified checkpointed allocations even though
+automatic Slurm requeue is disabled. Keep each linked run/W&B identity, checkpoint,
+actual GPU count/precision and cumulative/branch exposure explicit; allocation
+expiry alone is not an experimental endpoint. Preserve losses and held-out evidence
+across attempts without splicing them into an uninterrupted curve. Missing actual
+MFU, checkpoint or allocated data admission remains missing, regardless of a
+successful source check, staged payload or queued receipt.
 
 ## Reuse the reporting workflow, preserve the evidence
 

@@ -7,7 +7,8 @@ metadata:
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.43. Own the requested outcome in this experiment,
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
 do not need a lead or manager review. Continue the same goal after status questions,
@@ -256,7 +257,36 @@ Follow [Results checkpoint guidance](../supersurfer-results/references/results-c
 ## Slurm allocations
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
-The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
-use a control host with no physical GPU registration, preserve the same request
-and run identities, and read its recorded Slurm job state. Preparation alone and
-suggested experiments do not authorize launches. Existing stops still apply.
+Stanford uses `backend: "stanford_slurm"`. Omitting `slurm.profile` keeps the
+original one-GPU smoke with at most 900 seconds, 100 updates and exactly matching
+`--smoke-updates`. The explicit `profile: "seven_l40s_training_v1"` requires exactly
+seven L40S GPUs, 28 CPUs, 112 GiB RAM, 86,400 seconds and 120 seconds of checkpoint
+grace; omit `max_updates` and smoke bounds. Use only this authorized profile.
+Preparation stays held; suggestions and scheduled observations do not authorize
+either profile's launch.
+
+Own the scientific source, recipe, distributed rank/sampling semantics, full-state
+checkpointing and telemetry in the exact-source PR. An until-stopped trainer must
+handle the allocation's signal through its bootstrap and distributed children,
+seal raw/EMA/optimizer/RNG/sampler state, and support a verified full-state resume.
+The backend does not implement those scientific guarantees. Follow
+[host onboarding](../supersurfer-host-onboarding/SKILL.md#slurm-allocations) for
+allocated code/runtime/data admission and Slurm GPU visibility. Use the registered
+control host with `gpus: []`, never a physical login GPU or project-pool candidate.
+
+When the user assigns Stanford staging/placement to the manager, send that owner
+the exact source and bounded resource/input requirements; retain scientific work
+here and preserve the single submission owner. A missing backend capability or a
+native session without queue tools does not authorize shell `sbatch`, a new owner
+or a duplicate run. Only an available scoped tool confirms a held or queued state.
+
+Production requires `until_stopped: true` and `allow_preemption: true`, reflecting
+the user's actual continuation and scheduler reclamation authorization. Its
+read-only estimate may report `Preempts`; smoke continues to block that result.
+This never permits manual cancellation of other jobs or sleeper reservations.
+Unknown estimates block submission. Slurm requeue remains disabled; allocation
+expiry does not complete an until-stopped scientific assignment. Continue through
+its authorized scoped linked recovery with verified state and unchanged scope.
+Inspect the same run's job ID/state/reason, reconcile lost replies with the same
+request fields, and use `stop_run` for the requested recorded-run cancellation.
+Existing stops revoke continuation authority.

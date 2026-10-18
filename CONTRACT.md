@@ -1,3 +1,15 @@
+# Stanford production and complete status history — October 17, 2026
+
+The separate [Stanford production profile](docs/stanford-seven-l40s-training.md)
+admits exactly seven L40S GPUs for 24 hours with explicit reclamation policy.
+Its receipt records all seven GPUs. The reviewed scientific configuration owns
+until-stop semantics and full-state signal handling; the bridge invents no CLI
+flags. Original smoke limits and preemption guards remain unchanged.
+
+The workspace reads manager status in bounded run pages and retains every full
+historical run contract. Incomplete pages preserve the previous timestamped
+snapshot and fail fresh operations closed; they never imply missing runs ended.
+
 # Managed PSC Slurm smoke — October 13, 2026
 
 Scoped run tools support `backend=slurm` with a registered CPU-only control host,

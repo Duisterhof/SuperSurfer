@@ -135,7 +135,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.stanford_slurm.training.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):
@@ -143,9 +143,20 @@ class Manager:
                 for table in ("projects", "agents", "tasks", "runs", "native_sessions")}
         return targets.resolve(rows, target, project, default_project, conversation, kinds)
 
-    async def status(self, project=None):
+    async def status(self, project=None, run_offset=0, run_limit=None):
+        if type(run_offset) is not int or run_offset < 0:
+            raise ValueError("Invalid status run offset")
+        if run_limit is not None and (type(run_limit) is not int or not 1 <= run_limit <= 100):
+            raise ValueError("Status run limit must be between 1 and 100")
+        runs = await self.run_list(project, offset=run_offset, limit=run_limit)
+        page = {}
+        if run_limit is not None:
+            project_filter = " WHERE project_id=?" if project else ""
+            project_args = (self.project(project)["id"],) if project else ()
+            total = self.store.one("SELECT count(*) AS count FROM runs" + project_filter, project_args)["count"]
+            page = {"runs_total": total, "runs_offset": run_offset}
         return {"projects": await self.project_list(), "tasks": await self.task_list(project),
-                "agents": await self.agent_list(project), "runs": await self.run_list(project),
+                "agents": await self.agent_list(project), "runs": runs, **page,
                 "hosts": await self.host_list(), "queue": await self.queue_status(),
                 "gpus": await self.gpu_status()}
 
@@ -778,11 +789,16 @@ class Manager:
             row["wait_reason"] = ""
         return row
 
-    async def run_list(self, project=None):
+    async def run_list(self, project=None, offset=0, limit=None):
+        args = (self.project(project)["id"],) if project else ()
+        pagination = ""
+        if limit is not None:
+            pagination = " LIMIT ? OFFSET ?"
+            args += (limit, offset)
         rows = self.store.rows("SELECT r.*,p.name AS project_name,h.name AS host_name FROM runs r "
                                "JOIN projects p ON p.id=r.project_id JOIN hosts h ON h.id=r.host_id" +
-                               (" WHERE r.project_id=?" if project else "") + " ORDER BY r.created",
-                               (self.project(project)["id"],) if project else ())
+                               (" WHERE r.project_id=?" if project else "") + " ORDER BY r.created,r.id" + pagination,
+                               args)
         return [self.run_details(row) for row in rows]
 
     async def run_show(self, run):
@@ -1479,7 +1495,8 @@ class Manager:
                 if current["status"] != "queued":
                     continue
                 if json.loads(current["config"]).get("backend") == "stanford_slurm":
-                    # Initial onboarding budget is aggregate across projects/hosts.
+                    # Keep a single Stanford allocation across projects/hosts.
+                    # Its reviewed profile admits one smoke GPU or seven L40S.
                     active_stanford = self.store.one("SELECT id FROM runs WHERE id!=? AND status IN ('starting','running','cancelling','unreachable') AND json_extract(config, '$.backend')='stanford_slurm' LIMIT 1", (current["id"],))
                     if active_stanford:
                         continue
