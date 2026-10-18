@@ -61,6 +61,14 @@ Use `inspect_project_compute` for pool version/defaults, per-node paths, registe
 hosts, saved observations, `gpu_limit`, `run_limit`, active counts and `queue_paused`.
 This reads existing state rather than probing or reserving GPUs.
 
+Presentation archival is separate from compute admission. A run restored in the
+Runs browser retains its execution/recovery identity; Restore neither queues it
+nor proves that its source, local storage or environment is ready. Active,
+uncertain and recovery-enabled runs remain visible even if an older terminal
+observation had been archived. Use the existing scoped readiness/recovery tools
+for actual setup, preserving owner and backoff; the human-only `run.presentation`
+action is not an onboarding tool or a way to reset a failed lineage's budget.
+
 - A full project budget or paused queue is separate from physical capacity.
   Adding a free node does not override it. Preserve active jobs and finish useful
   independent preparation; do not manufacture a diagnostic launch.

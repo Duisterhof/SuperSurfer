@@ -131,3 +131,7 @@ model catalogs and native-session availability are separate capabilities; a
 successful login does not prove this block's tools, extensions or data sources
 are ready. Preserve existing native ownership and uncertain action identities.
 See [conversation continuity](../supersurfer-worker/references/conversations.md).
+
+When a scientific comparison requires exact-payload review, the manifest publisher is `publish_view_block`, with actual project/task, block ID/current version and copied media. Preserve omitted-versus-explicit assets semantics. The native source receipt binds new asset bytes and rejects a different publisher or changed payload; ordinary reports keep their existing review path. This support must exist in the connected runtime before claiming a valid block publication.
+
+For an owned block to open current Results, send `parent.postMessage({type: "supersurfer:block:open-results", request_id, experiment_id, result_id}, "*")` only in the explicit user click handler. Probe `supersurfer:block:capabilities` first and wait for the matching `supersurfer:block:navigation` response. The parent accepts only known opaque block frames and same-project experiments; there are no credentials or execution methods. Preserve a visible source/navigation fallback when the capability is absent.

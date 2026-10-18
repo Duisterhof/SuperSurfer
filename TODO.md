@@ -509,3 +509,11 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Validate role guidance, all ordinary tests, packaged isolated setup and actual read-only writer history.
 - [x] Verify controlled workspace activation, all five live sources and actual900/650 refresh/reopen-data without replacing scientific writers or runs; same transfer resumed.
 - [ ] Restore the already-reviewed parent scale/hidden-series preference bridge and verify actual same-report reopening after deployment.
+
+## Current-runtime Results integration — October18
+
+- [x] Isolate the existing PR53 retirement/review/navigation delta on installed PR57 source.
+- [x] Preserve current engine, Slurm/recovery, monitoring, provider and LaTeX behavior.
+- [x] Complete combined regression/browser and mandatory five-role capability review; exact package/native evidence is recorded separately.
+- [ ] Obtain the existing live-integration decision, then verify exact installed publication/navigation and permitted Archive/Restore receipts.
+- [ ] Complete the VLA cleanup inventory only after its real remaining deliverables exist.

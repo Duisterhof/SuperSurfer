@@ -1118,3 +1118,31 @@ reconcile one child and consume one attempt. The saved failed retry retains its
 owned five-minute reconciliation wakeup despite the parent's earlier allocation
 start; enabled failed flexible allocations also re-wake after five minutes when
 a workspace restart interrupted the recovery turn, without resetting attempts; no wakeup itself launches a job. Explicit stops remain binding.
+
+## Results retirement and comparison integration
+
+Run archival is a human presentation action on terminal work. `run.presentation`
+uses the current presentation version and requires retirement reason/evidence
+and an explicit no-unfinished-work declaration. Active, uncertain and
+recovery-enabled runs remain protected. Restore changes visibility only; neither
+action changes scheduler state, checkpoints, scientific configuration or wakeups.
+The agent tool surface does not gain a general run-archive operation.
+
+The existing research Results checkpoint accepts disjoint `archive_result_ids`
+and `restore_result_ids` from that same study. Its current visible comparison,
+all-attempt version, retained original HTML and source bindings are checked
+before the presentation transaction. Read archived evidence before Restore;
+receipts expose exact before/after flags and retained-byte identities. New
+attempts or report changes still reopen scientific review.
+
+Scientific reusable comparison blocks use the configured exact-payload
+publication gate, including project identity, retained assets and current block
+version. Missing/changed/escaping inputs and an unrelated successful action do
+not satisfy it. Navigation accepts only the known opaque frame and same-project
+study/results identity; it changes no execution or permission state.
+
+This combined source retains the installed flexible Stanford schema, pending-only
+replacement, confirmed-failed allocation retry, three-attempt budget and explicit
+Stop checks byte-for-byte in the engine, Slurm and recovery path. Monitoring,
+provider/session and LaTeX behavior remain at the installed baseline. No live
+installation or real Archive/Restore is established by an isolated fixture.

@@ -14,7 +14,7 @@ def payload_digest(payload):
     return hashlib.sha256(json.dumps(content, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
 
 
-def publication_snapshot(cwd, manifest_path, code_paths, experiment_id):
+def publication_snapshot(cwd, manifest_path, code_paths, experiment_id, project_id=None):
     root = Path(cwd).resolve()
     consumed = 0
     files = {}
@@ -71,7 +71,7 @@ def publication_snapshot(cwd, manifest_path, code_paths, experiment_id):
         if not experiment_id or manifest.get('experiment_id') != experiment_id:
             raise SurfboardError('Publication manifest belongs to another task; select the matching task', 409)
         tool = manifest.get('tool')
-        if tool not in {'publish_result', 'publish_training_results'}:
+        if tool not in {'publish_result', 'publish_training_results', 'publish_view_block'}:
             raise SurfboardError('Publication manifest must identify its publisher', 409)
         base = root / Path(manifest_path).parent
         actual, raw = read(base, manifest.get('payload'), True)
@@ -80,6 +80,27 @@ def publication_snapshot(cwd, manifest_path, code_paths, experiment_id):
         payload = json.loads(raw)
         if not isinstance(payload, dict) or payload.get('experiment_id', experiment_id) != experiment_id:
             raise SurfboardError('Publication payload belongs to another task', 409)
+        from .agent_tools import validate_arguments, RESULT_TOOL, TRAINING_RESULT_TOOL, BLOCK_PUBLISH_TOOL
+        validate_arguments({'publish_result': RESULT_TOOL, 'publish_training_results': TRAINING_RESULT_TOOL,
+                            'publish_view_block': BLOCK_PUBLISH_TOOL}[tool], payload)
+        if tool == 'publish_view_block':
+            if not project_id or manifest.get('project_id') != project_id or payload.get('project_id', project_id) != project_id:
+                raise SurfboardError('Reusable block publication belongs to another project', 409)
+            if set(payload) - {'project_id', 'id', 'version', 'title', 'html', 'assets'}:
+                raise SurfboardError('Reusable block manifest must contain the exact block publishing arguments', 409)
+            if bool(payload.get('id')) != ('version' in payload):
+                raise SurfboardError('Reusable block updates require both existing id and version', 409)
+            if 'version' in payload and (type(payload['version']) is not int or payload['version'] < 0):
+                raise SurfboardError('Reusable block version must be an integer', 409)
+            assets = payload.get('assets', {})
+            if not isinstance(assets, dict) or len(assets) > 32:
+                raise SurfboardError('Reusable block assets must be a bounded name/path map', 409)
+            # Omitted assets preserve existing copied media; an explicit map
+            # replaces it. Bind both argument semantics AND every source byte.
+            for name, relative in sorted(assets.items()):
+                if not isinstance(name, str) or not name or Path(name).is_absolute() or '..' in Path(name).parts:
+                    raise SurfboardError('Invalid reusable block asset name', 409)
+                read(root, relative)
         evidence = manifest.get('evidence_files')
         if not isinstance(evidence, list) or not evidence:
             raise SurfboardError('Publication manifest must declare its evidence files', 409)
@@ -96,6 +117,8 @@ def publication_snapshot(cwd, manifest_path, code_paths, experiment_id):
             raise SurfboardError('Declare the publication checker and producer code in source_paths', 409)
         for path in sorted(code_paths): read(root, path)
         return digest.hexdigest(), {'tool': tool, 'payload_digest': payload_digest(payload),
+                                    **({'project_id': project_id, 'block_id': payload.get('id'),
+                                        'block_version': payload.get('version')} if tool == 'publish_view_block' else {}),
                                     'input_count': len(files), 'input_bytes': consumed}
     except (OSError, ValueError, TypeError, AttributeError) as error:
         raise SurfboardError('Cannot read publication inputs: ' + str(error), 409) from error

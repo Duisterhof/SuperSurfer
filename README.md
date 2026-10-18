@@ -14,6 +14,8 @@ explicitly authorized flexible 1–8 GPU single-node profile, up to24hours withi
 site policy. Exact-source review, scheduler-managed placement and checkpoint
 recovery remain required. See the [training profile](docs/stanford-seven-l40s-training.md).
 
+Results cleanup keeps retained run/report evidence recoverable, with exact reviewed comparison-block publication and same-project navigation. See the [presentation contract](CONTRACT.md#results-retirement-and-comparison-integration).
+
 ## Native VS Code preview
 
 The [native chat extension](native_extension/README.md) adds a visual Surfboard,

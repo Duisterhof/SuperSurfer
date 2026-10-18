@@ -417,7 +417,7 @@ class SurfboardService:
                     if git("rev-parse", "--verify", revision + "^{commit}") != git("rev-parse", "HEAD") or git("status", "--porcelain"):
                         raise SurfboardError("The queued commit must match the clean checkout that passed the required check.", 409)
                 if not self.board_runtime.check_passed(project["id"], state["version"], requirement["action_id"], experiment_id, project["repo"],
-                        **({"publication": (operation, arguments)} if operation in {"publish_result", "publish_training_results"} else {})):
+                        **({"publication": (operation, arguments)} if operation in {"publish_result", "publish_training_results", "publish_view_block"} else {})):
                     raise SurfboardError("Run check '" + requirement["action_id"] + "' successfully for this item and current source before continuing.", 409)
             elif operation != "queue_run" and kind in {"exact_commit", "verified_pr"}:
                 head = subprocess.run(["git", "-C", project["repo"], "rev-parse", "HEAD"], capture_output=True, text=True, timeout=15)
@@ -456,7 +456,7 @@ class SurfboardService:
             if arguments.get("node_id") not in eligible:
                 raise SurfboardError("This action block is not connected to your agent role.", 403)
             self.board_gate(project, state, tool + ":" + str(arguments.get("node_id")), arguments, scope)
-        elif tool in {"queue_run", "publish_result", "publish_training_results"}:
+        elif tool in {"queue_run", "publish_result", "publish_training_results", "publish_view_block"}:
             self.board_gate(project, state, tool, arguments, scope)
         elif tool == "compile_latex" and arguments.get("operation", "start") == "start":
             blocks = state["compiled"].get("latex", [])
