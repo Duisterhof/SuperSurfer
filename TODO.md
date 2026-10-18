@@ -526,3 +526,9 @@ The existing research Results checkpoint now has bounded same-task
 `restore_result_ids` alongside archive cleanup, with retained-byte verification
 and before/after presentation receipts. Runtime integration and actual VLA
 Archive/Restore acceptance remain separate; the source patch changes no real run.
+
+## October 17: deployed-backend Results reader compatibility
+
+- [x] Restore the reviewed Int64 history-bound fix on the Stanford production baseline, including sparse held-out and built-in recent curves.
+- [x] Validate role guidance, all ordinary tests, packaged isolated setup and actual read-only writer history.
+- [ ] Verify controlled workspace activation and authenticated refresh/reopen without replacing scientific writers or runs.

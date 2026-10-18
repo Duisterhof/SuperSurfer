@@ -162,6 +162,11 @@ for detailed protocols, and `update_experiment_brief` for the short overview.
 Reuse page IDs and reconcile concurrent edits. Live curve freshness needs no
 agent turn or periodic republishing task.
 
+A live-reader query/HTTP failure does not prove your trainer omitted a metric.
+Inspect the existing report/source error using the Results skill's bounded
+diagnosis, preserving cached rows and genuine ages. Do not change a running
+logger, rebind its writer or rerun science to repair a reader failure.
+
 For explicitly requested recurring analysis, `configure_worker_wakeup` confirms
 an interval/metric/run-status rule owned by this conversation. Then mark the task
 `watching` with its returned `wakeup_id`; creating a rule does not finish monitoring.

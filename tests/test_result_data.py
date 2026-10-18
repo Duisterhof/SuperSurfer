@@ -37,10 +37,10 @@ class ResultDataTests(unittest.TestCase):
         self.assertTrue(any('RecentCurves' in q for q in queries))
 
     def setUp(self):
-        self.calls=[];self.step=1000;self.fail=False
+        self.calls=[];self.step=1000;self.offline=False
         def fetch(query, variables):
             self.calls.append((query,variables))
-            if self.fail:raise ValueError('W&B unavailable')
+            if self.offline:raise ValueError('W&B unavailable')
             if 'ReportRun' in query:
                 return {'project':{'run':{'name':'real-run','state':'running','summaryMetrics':json.dumps({'_step':self.step,'loss':99999}), 'history':[json.dumps({'_step':1,'_timestamp':10,'loss':2,'phase':True,'joint_updates':1,'private-extra':'DO NOT SEND'})]}}}
             return {'project':{'run':{'history':[json.dumps({'_step':self.step,'_timestamp':self.step+50,'loss':.5,'phase':'joint','joint_updates':self.step,'bad':float('nan')})], 'sampledHistory':[[{'_step':500,'_timestamp':600,'val/loss':.8,'joint_updates':500}]]}}}
@@ -58,14 +58,14 @@ class ResultDataTests(unittest.TestCase):
         self.assertTrue(all('mutation' not in query for query,_ in self.calls))
 
     def test_failed_refresh_retains_original_data_and_timestamps_with_stale_flag(self):
-        first=self.reader.history(SOURCE,True);self.fail=True
+        first=self.reader.history(SOURCE,True);self.offline=True
         failed=self.reader.history(SOURCE,True)
         for key in ['rows','observed_at','fetched_at']:self.assertEqual(first[key],failed[key])
         self.assertTrue(failed['stale']);self.assertEqual('W&B unavailable',failed['error'])
-        self.fail=False;self.assertFalse(self.reader.history(SOURCE,True)['stale'])
+        self.offline=False;self.assertFalse(self.reader.history(SOURCE,True)['stale'])
 
     def test_first_failure_is_missing_data_not_zero(self):
-        self.fail=True;data=self.reader.history(SOURCE,True)
+        self.offline=True;data=self.reader.history(SOURCE,True)
         self.assertEqual([],data['rows']);self.assertIsNone(data['fetched_at']);self.assertIsNone(data['observed_at']);self.assertTrue(data['stale'])
 
     def test_background_refresh_returns_cached_and_completed_sources_before_slow_source(self):

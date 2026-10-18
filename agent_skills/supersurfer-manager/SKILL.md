@@ -161,6 +161,12 @@ content stays with its owner otherwise. Results opening requires no manager
 review, model turn or new monitoring task. Preserve existing report identities,
 measured gaps and source provenance.
 
+If a live-data query fails, record the bounded reader diagnosis described in that
+skill. A query/HTTP error does not establish missing scientific measurements or
+a failed writer. Preserve cached evidence and sample ages; do not dispatch a new
+worker, rebind sources or repeat a run to repair a reader. App repair still needs
+an app maintainer, not a manager deployment claim.
+
 ## Task board and views
 
 Use `read_surfboard` for this task's applied workflow. Tasks snapshot project

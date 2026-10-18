@@ -23,6 +23,32 @@ file in the newer production bundle. The per-file source audit records this.
 
 # Stanford production and complete status history — October 17, 2026
 
+## October 17, 2026: preserve live Results history reads on the Stanford backend
+
+Restored the already reviewed PR49/229155c W&B `Int64` history-range fix
+onto exact installed backend c2c4275. Both declared Results tails and built-in
+recent curves use the API scalar, including small step values. The existing
+regression covers sparse held-out reads and ordinary history; the test fixture
+flag no longer shadows `unittest.TestCase.fail`.
+
+Validation: 830 Python tests passed; 49 Node tests passed with five opt-in SSH
+checks skipped. Targeted Results tests and capability-skill checks passed.
+An initial Node run exposed missing workspace dependencies in a reused historic
+node_modules directory; isolated npm ci from the unchanged lockfile resolved it.
+The packaged Linux x64 app opened its setup screen under Xvfb with a fresh
+isolated profile, renderer sandbox and context isolation enabled, node integration
+disabled, and no JS errors. The host-local launch used --no-sandbox at the OS
+process layer; it did not connect to the live workspace. Direct read-only candidate
+reads returned numeric rows from all five existing study writers with no stale
+or error state. That is not yet a claim of installed app/iframe refresh success.
+
+All engine source and Stanford seven-L40S/pagination behavior remain unchanged
+from c2c4275. No scientific run, source binding, checkpoint or scheduler setting
+was changed. See CAPABILITY_REVIEW_INT64.md and the redacted diagnostic at
+tests/reports/wandb-history-int64.md. Live activation and post-activation
+refresh/readback require their own operational receipts.
+
+
 - 828 Python tests pass, including complete history aggregation beyond 16 MiB,
   stale-snapshot preservation on page failure and old-manager compatibility.
 - 49 Node tests pass; five optional SSH tests are skipped. The initial Node run
@@ -1466,3 +1492,10 @@ Package SHA256 c34ea5180620bdd83675f4856e38073fa35f19b2663eeb6abb8525586e82eafc.
 Remote bundle SHA256 a6e5ec73c70d270c52bec610f7185f40db0c4973a5743e09f5e26180aba594fc.
 No live installation, restart, manager change or scientific execution occurred.
 Earlier97e CI receipts are historical; exact new-head CI must pass separately.
+
+
+## PR53 preparation against installed Int64 reader baseline
+
+The existing candidate now imports the five-role diagnostic guidance and test-fixture cleanup from installed production2ed14a2. Both Int64 runtime fixes were already present in ce9299c; server/engine/ui/desktop runtime bytes remain unchanged by this import. Preserve the root capability-review artifact and both Results retirement and reader-diagnosis documentation; no live activation is performed here.
+
+Actual focused validation:7 ResultData tests and4 capability-skill tests PASS, skill checker and diff checks PASS. Root five-skill additions pass reverse-apply verification. Earlier860Python/52Node suite evidence remains for the identical runtime; it is not claimed as a new full-suite run. The updated Linux x64 package built and opened an isolated setup profile under Xvfb; sandbox/contextIsolation true, nodeIntegration false, no workspace connected. OS --no-sandbox was required and disclosed. No live unit or service was changed. Package metadata/guidance refresh remains separate from live deployment.
