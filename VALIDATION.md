@@ -1,5 +1,31 @@
 # Stanford production and complete status history — October 17, 2026
 
+## October 17, 2026: preserve live Results history reads on the Stanford backend
+
+Restored the already reviewed PR49/229155c W&B `Int64` history-range fix
+onto exact installed backend c2c4275. Both declared Results tails and built-in
+recent curves use the API scalar, including small step values. The existing
+regression covers sparse held-out reads and ordinary history; the test fixture
+flag no longer shadows `unittest.TestCase.fail`.
+
+Validation: 830 Python tests passed; 49 Node tests passed with five opt-in SSH
+checks skipped. Targeted Results tests and capability-skill checks passed.
+An initial Node run exposed missing workspace dependencies in a reused historic
+node_modules directory; isolated npm ci from the unchanged lockfile resolved it.
+The packaged Linux x64 app opened its setup screen under Xvfb with a fresh
+isolated profile, renderer sandbox and context isolation enabled, node integration
+disabled, and no JS errors. The host-local launch used --no-sandbox at the OS
+process layer; it did not connect to the live workspace. Direct read-only candidate
+reads returned numeric rows from all five existing study writers with no stale
+or error state. That is not yet a claim of installed app/iframe refresh success.
+
+All engine source and Stanford seven-L40S/pagination behavior remain unchanged
+from c2c4275. No scientific run, source binding, checkpoint or scheduler setting
+was changed. See CAPABILITY_REVIEW_INT64.md and the redacted diagnostic at
+tests/reports/wandb-history-int64.md. Live activation and post-activation
+refresh/readback require their own operational receipts.
+
+
 - 828 Python tests pass, including complete history aggregation beyond 16 MiB,
   stale-snapshot preservation on page failure and old-manager compatibility.
 - 49 Node tests pass; five optional SSH tests are skipped. The initial Node run

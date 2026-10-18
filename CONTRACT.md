@@ -763,6 +763,8 @@ The Results parent requests background snapshots, renders cached/completed sourc
 
 The authenticated parent requests `/api/result-data` only for the active report and its current revision. The opaque iframe gets declared rows and provenance through a source-checked message channel, never the bearer token or arbitrary API access. The server validates experiment/report ownership and W&B destination URLs. Old responses cannot overwrite a newly opened report. Data failures retain the last successful curves and original measurement/fetch times, with errors marked stale; a first failure stays missing. Raw history remains bounded/sampled, adds a recent tail so sampling does not omit the newest step, and requests sparse validation separately. Summary values only locate recent history and are never plotted as reconstructed curves.
 
+Both declared report sources and built-in W&B curves declare history range variables as W&B's `Int64` scalar. GraphQL validates these types even for small step values; a rejected tail query is a reader failure, not evidence that the scientific run has no measurements.
+
 Opening the built-in W&B view forces a server refresh even inside the old 60-second cache window. Ordinary background UI polling may use the cache; opening Results does not launch a worker, authorize a run or alter an existing monitoring task. HTML plots retain their interactive state during data refresh and reload normally when reopened.
 
 ## 0.1.20 workspace authentication

@@ -123,9 +123,11 @@ published revisions. Follow [editor collaboration](../supersurfer-code-editor/SK
 when reporting intersects shared source or attachments.
 
 When a live comparison is empty, distinguish a successful fetch with no numeric
-history from an authentication or transport error. Check each declared writer's
-actual run state, metric keys and logging before changing the renderer. A running
-run can still have no measurements; a failed run may retain useful ones. Keep the
+history from authentication, transport or rejected-query errors. A query failure
+can hide existing scientific measurements; do not label them unmeasured solely
+because the reader failed. Check each declared writer's actual run state, metric
+keys and available logging evidence before changing the renderer. A running run
+can still have no measurements; a failed run may retain useful ones. Keep the
 empty state honest and preserve source identities. **Refresh results** refreshes
 the report's live sources; Compute's **Refresh availability** probes host capacity.
 
@@ -196,6 +198,15 @@ unknown/missing, never zero. A failed source retains available prior observation
 with original times and a visible stale/error notice; partial comparisons identify
 the unavailable source. Do not overwrite a live report with static arrays to hide
 a fetch/rendering failure.
+
+For a reader failure, record the existing report/source IDs, failing request or
+query when available, exact nonsecret error, last successful fetch and actual
+sample ages. HTTP 400 alone does not identify an authentication failure or prove
+the query's root cause. Use available diagnostics to distinguish a rejected
+query from missing numeric history; report unknowns explicitly and keep attempts
+bounded. Preserve cached observations, source bindings and writer ownership.
+Repairing an app query belongs to an authorized app-maintainer task; it requires
+no scientific rerun, trainer/logger change, replacement writer or republishing.
 
 For an apparent blank/stuck page, distinguish missing bridge, pending fetch,
 source error and rendering failure. Inspect available diagnostics first. After an

@@ -245,8 +245,11 @@ If the official CLI needs a code, the user enters it directly in that terminal.
 A connection failure stays distinct from confirmed sign-out; follow the app's
 reconnection state instead of reinstalling the workspace or copying credentials.
 GitHub/W&B access are separate, and a Results fetch failure does not prove compute
-readiness or provider account access failed. Never weaken the Results sandbox
-to repair a chart; preserve existing jobs and genuine sample ages.
+readiness or provider account access failed. A query/HTTP error alone justifies
+neither re-onboarding a node nor reinstalling its runtime or rotating credentials.
+Use the [Results reader diagnosis](../supersurfer-results/SKILL.md#refresh-without-model-work),
+preserving existing jobs, source bindings, cached rows and genuine sample ages.
+Never weaken the Results sandbox to repair a chart.
 
 Provider selection preserves the same scoped MCP compute tools, saved run contract
 and recovery owner. It cannot turn preparation into queue intent or autonomous

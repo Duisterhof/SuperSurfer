@@ -214,7 +214,7 @@ class WandBReader:
                     if not numeric(latest) or not 0 <= latest < 2**31-1:
                         continue
                     suffix = str(index)
-                    declarations += [f'$r{suffix}:String!', f'$lo{suffix}:Int!', f'$hi{suffix}:Int!']
+                    declarations += [f'$r{suffix}:String!', f'$lo{suffix}:Int64!', f'$hi{suffix}:Int64!']
                     selections.append(f'r{suffix}:run(name:$r{suffix}) {{ history(minStep:$lo{suffix},maxStep:$hi{suffix},samples:1500) }}')
                     tail_vars.update({f'r{suffix}': run['name'], f'lo{suffix}': max(0, int(latest)-100), f'hi{suffix}': int(latest)+1})
                     indexed.append((suffix, run))

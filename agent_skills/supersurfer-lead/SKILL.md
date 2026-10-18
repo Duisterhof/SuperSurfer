@@ -154,6 +154,11 @@ metrics and a short schematic after the curves. The app handles refresh on openi
 without another handoff or wakeup. Preserve IDs, measured gaps, protocol and source
 identity when revising a report; do not treat a comparison request as launch intent.
 
+A query/HTTP failure can prevent reading existing measurements. Keep that gap
+distinct from an unmeasured split, preserve cached evidence and sample ages, and
+follow the Results skill's bounded reader diagnosis. Do not hand off replacement
+science, rebind writers or revive stopped work to repair a reporting reader.
+
 ## Task board and views
 
 Use `read_surfboard` for this task's applied workflow. Tasks snapshot project
