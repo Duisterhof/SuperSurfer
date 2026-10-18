@@ -1,3 +1,43 @@
+# Results integration with production c2c4275 — October 17, 2026
+
+The unversioned local PR53 candidate now includes every PR54/c2c4275 runtime
+hunk for bounded paged status, legacy upgrade inspection and the seven-L40S
+Stanford production profile. Prior installed monitoring/SSH fixes and Results
+Archive/Restore/navigation remain retained; it is not byte-identical to every
+file in the newer production bundle. The per-file source audit records this.
+
+- Full isolated suite:860 Python tests pass (5 skips);52 Node tests pass
+  (5 optional SSH skips). Focused status-pagination5 and Stanford-production6
+  tests also pass. Capability-skill and whitespace checks pass.
+- Real isolated browser checks pass: Archive→persisted readback→Restore with
+  active runs retained; owned block→same-project Results; Results stale/error
+  retention. No scientific execution mutation.
+- Linux x64 package builds and opens an isolated setup profile under Xvfb.
+  No workspace was connected. OS launch used --no-sandbox; actual renderer
+  sandbox/contextIsolation are true and nodeIntegration false.
+- Archive SHA256:b40ebc46497e33cb74eb6f865c17e5d33ea8c1bbd36e7f7f1a98e5c2f1b13aff.
+  Remote bundle SHA256:8f1fba503557362ff84532192eb879f9ca8e47d832c79d01377f1a5635bef660.
+  The prior9f9e0d3 archives remain under commit-specific names in dist/.
+- No live installation/restart, manager mutation, real run/report Archive/Restore
+  or scientific job action was performed. Exact-head hosted CI is separate.
+
+# Stanford production and complete status history — October 17, 2026
+
+- 828 Python tests pass, including complete history aggregation beyond 16 MiB,
+  stale-snapshot preservation on page failure and old-manager compatibility.
+- 49 Node tests pass; five optional SSH tests are skipped. The initial Node run
+  found a missing isolated `ws` dependency; rerunning with its prepared dependency
+  path passed without modifying the shared environment.
+- 27 Stanford tests pass, preserving smoke bounds, exact production resources,
+  scheduler-only reclamation, source review, lost-reply deduplication and recovery.
+- Linux x64 packaging passed. The packaged app opened in an isolated profile;
+  native Electron sandbox, navigation persistence and untrusted-page denial passed.
+- Five shipped capability skills were substantively reviewed and revised;
+  both 0.1.43 version markers and the skill/diff checks pass.
+- No research GPU was launched by these tests. Production data/source admission,
+  actual seven-GPU optimizer progress and measured telemetry remain owner duties.
+
+
 # Results display persistence — October 15, 2026
 
 - Standard renderer browser regression: Log survives leaving/reopening Results,

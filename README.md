@@ -9,6 +9,10 @@ experiments and GPUs together—and shape the workspace around how you actually 
 Latest release: **0.1.43** adds direct agent workflow edits, generated-output
 exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
+The managed Stanford extension supports an explicitly requested seven-L40S,
+24-hour training allocation. Exact-source review, scheduler-managed placement and
+checkpoint recovery remain required. See the [training profile](docs/stanford-seven-l40s-training.md).
+
 ## Native VS Code preview
 
 The [native chat extension](native_extension/README.md) adds a visual Surfboard,

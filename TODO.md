@@ -23,6 +23,11 @@
   connections do not remove existing orphaned forwarding processes.
 # Slurm follow-up
 
+- [x] Explicit seven-L40S/24-hour Stanford profile with scheduler-managed
+  reclamation, correct GPU receipts and scientific-source checkpoint ownership.
+- [x] Page growing manager run histories without truncating contracts or raising
+  the agent response limit; preserve stale evidence when a later page fails.
+
 - [x] Managed PSC one-V100 smoke submission, polling, identity recovery and cancellation.
 - [x] Accept the full Slurm environment contract at the actual MCP entry point, including manager and worker calls.
 - [ ] Generalize Slurm resources and clusters after the bounded PSC smoke is verified.

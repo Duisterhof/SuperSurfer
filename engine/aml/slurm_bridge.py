@@ -25,9 +25,13 @@ RESOURCE_KEYS = {"account", "partition", "gpu_type", "gpu_count", "walltime_seco
 
 def validate_resources(resource, gpu_count, backend="slurm"):
     stanford = backend == "stanford_slurm"
+    production = stanford and isinstance(resource, dict) and resource.get("profile") == "seven_l40s_training_v1"
     if backend not in {"slurm", "stanford_slurm"}:
         raise ValueError("Unknown Slurm backend")
     expected = RESOURCE_KEYS | ({"cpus_per_task", "memory_gib"} if stanford else set())
+    if production:
+        expected.remove("max_updates")
+        expected.update({"profile", "until_stopped", "allow_preemption", "checkpoint_grace_seconds"})
     if not isinstance(resource, dict) or set(resource) != expected:
         raise ValueError("Explicit Slurm account/partition/GPU/time/update bounds required")
     if not isinstance(resource["account"], str) or not re.fullmatch(r"[A-Za-z0-9_-]+", resource["account"]):
@@ -35,14 +39,26 @@ def validate_resources(resource, gpu_count, backend="slurm"):
     if stanford:
         if resource["account"] != "viscam" or resource["partition"] != "viscam" or resource["gpu_type"] not in {"3090","a5000","a6000","a40","l40s"}:
             raise ValueError("Invalid bounded Stanford profile")
-        for key, maximum in (("cpus_per_task",8),("memory_gib",64)):
+        if production:
+            exact = {"gpu_type": "l40s", "cpus_per_task": 28, "memory_gib": 112,
+                     "walltime_seconds": 86400, "checkpoint_grace_seconds": 120}
+            if any(resource[key] != value or type(resource[key]) is not type(value)
+                   for key, value in exact.items()):
+                raise ValueError("Production profile requires exactly7 L40S/28CPU/112GiB/24h/120s checkpoint grace")
+            if resource["until_stopped"] is not True or resource["allow_preemption"] is not True:
+                raise ValueError("Explicit until-stopped and scheduler reclamation policy required")
+        for key, maximum in (("cpus_per_task",28 if production else 8),("memory_gib",112 if production else 64)):
             if type(resource[key]) is not int or not 1 <= resource[key] <= maximum:
                 raise ValueError("Invalid Stanford resource " + key)
     elif resource["partition"] != "GPU-shared" or resource["gpu_type"] not in {"v100-16", "v100-32"}:
         raise ValueError("PSC smoke requires GPU-shared and a V100")
-    if type(resource["gpu_count"]) is not int or resource["gpu_count"] != 1 or type(gpu_count) is not int or gpu_count != 1:
-        raise ValueError("PSC smoke requires exactly one GPU")
-    for key, maximum in (("walltime_seconds", 900), ("max_updates", 100)):
+    expected_count = 7 if production else 1
+    if type(resource["gpu_count"]) is not int or resource["gpu_count"] != expected_count or type(gpu_count) is not int or gpu_count != expected_count:
+        raise ValueError("Slurm profile requires exactly " + str(expected_count) + " GPUs")
+    bounds = [("walltime_seconds", 86400 if production else 900)]
+    if not production:
+        bounds.append(("max_updates", 100))
+    for key, maximum in bounds:
         if type(resource[key]) is not int or not 1 <= resource[key] <= maximum:
             raise ValueError(f"PSC smoke {key} must be between 1 and {maximum}")
     return resource
@@ -77,10 +93,16 @@ def validate(spec):
         raise ValueError("Command interpreter must match admitted Python")
     # The reviewed native entry point must enforce this same bound; the adapter
     # cannot turn an unbounded training command into a smoke by metadata alone.
-    expected_bound = ["--smoke-updates", str(resource["max_updates"])]
-    flags = [i for i, x in enumerate(command) if x == "--smoke-updates" or x.startswith("--smoke-updates=")]
-    if len(flags) != 1 or command[flags[0]:flags[0]+2] != expected_bound:
-        raise ValueError("Reviewed CLI must enforce --smoke-updates")
+    if resource.get("profile") == "seven_l40s_training_v1":
+        # Full-state signal handling and until-stop semantics belong to the
+        # reviewed scientific entry/config, not mandatory invented CLI flags.
+        if any(x.startswith("--smoke-updates") for x in command):
+            raise ValueError("Production cannot use a smoke update bound")
+    else:
+        expected_bound = ["--smoke-updates", str(resource["max_updates"])]
+        flags = [i for i, x in enumerate(command) if x == "--smoke-updates" or x.startswith("--smoke-updates=")]
+        if len(flags) != 1 or command[flags[0]:flags[0]+2] != expected_bound:
+            raise ValueError("Reviewed CLI must enforce --smoke-updates")
     return resource
 
 
@@ -142,9 +164,9 @@ class SlurmBridge:
             seconds = r["walltime_seconds"]
             argv = ["sbatch", "--parsable", "--account=" + r["account"],
                     "--partition=" + r["partition"], "--nodes=1", "--ntasks=1", "--cpus-per-task=" + str(r.get("cpus_per_task",2)),
-                    "--gpus=" + r["gpu_type"] + ":1",
+                    "--gpus=" + r["gpu_type"] + ":" + str(r["gpu_count"]),
                     f"--time={seconds//3600:02}:{seconds//60%60:02}:{seconds%60:02}",
-                    "--signal=B:TERM@60", "--job-name=" + spec["id"], "--comment=" + spec["id"],
+                    "--signal=B:TERM@" + str(r.get("checkpoint_grace_seconds", 60)), "--job-name=" + spec["id"], "--comment=" + spec["id"],
                     "--output=" + str(directory / "stdout.log"),
                     "--error=" + str(directory / "stderr.log"), str(script_path)]
             if spec["config"].get("backend") == "stanford_slurm":
@@ -154,7 +176,7 @@ class SlurmBridge:
                     probe = self.execute([argv[0], "--test-only", *argv[2:]])
                 except Exception as exc:
                     return {"state": "blocked", "error": "Stanford estimate unknown; no job submitted: " + str(exc)}
-                if re.search(r"Preempts:\s*\S", probe):
+                if re.search(r"Preempts:\s*\S", probe) and not r.get("allow_preemption", False):
                     return {"state": "blocked", "error": "Stanford estimate reports preemption; no job submitted", "estimate": probe}
             atomic(intent_path, {"run_id": spec["id"], "fingerprint": fingerprint,
                                  "request_id": spec["config"]["supersurfer_request_id"], "account": r["account"], "partition": r["partition"], "created_at": time.time()})
@@ -165,7 +187,7 @@ class SlurmBridge:
                 receipt = {"run_id": spec["id"], "job_id": output.split(";")[0],
                            "fingerprint": fingerprint, "revision": spec["revision"],
                            "account": r["account"], "partition": r["partition"],
-                           "gpu_type": r["gpu_type"], "gpu_count": 1, "cpus_per_task": r.get("cpus_per_task",2), "state": "starting", "slurm_state": "PENDING"}
+                           "gpu_type": r["gpu_type"], "gpu_count": r["gpu_count"], "cpus_per_task": r.get("cpus_per_task",2), "state": "starting", "slurm_state": "PENDING"}
                 atomic(receipt_path, receipt)
                 return receipt
             except subprocess.CalledProcessError as exc:

@@ -1312,7 +1312,12 @@ class Service(SurfboardService, EditorService, WritingService):
         review_url = text_field(params, "pr_url", 2048, required=False)
         payload = {"project": project["id"], "name_": name, "gpu_count": count, "command": command, "config": config}
         if is_slurm:
-            if ("run.stanford_slurm.v1" if params.get("backend") == "stanford_slurm" else "run.slurm.v1") not in self.aml.call("ping").get("capabilities", []):
+            required_capability = "run.slurm.v1"
+            if params.get("backend") == "stanford_slurm":
+                required_capability = "run.stanford_slurm.v1"
+                if params.get("slurm", {}).get("profile") == "seven_l40s_training_v1":
+                    required_capability = "run.stanford_slurm.training.v1"
+            if required_capability not in self.aml.call("ping").get("capabilities", []):
                 raise APIError("The workspace manager needs the Slurm backend update before submitting", 503)
             host = self.lookup("hosts", text_field(params, "host_id", 150))
             try:

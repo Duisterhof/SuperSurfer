@@ -7,7 +7,8 @@ metadata:
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.43. Work within this project. Suggest ideas without
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Work within this project. Suggest ideas without
 launching them. For requested work, give a worker the outcome, relevant evidence,
 constraints and actual preparation/launch authorization, then leave execution
 with that owner. Routine code, node setup and scientific results need no continuing
@@ -240,7 +241,30 @@ from general human reorder controls. Keep the existing scientific worker owner.
 ## Slurm allocations
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
-The managed `queue_run` backend now accepts an explicit bounded Slurm contract;
-use a control host with no physical GPU registration, preserve the same request
-and run identities, and read its recorded Slurm job state. Preparation alone and
-suggested experiments do not authorize launches. Existing stops still apply.
+Stanford uses `backend: "stanford_slurm"`; omitting `slurm.profile` preserves
+its one-GPU, 900-second/100-update smoke. Production needs explicit
+`profile: "seven_l40s_training_v1"`: exactly seven L40S GPUs, 28 CPUs, 112 GiB RAM,
+86,400 seconds and 120 seconds of checkpoint grace, with no `max_updates`.
+Support for this profile is not launch authorization.
+
+This lead still has no queue tool. Preserve the user's actual preparation or
+launch intent when handing work to its existing owner. If the user assigns
+Stanford staging/placement to the manager, coordinate that concrete dependency
+while leaving scientific source, recipe and checkpoint semantics with the
+scientist; do not dispatch a duplicate launch. Native-owned sessions without
+scoped queue tools cannot bypass that limit with shell Slurm commands.
+The launch owner needs the registered experiment, stable request ID, exact-source
+PR, training telemetry and verified allocated entry point. Follow
+[host onboarding](../supersurfer-host-onboarding/SKILL.md#slurm-allocations);
+the control host has `gpus: []` and is outside project-pool placement.
+
+Production requires `until_stopped: true` and `allow_preemption: true`; preserve
+the user's actual continuation and scheduler reclamation authorization in the
+handoff. Its read-only estimate may report `Preempts`, while smoke still blocks
+that result. Neither permits cancelling another user's job or reserving GPUs
+with sleepers. Unknown estimates block submission. Slurm requeue remains disabled;
+checkpointed continuation across allocation boundaries uses the owner's authorized
+scoped recovery, preserving full state and scientific exposure. An until-stopped scope
+does not make the allocation infinite. Reconcile uncertain submission against the
+same request/run identity and report actual job state. Suggestions, scheduled
+reviews and preparation alone never authorize launch or override stops.
