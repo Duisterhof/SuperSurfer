@@ -1499,3 +1499,8 @@ Earlier97e CI receipts are historical; exact new-head CI must pass separately.
 The existing candidate now imports the five-role diagnostic guidance and test-fixture cleanup from installed production2ed14a2. Both Int64 runtime fixes were already present in ce9299c; server/engine/ui/desktop runtime bytes remain unchanged by this import. Preserve the root capability-review artifact and both Results retirement and reader-diagnosis documentation; no live activation is performed here.
 
 Actual focused validation:7 ResultData tests and4 capability-skill tests PASS, skill checker and diff checks PASS. Root five-skill additions pass reverse-apply verification. Earlier860Python/52Node suite evidence remains for the identical runtime; it is not claimed as a new full-suite run. The updated Linux x64 package built and opened an isolated setup profile under Xvfb; sandbox/contextIsolation true, nodeIntegration false, no workspace connected. OS --no-sandbox was required and disclosed. No live unit or service was changed. Package metadata/guidance refresh remains separate from live deployment.
+
+
+## Deterministic attachment-history assertion after hosted CI
+
+Exact684dd71 Python3.11 CI found a test race: the fake worker may append an assistant message after steering, while the attachment copy assertion read messages[-1]. The test now re-reads the same steered user-message ID and still checks that mutating the caller input cannot change its stored attachment. Production code is unchanged. All59 fake-process Codex protocol tests pass locally; no real inference or provider call was used. The complete hosted checks must pass on the new exact head.

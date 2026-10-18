@@ -242,8 +242,11 @@ class CodexBridgeTests(unittest.TestCase):
         chat=self.bridge.chat('project:vla');user=[m for m in chat['messages'] if m['role']=='user']
         self.assertEqual(['Explain this','Now inspect'],[m['text'] for m in user])
         self.assertEqual([item],user[-1]['attachments'])
+        steered_message_id=user[-1]['id']
         item['text']='changed locally'
-        self.assertEqual('selected = 42',self.bridge.chat('project:vla')['messages'][-1]['attachments'][0]['text'])
+        # The fake worker may append an assistant event after the steering reply.
+        stored_message=next(m for m in self.bridge.chat('project:vla')['messages'] if m['id']==steered_message_id)
+        self.assertEqual('selected = 42',stored_message['attachments'][0]['text'])
         request=next(r for r in self.requests() if r.get('method')=='turn/steer')
         self.assertIn('selected = 42',request['params']['input'][0]['text'])
         self.bridge.stop('project:vla');self.finished()
