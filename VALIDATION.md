@@ -1,3 +1,35 @@
+# Confirmed failed Stanford allocation retry — October18,2026
+
+The pending job later started and failed before CUDA during local scratch
+selection. Failed-run retry now accepts bounded allocation overrides with exact
+source/job identities. It preserves source and command except physical ranks,
+normal source review, owner lineage and the existing recovery budget. No
+cancellation is involved. Eight new regressions cover unchanged science, active
+owner recovery, lost reply/restart deduplication, immutable fields, invalid
+resources/states, stops/budgets and exact saved retry wakeups.
+
+All869 Python tests pass;51 Node tests passed on unchanged UI/desktop source,
+with five opt-in SSH skips. All38 focused pending/failed/recovery cases pass.
+The five capability skills were reviewed again against the actual tool path.
+Restart continuity also verifies that an eligible failed flexible owner receives
+a fresh actual recovery grant after a workspace restart, without a new user
+request, new run or reset attempt count. Linux x64 packaging and isolated native
+sandbox/setup pass; final exact-commit
+CI and installation are separate receipts, with no research launch from tests.
+
+# Never-started Stanford allocation replacement — October 18, 2026
+
+Isolated regression fixtures exercise conditional PENDING cancellation, start
+races, strict accounting timestamps, explicit Stop, immutable saved fields,
+recovery restart and lost cancellation/submission replies. They use the real
+service-to-engine queue with mocked cluster transport. They submit no scientific
+job and establish no real availability or GPU admission. Final ordinary validation passed860 Python tests and51 Node tests (five opt-in
+SSH checks skipped). All19 focused pending-replan regressions and capability-skill
+checks passed. Linux x64 packaging and a fresh isolated packaged Electron launch
+passed: renderer sandbox/context isolation enabled, node integration disabled,
+no JS errors. The host-local native check used --no-sandbox and connected to no
+workspace. CI and installed activation remain separate operational receipts.
+
 ## Flexible Stanford single-node placement — October 17, 2026
 
 Eight focused regressions cover real service-schema/engine roundtrips across 1–8 ranks, exact single-node typed Slurm argv, shorter site walltime, resource/policy rejection, uncertain-submission deduplication, linked resource-preserving retry and missing installed capability rejection before run creation. Existing PSC/smoke/seven-L40S regressions remain required. These isolated CPU fixtures do not establish real cluster availability or scientific rank/precision admission. Ordinary validation passed 841 Python tests and 49 Node tests (five opt-in SSH checks skipped). All 51 focused Slurm tests and capability-skill validation passed. Linux x64 packaging and isolated native Electron sandbox/profile/navigation checks passed. No live service was restarted or job submitted; installed capability and actual cluster/scientific admission remain pending.

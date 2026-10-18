@@ -7,7 +7,7 @@ metadata:
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
 Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
@@ -330,3 +330,73 @@ rank/precision/VRAM admission; transport syntax alone proves neither. Preserve
 exact-source/data/local-scratch and single-owner submit/reconcile rules. A
 test-only estimate reserves nothing; this profile adds no launch, deployment or
 other-job cancellation authority.
+
+### Replanning a never-started Stanford allocation
+
+Use `recover_run` with `action: "replan_pending"` only for an explicit user-origin
+placement change to the latest enabled owner-bound Stanford
+`single_node_training_v1` lineage. Read the current run and supply its exact
+expected Slurm job ID and full source revision; do not target an older parent or
+infer them from a test estimate. An ordinary scheduled check or saved recovery
+wakeup cannot initiate this placement change. Preserve the existing submission
+owner, registered experiment, source/verified PR and immutable data identity.
+
+The revised layout is still one node with 1–8 homogeneous typed GPUs. Overrides
+are restricted to GPU type, `viscam`/`sc-loprio` partition, CPUs, memory and
+walltime within the flexible profile's limits. The existing argv is preserved
+except the existing `--ranks` value, which must equal the new GPU count. Source
+and scientific settings cannot change in this operation. Verify that the exact
+source already supports the new rank mapping, effective global batch, precision,
+memory and telemetry before requesting it; allocated admission remains required.
+
+The service checks that the exact job is never-started `PENDING`, then the engine
+uses a cancellation conditional on that exact job still being pending. It must
+confirm terminal `CANCELLED` with no start and persist owned cancellation proof
+before creating one linked child. If the job starts during the race, leave it
+running and do not create a replacement. An unknown state, missing terminal
+proof or uncertain cancellation/submission remains unresolved; inspect the same
+request's durable receipt instead of issuing a second request. Reuse the same
+replan identity after interruption. The replacement retains the lineage and
+uses its existing recovery budget, capped at three attempts, with ownership,
+stops, uncertainty guards and exact-source/review gates intact; a replan does not
+reset attempts.
+
+This managed transition is distinct from cancelling a run through `stop_run` and
+starting a new initial queue request. Do not perform `scancel`, `scontrol`,
+`sbatch`, database edits or ad hoc retries yourself. A native session without
+this scoped action must report that capability gap; it cannot emulate it.
+
+### Retrying a confirmed failed flexible allocation
+
+If the latest enabled owner-bound `single_node_training_v1` attempt has a
+confirmed terminal failure, use existing `recover_run(action="retry")` instead
+of cancelling or applying `replan_pending`. Under the user's existing flexible
+placement authorization, active user work or that lineage's active owned recovery
+grant may include all four allocation fields: `expected_revision`,
+`expected_slurm_job_id`, `gpu_count` and `slurm`. Match the exact failed source
+and Slurm job; a pending, running, cancelled or uncertain status is ineligible.
+
+The same 1–8 homogeneous single-node resource bounds and override whitelist
+apply. Source and data stay unchanged. Supply explicit argv equal to the original
+reviewed command except its existing `--ranks` value matching the new GPU count.
+The reviewed entry must preserve effective batch, fresh/resume behavior and any
+required full-state checkpoint; a changed GPU layout cannot silently discard
+scientific state. If another source repair is needed, this allocation-only route
+does not admit a different revision. Ordinary retry without allocation fields
+retains its original resource contract.
+
+No scheduler cancellation or engine resource mutation occurs. The service freezes
+the failed-allocation intent before submission and reuses the existing recovery
+request ID and uncertain queue receipt. Repeat identical fields after a lost
+reply, rather than creating a second retry or changing layout while the first
+submission is uncertain. The existing exact-source PR, ownership, Stop, policy,
+telemetry and maximum-three-attempt checks still apply. A saved intent can receive
+bounded reconciliation wakeups; those wakeups do not expand the user's placement
+or research authorization.
+
+The existing recovery tick also redelivers an enabled failed flexible Stanford
+lineage below the three-attempt cap after a five-minute unchanged-state backoff.
+This lets its existing owner regain the active recovery turn after a workspace
+restart without asking for a duplicate user request. It creates no timer, run or
+attempt; busy, paused and Stop guards remain. Unrelated unchanged failure states
+retain their previous deduplication behavior.

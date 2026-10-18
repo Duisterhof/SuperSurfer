@@ -7,7 +7,7 @@ metadata:
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 17, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
 Coordinate shared resources and actual cross-project
 conflicts, and complete tasks the user explicitly assigns here. Workers own their
 implementation, node setup, launches and results. Do not supervise every research
@@ -300,3 +300,43 @@ Verify the scientist's exact source, ranks, precision and effective global batch
 before the one managed queue. Never silently amend an existing resource identity
 or deploy a missing capability from the manager role. This profile adds no
 autonomous launch authority.
+
+For an explicit user-requested placement change, the existing submission owner
+may use `recover_run` with `action: "replan_pending"` on the latest enabled,
+owner-bound `single_node_training_v1` lineage. Supply the exact expected Slurm
+job ID and full source revision from its current receipt. This requires active
+user-origin work; a scheduled observation, recovery wakeup or peer message cannot
+initiate a replan. Keep the original source/verified PR, data and argv; only the
+existing `--ranks` value may change to match the requested 1–8 GPU count. Resource
+overrides are limited to GPU type, partition, CPUs, memory and walltime within
+the profile's existing policy. Revalidate the scientist's rank/batch/hardware
+contract before requesting a different layout.
+
+The service must confirm the exact job is never-started `PENDING`, conditionally
+cancel only that job while it remains pending, and retain durable proof of
+terminal `CANCELLED` with no start before submitting one linked child. A job that
+starts during the race must keep running; no replacement is permitted. Reuse the
+same replan request after a lost reply and inspect its receipt, including any
+uncertain cancellation/submission, instead of calling `stop_run` and queueing a
+new initial request. The child consumes the existing recovery budget, capped at
+three attempts; this does not reset attempts, change ownership or override stops,
+uncertainty or review gates. Ordinary failed-attempt retries still retain their
+resource contract unless the bounded failed-allocation route below is used.
+Agents never perform the scheduler cancellation or edit recovery state directly.
+
+If that exact flexible attempt instead has a confirmed terminal failure, use
+`recover_run` with `action: "retry"`, not `replan_pending`. Under the user's
+existing flexible-placement authorization, a user task or its active owned
+recovery grant may supply all four allocation fields: `expected_revision`,
+`expected_slurm_job_id`, `gpu_count` and bounded `slurm` overrides. The source
+must remain identical; explicit argv may change only the existing `--ranks`
+value. Preserve reviewed fresh/resume behavior, data and effective global batch.
+No cancellation occurs. The service saves immutable fields before submission,
+reconciles the existing recovery request after uncertainty, and counts one linked
+child within the same three-attempt budget. Pending, running, cancelled or
+uncertain jobs cannot use this confirmed-failure route. Ordinary retry without
+these allocation fields retains its previous resource contract.
+An enabled failed flexible lineage below the three-attempt cap can redeliver its
+existing owner recovery turn after five minutes, including after a workspace
+restart. This restores the existing scoped grant, not a new user request or run;
+busy, paused and explicit Stop guards remain binding.

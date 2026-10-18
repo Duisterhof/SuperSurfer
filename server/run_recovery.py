@@ -100,6 +100,8 @@ def compact_status(run, recovery, acquisitions):
             'updated_at', 'last_wake', 'task'), 'recovery')
         grant.update(current_run_id=recovery['runs'][-1], max_attempts=3,
                      is_latest_attempt=recovery['runs'][-1] == run['id'])
+        grant['pending_replans'] = [{k:p.get(k) for k in ('parent_run_id', 'child_run_id', 'phase', 'fields')}
+                                   for p in recovery.get('pending_replans', [])]
     recent = sorted(acquisitions, key=lambda row: row.get('updated_at', 0), reverse=True)[:4]
     summaries = []
     for row in recent:
@@ -244,6 +246,9 @@ class RunRecovery:
 
     def action(self, scope, run, fields):
         action = fields.get('action', 'status')
+        if action == 'replan_pending':
+            from .run_replan import replan
+            return replan(self, scope, run, fields)
         if action == 'status':
             if set(fields) - {'action','run_id','include_details'}: raise ComputeError('Status accepts run_id and optional include_details')
             if type(fields.get('include_details', False)) is not bool:
@@ -289,15 +294,24 @@ class RunRecovery:
         if action == 'pause':
             if set(fields) - {'action','run_id'}: raise ComputeError('Pause accepts only run_id')
             self.pause(scope, run['id']); return self.get(run['id'])
-        if action != 'retry' or set(fields) - {'action','run_id','revision','pr_url','command','reason'}:
+        allocation_fields = {'gpu_count','slurm','expected_revision','expected_slurm_job_id'}
+        allocation = bool(allocation_fields & set(fields))
+        if action != 'retry' or set(fields) - ({'action','run_id','revision','pr_url','command','reason'} | allocation_fields):
             raise ComputeError('Retry accepts run_id, revision, pr_url, command and reason')
+        if allocation:
+            from .run_replan import pending_plan
+            plan = pending_plan(record, run['id'], 'retry')
+            if plan and plan.get('result'):
+                if plan['fields'] != fields:
+                    raise ComputeError('Saved allocation retry fields are immutable', 409)
+                return {**copy.deepcopy(plan['result']), 'recovery':record, 'previous_run_id':run['id']}
         if not record['enabled'] or record['runs'][-1] != run['id'] or run['status'] != 'failed':
             raise ComputeError('Only the latest confirmed failed attempt can be retried. Never retry cancelled or uncertain jobs.', 409)
         if record['attempts'] >= 3: raise ComputeError('Three recovery attempts exhausted. Report the failure and obtain new direction.', 409)
         reason = fields.get('reason')
         if not isinstance(reason, str) or not reason.strip() or len(reason)>4000: raise ComputeError('Retry requires the diagnosed failure and repair in reason')
-        # New attempt = new source review, W&B identity and scheduler run. Resources
-        # and original experimental scope cannot be widened through this endpoint.
+        # A new attempt receives fresh review and tracking identity. Resource
+        # changes require the separate bounded flexible-allocation checks below.
         request = retry_intent(self.service, run)
         request = {key:value for key,value in request.items() if key in RETRY_FIELDS}
         if not fields.get('command'): raise ComputeError('Retry requires explicit argv with a fresh output destination or a verified resume command')
@@ -306,14 +320,21 @@ class RunRecovery:
         legacy_name = original_name[:75] + ' · recovery ' + str(record['attempts']+1)
         request['name'] = retry_name(original_name, record['attempts']+1)
         request['request_id'] = recovery_request_id(record, run)
+        if allocation:
+            from .run_replan import allocation_retry
+            request = allocation_retry(self, run, fields, request)
         experiment = self.service.store.experiment(run['experiment_id'])
         self.submitting.add(scope)
         try:
             result = self._queue_retry(scope, request, legacy_name, experiment)
         finally:
             self.submitting.discard(scope)
+        record = self.get(run['id'])
         if result['run_id'] not in record['runs']:
             record['runs'].append(result['run_id']); record['attempts'] += 1
+        if allocation:
+            plan = pending_plan(record, run['id'], 'retry')
+            plan.update(phase='complete', child_run_id=result['run_id'], result=copy.deepcopy(result))
         record.update(last_problem=None, last_wake=time.time(), repair=reason, updated_at=time.time())
         self.save(record)
         return {**result, 'recovery':record, 'previous_run_id':run['id']}
@@ -328,9 +349,19 @@ class RunRecovery:
             for record in service.store.get('run_recovery', []):
                 run = runs.get(record['runs'][-1]); scope = record['scope']
                 if not record['enabled'] or not run: continue
-                if run['status'] in {'succeeded','cancelled'}:
+                from .run_replan import pending_plan, PENDING_PHASES
+                plan = pending_plan(record, run['id'])
+                replanning = bool(plan and plan['phase'] in PENDING_PHASES)
+                failed_allocation = bool(replanning and plan['fields']['action'] == 'retry')
+                if replanning and not failed_allocation and (run.get('started') is not None or run['status'] in {'running', 'succeeded', 'failed'}):
+                    plan.update(phase='aborted', error='Original attempt started or changed; preserve it')
+                    self.save(record)
+                    replanning = False
+                if run['status'] in {'succeeded','cancelled'} and not replanning:
                     record.update(enabled=False); self.save(record); continue
-                if run['status'] == 'failed' and record['attempts'] < 3:
+                if replanning:
+                    problem = ['pending_replan', run['status'], plan['phase']]
+                elif run['status'] == 'failed' and record['attempts'] < 3:
                     problem = ['failed', run.get('error')]
                 elif run['status'] == 'queued' and run.get('ready') and time.time() - (run.get('created') or time.time()) >= 120:
                     problem = ['queued', run.get('waiting_reason')]
@@ -342,7 +373,14 @@ class RunRecovery:
                 if legacy_retry:
                     problem.append({'retry_name_repair':1,'receipt':legacy_retry['receipt']})
                 problem = json.dumps(problem, sort_keys=True)
-                if problem == record.get('last_problem') or time.time() - record.get('last_wake', 0) < 60: continue
+                unchanged = problem == record.get('last_problem')
+                # Saved replans must reconcile after a lost reply even when the
+                # parent remains terminal. Retain bounded backoff and one intent.
+                failed_flexible = (run['status'] == 'failed' and record['attempts'] < 3
+                    and run.get('config', {}).get('backend') == 'stanford_slurm'
+                    and run['config'].get('slurm', {}).get('profile') == 'single_node_training_v1')
+                if unchanged and not (replanning or failed_flexible): continue
+                if time.time() - record.get('last_wake', 0) < (300 if unchanged else 60): continue
                 if service.codex.chat(scope).get('busy') or service.store.get('agent_messages_paused:' + scope, False): continue
                 preferences = service.chat_preferences(scope, strict=True)['effective']
                 record.update(last_wake=time.time()); self.save(record)
@@ -363,6 +401,10 @@ class RunRecovery:
                         'reconciles any existing submission; do not use a fresh queue request or delete the receipt. '
                         'This changes no resource, protocol, approval or retry limit. Saved retry fields: ' +
                         json.dumps({'run_id':run['id'],'command':legacy_retry['command'],'revision':legacy_retry['revision']}))
+                if replanning:
+                    prompt += ('\nAn explicit user resource replan is already saved. Reconcile it using '
+                               'recover_run with these EXACT immutable fields; no separate stop or new request: '
+                               + json.dumps(plan['fields']))
                 try:
                     response = service.codex.send(scope, prompt, **{key:preferences[key] for key in ('model','reasoning','fast_mode','approval_mode')})
                     if not response.get('accepted'):
