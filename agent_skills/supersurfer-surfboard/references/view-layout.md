@@ -186,7 +186,8 @@ declared W&B sources survive; publishing an update keeps the archive state.
 Existing layout/publishing tools do not grant report reorder or unarchive actions.
 
 Research check_experiment_results is a separate scoped evidence checkpoint, not a
-layout tool. Its complete action may archive redundant other reports while
-preserving source, but cannot reorder/unarchive reports or archive its reviewed
-comparison. Human organization controls above remain separate. Follow
+layout tool. Its complete action may archive redundant other reports or Restore
+retained owned reports while preserving verified source bytes, but cannot reorder
+reports or archive its reviewed comparison. Human organization controls above
+remain separate. Follow
 [Results checkpoint guidance](../../supersurfer-results/references/results-checkpoint.md).

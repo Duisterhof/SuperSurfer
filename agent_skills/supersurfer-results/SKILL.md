@@ -94,8 +94,8 @@ value. Report the actual accepted job and allocated hardware separately from
 test estimates and requested ranks; neither a cancellation receipt nor a linked
 child proves CUDA admission, checkpoint creation or optimizer progress. Preserve
 each verified writer/attempt identity without inventing a writer for an unstarted
-job. The existing recovery budget and ownership remain, and reporting/polling
-cannot initiate a replan, cancel work or authorize another launch.
+job. The existing recovery budget, capped at three attempts, and ownership remain;
+reporting/polling cannot initiate a replan, cancel work or authorize another launch.
 
 A confirmed failed flexible attempt may have a linked allocation-only `retry`
 under the existing explicit placement authorization. This differs from cancelling
@@ -320,7 +320,7 @@ reports, choose Move earlier/later or Remove in their tab menu, then Restore
 through Removed. Removal archives the report's presentation; saved HTML, declared
 W&B sources and measurements remain. Standalone organization controls use a presentation revision
 check and are human-only; the research checkpoint below separately permits
-bounded archive cleanup, not general reorder or Restore. `publish_result` can
+bounded archive and Restore cleanup, not general reorder. `publish_result` can
 revise the same stored report but preserves its archived state; do not publish a
 duplicate or claim an update unarchives it. Ordinary report listings omit
 archived reports, so absence from that list does not prove content was deleted.
@@ -329,8 +329,53 @@ Use enabled `check_experiment_results` to verify one current research comparison
 against all returned attempts, not only the first training run or an earlier
 baseline. Inspect may read an owned report's HTML; complete binds the current
 attempt version, visible report ID/SHA and concrete summary. Missing/pending/failed
-measurements remain explicit entries. Optional archive_result_ids can hide only
-redundant other owned reports, keeping their source and unique evidence. Follow
+measurements remain explicit entries. Optional `archive_result_ids` can hide up
+to 20 redundant other owned reports, keeping their source and unique evidence.
+Optional `restore_result_ids` can Restore up to 20 retained reports from this
+same task after verifying their saved bytes; it requires a valid visible
+comparison and current attempt version. Read archived evidence first. Foreign or
+duplicate IDs, overlapping archive/Restore lists, a changed artifact or archiving
+the reviewed comparison fail before visibility changes. Inspect the returned
+before/after flags and report SHA, then read back the restored page and live
+bindings. An already-visible Restore is unchanged, not proof of a transition.
+Neither operation changes job state or supplies a missing publication gate. Follow
 [Results checkpoint guidance](references/results-checkpoint.md) for scope, exact
 fields and the required task's reopen behavior. Nonresearch work and held-only
 drafts do not acquire this launch-related reporting checkpoint.
+
+When a user requests a shared project Results template, use its versioned
+contract and single reusable composer around the standard training renderer.
+Preserve existing report/source/chart identities, measured cohorts, sample
+exposure, checkpoint distinctions, media and parent-managed preferences. Do not
+fork another dashboard per study. A composed custom HTML payload still requires
+the project's exact-payload quality gate and stored readback.
+
+Plot/axis headings participate in saved legend keys. Stable trace UIDs and a
+new-revision reopen test alone do not prove migration of old choices. A shared
+renderer may generate reviewed one-to-one `legend_aliases` from hashed original
+and current specs with unchanged writer/metric/split/x/filter/transforms and
+cohort/aggregation proof. Do not transfer ambiguous merges or hide new metrics.
+Test old-hidden → renamed revision → shown again → reload, smoothing/raw and
+stale refresh; declare supporting-runtime and unresolved historical limitations.
+
+The user-facing Runs browser supports reversible presentation archival through
+`run.presentation` in builds containing that API. It records reason, evidence,
+lineage and a version; it does not change execution state or stop a run. Active,
+uncertain or recovery-enabled runs cannot be archived. A terminal run with
+unfinished evaluation/analysis must remain visible. Archived runs retain their
+evidence and are available under Archived with Restore. This is distinct from
+report removal and whole-task archival. It is not an agent tool or authority to
+call a user-only action through another route. Do not claim it is installed
+until the connected runtime advertises/implements it; a source patch or JSON
+inventory alone is not live archival.
+
+Scientific reusable comparison blocks use their exact `publish_view_block`
+publisher in a scoped manifest when the connected runtime supports it. Keep the
+actual block ID/current version and copied media; omitting assets preserves them,
+while an explicit map replaces them and binds its bytes. Never mislabel a block
+as a report to obtain a receipt. Wrong publisher/project or stale version fails.
+The owning Results check requirement applies to this publication too; it grants
+no execution authority. A source-only helper or isolated preview is not proof of
+an installed capability, a published block or its actual app rendering.
+
+Owned blocks can use the documented same-project `supersurfer:block:open-results` message (request ID, actual experiment ID and optional current report ID), after a capability response. Only a known block frame/current project is accepted; no app credentials enter the sandbox. Do not invent app query/hash routes or persist temporary preview URLs on older runtimes.

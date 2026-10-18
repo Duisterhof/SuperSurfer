@@ -30,15 +30,24 @@ Do not replace a disabled tool with private state edits or a manager relay.
    comparison or prove a measurement exists.
 3. Publish/revise through the existing enabled results tool, preserving the
    report ID and live-source behavior. Inspect the published HTML/SHA and rendered
-   comparison. If this chosen report is archived, the user must Restore it first;
+   comparison. If this chosen report is archived, Restore it through the UI or a
+   valid visible comparison's scoped checkpoint before making it canonical;
    publishing a revision does not unarchive it.
 4. Call `action: complete` with the current attempt `version`, visible comparison
    `result_id`, its exact `sha256`, and a concrete `summary` (at most 2000
    characters). The summary states what was compared and what remains unavailable.
    Optionally supply `archive_result_ids` for at most 20 redundant reports in this
    experiment only. Keep the reviewed comparison and useful unique evidence.
-   This bounded cleanup hides other reports while preserving their HTML/W&B data;
-   it provides no general reorder or unarchive tool.
+   Alternatively supply `restore_result_ids` for at most20 retained reports in
+   this same experiment. Read each archived report's exact HTML first. The
+   service verifies retained bytes before restoring visibility and rejects
+   foreign IDs, duplicate IDs, archive/Restore overlap or a changed revision.
+   Both operations require the valid visible canonical comparison; they provide
+   no general reorder or cross-task control and change no scientific execution.
+   The receipt's `presentation` gives actual before/after archived flags, whether
+   each flag changed, preserved report SHAs and the resulting presentation
+   version. An already-visible Restore is an explicit unchanged result, not a
+   fabricated transition. Read back the restored HTML/source bindings afterward.
 5. Read back the returned review/receipt. A stale attempt version, report SHA or
    unavailable workspace run status requires rereading and reconciling, not a
    blind replay. Comment-only references do not satisfy coverage.

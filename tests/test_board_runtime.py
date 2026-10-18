@@ -7,9 +7,9 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
-import threading
 from unittest.mock import patch
 
 from server.board_runtime import BoardRuntime, source_fingerprint, TERMINAL, MAX_LOG

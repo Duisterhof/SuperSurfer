@@ -73,3 +73,48 @@ class PublicationSourceTests(unittest.TestCase):
         self.assertEqual(5, self.snapshot()[1]['input_count'])
         (self.root / 'review/data.json').unlink()
         with self.assertRaises(SurfboardError): self.snapshot()
+
+    def block(self, **payload):
+        self.payload = {'id': 'block_existing', 'version': 4, 'title': 'Current comparison',
+                        'html': '<p>Measured cohorts</p>', **payload}
+        body = json.dumps(self.payload)
+        (self.root / 'review/payload.json').write_text(body)
+        self.manifest.update(tool='publish_view_block', project_id='project-a',
+                             payload_sha256=hashlib.sha256(body.encode()).hexdigest())
+        (self.root / 'review/manifest.json').write_text(json.dumps(self.manifest))
+
+    def block_snapshot(self, project='project-a'):
+        return publication_snapshot(self.root, 'review/manifest.json', ['check.py'], 'item-a', project)
+
+    def test_block_identity_version_assets_and_publisher_are_bound(self):
+        (self.root / 'media.png').write_bytes(b'original media fixture')
+        self.block(assets={'media.png': 'media.png'})
+        digest, binding = self.block_snapshot()
+        self.assertEqual(('publish_view_block', 'block_existing', 4, 'project-a'),
+                         (binding['tool'], binding['block_id'], binding['block_version'], binding['project_id']))
+        (self.root / 'media.png').write_bytes(b'changed media')
+        self.assertNotEqual(digest, self.block_snapshot()[0])
+        for args in ({'id': 'another'}, {'version': 5}, {'assets': {}}):
+            self.block(**args)
+            self.assertNotEqual(digest, self.block_snapshot()[0])
+
+    def test_wrong_project_wrong_publisher_and_stale_block_payload_fail(self):
+        self.block()
+        with self.assertRaisesRegex(SurfboardError, 'another project'): self.block_snapshot('project-b')
+        self.block(project_id='project-b')
+        with self.assertRaisesRegex(SurfboardError, 'another project'): self.block_snapshot()
+        self.block(result_id='wrong publisher identity')
+        with self.assertRaisesRegex(SurfboardError, 'declared fields'): self.block_snapshot()
+        self.block()
+        self.manifest['tool'] = 'publish_result'
+        (self.root / 'review/manifest.json').write_text(json.dumps(self.manifest))
+        with self.assertRaisesRegex(SurfboardError, 'declared fields'): self.block_snapshot()
+        self.block()
+        (self.root / 'review/payload.json').write_text('{"changed": true}')
+        with self.assertRaisesRegex(SurfboardError, 'changed'): self.block_snapshot()
+
+    def test_omitted_assets_and_explicit_empty_map_have_different_semantics(self):
+        self.block()
+        preserved = self.block_snapshot()[1]['payload_digest']
+        self.block(assets={})
+        self.assertNotEqual(preserved, self.block_snapshot()[1]['payload_digest'])

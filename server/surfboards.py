@@ -827,7 +827,7 @@ def compile_board(board):
         if node["kind"] == "visualizer":
             return ["publish_training_results"]
         if node["kind"] == "results":
-            return ["publish_result"]
+            return ["publish_result", "publish_view_block"]
         if node["kind"] == "latex":
             return ["compile_latex:" + node["id"]]
         return []

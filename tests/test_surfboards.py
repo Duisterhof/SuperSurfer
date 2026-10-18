@@ -169,7 +169,7 @@ class GraphTests(unittest.TestCase):
         board = template()
         node(board, "launch_requirements")["config"]["requirements"] = ["exact_commit"]
         board["edges"].append({"id": "source-publish", "source": "launch_requirements", "target": "results", "relation": "requires"})
-        self.assertIn(["publish_result"], [row["applies_to"] for row in compile_board(board)["requirements"]])
+        self.assertIn(["publish_result", "publish_view_block"], [row["applies_to"] for row in compile_board(board)["requirements"]])
 
     def test_recovery_and_monitoring_are_explicit_bounded_nonexecuting_descriptors(self):
         board = template()

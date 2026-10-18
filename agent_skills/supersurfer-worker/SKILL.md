@@ -259,6 +259,16 @@ then complete with its exact version/SHA and measured-or-unavailable evidence.
 changes reopen it, separately from the overall goal and authorized monitoring.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 
+For an authorized presentation cleanup, this same checkpoint can archive
+redundant reports or Restore retained reports from this task while preserving
+their exact HTML and live bindings. Read the archived revision first; complete
+against a valid visible comparison and current attempt version, then inspect the
+before/after receipt and read back restored evidence. It cannot reorder reports
+or archive runs. The separate human Runs archive action does not stop or recover
+execution; enabled recovery, uncertainty and unfinished evaluations stay visible.
+A missing native-session tool is a capability limit, not permission to call a
+user-only API, replace the owner or replay a publication under another identity.
+
 ## Slurm allocations
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).

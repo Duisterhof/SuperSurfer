@@ -240,7 +240,15 @@ with `experiment_id`. Revisit the existing comparison across every observed
 released/started attempt; preserve failed/pending evidence and the worker owner.
 Complete with current attempt version and exact report SHA, never a status-only
 handoff. Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md);
-its bounded archive cleanup is separate from human reorder/Restore controls.
+its bounded archive/Restore cleanup preserves owned report bytes and is separate
+from general human reorder controls. Keep the existing scientific worker owner.
+Read archived evidence through that checkpoint before Restore; require a valid
+visible comparison, current attempt version and exact report SHA, then verify the
+returned visibility flags and unchanged HTML/source bindings. Run retirement is a
+separate human-only presentation action, not a lead tool or a stop/recovery grant.
+Active, uncertain, recovery-enabled or otherwise unfinished work stays visible.
+Do not replace a missing native-owner capability with private app state changes,
+another publication or a second submission owner.
 
 ## Slurm allocations
 

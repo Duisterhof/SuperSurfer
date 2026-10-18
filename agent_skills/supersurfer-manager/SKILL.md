@@ -248,6 +248,16 @@ revise the current comparison, and complete with its exact current version/SHA.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 This is scoped reporting, not permission to take over another recovery owner.
 
+For user-requested retirement cleanup, distinguish report visibility from run
+execution. This checkpoint can archive redundant owned reports or Restore retained
+reports in the same experiment using the current comparison/version and verified
+saved bytes. Inspect its before/after receipts and read back HTML/live bindings.
+The separate Runs browser `run.presentation` action is human-only, not a manager
+MCP tool. A terminal attempt with enabled recovery or unfinished evaluation remains
+visible; neither archival nor Restore cancels, retries or changes its owner. A
+native owner missing a scoped operation must report the capability gap instead of
+using an HTTP/private-state workaround. Source support is not installed support.
+
 ## Slurm allocations
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).

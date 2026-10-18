@@ -116,7 +116,7 @@ def _url(value):
 def action_snapshot(row):
     if row.get("source_manifest"):
         from .publication_source import publication_snapshot
-        return publication_snapshot(row["cwd"], row["source_manifest"], row.get("source_paths"), row.get("experiment_id"))
+        return publication_snapshot(row["cwd"], row["source_manifest"], row.get("source_paths"), row.get("experiment_id"), row.get("project_id"))
     return source_fingerprint(row["cwd"], row.get("source_exclude", [])), None
 
 

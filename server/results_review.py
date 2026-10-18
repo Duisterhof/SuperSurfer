@@ -62,7 +62,7 @@ def read_report(service, experiment_id, result_id):
 
 
 def complete(service, experiment_id, fields):
-    if set(fields) - {'archive_result_ids'} != {'version', 'result_id', 'sha256', 'summary'}:
+    if set(fields) - {'archive_result_ids', 'restore_result_ids'} != {'version', 'result_id', 'sha256', 'summary'}:
         raise ValueError('Complete Results review with version, result_id, sha256 and summary')
     if not isinstance(fields['summary'], str) or not fields['summary'].strip() or len(fields['summary']) > 2000:
         raise ValueError('Record what was compared and cleaned up, including unavailable measurements')
@@ -79,9 +79,15 @@ def complete(service, experiment_id, fields):
         if not row or fields['sha256'] != row['sha256']:
             raise Conflict('Report changed or was removed. Review the current published report.')
         archived = fields.get('archive_result_ids', [])
-        if (not isinstance(archived, list) or len(archived) > 20 or not all(isinstance(value, str) for value in archived) or
-                fields['result_id'] in archived or not set(archived) <= {row['id'] for row in reports}):
-            raise ValueError('Cleanup may archive only other reports in this experiment; keep the reviewed comparison')
+        restored = fields.get('restore_result_ids', [])
+        known = {report['id'] for report in reports}
+        for ids in (archived, restored):
+            if (not isinstance(ids, list) or len(ids) > 20 or
+                    not all(isinstance(value, str) for value in ids) or
+                    len(set(ids)) != len(ids) or not set(ids) <= known):
+                raise ValueError('Cleanup may archive or restore only known reports in this experiment')
+        if fields['result_id'] in archived or set(archived) & set(restored):
+            raise ValueError('Keep the reviewed comparison and do not both archive and restore a report')
         path = service.results.directory / (row['id'] + '.html')
         if path.is_symlink() or path.resolve().parent != service.results.directory.resolve() or path.stat().st_size > 2_000_000:
             raise ValueError('Invalid Results evidence')
@@ -96,10 +102,24 @@ def complete(service, experiment_id, fields):
             raise ValueError('The report still omits attempts: ' + ', '.join(missing) + '. Include measured comparisons or explicit pending/unavailable entries.')
         receipt = {'version': status['version'], 'result_id': row['id'], 'sha256': row['sha256'],
                    'summary': fields['summary'].strip(), 'reviewed_at': time.time()}
-        if archived:
+        if archived or restored:
+            requested = set(archived) | set(restored)
+            # Verify every retained revision before changing any visibility flag.
+            # An unreadable archived artifact must not produce a Restore receipt.
+            preserved = {ident: read_report(service, experiment_id, ident) for ident in requested}
+            before = {other['id']: bool(other.get('archived')) for other in reports if other['id'] in requested}
             for other in reports:
                 if other['id'] in archived:
                     other['archived'] = True
+                elif other['id'] in restored:
+                    other['archived'] = False
             service.store.put('results:' + experiment_id, reports)
+            receipt['presentation'] = {
+                'version': service.results.presentation(experiment_id)['version'],
+                'presentation_only': True,
+                'reports': [{'result_id': ident, 'sha256': preserved[ident]['sha256'],
+                             'before_archived': before[ident], 'archived': ident in archived,
+                             'changed': before[ident] != (ident in archived)}
+                            for ident in sorted(requested)]}
         service.store.put('results_review:' + experiment_id, receipt)
         return receipt

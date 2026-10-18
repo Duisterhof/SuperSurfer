@@ -1,3 +1,27 @@
+# Results integration on current Stanford recovery — October18,2026
+
+This local candidate combines the existing PR53 presentation/review/navigation
+changes with installed PR57 source2f91533. Engine, Slurm/resource validation,
+run recovery, monitoring, native provider sessions and LaTeX remain at that
+baseline. Combined validation passed881 Python tests and52 Node tests, with five opt-in
+Node SSH tests skipped. The independent capability audit passed59 focused Python
+cases and its Node navigation unit test. Real isolated HTTP/browser tests passed
+Archive→persisted readback→Restore, protected active work, desktop/narrow layout,
+Stanford job/node display, and known-frame same-project exact Results navigation.
+
+The first new Stanford browser assertion exposed an incorrectly shaped fixture:
+raw manager metadata belongs in config.backend/config.slurm_status, not normalized
+top-level fields. Correcting that fixture restored the expected real UI path;
+its initial failure is retained separately. The first focused standalone invocation
+also lacked PYTHONPATH=engine; remaining tests passed with the ordinary harness
+path restored. No source guard was weakened for either setup correction.
+
+The required five-role capability review, skill checker and whitespace checks
+pass. Forty-two excluded runtime files are byte-identical to installed2f91533,
+including engine/recovery/Slurm, monitoring and provider/session behavior. Exact
+package/native and any later live-integration receipts are separate; preparation
+changes no live service, presentation state or scientific job.
+
 # Confirmed failed Stanford allocation retry — October18,2026
 
 The pending job later started and failed before CUDA during local scratch

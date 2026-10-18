@@ -277,6 +277,8 @@ class Service(SurfboardService, EditorService, WritingService):
         projects = {project["id"]: project for project in state["projects"]}
         experiments = {experiment["id"]: experiment for experiment in state["experiments"]}
         for run in state["runs"]:
+            from . import run_presentation
+            run["presentation"] = run_presentation.read(self.store, run, self.recovery.get(run['id']))
             experiment = experiments.get(run.get("experiment_id"))
             project = projects.get(run.get("project_id"))
             known = run["config"].get("wandb_tracking")
@@ -1724,6 +1726,9 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.store.restore(text_field(params, "id", 180), integer(params, "version", 1), integer(params, "current_version", 1))
         if self.read_only:
             raise APIError("Read-only preview: agent turns and AutoML mutations are disabled", 403)
+        if op == "run.presentation":
+            from . import run_presentation
+            return run_presentation.manage(self, params)
         if op == "experiment.wandb.sync":
             return self.sync_experiment_tracking(text_field(params, "id", 180), required=True)
         if op == "project.compute.save":
