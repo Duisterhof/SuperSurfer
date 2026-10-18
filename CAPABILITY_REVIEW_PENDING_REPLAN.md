@@ -1,6 +1,6 @@
 # Pending Stanford replan capability review
 
-Reviewed 2026-10-18T06:30:25+00:00 against base `938ed0b9f96f88e0cf3e098d07d9645978d2396b` and the exact working-tree file hashes below.
+Reviewed 2026-10-18T06:36:31+00:00 against base `938ed0b9f96f88e0cf3e098d07d9645978d2396b` and the exact working-tree file hashes below.
 SuperSurfer version remains **0.1.43**; no version bump is part of this change.
 
 ## Disposition
@@ -30,6 +30,10 @@ responsibility.
   conditional pending cancellation of the exact known job, then requires owned
   terminal no-start cancellation proof. A started job is preserved. Unknown or
   incomplete outcomes do not authorize a replacement.
+- The existing recovery tick may redeliver an unchanged pending replan after
+  300 seconds, using the original saved fields and submission identity. It adds
+  no timer or launch operation, keeps busy/paused and ownership guards, and does
+  not change ordinary unchanged-failure deduplication.
 - Fresh queueing continues through the existing exact-source PR, Surfboard,
   telemetry, limits and single-active-Stanford checks. A saved replan may resume
   under its existing active recovery grant; polling cannot initiate one. Explicit
@@ -45,6 +49,7 @@ responsibility.
 | A confirmed start race could leave an impossible saved replan active. | Affirmative started/running/confirmed incompatible terminal state aborts that saved plan; the start-abort regression emits no replacement/wakeup. |
 | A transport-uncertain parent could lose its saved replan. | Unknown/unreachable states retain the saved phase and enabled grant without submitting a child. The uncertainty regression passes. |
 | An older in-flight status reply could revive an already cancelled parent. | Ordinary reconciliation now checks for a newer terminal row immediately after its awaited RPC, before timing, evidence or state writes. A held-status/real-pending-cancel regression preserves terminal cancellation. |
+| An unchanged saved replan could receive no further reconciliation wakeup after an interrupted submission reply. | Only pending replans now redeliver the same immutable intent after a 300-second unchanged-state backoff. The 1000/1299/1300 fixture verifies delivery, no early redelivery, delivery at the boundary, and no new run or attempt. Ordinary unchanged failures retain their prior deduplication. |
 
 The last finding was independently reproduced before repair as
 `cancelled -> starting` in an isolated fixture, then verified by the new passing
@@ -73,7 +78,7 @@ than emulate it through shell commands or another owner.
 ## Checks run by this reviewer
 
 - `PYTHONPATH=engine:tests python3 -m unittest test_pending_replan -v`:
-  **18 tests passed**, 1.152 seconds, exit 0.
+  **19 tests passed**, 1.381 seconds, exit 0.
 - `python3 scripts/check-agent-skills.py`: **passed**, all shipped capability
   skills match 0.1.43.
 - `git diff --check`: **passed** at the reviewed revision and after this record.
@@ -99,11 +104,11 @@ jobs, reset the recovery budget or bypass a failed/uncertain gate.
 | File | SHA256 |
 |---|---|
 | `server/run_replan.py` | `1a9d1bdca876cfeee07b52f29d28cfd9137d704bbfae12e2e9868b4fec779ee1` |
-| `server/run_recovery.py` | `99daad23cef4cee7e3be45de8158e11334432116faf753131777d5658b588e11` |
+| `server/run_recovery.py` | `0c1d9eeee9e4894a0996433148b61b105bcc8320c053145aacd3e38fb662fc92` |
 | `server/agent_tools.py` | `ea9cdd20f96a9a7001fec79da5d22a920d3bb91ab4952a91e6a93046c602d13a` |
 | `engine/aml/service.py` | `267d8011a0c64f89dce6b543a31f145c6f83c605413ddbb1f3c4e61edca3f422` |
 | `engine/aml/slurm_bridge.py` | `2eb06a7ada7a513b0cd3ef5e47575eb458a06016752ac6d69a3538cfc6ef0235` |
-| `tests/test_pending_replan.py` | `fff1ffc97d0a523467af21722a91a95d3981c6ab18a12254cf7ae54a821a19b1` |
+| `tests/test_pending_replan.py` | `04c7fb92c5730f853571a2b52ac71975569aae3ed34ad140317ca4b63c5dc642` |
 | `agent_skills/supersurfer-manager/SKILL.md` | `814b29b03196e989943bf3a40826caa38deb388c300381d51c5a8c15b1c2a3fd` |
 | `agent_skills/supersurfer-lead/SKILL.md` | `80639b1d5bc1c10da1b832414404e49ef376b8d2ca852dc7474a0ce2fd1df896` |
 | `agent_skills/supersurfer-worker/SKILL.md` | `82726dd61c6827caf5f3ba8b6028a0e584b1b350572e4f0e4dcd0febd6897624` |

@@ -356,7 +356,11 @@ class RunRecovery:
                 if legacy_retry:
                     problem.append({'retry_name_repair':1,'receipt':legacy_retry['receipt']})
                 problem = json.dumps(problem, sort_keys=True)
-                if problem == record.get('last_problem') or time.time() - record.get('last_wake', 0) < 60: continue
+                unchanged = problem == record.get('last_problem')
+                # Saved replans must reconcile after a lost reply even when the
+                # parent remains terminal. Retain bounded backoff and one intent.
+                if unchanged and not replanning: continue
+                if time.time() - record.get('last_wake', 0) < (300 if unchanged else 60): continue
                 if service.codex.chat(scope).get('busy') or service.store.get('agent_messages_paused:' + scope, False): continue
                 preferences = service.chat_preferences(scope, strict=True)['effective']
                 record.update(last_wake=time.time()); self.save(record)

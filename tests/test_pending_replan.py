@@ -294,6 +294,29 @@ class PendingReplanTests(unittest.TestCase):
             return self.manager.store.get('runs',self.run_id)
         self.assertEqual(self.wait(overlap())['status'],'cancelled')
 
+    def test_uncertain_saved_plan_retries_wakeup_with_five_minute_backoff(self):
+        self.prepare()
+        with patch.object(self.manager.transport,'request',AsyncMock(return_value={'state':'starting','job_id':'123'})):
+            self.replan()
+        record = self.service.recovery.get(self.run_id)
+        record['last_wake'] = 0
+        self.service.recovery.save(record)
+        self.service.codex.sent.clear()
+        self.service.codex.busy.clear()
+        with patch('server.run_recovery.time.time',return_value=1000):
+            self.service.recovery.tick()
+        self.assertEqual(len(self.service.codex.sent),1)
+        self.service.codex.busy.clear()
+        with patch('server.run_recovery.time.time',return_value=1299):
+            self.service.recovery.tick()
+        self.assertEqual(len(self.service.codex.sent),1)
+        with patch('server.run_recovery.time.time',return_value=1300):
+            self.service.recovery.tick()
+        self.assertEqual(len(self.service.codex.sent),2)
+        self.assertIn('EXACT immutable fields',self.service.codex.sent[-1][1])
+        self.assertEqual(self.service.recovery.get(self.run_id)['attempts'],0)
+        self.assertEqual(len(self.runs()),1)
+
 
 if __name__ == '__main__':
     unittest.main()

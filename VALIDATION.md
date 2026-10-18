@@ -4,8 +4,8 @@ Isolated regression fixtures exercise conditional PENDING cancellation, start
 races, strict accounting timestamps, explicit Stop, immutable saved fields,
 recovery restart and lost cancellation/submission replies. They use the real
 service-to-engine queue with mocked cluster transport. They submit no scientific
-job and establish no real availability or GPU admission. Final ordinary validation passed859 Python tests and51 Node tests (five opt-in
-SSH checks skipped). All18 focused pending-replan regressions and capability-skill
+job and establish no real availability or GPU admission. Final ordinary validation passed860 Python tests and51 Node tests (five opt-in
+SSH checks skipped). All19 focused pending-replan regressions and capability-skill
 checks passed. Linux x64 packaging and a fresh isolated packaged Electron launch
 passed: renderer sandbox/context isolation enabled, node integration disabled,
 no JS errors. The host-local native check used --no-sandbox and connected to no

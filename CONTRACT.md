@@ -1088,7 +1088,9 @@ then uses Slurm's PENDING-state cancellation filter. A race-started allocation i
 preserved. Only exact terminal CANCELLED accounting with no start and the owned
 replan receipt permits a child. Incomplete accounting, connectivity errors and
 lost replies retain the saved intent without another submission identity. Reuse
-identical fields to reconcile. A saved plan can resume under its active recovery
+identical fields to reconcile. An unchanged saved replan receives another owned
+reconciliation wakeup after five minutes; this sends no scheduler command by
+itself and changes no attempt count. A saved plan can resume under its active recovery
 grant; new resource choices require another explicit user task. Explicit Stop
 or pause disables continuation, including while cancellation is in flight.
 
