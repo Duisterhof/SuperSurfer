@@ -25,6 +25,19 @@ file in the newer production bundle. The per-file source audit records this.
 
 ## October 17, 2026: preserve live Results history reads on the Stanford backend
 
+The installed Int64 repair restored fresh trainers and stopped SIGReg history.
+The original single-run 6×8 baseline separately exceeded the 8 MiB response cap.
+A read-only 500-sample request returned 500 real rows in 3,389,056 decoded bytes.
+The reader now retries only oversized initial overviews at 500, then 100 samples;
+the same URLs, keys, latest tail and sparse requests remain intact. Three new
+regressions cover retained sparse/latest points, bounded exhaustion with original
+cache timestamps, and no retry for unrelated access failures. All ten targeted
+Results tests pass. The ordinary suite passed 833 Python tests and 49 Node tests
+with five opt-in SSH checks skipped. Capability-skill validation passed. The
+candidate baseline reader returned 614 merged real rows (500-sample overview
+plus latest/sparse rows), no error and unchanged source bindings. Packaged-build
+and installed follow-through remain separate operational checks.
+
 Restored the already reviewed PR49/229155c W&B `Int64` history-range fix
 onto exact installed backend c2c4275. Both declared Results tails and built-in
 recent curves use the API scalar, including small step values. The existing

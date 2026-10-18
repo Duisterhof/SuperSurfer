@@ -530,5 +530,6 @@ Archive/Restore acceptance remain separate; the source patch changes no real run
 ## October 17: deployed-backend Results reader compatibility
 
 - [x] Restore the reviewed Int64 history-bound fix on the Stanford production baseline, including sparse held-out and built-in recent curves.
+- [x] Bound wide-run overview reads after the actual single-run baseline exceeded the response cap; retain the latest tail and sparse metric requests.
 - [x] Validate role guidance, all ordinary tests, packaged isolated setup and actual read-only writer history.
 - [ ] Verify controlled workspace activation and authenticated refresh/reopen without replacing scientific writers or runs.

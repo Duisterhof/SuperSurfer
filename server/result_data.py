@@ -106,8 +106,17 @@ class ResultData:
             try:
                 target = parse_target(source['url'])
                 variables = {k: target[k] for k in ('entity', 'project', 'run')}
-                query = 'query ReportRun($entity:String!, $project:String!, $run:String!) { project(name:$project,entityName:$entity) { run(name:$run) { name displayName state summaryMetrics history(samples:1500) } } }'
-                run = (self.reader.fetcher(query, variables).get('project') or {}).get('run')
+                # Wide histories can exceed the transport cap even for one run.
+                # Reduce only the sampled overview; retain the latest tail and
+                # independently requested sparse metrics below.
+                for sample_limit in (1500, 500, 100):
+                    query = 'query ReportRun($entity:String!, $project:String!, $run:String!) { project(name:$project,entityName:$entity) { run(name:$run) { name displayName state summaryMetrics history(samples:' + str(sample_limit) + ') } } }'
+                    try:
+                        run = (self.reader.fetcher(query, variables).get('project') or {}).get('run')
+                        break
+                    except ValueError as error:
+                        if not str(error).startswith('W&B response is too large.') or sample_limit == 100:
+                            raise
                 if not run:
                     raise ValueError('W&B run is missing or is not accessible to this workspace account')
                 history = list(rows(run.get('history')))
@@ -141,7 +150,7 @@ class ResultData:
                         continue
                     clean = {k: v for k, v in row.items() if k in allowed and (numeric(v) or isinstance(v, bool) or isinstance(v, str) and len(v) <= 500)}
                     merged.setdefault(step, {}).update(clean)
-                result.update(rows=[merged[k] for k in sorted(merged)], run_id=run['name'], run_name=run.get('displayName') or run['name'], state=run.get('state'), fetched_at=time.time())
+                result.update(rows=[merged[k] for k in sorted(merged)], run_id=run['name'], run_name=run.get('displayName') or run['name'], state=run.get('state'), fetched_at=time.time(), history_sample_limit=sample_limit)
                 result['observed_at'] = max((r['_timestamp'] for r in result['rows'] if numeric(r.get('_timestamp'))), default=None)
             except (ValueError, TypeError, KeyError, OSError) as error:
                 if cached:
