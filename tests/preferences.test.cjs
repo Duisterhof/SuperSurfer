@@ -13,3 +13,23 @@ test('custom experiment tabs survive native preference round trips',()=>{
 });
 
 test('task tabs survive native persistence and reject foreign values',()=>{const value=workspacePreference({taskTabs:{'vla/E15':'results','vla/E12':'runs','vla/_project':'compute','../bad':'editor','vla/E17':{},'vla/E18':'javascript:alert(1)'}});assert.deepEqual(value.taskTabs,{'vla/E15':'results','vla/E12':'runs','vla/_project':'compute'});});
+
+test('Results scales are report-specific, bounded and persist through native serialization',()=>{
+ const value=workspacePreference({resultScales:{'exp_a/report_a':'log','exp_a/report_b':'linear','exp_b/report_a':'linear','../bad':'log','exp_a/bad':'symlog','exp_a/object':{}}});
+ assert.deepEqual(workspacePreference(JSON.parse(JSON.stringify(value))).resultScales,{'exp_a/report_a':'log','exp_a/report_b':'linear','exp_b/report_a':'linear'});
+ assert.deepEqual(workspacePreference({resultScales:[]}).resultScales,{});
+ assert.equal(Object.keys(workspacePreference({resultScales:Object.fromEntries(Array.from({length:600},(_,i)=>['exp/report_'+i,'log']))}).resultScales).length,512);
+});
+
+
+test('Results legend preferences retain hidden series and show-all, with bounded input',()=>{
+ const {validResultLegend,resultLegends}=require('../desktop/preferences.cjs');
+ const hidden=['["Loss","Run A","train"]'];
+ const value=workspacePreference({resultLegends:{'exp/report':hidden,'exp/visible':[],'../bad':hidden,'exp/bad':{},'exp/oversize':['x'.repeat(1025)]}});
+ assert.deepEqual(workspacePreference(JSON.parse(JSON.stringify(value))).resultLegends,{'exp/report':hidden,'exp/visible':[]});
+ for(const invalid of [null,{},['ok',null],Array(257).fill('x')])assert.equal(validResultLegend(invalid),false);
+ const many=Object.fromEntries(Array.from({length:600},(_,i)=>['exp/report_'+i,hidden]));
+ assert.equal(Object.keys(resultLegends(many)).length,512);
+ const large=Object.fromEntries(Array.from({length:100},(_,i)=>['exp/report_'+i,Array(256).fill('x'.repeat(1024))]));
+ const bounded=resultLegends(large);assert.ok(JSON.stringify(bounded).length<1024*1024);assert.ok(bounded['exp/report_99']);assert.equal(bounded['exp/report_0'],undefined);
+});

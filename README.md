@@ -73,6 +73,8 @@ Cmd/Ctrl +/− changes text size in the focused editor or panel; outside a panel
 
 Research Results show all task attempts immediately. Workers use `check_experiment_results` to compare new attempts with earlier evidence, update an existing report and record a revision-checked review. Released attempts, status/source changes or a changed report reopen that checkpoint. Pending and failed measurements stay explicit; a review never authorizes another run.
 
+Each Results report remembers its selected linear/log scale and hidden curves when reopened. The desktop app also keeps these choices across connection-port changes and app restarts; other reports and workspaces keep separate choices.
+
 Mac releases are not Developer ID signed or notarized. If blocked, try
 **System Settings → Privacy & Security → Open Anyway**. If macOS says the app is
 “damaged,” first move it to Applications, then run this **only for a download you

@@ -2,6 +2,34 @@
 
 ## October 17, 2026: preserve live Results history reads on the Stanford backend
 
+Installed4ccc898 follow-through verified all five original writers with numeric
+rows and no errors/stale flags. The authenticated Results pane and every primary
+plot rendered at actual900px and650px with no JS errors or body overflow. The
+650px check used the app's expanded Results pane, retaining the same iframe and
+bridge. Refresh and reopening fetch real data; the independent manager PID and
+all456 prior run/source/host/GPU/status identities remained unchanged. The same
+transfer journal resumed after a controlled pause. Scale/legend reopening exposed
+an existing parent preference-bridge regression, separate from reader success.
+
+The reviewed preference implementation from PR53/ce9299 is now recovered without
+scientific report rewrites or engine changes: authenticated parent storage,
+opaque-frame scale/legend messages and native report/window preferences. The
+original browser and native regressions exercise real view choices, trace order,
+raw smoothing companions, stale refresh, late-read races, report isolation and
+native changed-port restart. Their current results are recorded after execution;
+this source preparation alone is not deployed-app or scientific proof. Browser
+and native window tests passed. The browser test initially reproduced the old
+Plotly raw-companion cleanup bug during smoothing/refresh; restoring the existing
+0620ed3 compiler CSS-selector escape resolved it without changing stable trace
+UIDs. The current shared scientific payloads already contain that same escape,
+so no report rewrite is needed. Native tests verified report/window isolation,
+detached panels, changed connection port and saved scale/legend after restart.
+The ordinary suite passed833 Python and51 Node tests, with five opt-in SSH tests
+skipped. Capability checks and all four skill tests passed. Linux x64 packaging
+completed; its fresh-profile packaged setup opened under Xvfb with renderer
+sandbox/context isolation enabled, node integration disabled and no JS errors.
+This native test used OS-process --no-sandbox and did not connect to live jobs.
+
 The installed Int64 repair restored fresh trainers and stopped SIGReg history.
 The original single-run 6×8 baseline separately exceeded the 8 MiB response cap.
 A read-only 500-sample request returned 500 real rows in 3,389,056 decoded bytes.

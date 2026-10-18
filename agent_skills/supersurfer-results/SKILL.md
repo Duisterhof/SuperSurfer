@@ -170,6 +170,14 @@ quantities on shared axes, with comparable steps/examples/time; different batch
 sizes can make step counts incomparable. Name the actual split: validation and
 test are not interchangeable, and one final test measurement is a point.
 
+Linear/log scale and hidden legend series are viewing preferences saved per
+experiment/report by the trusted app parent; desktop also saves them independently
+of the local connection port. Legend choices follow the plot and measured series,
+not array indices. The opaque report frame gains no credentials or direct storage
+access. Verify navigation, reopening and relevant native persistence before claiming
+a fix. Lost preferences are separate from missing measurements: preserve report
+and series identities instead of republishing or rebinding writers to repair them.
+
 Use `details_html` for a short schematic and requested domain widgets **after**
 the curves. For an intervention diagram, show meaningful arrows, trainable/frozen
 components and important dimensions with a brief caption. Keep extensive settings,

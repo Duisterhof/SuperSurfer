@@ -497,4 +497,5 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Restore the reviewed Int64 history-bound fix on the Stanford production baseline, including sparse held-out and built-in recent curves.
 - [x] Bound wide-run overview reads after the actual single-run baseline exceeded the response cap; retain the latest tail and sparse metric requests.
 - [x] Validate role guidance, all ordinary tests, packaged isolated setup and actual read-only writer history.
-- [ ] Verify controlled workspace activation and authenticated refresh/reopen without replacing scientific writers or runs.
+- [x] Verify controlled workspace activation, all five live sources and actual900/650 refresh/reopen-data without replacing scientific writers or runs; same transfer resumed.
+- [ ] Restore the already-reviewed parent scale/hidden-series preference bridge and verify actual same-report reopening after deployment.
