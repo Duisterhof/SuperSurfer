@@ -1,3 +1,5 @@
+A separate `single_node_training_v1` admits explicitly authorized 1–8 homogeneous GPUs on one Stanford node with installed flexible-training capability. It preserves managed exact-source review, immutable inputs, intent reconciliation and checkpoint ownership. Current site/account/precision/rank/global-batch admission remains mandatory; old PSC/smoke/seven-L40S contracts remain unchanged. See docs/stanford-seven-l40s-training.md.
+
 # Stanford production and complete status history — October 17, 2026
 
 The separate [Stanford production profile](docs/stanford-seven-l40s-training.md)

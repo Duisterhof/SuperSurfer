@@ -1,3 +1,6 @@
+- [x] Add bounded explicit1–8 GPU Stanford single-node profile, separate capability gate and resource-preserving recovery tests.
+- [ ] Deploy reviewed flexible profile and verify the authorized production allocation; no test-only reservation claim.
+
 # Slurm follow-up
 
 - [x] Explicit seven-L40S/24-hour Stanford profile with scheduler-managed

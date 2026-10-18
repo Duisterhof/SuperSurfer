@@ -272,3 +272,8 @@ scoped recovery, preserving full state and scientific exposure. An until-stopped
 does not make the allocation infinite. Reconcile uncertain submission against the
 same request/run identity and report actual job state. Suggestions, scheduled
 reviews and preparation alone never authorize launch or override stops.
+
+
+### Explicit flexible Stanford placement
+
+An explicit user choice may allow the manager to select a flexible Stanford layout. `single_node_training_v1` is separate from the fixed seven-L40S profile and requires installed `run.stanford_slurm.training.flexible.v1`. It supports one homogeneous node with 1–8 GPUs within viscam account/viscam or sc-loprio partition policy, at most 24h/four CPUs/16 GiB RAM per GPU. Keep scientific ownership with the worker, exact rank/global-batch/precision admission with the source, and a single training submission owner. A read-only estimate grants no allocation or new research authority.
