@@ -284,3 +284,8 @@ reply requires reconciliation of that request and intent, not another launch.
 Use `stop_run` only for a requested cancellation of the recorded run. An unavailable
 backend capability is a concrete app-maintainer dependency; this manager still
 cannot deploy or restart SuperSurfer and must not bypass it through shell `sbatch`.
+
+
+### Explicit flexible Stanford placement
+
+For an explicitly authorized flexible Stanford allocation, inspect current Slurm inventory and site/account limits after data seals. Select the largest compatible homogeneous single-node layout; a test-only estimate is not a reservation. The separate `single_node_training_v1` requires installed `run.stanford_slurm.training.flexible.v1`, 1–8 GPUs, account viscam, partition viscam or sc-loprio, at most 24h, four CPUs and 16 GiB RAM per GPU, and the same explicit reclamation/TERM120 policy. Verify exact scientist source/ranks/precision/global batch before the one managed queue. Never silently amend an existing resource identity or deploy a missing capability from the manager role.

@@ -1,3 +1,7 @@
+## Flexible Stanford single-node placement — October 17, 2026
+
+Eight focused regressions cover real service-schema/engine roundtrips across 1–8 ranks, exact single-node typed Slurm argv, shorter site walltime, resource/policy rejection, uncertain-submission deduplication, linked resource-preserving retry and missing installed capability rejection before run creation. Existing PSC/smoke/seven-L40S regressions remain required. These isolated CPU fixtures do not establish real cluster availability or scientific rank/precision admission. Ordinary validation passed 841 Python tests and 49 Node tests (five opt-in SSH checks skipped). All 51 focused Slurm tests and capability-skill validation passed. Linux x64 packaging and isolated native Electron sandbox/profile/navigation checks passed. No live service was restarted or job submitted; installed capability and actual cluster/scientific admission remain pending.
+
 # Stanford production and complete status history — October 17, 2026
 
 ## October 17, 2026: preserve live Results history reads on the Stanford backend

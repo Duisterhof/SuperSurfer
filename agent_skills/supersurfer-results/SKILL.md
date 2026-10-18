@@ -293,3 +293,8 @@ redundant other owned reports, keeping their source and unique evidence. Follow
 [Results checkpoint guidance](references/results-checkpoint.md) for scope, exact
 fields and the required task's reopen behavior. Nonresearch work and held-only
 drafts do not acquire this launch-related reporting checkpoint.
+
+
+### Explicit flexible Stanford placement
+
+Stanford flexible single-node placement must report actual GPU type, physical ranks, effective global batch and measured exposure/throughput. `single_node_training_v1` and its test-only estimate are resource contracts, not launch or optimizer evidence. Keep hardware comparisons qualified and missing measurements pending; changing hardware does not permit inventing curves or rewriting older source bindings.

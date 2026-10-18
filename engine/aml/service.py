@@ -135,7 +135,7 @@ class Manager:
 
     async def ping(self):
         return {"pid": os.getpid(), "home": str(self.home),
-                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.stanford_slurm.training.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
+                "capabilities": ["target.resolve", "task_binding", "host.update", "placement.host_contracts.v1", "source.stage.v1", "run.ready_with_review.v1", "run.slurm.v1", "run.stanford_slurm.v1", "run.stanford_slurm.training.v1", "run.stanford_slurm.training.flexible.v1", "run.amend_source.v1", "run.submit_idempotent.v1", "run.add_candidate.v1"]}
 
     async def target_resolve(self, target=None, project=None, default_project=None,
                              conversation=False, kinds=None):

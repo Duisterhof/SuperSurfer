@@ -25,7 +25,15 @@ RESOURCE_KEYS = {"account", "partition", "gpu_type", "gpu_count", "walltime_seco
 
 def validate_resources(resource, gpu_count, backend="slurm"):
     stanford = backend == "stanford_slurm"
-    production = stanford and isinstance(resource, dict) and resource.get("profile") == "seven_l40s_training_v1"
+    flexible = stanford and isinstance(resource, dict) and resource.get("profile") == "single_node_training_v1"
+    production = flexible or (stanford and isinstance(resource, dict) and resource.get("profile") == "seven_l40s_training_v1")
+    expected_count = 1
+    if production:
+        expected_count = 7
+    if flexible:
+        expected_count = gpu_count
+    if flexible and (type(expected_count) is not int or not 1 <= expected_count <= 8):
+        raise ValueError("Single-node training requires 1–8 GPUs")
     if backend not in {"slurm", "stanford_slurm"}:
         raise ValueError("Unknown Slurm backend")
     expected = RESOURCE_KEYS | ({"cpus_per_task", "memory_gib"} if stanford else set())
@@ -37,9 +45,14 @@ def validate_resources(resource, gpu_count, backend="slurm"):
     if not isinstance(resource["account"], str) or not re.fullmatch(r"[A-Za-z0-9_-]+", resource["account"]):
         raise ValueError("Invalid Slurm account")
     if stanford:
-        if resource["account"] != "viscam" or resource["partition"] != "viscam" or resource["gpu_type"] not in {"3090","a5000","a6000","a40","l40s"}:
+        allowed_partitions = {"viscam", "sc-loprio"} if flexible else {"viscam"}
+        gpu_type_valid = resource["gpu_type"] in {"3090","a5000","a6000","a40","l40s"}
+        if flexible:
+            gpu_type_valid = (isinstance(resource["gpu_type"], str)
+                              and re.fullmatch(r"[A-Za-z0-9_-]{1,32}", resource["gpu_type"]))
+        if resource["account"] != "viscam" or resource["partition"] not in allowed_partitions or not gpu_type_valid:
             raise ValueError("Invalid bounded Stanford profile")
-        if production:
+        if production and not flexible:
             exact = {"gpu_type": "l40s", "cpus_per_task": 28, "memory_gib": 112,
                      "walltime_seconds": 86400, "checkpoint_grace_seconds": 120}
             if any(resource[key] != value or type(resource[key]) is not type(value)
@@ -47,12 +60,19 @@ def validate_resources(resource, gpu_count, backend="slurm"):
                 raise ValueError("Production profile requires exactly7 L40S/28CPU/112GiB/24h/120s checkpoint grace")
             if resource["until_stopped"] is not True or resource["allow_preemption"] is not True:
                 raise ValueError("Explicit until-stopped and scheduler reclamation policy required")
-        for key, maximum in (("cpus_per_task",28 if production else 8),("memory_gib",112 if production else 64)):
+        if flexible and (resource["until_stopped"] is not True or resource["allow_preemption"] is not True
+                         or type(resource["checkpoint_grace_seconds"]) is not int or resource["checkpoint_grace_seconds"] != 120):
+            raise ValueError("Explicit until-stop, scheduler reclamation and 120s checkpoint grace required")
+        cpu_limit, memory_limit = 8, 64
+        if production:
+            cpu_limit, memory_limit = 28, 112
+        if flexible:
+            cpu_limit, memory_limit = 4 * expected_count, 16 * expected_count
+        for key, maximum in (("cpus_per_task", cpu_limit), ("memory_gib", memory_limit)):
             if type(resource[key]) is not int or not 1 <= resource[key] <= maximum:
                 raise ValueError("Invalid Stanford resource " + key)
     elif resource["partition"] != "GPU-shared" or resource["gpu_type"] not in {"v100-16", "v100-32"}:
         raise ValueError("PSC smoke requires GPU-shared and a V100")
-    expected_count = 7 if production else 1
     if type(resource["gpu_count"]) is not int or resource["gpu_count"] != expected_count or type(gpu_count) is not int or gpu_count != expected_count:
         raise ValueError("Slurm profile requires exactly " + str(expected_count) + " GPUs")
     bounds = [("walltime_seconds", 86400 if production else 900)]
@@ -93,7 +113,7 @@ def validate(spec):
         raise ValueError("Command interpreter must match admitted Python")
     # The reviewed native entry point must enforce this same bound; the adapter
     # cannot turn an unbounded training command into a smoke by metadata alone.
-    if resource.get("profile") == "seven_l40s_training_v1":
+    if resource.get("profile") in {"seven_l40s_training_v1", "single_node_training_v1"}:
         # Full-state signal handling and until-stop semantics belong to the
         # reviewed scientific entry/config, not mandatory invented CLI flags.
         if any(x.startswith("--smoke-updates") for x in command):

@@ -295,3 +295,8 @@ its authorized scoped linked recovery with verified state and unchanged scope.
 Inspect the same run's job ID/state/reason, reconcile lost replies with the same
 request fields, and use `stop_run` for the requested recorded-run cancellation.
 Existing stops revoke continuation authority.
+
+
+### Explicit flexible Stanford placement
+
+When the user permits flexible Stanford placement, `single_node_training_v1` supports 1–8 GPUs on one homogeneous node under the installed flexible-training capability. Validate the actual rank mapping, effective global batch, precision and hardware telemetry in exact reviewed source before manager submission. The profile does not adapt model code or certify VRAM. Preserve strict full-state resume compatibility; a linked retry retains its original resource contract. Do not create a second queue request when the manager owns submission.

@@ -315,3 +315,8 @@ Inspect the same run's recorded Slurm ID/state/reason and reconcile uncertain
 submission rather than changing request identity. Use scoped `stop_run` for an
 authorized cancellation, never shell `sbatch` or broad `scancel`. Deployment of a
 missing backend capability remains an app-maintainer operation, not node setup.
+
+
+### Explicit flexible Stanford placement
+
+For explicitly authorized flexible placement, the separate `single_node_training_v1` admits one homogeneous node, 1–8 typed GPUs, account viscam, partition viscam or sc-loprio, at most 24h/four CPUs/16 GiB RAM per GPU, TERM120, until-stop and explicit scheduler reclamation. Require installed `run.stanford_slurm.training.flexible.v1`. Check real account/QOS/partition constraints and exact scientific rank/precision/VRAM admission; transport syntax alone proves neither. Preserve exact-source/data/local-scratch and single-owner submit/reconcile rules; do not allocate from a test-only estimate.
