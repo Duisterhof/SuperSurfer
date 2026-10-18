@@ -765,6 +765,8 @@ The authenticated parent requests `/api/result-data` only for the active report 
 
 Both declared report sources and built-in W&B curves declare history range variables as W&B's `Int64` scalar. GraphQL validates these types even for small step values; a rejected tail query is a reader failure, not evidence that the scientific run has no measurements.
 
+If a declared run's initial 1500-sample overview exceeds the 8 MiB response cap, the reader retries that same overview at 500, then 100 samples. Other failures do not trigger size retries. The cap, source binding, newest-history tail and independently requested sparse metrics remain unchanged. An exhausted retry retains cached observations and their original timestamps with a stale error; it never creates a zero measurement.
+
 Opening the built-in W&B view forces a server refresh even inside the old 60-second cache window. Ordinary background UI polling may use the cache; opening Results does not launch a worker, authorize a run or alter an existing monitoring task. HTML plots retain their interactive state during data refresh and reload normally when reopened.
 
 ## 0.1.20 workspace authentication

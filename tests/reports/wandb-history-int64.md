@@ -24,3 +24,13 @@ view. Existing tests check preservation of cached values on genuine failures.
 
 This report deliberately excludes private project names, run IDs, credentials,
 and research measurements. The failure is the GraphQL variable type contract.
+# Additional installed-reader finding: oversized single-run history
+
+After the Int64 repair, four preserved study sources loaded measured rows. The
+original 6×8 baseline was already linked to one individual run but its wide
+1500-sample history exceeded the existing 8 MiB transport limit. A bounded
+500-sample read returned 500 real observations in 3,389,056 decoded bytes.
+The fix reduces only the initial sampled overview on that specific error, tries
+at most 1500/500/100 samples, and preserves the latest tail, sparse requests,
+source identities and stale-cache behavior. No research run was restarted and
+no underlying W&B measurement was changed. The response cap is not increased.

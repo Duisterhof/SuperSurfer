@@ -199,6 +199,13 @@ with original times and a visible stale/error notice; partial comparisons identi
 the unavailable source. Do not overwrite a live report with static arrays to hide
 a fetch/rendering failure.
 
+If the initial history response exceeds the fixed 8 MiB limit, the reader retries
+its 1,500-sample overview at 500 then 100 samples. This reduces overview density;
+it preserves the declared source/keys, recent 100-step tail and sparse held-out
+reads. Other errors do not trigger these retries, and exhausted retries retain
+the existing stale/error behavior. Do not infer complete history from a successful
+sampled read or raise the response limit to repair a report.
+
 For a reader failure, record the existing report/source IDs, failing request or
 query when available, exact nonsecret error, last successful fetch and actual
 sample ages. HTTP 400 alone does not identify an authentication failure or prove
