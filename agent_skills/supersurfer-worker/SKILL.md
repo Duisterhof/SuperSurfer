@@ -326,3 +326,16 @@ existing recovery budget. A race-started job must not be stopped or duplicated.
 Reconcile uncertain replies using the same replan identity; do not use shell
 scheduler commands, manual state edits or a new initial queue request. Ordinary
 polling/recovery wakeups cannot initiate a replan or override an existing stop.
+
+For a confirmed failed latest flexible allocation, the user's existing flexible
+placement choice may be continued through `recover_run` action `retry` with all
+four allocation fields: `expected_revision`, `expected_slurm_job_id`, `gpu_count`
+and bounded `slurm` overrides. Use active user work or this lineage's active owned
+recovery grant; preserve its submission owner. Source must remain identical and
+explicit argv may change only the existing `--ranks` value. Verify the reviewed
+entry preserves effective batch and appropriate fresh/full-state resume behavior;
+a new hardware layout is not permission to reset an advancing experiment.
+This route never cancels. Reuse its immutable fields and existing recovery request
+after a lost reply, retaining the same three-attempt budget. Ordinary retry without
+allocation fields keeps resources unchanged; pending, running, cancelled and
+uncertain attempts cannot use the failed-allocation route.

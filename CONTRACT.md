@@ -1099,3 +1099,21 @@ before cancellation. Ordinary cancellation and failed-run retry remain separate.
 No test-only scheduler estimate reserves capacity or establishes scientific
 readiness. Actual hardware, rank mapping, local inputs and native training
 admission still belong to the experiment's reviewed launch path.
+
+### Confirmed failed flexible allocation
+
+An already failed latest flexible Stanford attempt uses `retry`, with optional
+`expected_revision`, `expected_slurm_job_id`, `gpu_count` and `slurm` supplied
+together. This route never cancels. It requires the existing explicit flexible
+placement authorization or its active owned recovery task. The source must stay
+identical and the explicit reviewed fresh/resume command may change only its
+`--ranks` value; effective batch, recipe, dataset, account and recovery budget
+remain fixed. The scientific source must validate the new physical mapping and
+checkpoint compatibility. Ordinary retry without allocation fields keeps its
+existing resource contract.
+
+The service saves immutable allocation-retry fields before submission and reuses
+the standard recovery request identity. Lost replies and service restarts
+reconcile one child and consume one attempt. The saved failed retry retains its
+owned five-minute reconciliation wakeup despite the parent's earlier allocation
+start; no wakeup itself launches a job. Explicit stops remain binding.

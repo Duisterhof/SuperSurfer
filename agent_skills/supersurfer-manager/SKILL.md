@@ -320,6 +320,19 @@ same replan request after a lost reply and inspect its receipt, including any
 uncertain cancellation/submission, instead of calling `stop_run` and queueing a
 new initial request. The child consumes the existing recovery budget, capped at
 three attempts; this does not reset attempts, change ownership or override stops,
-uncertainty or review
-gates. Ordinary failed-attempt retries still retain their resource contract.
+uncertainty or review gates. Ordinary failed-attempt retries still retain their
+resource contract unless the bounded failed-allocation route below is used.
 Agents never perform the scheduler cancellation or edit recovery state directly.
+
+If that exact flexible attempt instead has a confirmed terminal failure, use
+`recover_run` with `action: "retry"`, not `replan_pending`. Under the user's
+existing flexible-placement authorization, a user task or its active owned
+recovery grant may supply all four allocation fields: `expected_revision`,
+`expected_slurm_job_id`, `gpu_count` and bounded `slurm` overrides. The source
+must remain identical; explicit argv may change only the existing `--ranks`
+value. Preserve reviewed fresh/resume behavior, data and effective global batch.
+No cancellation occurs. The service saves immutable fields before submission,
+reconciles the existing recovery request after uncertainty, and counts one linked
+child within the same three-attempt budget. Pending, running, cancelled or
+uncertain jobs cannot use this confirmed-failure route. Ordinary retry without
+these allocation fields retains its previous resource contract.

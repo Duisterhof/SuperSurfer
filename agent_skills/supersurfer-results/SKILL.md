@@ -97,6 +97,16 @@ each verified writer/attempt identity without inventing a writer for an unstarte
 job. The existing recovery budget and ownership remain, and reporting/polling
 cannot initiate a replan, cancel work or authorize another launch.
 
+A confirmed failed flexible attempt may have a linked allocation-only `retry`
+under the existing explicit placement authorization. This differs from cancelling
+a never-started pending allocation: the failed parent keeps its actual failure,
+allocation and any measured progress, and the retry performs no cancellation.
+Keep source/checkpoint/exposure and actual hardware/rank provenance separate for
+each attempt; unchanged source and an accepted retry do not establish successful
+resume, optimizer progress or comparable throughput. Do not score a technical
+setup error as a scientific failure, invent missing measurements or splice retries
+into one uninterrupted curve. Reporting and ordinary polling authorize no retry.
+
 ## Reuse the reporting workflow, preserve the evidence
 
 Saving a Surfboard reuses its views and data-flow configuration; it does not copy

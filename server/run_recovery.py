@@ -294,15 +294,24 @@ class RunRecovery:
         if action == 'pause':
             if set(fields) - {'action','run_id'}: raise ComputeError('Pause accepts only run_id')
             self.pause(scope, run['id']); return self.get(run['id'])
-        if action != 'retry' or set(fields) - {'action','run_id','revision','pr_url','command','reason'}:
+        allocation_fields = {'gpu_count','slurm','expected_revision','expected_slurm_job_id'}
+        allocation = bool(allocation_fields & set(fields))
+        if action != 'retry' or set(fields) - ({'action','run_id','revision','pr_url','command','reason'} | allocation_fields):
             raise ComputeError('Retry accepts run_id, revision, pr_url, command and reason')
+        if allocation:
+            from .run_replan import pending_plan
+            plan = pending_plan(record, run['id'], 'retry')
+            if plan and plan.get('result'):
+                if plan['fields'] != fields:
+                    raise ComputeError('Saved allocation retry fields are immutable', 409)
+                return {**copy.deepcopy(plan['result']), 'recovery':record, 'previous_run_id':run['id']}
         if not record['enabled'] or record['runs'][-1] != run['id'] or run['status'] != 'failed':
             raise ComputeError('Only the latest confirmed failed attempt can be retried. Never retry cancelled or uncertain jobs.', 409)
         if record['attempts'] >= 3: raise ComputeError('Three recovery attempts exhausted. Report the failure and obtain new direction.', 409)
         reason = fields.get('reason')
         if not isinstance(reason, str) or not reason.strip() or len(reason)>4000: raise ComputeError('Retry requires the diagnosed failure and repair in reason')
-        # New attempt = new source review, W&B identity and scheduler run. Resources
-        # and original experimental scope cannot be widened through this endpoint.
+        # A new attempt receives fresh review and tracking identity. Resource
+        # changes require the separate bounded flexible-allocation checks below.
         request = retry_intent(self.service, run)
         request = {key:value for key,value in request.items() if key in RETRY_FIELDS}
         if not fields.get('command'): raise ComputeError('Retry requires explicit argv with a fresh output destination or a verified resume command')
@@ -311,14 +320,21 @@ class RunRecovery:
         legacy_name = original_name[:75] + ' · recovery ' + str(record['attempts']+1)
         request['name'] = retry_name(original_name, record['attempts']+1)
         request['request_id'] = recovery_request_id(record, run)
+        if allocation:
+            from .run_replan import allocation_retry
+            request = allocation_retry(self, run, fields, request)
         experiment = self.service.store.experiment(run['experiment_id'])
         self.submitting.add(scope)
         try:
             result = self._queue_retry(scope, request, legacy_name, experiment)
         finally:
             self.submitting.discard(scope)
+        record = self.get(run['id'])
         if result['run_id'] not in record['runs']:
             record['runs'].append(result['run_id']); record['attempts'] += 1
+        if allocation:
+            plan = pending_plan(record, run['id'], 'retry')
+            plan.update(phase='complete', child_run_id=result['run_id'], result=copy.deepcopy(result))
         record.update(last_problem=None, last_wake=time.time(), repair=reason, updated_at=time.time())
         self.save(record)
         return {**result, 'recovery':record, 'previous_run_id':run['id']}
@@ -336,7 +352,8 @@ class RunRecovery:
                 from .run_replan import pending_plan, PENDING_PHASES
                 plan = pending_plan(record, run['id'])
                 replanning = bool(plan and plan['phase'] in PENDING_PHASES)
-                if replanning and (run.get('started') is not None or run['status'] in {'running', 'succeeded', 'failed'}):
+                failed_allocation = bool(replanning and plan['fields']['action'] == 'retry')
+                if replanning and not failed_allocation and (run.get('started') is not None or run['status'] in {'running', 'succeeded', 'failed'}):
                     plan.update(phase='aborted', error='Original attempt started or changed; preserve it')
                     self.save(record)
                     replanning = False

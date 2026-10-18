@@ -385,9 +385,9 @@ RECOVER_RUN_TOOL = {
         "run_id":{"type":"string","minLength":1,"maxLength":150},"action":{"type":"string","enum":["status","enable","pause","retry","amend_source","replan_pending"]},
         "include_details":{"type":"boolean","description":"Only for status: include full source, probe and acquisition receipts instead of the compact default."},
         "expected_revision":{"type":"string","pattern":"^[a-f0-9]{40}$"},
-        "expected_slurm_job_id":{"type":"string","pattern":"^[1-9][0-9]*$","description":"For replan_pending: exact current never-started Slurm job identity."},
+        "expected_slurm_job_id":{"type":"string","pattern":"^[1-9][0-9]*$","description":"Exact Slurm job identity for pending replan or failed allocation retry."},
         "gpu_count":{"type":"integer","minimum":1,"maximum":8},
-        "slurm":{"type":"object","additionalProperties":False,"description":"For replan_pending only: bounded allocation overrides; source, data, account and scientific settings remain fixed.","properties":{
+        "slurm":{"type":"object","additionalProperties":False,"description":"Bounded pending/failed allocation overrides; source, data, account and science remain fixed.","properties":{
             "gpu_type":{"type":"string"},"partition":{"type":"string"},
             "cpus_per_task":{"type":"integer","minimum":1},"memory_gib":{"type":"integer","minimum":1},
             "walltime_seconds":{"type":"integer","minimum":1,"maximum":86400}}},
@@ -395,6 +395,7 @@ RECOVER_RUN_TOOL = {
         "pr_url":{"type":"string","maxLength":2048},"command":{"type":"array","minItems":1,"items":{"type":"string"}},
         "reason":{"type":"string","minLength":1,"maxLength":4000}}}}
 RECOVER_RUN_TOOL['description'] += (' replan_pending is a separate explicit-user placement operation for the latest enabled, never-started flexible Stanford attempt. Supply expected_revision, expected_slurm_job_id, gpu_count, bounded slurm overrides and reason. It persists the intent, conditionally cancels only PENDING, confirms terminal cancellation with no start, then submits one linked exact-source replacement. Only --ranks and allocation resources change; science/data and the three-attempt budget remain fixed. Reuse identical fields after uncertainty; inspect its saved phase. An existing saved replan can resume under its active recovery grant. No replacement is allowed if the original started or an explicit Stop revoked recovery.')
+RECOVER_RUN_TOOL['description'] += (' For a confirmed failed latest flexible Stanford attempt, retry also accepts all four allocation fields: expected_revision, expected_slurm_job_id, gpu_count and slurm. This requires the user-authorized resource change or its active owned recovery task. Source must remain identical and explicit command may change only --ranks; the reviewed entry must preserve fresh/resume state, effective batch and protocol. It uses the existing recovery request identity and three-attempt budget, saves immutable fields before submission and never cancels. Ordinary retry without allocation fields still preserves resources. Pending/running/cancelled/uncertain jobs cannot use this failed-run route.')
 
 ROLE_TOOLS = {"worker": [TOOL, QUEUE_TOOL, *WORKER_COMPUTE_TOOLS, WAKEUP_TOOL, QUESTION_TOOL, TASK_TOOL, RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL],
               "lead": [CREATE_EXPERIMENT_TOOL, CREATE_AGENT_TOOL, HANDOFF_TOOL, UPDATE_TOOL, *COMPUTE_TOOLS, QUESTION_TOOL, TASK_TOOL, PROJECT_RESULT_TOOL, PROJECT_BRIEF_TOOL, PROJECT_PAGE_TOOL],

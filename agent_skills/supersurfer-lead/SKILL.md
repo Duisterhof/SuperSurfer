@@ -298,3 +298,13 @@ must prove pending-only cancellation and terminal no-start status before one
 idempotent linked child, using the existing recovery budget. A race-started job,
 uncertain outcome, stop or exhausted budget blocks replacement. Scheduled checks
 cannot initiate this operation or turn a placement suggestion into authorization.
+
+A confirmed failed latest flexible attempt uses `recover_run` action `retry`
+instead. The existing owner may include exact expected source/job IDs, GPU count
+and bounded Slurm overrides under the user's flexible-placement authorization
+and active owned recovery. Source/data stay fixed and argv changes only the
+existing `--ranks` value; verified fresh/resume semantics and effective batch
+remain the scientist's responsibility. This path performs no cancellation and
+uses the same immutable recovery request and three-attempt budget. Do not turn
+a running, pending, cancelled or uncertain job into a failed retry, dispatch a
+second owner, or infer launch rights from a scheduled observation.

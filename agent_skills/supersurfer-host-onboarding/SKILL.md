@@ -365,3 +365,31 @@ This managed transition is distinct from cancelling a run through `stop_run` and
 starting a new initial queue request. Do not perform `scancel`, `scontrol`,
 `sbatch`, database edits or ad hoc retries yourself. A native session without
 this scoped action must report that capability gap; it cannot emulate it.
+
+### Retrying a confirmed failed flexible allocation
+
+If the latest enabled owner-bound `single_node_training_v1` attempt has a
+confirmed terminal failure, use existing `recover_run(action="retry")` instead
+of cancelling or applying `replan_pending`. Under the user's existing flexible
+placement authorization, active user work or that lineage's active owned recovery
+grant may include all four allocation fields: `expected_revision`,
+`expected_slurm_job_id`, `gpu_count` and `slurm`. Match the exact failed source
+and Slurm job; a pending, running, cancelled or uncertain status is ineligible.
+
+The same 1–8 homogeneous single-node resource bounds and override whitelist
+apply. Source and data stay unchanged. Supply explicit argv equal to the original
+reviewed command except its existing `--ranks` value matching the new GPU count.
+The reviewed entry must preserve effective batch, fresh/resume behavior and any
+required full-state checkpoint; a changed GPU layout cannot silently discard
+scientific state. If another source repair is needed, this allocation-only route
+does not admit a different revision. Ordinary retry without allocation fields
+retains its original resource contract.
+
+No scheduler cancellation or engine resource mutation occurs. The service freezes
+the failed-allocation intent before submission and reuses the existing recovery
+request ID and uncertain queue receipt. Repeat identical fields after a lost
+reply, rather than creating a second retry or changing layout while the first
+submission is uncertain. The existing exact-source PR, ownership, Stop, policy,
+telemetry and maximum-three-attempt checks still apply. A saved intent can receive
+bounded reconciliation wakeups; those wakeups do not expand the user's placement
+or research authorization.

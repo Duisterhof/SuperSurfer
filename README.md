@@ -110,4 +110,6 @@ provide the corresponding source and build instructions required by that license
 A user-requested pending Stanford allocation can be replanned through the managed
 recovery tool without touching a job that has started. The operation keeps the
 reviewed scientific source and data, records cancellation proof, and creates one
-linked replacement within the existing recovery limit.
+linked replacement within the existing recovery limit. A confirmed failed
+flexible allocation can use the same bounded resource policy through linked
+retry; it needs no cancellation.

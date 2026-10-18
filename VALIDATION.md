@@ -1,3 +1,19 @@
+# Confirmed failed Stanford allocation retry — October18,2026
+
+The pending job later started and failed before CUDA during local scratch
+selection. Failed-run retry now accepts bounded allocation overrides with exact
+source/job identities. It preserves source and command except physical ranks,
+normal source review, owner lineage and the existing recovery budget. No
+cancellation is involved. Eight new regressions cover unchanged science, active
+owner recovery, lost reply/restart deduplication, immutable fields, invalid
+resources/states, stops/budgets and exact saved retry wakeups.
+
+All868 Python tests pass;51 Node tests passed on unchanged UI/desktop source,
+with five opt-in SSH skips. All37 focused pending/failed/recovery cases pass.
+The five capability skills were reviewed again against the actual tool path.
+Linux x64 packaging and isolated native sandbox/setup pass; final exact-commit
+CI and installation are separate receipts, with no research launch from tests.
+
 # Never-started Stanford allocation replacement — October 18, 2026
 
 Isolated regression fixtures exercise conditional PENDING cancellation, start

@@ -2,6 +2,7 @@
 
 - [x] Add owner-bound pending-only cancellation and idempotent linked replacement.
 - [x] Preserve source/protocol/global batch, explicit stops and max-three recovery.
+- [x] Add bounded confirmed-failed allocation retry with no cancellation.
 - [ ] Verify installed capability and the authorized replacement allocation.
 
 - [x] Add bounded explicit1–8 GPU Stanford single-node profile, separate capability gate and resource-preserving recovery tests.
