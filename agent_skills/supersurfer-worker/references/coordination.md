@@ -16,7 +16,7 @@ Workers/leads cannot contact workers in another project.
 ASCII letters, digits, underscores or hyphens. Choose the kind deliberately:
 
 - `request`: one concrete dependency question or bounded action. Omit `reply_to`.
-  It wakes an eligible idle recipient. State the needed outcome and relevant
+  It is saved in the inbox; peer wakes are disabled by default. State the needed outcome and relevant
   existing authorization; do not disguise a status report as a request.
 - `answer`: resolve a received request once; set `reply_to` to that request ID
   and target its sender. Supply evidence or the actual unresolved dependency.
@@ -29,13 +29,12 @@ ASCII letters, digits, underscores or hyphens. Choose the kind deliberately:
 Without an explicit kind, `reply_to` defaults to `answer`. Reuse the exact ID,
 kind, target, text and reply relationship after a timeout; inspect the recorded
 outcome before creating another message. Legacy accepted messages keep their
-identity/delivery behavior. A `recorded` update was saved quietly; `queued` or
+identity; saved messages do not establish model activation. A `recorded` update was saved quietly; `queued` or
 `delivered` establishes delivery, not completion. An uncertain dispatch is not
 automatically replayed. Continue independent work instead of polling the inbox.
 
-During a direct user turn, unrelated peer requests wait. An answer may steer it
-only when replying to a request that recipient sent since the latest direct user
-instruction. Do not forge a reply relationship to obtain priority. Explicit Stop
+During a direct user turn, unrelated peer requests wait. Peer dispatch and answer steering are disabled by default; inspect
+the relevant saved answer during user-triggered work. Do not forge a reply relationship to obtain priority. Explicit Stop
 holds delivery until user resumption; archiving hides the chat without pausing it.
 Do not replace an owner to evade Stop or send both a handoff and a request for the
 same assignment.

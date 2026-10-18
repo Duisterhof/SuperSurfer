@@ -310,7 +310,7 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(result["accepted"])
         self.assertEqual(result["scope"], scope)
         self.assertEqual(result["experiment"]["status"], "preparing")
-        self.assertEqual(self.service.codex.sent[-1][2], {"model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
+        self.assertEqual(self.service.codex.sent[-1][2], {"activation_source": "user", "model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
         self.assertIn("Do not launch training", self.service.codex.sent[-1][1])
         with self.assertRaises(APIError): self.service.action("experiment.start", {"id": experiment["id"]})
         self.assertEqual(len(self.service.codex.sent), 1)
@@ -426,28 +426,6 @@ class BackendTests(unittest.TestCase):
         self.manager.data["projects"] = []
         with self.assertRaises(APIError): self.service.agent_action("manager", "supersurfer_queue_run", arguments)
         self.assertFalse(any(op.startswith("run.") for op, _ in self.manager.calls))
-    def test_manager_handoffs_exceed_three_and_preserve_ownership_across_projects(self):
-        first = self.service.action("experiment.create", {"project_id": "p1", "name": "First", "summary": "Question"})
-        project = {**self.manager.data["projects"][0], "id": "p2", "name": "second-project"}
-        self.manager.data["projects"].append(project)
-        self.manager.data["tasks"].append({"id": "t-native", "project_id": "p2", "name": "e15-native", "briefing": "Native fixture"})
-        self.manager.data["agents"].append({"id": "a-native", "project_id": "p2", "name": "native-worker", "role": "worker", "task_id": "t-native", "status": "idle"})
-        native = next(row for row in self.service.state(force=True)["experiments"] if row["name"] == "E15")
-        second = self.service.action("experiment.create", {"project_id": "p2", "name": "Second", "summary": "Question"})
-        fourth = self.service.action("experiment.create", {"project_id": "p1", "name": "Fourth", "summary": "Question"})
-        self.service.action("chat.settings", {"scope": "experiment:" + second["id"], "model": "model-b", "reasoning": "max", "fast_mode": True})
-        self.service.action("chat.send", {"scope": "manager", "text": "Hand off these four existing experiments"})
-        for target in (first, native, second):
-            result = self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": target["id"], "task": "Prepare its requested source and PR; do not queue yet", **({"agent_scope": "agent:a-native"} if target == native else {})})
-            self.assertEqual(result["scope"], "agent:a-native" if target == native else "experiment:" + target["id"])
-        self.assertEqual(self.service.codex.sent[-1][2]["model"], "model-b")
-        self.assertTrue(self.service.codex.sent[-1][2]["fast_mode"])
-        self.assertEqual(next(params for op, params in self.manager.calls if op == "agent.send")["expected_task_id"], "t-native")
-        result = self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": fourth["id"], "task": "Prepare the fourth requested experiment"})
-        self.assertEqual("experiment:" + fourth["id"], result["scope"])
-        with self.assertRaisesRegex(APIError, "already.*handed off"):
-            self.service.agent_action("manager", "supersurfer_handoff_experiment", {"experiment_id": first["id"], "task": "Repeat"})
-        self.assertFalse(any(op.startswith("run.") for op, _ in self.manager.calls))
     def test_start_working_requires_draft_idle_worker_and_write_access(self):
         queued = self.service.state()["experiments"][0]
         with self.assertRaises(APIError): self.service.action("experiment.start", {"id": queued["id"]})
@@ -478,34 +456,6 @@ class BackendTests(unittest.TestCase):
         self.assertIn(experiment["document_path"], sent[0]["content"])
         self.assertEqual(self.service.codex.sent, [])
         self.assertFalse(any(op.startswith("run.") for op, _ in self.manager.calls))
-    def test_lead_handoffs_exceed_three_with_scope_origin_and_duplicate_guards(self):
-        drafts = [self.service.action("experiment.create", {"project_id": "p1", "name": f"Draft {i}", "summary": "Question"}) for i in range(4)]
-        self.manager.data["projects"].append({**self.manager.data["projects"][0], "id": "p2", "name": "other"})
-        self.service.state(force=True)
-        foreign = self.service.action("experiment.create", {"project_id": "p2", "name": "Other", "summary": "Question"})
-        args = {"experiment_id": drafts[0]["id"], "task": "Implement the proposed ablation, without launching it"}
-        with self.assertRaises(APIError): self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
-        self.service.action("chat.send", {"scope": "project:p1", "text": "Hand off the four planned ablations"})
-        for scope, name, params in [("project:p1", "supersurfer_handoff_experiment", {**args, "experiment_id": foreign["id"]}), ("project:p1", "supersurfer_handoff_experiment", {**args, "project_id": "p2"}), ("project:p1", "supersurfer_prepare_run", {}), ("experiment:" + drafts[0]["id"], "supersurfer_update_experiment", {"experiment_id": drafts[0]["id"], "version": 1, "status": "ready"})]:
-            with self.assertRaises(APIError): self.service.agent_action(scope, name, params)
-        self.service.turn_origins["project:p1"] = "schedule"
-        with self.assertRaises(APIError): self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
-        self.service.turn_origins["project:p1"] = "user"
-        self.service.codex.busy.add("experiment:" + drafts[0]["id"])
-        with self.assertRaisesRegex(APIError, "already working"): self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
-        self.assertEqual(self.service.turn_handoffs["project:p1"], set())
-        self.service.codex.busy.remove("experiment:" + drafts[0]["id"])
-        for draft in drafts:
-            result = self.service.agent_action("project:p1", "supersurfer_handoff_experiment", {**args, "experiment_id": draft["id"]})
-            self.assertEqual(result["scope"], "experiment:" + draft["id"])
-        self.service.codex.busy.remove("experiment:" + drafts[0]["id"])
-        with self.assertRaisesRegex(APIError, "already.*handed off"):
-            self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
-        self.assertEqual(len(self.service.codex.sent), 5)  # Lead + four workers.
-        self.assertEqual({op for op, _ in self.manager.calls}, {"status"})
-        self.service.codex.busy.remove("project:p1")
-        self.service.action("chat.send", {"scope": "project:p1", "text": "Continue the first ablation"})
-        self.service.agent_action("project:p1", "supersurfer_handoff_experiment", args)
     def test_lead_scope_and_status_edits_are_versioned_without_changing_runs(self):
         draft = self.service.action("experiment.create", {"project_id": "p1", "name": "Old name", "summary": "Old scope"})
         self.service.action("chat.send", {"scope": "project:p1", "text": "Narrow the experiment scope and mark it ready"})
@@ -527,38 +477,6 @@ class BackendTests(unittest.TestCase):
     def test_empty_host_target_registers_workspace_local(self):
         self.service.action("host.add", {"name": "local", "target": "", "root": "/tmp/jobs", "gpus": [0], "python": "python3"})
         self.assertIsNone(next(params for op, params in self.manager.calls if op == "host.add")["target"])
-    def test_lead_mcp_update_and_handoff_use_scoped_http_and_worker_model(self):
-        draft = self.service.action("experiment.create", {"project_id": "p1", "name": "Draft", "summary": "Question"})
-        self.service.action("chat.settings", {"scope": "experiment:" + draft["id"], "model": "model-b", "reasoning": "max"})
-        server = create_server(self.service, port=0)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            context = self.service.context_provider("project:p1")
-            config = context["mcp_servers"]["supersurfer"]
-            self.assertIn(draft["id"], context["instructions"])
-            self.service.action("chat.send", {"scope": "project:p1", "text": "Narrow this experiment and hand its implementation to the worker"})
-            requests = [
-                {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
-                {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "update_experiment", "arguments": {"experiment_id": draft["id"], "version": 1, "summary": "Implement the narrow ablation"}}},
-                {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "handoff_experiment", "arguments": {"experiment_id": draft["id"], "task": "Implement the narrow ablation without launching GPU work"}}},
-                {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "prepare_run", "arguments": {}}},
-            ]
-            process = subprocess.run([config["command"], *config["args"]], input="\n".join(json.dumps(item) for item in requests) + "\n", text=True, capture_output=True, timeout=15, env={**os.environ, **config["env"]})
-            self.assertEqual(process.returncode, 0, process.stderr)
-            responses = [json.loads(line) for line in process.stdout.splitlines()]
-            self.assertEqual({tool["name"] for tool in responses[0]["result"]["tools"]}, {"create_experiment", "update_experiment", "handoff_experiment", "create_experiment_agent", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "onboard_project_node", "configure_project_compute", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "message_agent", "list_agent_messages", "check_available_node", "acquire_new_node", "recover_run", "publish_training_results", "check_experiment_results", "set_project_limits", "stop_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics", "create_work_item", "update_work_item", "handoff_work_item", "create_work_item_agent", "compile_latex"})
-            self.assertFalse(responses[1]["result"]["isError"])
-            self.assertFalse(responses[2]["result"]["isError"])
-            handoff = json.loads(responses[2]["result"]["content"][0]["text"])
-            self.assertEqual(handoff["scope"], "experiment:" + draft["id"])
-            self.assertTrue(responses[3]["result"]["isError"])
-            self.assertEqual(self.service.codex.sent[-1][2], {"model": "model-b", "reasoning": "max", "fast_mode": False, "approval_mode": "ask"})
-            self.assertEqual({op for op, _ in self.manager.calls}, {"status"})
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join()
     def test_initialization_preserves_pending_agent_edit_revision(self):
         key = self.service.state()["experiments"][0]["id"]
         original = self.service.store.experiment(key)
@@ -623,7 +541,7 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(preferences["effective"], {"model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask"})
         self.assertIn("role default is unavailable", preferences["note"])
         self.service.action("chat.send", {"scope": "manager", "text": "Continue with the available model"})
-        self.assertEqual(self.service.codex.sent[-1][2], {"model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(self.service.codex.sent[-1][2], {"activation_source": "user", "model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask"})
         with self.assertRaisesRegex(APIError, "model-a"):
             self.service.action("chat.settings", {"scope": "manager", "model": None})
         self.assertEqual(self.service.store.chat_settings("manager")["model"], "model-b")
@@ -631,13 +549,13 @@ class BackendTests(unittest.TestCase):
         key = self.service.state()["experiments"][0]["id"]
         scope = "experiment:" + key
         self.service.action("chat.send", {"scope": scope, "text": "Explain the experiment"})
-        self.assertEqual(self.service.codex.sent[-1][2], {"model": "model-a", "reasoning": "medium", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(self.service.codex.sent[-1][2], {"activation_source": "user", "model": "model-a", "reasoning": "medium", "fast_mode": False, "approval_mode": "ask"})
         self.service.action("chat.settings", {"scope": scope, "model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
         self.assertIn(scope, self.service.codex.busy)
         self.assertEqual(len(self.service.codex.sent), 1)
         self.service.codex.busy.clear()
         self.service.action("chat.send", {"scope": scope, "text": "Explain the new result"})
-        self.assertEqual(self.service.codex.sent[-1][2], {"model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
+        self.assertEqual(self.service.codex.sent[-1][2], {"activation_source": "user", "model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
         self.service.codex.busy.clear()
         self.service.action("experiment.schedule", {"id": key, "interval_minutes": 5})
         with self.service.store.lock, self.service.store.db:
@@ -645,7 +563,8 @@ class BackendTests(unittest.TestCase):
             data["next_review_at"] = time.time() - 1
             self.service.store._write_data(data)
         self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent[-1][2], {"model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
+        self.assertEqual(2,len(self.service.codex.sent))
+        self.assertEqual(self.service.codex.sent[-1][2], {"activation_source": "user", "model": "model-b", "reasoning": "max", "fast_mode": True, "approval_mode": "auto_review"})
     def test_approval_mode_changes_next_turn_only_without_resolving_pending_requests(self):
         self.service.action("chat.send", {"scope": "manager", "text": "Work on this"})
         self.assertEqual(self.service.codex.sent[-1][2]["approval_mode"], "ask")
@@ -854,54 +773,6 @@ class BackendTests(unittest.TestCase):
         self.assertGreater(observed["last_check"], first["last_check"])
         self.assertEqual(observed["alerts"][-1]["status"], "succeeded")
         self.assertEqual({op for op, _ in self.manager.calls}, {"status"})
-    def test_worker_reviews_require_opt_in_and_durable_claim(self):
-        state = self.service.state()
-        key = state["experiments"][0]["id"]
-        self.assertEqual(state["experiments"][0]["review_interval_minutes"], 0)
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent, [])
-        self.service.action("experiment.schedule", {"id": key, "interval_minutes": 5})
-        with self.service.store.lock, self.service.store.db:
-            data = self.service.store._data(key)
-            data["next_review_at"] = time.time() - 1
-            self.service.store._write_data(data)
-        scope = "experiment:" + key
-        self.service.codex.busy.add(scope)
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent, [])
-        self.service.codex.busy.clear()
-        self.service.check_reviews()
-        self.assertEqual(len(self.service.codex.sent), 1)
-        self.assertGreater(self.service.store.experiment(key)["next_review_at"], time.time())
-        self.assertIn("Do not run training", self.service.codex.sent[0][1])
-        self.assertEqual({op for op, _ in self.manager.calls}, {"status"})
-        self.service.close()
-        self.service = Service(self.root / "state", self.root / "aml", aml=AMLClient(self.root / "aml", rpc=self.manager), codex=FakeCodex(), start_monitor=False, tracking=FakeTracking())
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent, [])
-        self.assertIsNone(self.service.store.get("active_review"))
-    def test_review_scheduler_serializes_experiments_and_obeys_preview(self):
-        first = self.service.state()["experiments"][0]["id"]
-        second = self.service.action("experiment.create", {"project_id": "p1", "name": "Other", "summary": "Test another hypothesis"})["id"]
-        for key in (first, second):
-            self.service.action("experiment.schedule", {"id": key, "interval_minutes": 5})
-            with self.service.store.lock, self.service.store.db:
-                data = self.service.store._data(key)
-                data["next_review_at"] = time.time() - 1
-                self.service.store._write_data(data)
-        self.service.read_only = True
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent, [])
-        self.service.read_only = False
-        self.service.check_reviews()
-        self.service.check_reviews()
-        self.assertEqual(len(self.service.codex.sent), 1)
-        self.service.codex.busy.clear()
-        self.service.check_reviews()
-        self.assertEqual(len(self.service.codex.sent), 2)
-        context = self.service.context_provider("experiment:" + first)
-        self.assertIn('"pr_url": "https://github.com/example/research/pull/1"', context["instructions"])
-        self.assertIn('"stale": true', context["instructions"])
     def test_http_auth_csrf_bounded_body_and_static_traversal(self):
         ui = self.root / "ui"
         ui.mkdir()

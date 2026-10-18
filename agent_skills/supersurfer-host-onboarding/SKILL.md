@@ -7,7 +7,17 @@ metadata:
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026. Token-containment policy reviewed.
+
+Automatic continuation and completion-review turns are disabled. Scheduled LLM
+checks, recovery reviews and peer-message wakes are disabled by default and fail
+closed. Peer messages remain in the inbox without activating their recipient.
+Complete bounded user-triggered work; leave unfinished work pending with its
+existing identity and a concrete next step. Do not create keep-going loops,
+repeat checks on unchanged evidence or supervise another owner's assigned work.
+Code telemetry and live-data refresh continue without model turns; this policy
+does not add deterministic evaluation scheduling.
+
 Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
@@ -390,13 +400,6 @@ the failed-allocation intent before submission and reuses the existing recovery
 request ID and uncertain queue receipt. Repeat identical fields after a lost
 reply, rather than creating a second retry or changing layout while the first
 submission is uncertain. The existing exact-source PR, ownership, Stop, policy,
-telemetry and maximum-three-attempt checks still apply. A saved intent can receive
-bounded reconciliation wakeups; those wakeups do not expand the user's placement
-or research authorization.
-
-The existing recovery tick also redelivers an enabled failed flexible Stanford
-lineage below the three-attempt cap after a five-minute unchanged-state backoff.
-This lets its existing owner regain the active recovery turn after a workspace
-restart without asking for a duplicate user request. It creates no timer, run or
-attempt; busy, paused and Stop guards remain. Unrelated unchanged failure states
-retain their previous deduplication behavior.
+telemetry and maximum-three-attempt checks still apply. A saved intent remains pending when model dispatch is disabled. Preserve its
+receipt and ownership for the next authorized user-triggered recovery action;
+do not repeat retries or probes on unchanged evidence to obtain another turn.

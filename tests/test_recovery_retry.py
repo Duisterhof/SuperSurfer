@@ -167,26 +167,16 @@ class RecoveryRetryTests(unittest.TestCase):
         self.assertEqual(self.service.store.get(key),{**before,'concurrent_note':'preserve me'})
         self.assertEqual(len(self.manager.data['runs']),1)
 
-    def test_legacy_receipt_wakes_original_recovery_owner_once_without_launching(self):
-        self.prepare();self.seed_legacy_rejection()
-        record=self.service.recovery.get('r1')
-        old_problem=json.dumps(['failed',self.run.get('error'),[]],sort_keys=True)
-        record.update(last_problem=old_problem,last_wake=0);self.service.recovery.save(record)
-        self.service.codex.busy.clear()
+    def test_failed_recovery_records_attention_without_model_or_retry_across_restart(self):
+        self.prepare();self.seed_legacy_rejection();self.service.codex.busy.clear()
         self.service.recovery.tick()
-        self.assertEqual(len(self.service.codex.sent),1)
-        prompt=self.service.codex.sent[0][1]
-        self.assertIn('saved retry previously encountered',prompt)
-        self.assertIn(self.fields['command'][-1],prompt)
-        self.assertIn(self.revision,prompt)
-        self.assertEqual(self.service.turn_origins[self.scope],'recovery')
-        self.assertEqual(self.service.recovery.active[self.scope],'r1')
-        self.assertEqual(self.submit_calls,[])
+        self.assertEqual([],self.service.codex.sent);self.assertEqual([],self.submit_calls)
+        self.assertTrue(self.service.recovery.get('r1')['needs_attention'])
         from server.run_recovery import RunRecovery
         self.service.recovery=RunRecovery(self.service)
-        self.service.codex.busy.clear();self.service.recovery.tick()
-        self.assertEqual(len(self.service.codex.sent),1)
-        self.assertEqual(self.service.recovery.get('r1')['attempts'],0)
+        for _ in range(10):self.service.recovery.tick()
+        self.assertEqual([],self.service.codex.sent);self.assertEqual([],self.submit_calls)
+        self.assertEqual(0,self.service.recovery.get('r1')['attempts'])
 
     def test_legacy_wake_skips_disabled_paused_busy_or_nonmatching_receipts(self):
         self.prepare();key,receipt=self.seed_legacy_rejection()
@@ -208,28 +198,6 @@ class RecoveryRetryTests(unittest.TestCase):
                 self.assertEqual(self.service.codex.sent,[])
                 self.assertEqual(self.submit_calls,[])
 
-    def test_rejected_wakeup_retries_after_backoff_without_losing_problem_or_origin(self):
-        self.prepare();self.seed_legacy_rejection()
-        old_problem=json.dumps(['failed',self.run.get('error'),[]],sort_keys=True)
-        for failure in ({'accepted':False},RuntimeError('Transport closed')):
-            with self.subTest(failure=failure):
-                record=self.service.recovery.get('r1')
-                record.update(last_problem=old_problem,last_wake=0);self.service.recovery.save(record)
-                self.service.codex.busy.clear();self.service.turn_origins[self.scope]='schedule'
-                self.service.recovery.active.pop(self.scope,None)
-                kwargs={'side_effect':failure} if isinstance(failure,Exception) else {'return_value':failure}
-                with patch.object(self.service.codex,'send',**kwargs) as send, patch('server.run_recovery.time.time',return_value=1000):
-                    with self.assertRaises((ComputeError,RuntimeError)):self.service.recovery.tick()
-                    self.assertEqual(self.service.recovery.get('r1')['last_problem'],old_problem)
-                    self.assertEqual(self.service.turn_origins[self.scope],'schedule')
-                    self.assertNotIn(self.scope,self.service.recovery.active)
-                    self.service.recovery.tick();self.assertEqual(send.call_count,1)
-                with patch.object(self.service.codex,'send',return_value={'accepted':True}) as send, patch('server.run_recovery.time.time',return_value=1061):
-                    self.service.recovery.tick();self.service.recovery.tick()
-                    self.assertEqual(send.call_count,1)
-                self.assertNotEqual(self.service.recovery.get('r1')['last_problem'],old_problem)
-                self.assertEqual(self.service.recovery.get('r1')['attempts'],0)
-                self.assertEqual(self.submit_calls,[])
 
 
 if __name__=='__main__':unittest.main()

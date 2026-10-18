@@ -100,18 +100,6 @@ class NodeWorkflowTests(unittest.TestCase):
             result=self.wait_setup(self.service.nodes.acquire(self.scope,self.run,{'run_id':'r1','host_id':'h1'})['id'])
         self.assertEqual(result['status'],'blocked');self.assertEqual(self.admissions,[])
 
-    def test_recovery_wakes_owner_once_and_cannot_mutate_other_runs(self):
-        self.service.recovery.enable(self.scope,self.run,'Complete this fixture')
-        self.service.codex.busy.clear();self.service.recovery.tick();self.assertEqual(len(self.service.codex.sent),1)
-        self.assertEqual(self.service.turn_origins[self.scope],'recovery');self.assertTrue(self.service.recovery.allowed(self.scope,'r1'))
-        self.service.codex.busy.clear();self.service.recovery.tick();self.assertEqual(len(self.service.codex.sent),1)
-        self.assertFalse(self.service.recovery.allowed(self.scope,'r2'))
-        self.service.codex.busy.add(self.scope)
-        self.service.turn_origins[self.scope]='schedule'
-        with self.assertRaises(APIError):self.service.agent_action(self.scope,'supersurfer_acquire_new_node',{'run_id':'r1','host_id':'h1'})
-        self.service.turn_origins[self.scope]='recovery'
-        with self.assertRaises(APIError):self.service.agent_action(self.scope,'supersurfer_set_project_limits',{'gpu_limit':10})
-        self.service.recovery.pause(scope=self.scope);self.assertFalse(self.service.recovery.allowed(self.scope,'r1'))
 
     def test_failed_retry_is_linked_bounded_and_requires_explicit_outputs(self):
         self.run['status']='failed';self.service.recovery.enable(self.scope,self.run,'Finish fixture')

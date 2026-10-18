@@ -227,6 +227,18 @@ class Service(SurfboardService, EditorService, WritingService):
         self.message_thread = None
         self.wakeups = Wakeups(self.store, self.wandb, stop_event=self.shutdown)
         self.wakeup_thread = None
+        # One-way migration: retain rules and their evidence, but explicitly
+        # pause old agent work so the UI cannot promise unattended reasoning.
+        if not self.read_only and not self.store.get("agent_containment_v1"):
+            for key in ("worker_wakeups", "run_recovery"):
+                records = self.store.get(key, [])
+                for record in records:
+                    record["enabled"] = False
+                    if key == "worker_wakeups": record["status"] = "paused"
+                    record["pause_reason"] = "Automatic agent calls disabled to control token use."
+                self.store.put(key, records)
+            self.messages.drain()
+            self.store.put("agent_containment_v1", {"applied_at": time.time()})
         self.tracking = tracking or Tracking(self.store, self.wandb)
         self.tracking.stop_event = self.shutdown
         self.tracking_thread = None
@@ -289,6 +301,8 @@ class Service(SurfboardService, EditorService, WritingService):
                     run["wandb_url"] = prepared.get("run_url") or run["wandb_url"]
         state["settings"] = self.store.settings()
         state["account_setup"] = self.account_setup()
+        if hasattr(self.codex, "budget"):
+            state["agent_usage"] = self.codex.budget.summary()
         state["monitoring"] = self.store.get("monitoring", {"last_check": None, "next_check": None, "alerts": []})
         if not state["settings"]["monitor_enabled"]:
             state["monitoring"]["next_check"] = None
@@ -371,86 +385,19 @@ class Service(SurfboardService, EditorService, WritingService):
                     self.store.put("worker_wakeup_error", str(exc))
 
     def start_worker_wakeup(self, rule, trigger):
-        # A pending queue/PR request must not block the wakeup loop or shutdown.
-        if not self.action_lock.acquire(timeout=0.1):
+        if self.read_only or self.shutdown.is_set():
             return False
-        try:
-            if self.read_only or self.shutdown.is_set():
-                return False
-            experiment = self.store.experiment(rule["experiment_id"])
-            scope = rule["scope"]
-            self.validate_experiment_scope(experiment, scope)
-            try:
-                self.check_experiment_idle(experiment)
-            except APIError as exc:
-                if exc.status == 409:
-                    return False
-                raise
-            preferences = self.chat_preferences(scope, strict=True)["effective"]
-            self.turn_origins[scope] = "schedule"
-            prompt = ("Perform this worker check explicitly scheduled by the user. Stay within the saved task; "
-                      "inspect and debug only as requested. Report meaningful changes or failures and update the experiment document with evidence. "
-                      "Routine monitoring is a compact activity card: omit start-of-check narration. Give one short outcome with the latest meaningful observation; lead with any new failure, milestone or decision needed. Keep detailed repeated metrics and provenance in the saved evidence, not a long chat recap. "
-                      "Do not launch or queue jobs, change GPU allocations, create agents, launch new work through peers, or add recurring tasks from this wakeup. "
-                      "A metric trigger is an observation, not permission to start another experiment.\n\nSaved task:\n" + rule["task"] +
-                      "\n\nWakeup evidence:\n" + json.dumps(trigger))
-            result = self.codex.send(scope, prompt, model=preferences["model"], reasoning=preferences["reasoning"],
-                                     fast_mode=preferences["fast_mode"], approval_mode=preferences["approval_mode"],
-                                     message_role="system", background_check={"rule_id": rule["id"], "kind": trigger.get("kind", "interval")})
-            if not result.get("accepted"):
-                raise APIError("Worker did not confirm acceptance of its wakeup", 409)
-            return True
-        finally:
-            self.action_lock.release()
+        # A due rule records evidence without purchasing a model turn. Legacy
+        # rules remain visible but never revive stopped conversations.
+        self.store.put("worker_observation:" + rule["id"], {
+            "rule_id": rule["id"], "scope": rule["scope"], "trigger": trigger,
+            "observed_at": time.time(), "agent_started": False,
+            "message": "Observation recorded. Automatic agent calls are disabled."})
+        return True
 
     def check_reviews(self):
-        """One opted-in worker review at a time, independent of telemetry monitoring."""
-        if self.read_only:
-            return
-        with self.action_lock:
-            active_review = self.store.get("active_review")
-            if active_review:
-                active_scope = self.store.get("active_review_scope", "experiment:" + active_review)
-                chat = self.codex.chat(active_scope)
-                if chat.get("busy"):
-                    return
-                self.store.review_error(active_review, chat.get("error"))
-                self.store.put("active_review", None)
-            for experiment in self.store.due_reviews():
-                scope = self.experiment_agents(experiment["id"])["selected_scope"]
-                if scope.startswith("agent:"):
-                    scope = "experiment:" + experiment["id"]
-                try:
-                    self.check_experiment_idle(experiment)
-                except APIError as exc:
-                    if exc.status == 409:
-                        continue
-                    raise
-                except Exception as exc:
-                    if self.store.claim_review(experiment["id"]):
-                        self.store.review_error(experiment["id"], exc)
-                    return
-                if not self.store.claim_review(experiment["id"]):
-                    continue
-                # The durable claim precedes send, including crashes and uncertain delivery.
-                self.store.put("active_review", experiment["id"])
-                self.store.put("active_review_scope", scope)
-                try:
-                    preferences = self.chat_preferences(scope, strict=True)
-                    self.turn_origins[scope] = "schedule"
-                    self.codex.send(scope,
-                        "Perform the explicitly enabled periodic review of this existing experiment. "
-                        "Read the current experiment document and the current run/host observations supplied in context. "
-                        "Check recorded progress, failures, stalls and scientific claims. Update the document only when "
-                        "there is meaningful new evidence, and preserve uncertainty when observations are stale or unavailable. "
-                        "If nothing changed, give a short no-change result. Do not run training or evaluation, launch or ready "
-                        "any job, alter the queue, change source/checkpoints, initiate a new experiment, or create/contact other agents. "
-                        "New research ideas are suggestions requiring the user's decision.",
-                        model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
-                except Exception as exc:
-                    self.store.review_error(experiment["id"], exc)
-                    self.store.put("active_review", None)
-                return
+        """Telemetry is deterministic; periodic model reviews are disabled."""
+        return
 
     def lookup(self, collection, key, fresh=False):
         if collection == "projects":
@@ -739,6 +686,32 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.agent_tool_scopes.get(authorization.removeprefix("Bearer "))
 
     def agent_action(self, scope, name, arguments):
+        if hasattr(self.codex, "budget"):
+            chat = self.codex.chat(scope)
+            allowance = chat.get("usage_allowance") or {}
+            if not chat.get("busy") or not allowance.get("id"):
+                raise APIError("Agent tools require an active user-started turn with a usage allowance.", 429)
+            try:
+                self.codex.budget.tool(allowance["id"], name, arguments)
+            except ValueError:
+                self.codex.stop(scope)
+                raise
+        return self._agent_action_unmetered(scope, name, arguments)
+
+    def bounded_agent_result(self, scope, result):
+        # Bound all scoped HTTP/MCP clients, not just the displayed activity.
+        text = json.dumps(result, ensure_ascii=False, default=str)
+        if len(text) > 12000:
+            import hashlib
+            folder = self.directory / "tool-results" / hashlib.sha256(scope.encode()).hexdigest()
+            path = folder / (hashlib.sha256(text.encode()).hexdigest() + ".json")
+            atomic_write(path, text)
+            scalars = {key: value for key, value in result.items() if isinstance(value, (str, int, float, bool, type(None))) and len(str(value)) < 500} if isinstance(result, dict) else {}
+            result = {**scalars, "truncated": True, "summary": scalars, "preview": text[:6000], "full_result_path": str(path), "characters": len(text),
+                      "instruction": "Read only the needed fields or a bounded range from this JSON file. Do not dump the full result into context."}
+        return result
+
+    def _agent_action_unmetered(self, scope, name, arguments):
         """Each capability is confined to its project or experiment and user turn."""
         if name == "supersurfer_compile_latex" and isinstance(arguments, dict) and arguments.get("operation") == "inspect":
             # PDF decoding is a bounded read, but can take seconds. Chat Stop
@@ -871,6 +844,7 @@ class Service(SurfboardService, EditorService, WritingService):
                     raise APIError("Wakeup run belongs to another experiment", 403)
                 before = self.wakeups.list(experiment["id"], scope)
                 result = self.wakeups.configure(scope, experiment["id"], arguments)
+                result.update(agent_started=False, execution="observation_only", note="This records observations only; it will not start an agent, debug or queue work.")
                 if arguments.get("action") in {"add", "update"} and hasattr(self.codex, "update_task"):
                     old_ids = {rule["id"] for rule in before}
                     rule = next((rule for rule in result["rules"] if rule["id"] == arguments.get("id") or rule["id"] not in old_ids), None)
@@ -1344,6 +1318,8 @@ class Service(SurfboardService, EditorService, WritingService):
                 raise APIError("The existing AutoML experiment worker already has active or queued work", 409)
 
     def start_experiment_work(self, key, task, draft_only=True, before_dispatch=None, agent_scope=None, handoff=False):
+        if handoff:
+            raise APIError("Agent-to-agent activation is disabled. Save a message in the worker inbox; the user can start that worker directly.", 429)
         if self.read_only:
             raise APIError("Read-only preview: experiment work is disabled", 403)
         experiment = self.lookup("experiments", key, fresh=True)
@@ -1393,7 +1369,7 @@ class Service(SurfboardService, EditorService, WritingService):
                 if not handoff:
                     self.store.put("agent_messages_paused:" + scope, False)
                 self.turn_queue_requests.pop(scope, None)
-                self.codex.send(scope, prompt, model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
+                self.codex.send(scope, prompt, activation_source="user", model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
         except Exception as exc:
             self.store.record_work(key, scope, "uncertain", str(exc))
             raise
@@ -1963,7 +1939,7 @@ class Service(SurfboardService, EditorService, WritingService):
             self.turn_handoffs[scope] = set()
             self.turn_agent_creations[scope] = 0
             self.turn_queue_requests.pop(scope, None)
-            return self.codex.send(scope, content + view_context + attachment_context, **({"display_text": content} if view_context or attached else {}), **({"attachments": attached} if attached else {}), model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
+            return self.codex.send(scope, content + view_context + attachment_context, activation_source="user", **({"display_text": content} if view_context or attached else {}), **({"attachments": attached} if attached else {}), model=preferences["effective"]["model"], reasoning=preferences["effective"]["reasoning"], fast_mode=preferences["effective"]["fast_mode"], approval_mode=preferences["effective"]["approval_mode"])
         if op == "project.initialize":
             return self.store.initialize(self.lookup("projects", text_field(params, "project_id", 150), fresh=True))
         if op == "project.limits":
@@ -2057,6 +2033,8 @@ class Service(SurfboardService, EditorService, WritingService):
     def close(self):
         self.shutdown.set()
         self.message_event.set()
+        # Stop paid inference before waiting on network/telemetry cleanup.
+        self.codex.close()
         if self.message_thread:
             self.message_thread.join(timeout=30)
         if self.wakeup_thread:
@@ -2069,7 +2047,6 @@ class Service(SurfboardService, EditorService, WritingService):
         self.workbench.close()
         self.latex.close()
         self.board_runtime.close()
-        self.codex.close()
         # A bounded external call may still be unwinding on process shutdown.
         # Do not close SQLite underneath a live background writer.
         threads = (self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread, *self.nodes.threads)
@@ -2401,6 +2378,7 @@ class Handler(BaseHTTPRequestHandler):
                 if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
+                result = self.server.service.bounded_agent_result(agent_scope, result)
             else:
                 result = self.server.service.action(request.get("op"), request.get("params", {}))
             self.respond(200, result)

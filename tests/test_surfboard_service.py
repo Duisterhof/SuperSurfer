@@ -117,7 +117,7 @@ class SurfboardServiceTests(unittest.TestCase):
             self.assertEqual(context['agent_skill']['name'], 'supersurfer-workflow')
             self.assertNotIn('AutoML', context['base_instructions'])
             self.assertNotIn('queue_run', self.service.boards.get(project['id'])['compiled']['tools_by_role']['worker'])
-            result = self.service.agent_action(scope, 'supersurfer_handoff_work_item', {'experiment_id': created['experiment_id'], 'task': 'Implement and check this feature.'})
+            result = self.service.action('chat.send', {'scope': created['agent_scope'], 'text': 'Implement and check this feature.'})
             self.assertTrue(result['accepted'])
             self.assertNotIn('research work', self.service.codex.sent[-1][1])
         self.assertFalse(any(op == 'project.add' for op, _ in self.manager.calls))
@@ -404,6 +404,9 @@ class SurfboardServiceTests(unittest.TestCase):
             self.assertEqual(17, reply['id'])
             self.assertFalse(reply['result']['isError'], reply)
             proposed = json.loads(reply['result']['content'][0]['text'])
+            if proposed.get('truncated'):
+                self.assertLess(len(reply['result']['content'][0]['text']),12000)
+                proposed = json.loads(Path(proposed['full_result_path']).read_text())
             self.assertGreater(proposed['draft']['draft_version'], 0)
             self.assertEqual('web', proposed['draft']['board']['workflow'])
             self.assertEqual('research', self.service.boards.get('p1')['compiled']['workflow'])

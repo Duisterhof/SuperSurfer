@@ -384,7 +384,7 @@ class CliBridge(ConversationBridge):
                 config_path.write_text(json.dumps({"mcpServers": mcp})); config_path.chmod(0o600)
                 prompt_path.write_text(instructions); prompt_path.chmod(0o600)
                 args = [binary, "--print", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-                        "--permission-prompt-tool", "stdio", "--permission-mode", "bypassPermissions" if approval_mode == "yolo" else "default",
+                        "--max-turns", "24", "--permission-prompt-tool", "stdio", "--permission-mode", "bypassPermissions" if approval_mode == "yolo" else "default",
                         "--mcp-config", str(config_path), "--strict-mcp-config", "--setting-sources=", "--append-system-prompt-file", str(prompt_path)]
                 if approval_mode == "yolo":
                     args.append("--dangerously-skip-permissions")

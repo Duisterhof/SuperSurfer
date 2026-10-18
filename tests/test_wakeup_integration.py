@@ -53,48 +53,16 @@ class WakeupIntegrationTests(unittest.TestCase):
         state = self.service.state(force=True); state['updated_at'] = self.now
         return self.service.wakeups.tick(state, self.service.start_worker_wakeup)
 
-    def test_only_active_user_workers_can_save_and_schedule_origin_cannot_queue(self):
-        with self.assertRaises(APIError): self.service.agent_action(self.scope, self.tool, self.args)
-        for scope in ('manager', 'project:p1', 'agent:a1'):
-            self.active_user(scope)
-            with self.assertRaises(APIError): self.service.agent_action(scope, self.tool, self.args)
-        rule = self.add()
-        self.now += 600
-        self.assertEqual([rule['id']], self.tick())
-        self.assertEqual('schedule', self.service.turn_origins[self.scope])
-        self.assertEqual(1, len(self.service.codex.sent))
-        self.assertIn('debug the failure', self.service.codex.sent[0][1])
-        for name, arguments in ((self.tool, self.args), ('supersurfer_queue_run', {'run_id': 'r1', 'pr_url': 'https://github.com/example/research/pull/1'}), ('supersurfer_prepare_run', {})):
-            with self.assertRaises(APIError): self.service.agent_action(self.scope, name, arguments)
-        self.assertEqual(1, len(self.service.agent_action(self.scope, self.tool, {'action': 'list'})['rules']))
-        self.assertFalse(any(op.startswith(('run.', 'queue.')) for op, _ in self.manager.calls))
-
-    def test_chat_model_effort_speed_and_permission_overrides_are_forwarded(self):
-        scope = self.service.create_experiment_agent(self.experiment['id'], 'Monitor')['scope']
-        self.service.action('chat.settings', {'scope': scope, 'model': 'model-b', 'reasoning': 'max', 'fast_mode': True, 'approval_mode': 'yolo'})
-        rule = self.add(scope=scope)
-        self.now += 600
-        self.assertEqual([rule['id']], self.tick())
-        sent = self.service.codex.sent[-1]
-        self.assertEqual(scope, sent[0])
-        self.assertEqual({'model': 'model-b', 'reasoning': 'max', 'fast_mode': True, 'approval_mode': 'yolo', 'message_role': 'system', 'background_check': {'rule_id': rule['id'], 'kind': 'interval'}}, sent[2])
-        self.assertIn('Do not launch or queue jobs', sent[1])
-        self.assertEqual('schedule', self.service.turn_origins[scope])
-
-    def test_another_owned_worker_blocks_overlap_and_saved_trigger_survives(self):
-        rule = self.add()
-        other_scope = self.service.create_experiment_agent(self.experiment['id'], 'Current worker')['scope']
-        self.service.codex.busy.add(other_scope)
-        self.now += 600
-        self.assertEqual([], self.tick())
-        self.assertEqual('pending', self.service.wakeups.list(self.experiment['id'])[0]['status'])
-        self.assertEqual([], self.service.codex.sent)
-        self.service.codex.busy.remove(other_scope); self.now += 10
-        self.assertEqual([rule['id']], self.tick())
-        self.assertEqual(self.scope, self.service.codex.sent[-1][0])
-        self.now += 600
-        self.assertEqual([], self.tick())
-        self.assertEqual(1, len(self.service.codex.sent))
+    def test_scheduled_observations_never_activate_a_model_even_when_worker_busy(self):
+        rule=self.add();self.service.codex.busy.add(self.scope)
+        for _ in range(4):
+            self.now+=600
+            self.assertEqual([rule['id']],self.tick())
+        self.assertEqual([],self.service.codex.sent)
+        observation=self.service.store.get('worker_observation:'+rule['id'])
+        self.assertFalse(observation['agent_started'])
+        self.assertEqual(self.scope,observation['scope'])
+        self.assertFalse(any(op.startswith(('run.','queue.')) for op,_ in self.manager.calls))
 
     def test_status_and_metric_explicit_runs_cannot_cross_experiment(self):
         self.active_user()
@@ -122,8 +90,8 @@ class WakeupIntegrationTests(unittest.TestCase):
         self.service.wandb.fetcher = metrics
         self.assertEqual([rule['id']], self.tick())
         self.assertEqual([{'entity': 'test', 'project': 'research', 'run': 'training1'}], calls)
-        self.assertIn('"value": 0.2', self.service.codex.sent[0][1])
-        self.assertIn('"run_id": "r1"', self.service.codex.sent[0][1])
+        self.assertIn('"value": 0.2', json.dumps(self.service.store.get('worker_observation:'+rule['id'])['trigger']))
+        self.assertIn('"run_id": "r1"', json.dumps(self.service.store.get('worker_observation:'+rule['id'])['trigger']))
         self.assertFalse(self.service.wakeups.list(self.experiment['id'])[0]['enabled'])
 
     def test_pause_remove_scoped_actions_and_read_only_service(self):

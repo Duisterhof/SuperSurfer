@@ -509,3 +509,10 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Validate role guidance, all ordinary tests, packaged isolated setup and actual read-only writer history.
 - [x] Verify controlled workspace activation, all five live sources and actual900/650 refresh/reopen-data without replacing scientific writers or runs; same transfer resumed.
 - [ ] Restore the already-reviewed parent scale/hidden-series preference bridge and verify actual same-report reopening after deployment.
+
+## Token containment follow-ups
+
+- [x] Remove automatic continuation, completion reviews, peer wakes and handoff execution.
+- [x] Durable activation admission, shared rolling quotas, runtime limits and bounded tool output.
+- [ ] Provider-neutral pre-request metering; current native APIs expose post-response usage only.
+- [ ] Typed deterministic recurring evaluation plans. Do not claim arbitrary saved natural-language wakeups can execute without an agent.

@@ -98,94 +98,10 @@ class ConversationTests(unittest.TestCase):
         self.assertFalse(any(op in {'agent.resume', 'agent.send'} for op, _ in self.manager.calls))
         self.assertTrue(any(row['scope'] == native for row in self.service.experiment_agents(self.exp['id'])['agents']))
 
-    def test_explicit_parallel_handoff_checks_only_named_owned_worker(self):
-        busy = 'experiment:' + self.exp['id']
-        self.service.action('chat.send', {'scope': busy, 'text': 'Continue original work'})
-        self.service.action('chat.send', {'scope': 'project:p1', 'text': 'Start a separate agent for parallel code review'})
-        scope = self.new_agent()['scope']
-        result = self.service.agent_action('project:p1', 'supersurfer_handoff_experiment', {'experiment_id': self.exp['id'], 'agent_scope': scope, 'task': 'Prepare isolated code review'})
-        self.assertEqual(scope, result['scope'])
-        self.assertIn(busy, self.service.codex.busy)
-        self.assertIn(scope, self.service.codex.busy)
-        with self.assertRaisesRegex(APIError, 'already working'):
-            self.service.start_experiment_work(self.exp['id'], 'Duplicate', draft_only=False, agent_scope=scope)
-        self.assertFalse(any(op.startswith('run.') for op, _ in self.manager.calls))
 
-    def test_reviews_use_selected_owned_scope_and_keep_active_scope_when_selection_changes(self):
-        first, second = self.new_agent()['scope'], self.new_agent()['scope']
-        self.service.action('chat.settings', {'scope': second, 'model': 'model-b', 'approval_mode': 'yolo'})
-        self.service.action('settings.save', {'timezone': 'Asia/Tokyo'})
-        self.due(self.exp)
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent[-1][0], second)
-        self.assertEqual(self.service.codex.sent[-1][2]['approval_mode'], 'yolo')
-        self.assertEqual(self.service.context_provider(second)['timezone'], 'Asia/Tokyo')
-        self.assertEqual(self.service.turn_origins[second], 'schedule')
-        self.service.action('experiment.agent.select', {'experiment_id': self.exp['id'], 'scope': first})
-        self.service.check_reviews()
-        self.assertEqual(len(self.service.codex.sent), 1)
-        self.assertEqual(self.service.store.get('active_review_scope'), second)
-        self.service.close()
-        self.open_service()
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent, [])
-        self.assertIsNone(self.service.store.get('active_review'))
 
-    def test_review_respects_unretired_native_queue_but_not_retired_history(self):
-        self.native('paused')
-        self.manager.histories['native-worker'] = [{'status': 'queued'}]
-        scope = self.new_agent()['scope']
-        self.due(self.exp)
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent, [])
-        self.service.store.put('retired_native_agents', ['native-worker'])
-        self.service.check_reviews()
-        self.assertEqual(self.service.codex.sent[-1][0], scope)
-        self.assertEqual(self.service.turn_origins[scope], 'schedule')
-        self.assertFalse(any(op in {'agent.resume', 'agent.send'} for op, _ in self.manager.calls))
 
-    def test_lead_creates_and_targets_new_worker_with_origin_membership_and_turn_limits(self):
-        args = {'experiment_id': self.exp['id'], 'name': 'Delegated agent'}
-        with self.assertRaises(APIError): self.service.agent_action('project:p1', 'supersurfer_create_experiment_agent', args)
-        self.service.action('chat.send', {'scope': 'project:p1', 'text': 'Create an agent and delegate the experiment implementation'})
-        result = self.service.agent_action('project:p1', 'supersurfer_create_experiment_agent', args)
-        self.assertEqual(len(self.service.codex.sent), 1)
-        scope = result['scope']
-        self.service.action('chat.settings', {'scope': scope, 'approval_mode': 'yolo', 'model': 'model-b'})
-        handoff = self.service.agent_action('project:p1', 'supersurfer_handoff_experiment', {'experiment_id': self.exp['id'], 'agent_scope': scope, 'task': 'Prepare this requested implementation'})
-        self.assertEqual(handoff['scope'], scope)
-        self.assertEqual(self.service.codex.sent[-1][2]['approval_mode'], 'yolo')
-        for _ in range(2): self.service.agent_action('project:p1', 'supersurfer_create_experiment_agent', args)
-        with self.assertRaisesRegex(APIError, 'three'): self.service.agent_action('project:p1', 'supersurfer_create_experiment_agent', args)
-        with self.assertRaises(APIError): self.service.agent_action(scope, 'supersurfer_create_experiment_agent', args)
-        project = {**self.manager.data['projects'][0], 'id': 'p2', 'name': 'other'}
-        self.manager.data['projects'].append(project)
-        self.service.state(force=True)
-        foreign = self.service.store.create(project, 'Different', 'Different project')
-        with self.assertRaisesRegex(APIError, 'another project'):
-            self.service.agent_action('project:p1', 'supersurfer_create_experiment_agent', {'experiment_id': foreign['id']})
-        self.service.codex.busy.clear()
-        self.service.action('chat.send', {'scope': 'project:p1', 'text': 'Create one more worker'})
-        self.service.agent_action('project:p1', 'supersurfer_create_experiment_agent', args)
 
-    def test_default_handoff_uses_owned_worker_and_native_retirement_preserves_history(self):
-        native = self.native('idle')
-        self.service.action('experiment.agent.select', {'experiment_id': self.exp['id'], 'scope': native})
-        result = self.service.start_experiment_work(self.exp['id'], 'Prepare source', draft_only=False, handoff=True)
-        self.assertEqual(result['scope'], 'experiment:' + self.exp['id'])
-        self.service.codex.busy.clear()
-        self.service.store.put('retired_native_agents', {'native-worker': 'Replaced by SuperSurfer'})
-        listing = self.service.experiment_agents(self.exp['id'])
-        self.assertEqual(listing['selected_scope'], 'experiment:' + self.exp['id'])
-        row = next(row for row in listing['agents'] if row['scope'] == native)
-        self.assertTrue(row['retired'])
-        self.assertFalse(row['can_resume'])
-        self.assertTrue(self.service.chat(native)['messages'])
-        self.assertTrue(self.service.chat(native)['retired'])
-        for op, params in [('chat.send', {'scope': native, 'text': 'continue'}), ('experiment.agent.resume', {'experiment_id': self.exp['id'], 'scope': native})]:
-            with self.assertRaises(APIError): self.service.action(op, params)
-        with self.assertRaises(APIError): self.service.start_experiment_work(self.exp['id'], 'Continue', draft_only=False, agent_scope=native)
-        self.assertFalse(any(op in {'agent.resume', 'agent.send'} for op, _ in self.manager.calls))
 
     def test_explicit_native_resume_uses_original_owner_and_fresh_message_with_workspace_clock(self):
         scope = self.native('interrupted')

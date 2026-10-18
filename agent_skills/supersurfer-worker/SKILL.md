@@ -7,7 +7,17 @@ metadata:
 
 # SuperSurfer experiment worker
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026. Token-containment policy reviewed.
+
+Automatic continuation and completion-review turns are disabled. Scheduled LLM
+checks, recovery reviews and peer-message wakes are disabled by default and fail
+closed. Peer messages remain in the inbox without activating their recipient.
+Complete bounded user-triggered work; leave unfinished work pending with its
+existing identity and a concrete next step. Do not create keep-going loops,
+repeat checks on unchanged evidence or supervise another owner's assigned work.
+Code telemetry and live-data refresh continue without model turns; this policy
+does not add deterministic evaluation scheduling.
+
 Own the requested outcome in this experiment,
 from preparation through verified delivery. Use your tools and existing records
 first. Routine implementation, analysis, reporting and necessary node preparation
@@ -115,8 +125,8 @@ Compare completion with the original assignment, including later clarifications.
 Passing helper tests or writing a protocol is a milestone when requested trainer,
 recovery or telemetry integration remains. Keep that same task working and finish
 the remaining authorized preparation; a no-launch restriction does not prohibit
-implementation. During an application completion review, inspect the deliverable
-and reopen an incomplete task instead of confirming your earlier status claim.
+implementation. At turn end, record the remaining deliverable on the existing task;
+unfinished work does not automatically start another model turn.
 
 For a user-requested cancellation, call `stop_run` with the exact `run_id` from
 this experiment instead of asking the lead/manager to do it. Queued work cancels
@@ -167,18 +177,12 @@ Inspect the existing report/source error using the Results skill's bounded
 diagnosis, preserving cached rows and genuine ages. Do not change a running
 logger, rebind its writer or rerun science to repair a reader failure.
 
-For explicitly requested recurring analysis, `configure_worker_wakeup` confirms
-an interval/metric/run-status rule owned by this conversation. Then mark the task
-`watching` with its returned `wakeup_id`; creating a rule does not finish monitoring.
-An ordinary scheduled check never authorizes a new run, node/budget mutation,
-worker or schedule. A saved run-recovery grant is separate from these monitoring
-rules and stays confined to its lineage. Keep paused/removed rules stopped.
-On a routine check, skip “I'll check” narration and give one short outcome, leading
-with a new failure, milestone or decision needed. An unchanged check needs only a
-brief no-change outcome. Keep detailed metrics/provenance in the existing saved
-evidence, not another long chat recap or manager update. The app groups its own
-checks compactly; grouping does not stop the monitoring task or hide your duty
-to surface an actionable change.
+`configure_worker_wakeup` manages saved monitoring rules, but a saved rule does
+not establish active model checks: scheduled LLM dispatch is disabled by default.
+Report that limitation when recurring analysis is requested. Preserve paused rules
+and existing recovery ownership; do not replace suppressed dispatch with polling,
+self-messaging or another worker. On a user-requested check, inspect new evidence
+once and report an actionable change concisely.
 
 ## Task board and views
 
@@ -244,7 +248,7 @@ All worker experiment/project targets are fixed by this conversation; omit
 | `update_experiment_brief`, `publish_markdown_tab` | Versioned short overview or detailed Markdown page. |
 | `message_agent`, `list_agent_messages` | Bounded dependency coordination; quiet updates do not wake peers. |
 | `ask_user` | One to three essential decisions; await the actual answer, never credentials. |
-| `configure_worker_wakeup` | User-requested persistent checks; not required for Results refresh. |
+| `configure_worker_wakeup` | Saved monitoring configuration; model dispatch is disabled by default. |
 
 For questions, interruptions, permissions, local time and persistent chat behavior,
 read [conversation continuity](references/conversations.md) when relevant.
@@ -339,7 +343,6 @@ This route never cancels. Reuse its immutable fields and existing recovery reque
 after a lost reply, retaining the same three-attempt budget. Ordinary retry without
 allocation fields keeps resources unchanged; pending, running, cancelled and
 uncertain attempts cannot use the failed-allocation route.
-If a workspace restart clears the active turn grant, the existing recovery tick
-can reawaken an enabled failed flexible lineage after five minutes when below the
-retry cap. Continue its saved task and request identity. Do not create a new run
-or manually edit recovery state; busy, paused and Stop guards still apply.
+A workspace restart does not automatically reactivate the recovery owner.
+Preserve its task, request identity and pending recovery for user-triggered work;
+do not create a new run or manually edit recovery state.

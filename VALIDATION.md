@@ -1365,3 +1365,47 @@ Validation: 776 Python tests and 48 Node tests passed (five optional SSH tests s
 Linux x64 package and isolated native Electron startup passed. Deployed service 9ca51db685f74807, health 0.1.43 confirmed; migrated 17 VLA applied/default boards through versioned APIs. One board with a pending draft was left untouched to preserve the proposal. Scheduler and research processes were not restarted.
 
 Live Many projections receipt action_717b80272f0da703bc04102b passed on board version 7: 46 inputs / 24,579,666 bytes, source unchanged, all ten reviewer checks passed; creation-to-completion 0.309 seconds including the real configured checker. This verifies the deployed agent path, not just an offline snapshot.
+
+## Agent token containment — October 18, 2026
+
+SuperSurfer only admits model activations from direct user chat/start actions.
+Unfinished tasks do not trigger continuation turns or model completion reviews.
+Peer requests, answers and updates are inbox records; they neither start nor steer
+another agent. Handoff execution is disabled, including native-owner handoffs.
+Native Codex subagent spawning is disabled for managed turns. Existing worker
+wakeups/recovery grants are paused once on upgrade, retaining their records.
+New scheduled observations and recovery ticks record evidence without inference.
+They do not debug, launch evaluations or repair failures autonomously. Ordinary
+scheduler execution, telemetry, W&B refresh and live Results remain independent.
+
+Each direct activation atomically reserves a 1,000,000-token allowance from a
+rolling 24-hour ledger: 4,000,000 per agent and 20,000,000 across the workspace,
+shared by Codex, Claude and Cursor. New chats do not reset the workspace ledger.
+Confirmed completed turns with usage release unused allowance; missing usage,
+interruptions and uncertain delivery retain it. Task edits, retries and restarts
+cannot reset reservations. User question answers and steering keep the same
+allowance and deadline, rather than minting new credit.
+
+Runtime circuit breakers: 15 minutes, 40 scoped tool invocations, and no more than
+three identical scoped tool requests per activation. Codex usage notifications
+interrupt at 24 response notifications or 1,000,000 input-plus-output tokens;
+cached input is included, never added twice. Counters are deduplicated. Claude
+also receives its native 24-turn limit. Cursor has time/tool and admission limits;
+its adapter does not expose reliable per-response token accounting. Provider
+usage arrives after a response: these are circuit breakers, not an exact
+pre-request billing cap. In-flight responses can overshoot; missing telemetry
+never silently refunds a reservation. Do not describe reserved tokens as billed
+usage. This covers SuperSurfer-managed inference, not independent IDE sessions.
+
+Codex compacts around 32k tokens and bounds native tool output to 3k tokens.
+Oversized app context/task records are saved as private files with explicit
+references. Model-facing scoped tool responses over 12k characters return a
+bounded preview plus a full-result file; service-internal results are unchanged.
+Settings show reserved allowance and reported input, cached input and output.
+
+Containment verification: isolated fake-provider tests cover zero scheduled/peer
+activations, legacy queue migration, concurrent durable reservations, budget
+persistence, usage deduplication, repeated tool limits, actual turn interruption,
+continued manual chat/queue actions and full-result file references. Node suite:
+51 passed, 5 SSH-dependent skipped. Remote bundle built on Linux. No real model
+calls or research launches were used for validation.

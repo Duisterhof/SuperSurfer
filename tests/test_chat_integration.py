@@ -28,7 +28,7 @@ class ChatIntegrationTests(unittest.TestCase):
             fixture = FAKE.replace("if text in ('hold', 'partial'):", "if text in ('hold', 'partial', 'Queue this run using its PR') or text.startswith('The user requested work on experiment '):")
             binary.write_text("#!" + sys.executable + "\n" + fixture)
             binary.chmod(0o700)
-            with patch.dict(os.environ, {"SUPERSURFER_CODEX": str(binary), "SS_FAKE_LOG": str(log), "SS_FAKE_DOC": str(root / "document.md")}):
+            with patch("server.agent_budget.AGENT_TOKENS", 100_000_000), patch("server.agent_budget.WORKSPACE_TOKENS", 200_000_000), patch.dict(os.environ, {"SUPERSURFER_CODEX": str(binary), "SS_FAKE_LOG": str(log), "SS_FAKE_DOC": str(root / "document.md")}):
                 service = Service(root / "state", root / "aml", aml=AMLClient(root / "aml", rpc=FakeManager(repo)), start_monitor=False, tracking=FakeTracking())
                 server = create_server(service, port=0)
                 server_thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -135,7 +135,7 @@ class ChatIntegrationTests(unittest.TestCase):
                     self.assertTrue(new_scope.startswith("conversation:"))
                     self.assertFalse(service.codex.chat(new_scope)["busy"])
                     self.assertIsNone(service.codex.chat(new_scope)["thread_id"])
-                    dispatched = tool("project:p1", "handoff_experiment", {"experiment_id": experiment["id"], "agent_scope": new_scope, "task": "Queue the user's requested run using its exact-source PR."})
+                    dispatched = action("chat.send", {"scope": new_scope, "text": "Queue this run using its PR"})
                     self.assertEqual(dispatched["scope"], new_scope)
                     wait_for(lambda: service.codex.chat(new_scope).get("turn_id"))
                     args = {**queue_request["params"]["arguments"], "name": "delegated-run"}

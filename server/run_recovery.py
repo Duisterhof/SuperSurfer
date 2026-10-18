@@ -381,39 +381,11 @@ class RunRecovery:
                     and run['config'].get('slurm', {}).get('profile') == 'single_node_training_v1')
                 if unchanged and not (replanning or failed_flexible): continue
                 if time.time() - record.get('last_wake', 0) < (300 if unchanged else 60): continue
-                if service.codex.chat(scope).get('busy') or service.store.get('agent_messages_paused:' + scope, False): continue
-                preferences = service.chat_preferences(scope, strict=True)['effective']
-                record.update(last_wake=time.time()); self.save(record)
-                previous_origin = service.turn_origins.get(scope)
-                previous_active = self.active.get(scope)
-                service.turn_origins[scope] = 'recovery'; self.active[scope] = record['id']
-                prompt = ('Continue the existing authorized task below. This is a run-specific recovery wakeup. '
-                    'Use recover_run(status), check_available_node and acquire_new_node directly. Reuse prepared nodes first; '
-                    'stage source, environment and data when needed. Add capacity to the same queued run. Diagnose and repair '
-                    'confirmed failures before recover_run(retry), with a fresh output directory or verified resume command. '
-                    'Do not raise budgets, stop other work, change the experimental protocol, or launch unrelated experiments. '
-                    'Keep pursuing the deliverable; report an external blocker only after checking alternatives. '
-                    'No manager relay is needed for these tools.\nTask: ' + record['task'] + '\nRun: ' + json.dumps(run) + '\nAcquisitions: ' + json.dumps(acquisitions))
-                if legacy_retry:
-                    prompt += ('\nThe saved retry previously encountered a service-generated invalid name. '
-                        'That name repair is now available. Continue recover_run(retry) for this same failed run, '
-                        'with the original repair PR/reason and the saved argv/revision below. The service first '
-                        'reconciles any existing submission; do not use a fresh queue request or delete the receipt. '
-                        'This changes no resource, protocol, approval or retry limit. Saved retry fields: ' +
-                        json.dumps({'run_id':run['id'],'command':legacy_retry['command'],'revision':legacy_retry['revision']}))
-                if replanning:
-                    prompt += ('\nAn explicit user resource replan is already saved. Reconcile it using '
-                               'recover_run with these EXACT immutable fields; no separate stop or new request: '
-                               + json.dumps(plan['fields']))
-                try:
-                    response = service.codex.send(scope, prompt, **{key:preferences[key] for key in ('model','reasoning','fast_mode','approval_mode')})
-                    if not response.get('accepted'):
-                        raise ComputeError('Recovery wakeup was not accepted; delivery will be retried after the backoff.', 409)
-                except Exception:
-                    if previous_origin is None: service.turn_origins.pop(scope, None)
-                    else: service.turn_origins[scope] = previous_origin
-                    if previous_active is None: self.active.pop(scope, None)
-                    else: self.active[scope] = previous_active
-                    raise
-                record.update(last_problem=problem); self.save(record)
+                # Record an actionable observation once. Never wake a model,
+                # regardless of saved grants or retry/backoff state.
+                if unchanged: continue
+                record.update(last_problem=problem, needs_attention=True,
+                              attention_reason='Run needs attention; automatic agent recovery is disabled.',
+                              observed_at=time.time())
+                self.save(record)
         finally: service.action_lock.release()

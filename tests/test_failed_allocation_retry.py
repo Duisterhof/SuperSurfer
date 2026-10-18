@@ -111,42 +111,7 @@ class FailedAllocationRetryTests(unittest.TestCase):
             with self.assertRaises(ComputeError):self.replan()
             self.assertEqual(len(self.runs()),1)
 
-    def test_saved_failed_retry_wakes_with_exact_fields_without_aborting_on_old_start(self):
-        self.prepare()
-        with patch.object(self.service.recovery,'_queue_retry',side_effect=TimeoutError('Unavailable')):
-            with self.assertRaises(TimeoutError):self.replan()
-        record = self.service.recovery.get(self.run_id)
-        record.update(last_wake=0)
-        self.service.recovery.save(record)
-        self.service.codex.sent.clear();self.service.codex.busy.clear()
-        with patch('server.run_recovery.time.time',return_value=1000):
-            self.service.recovery.tick()
-        record = self.service.recovery.get(self.run_id)
-        self.assertEqual(record['pending_replans'][0]['phase'],'submitting')
-        self.assertIn('"action": "retry"',self.service.codex.sent[-1][1])
-        self.assertEqual(len(self.runs()),1)
-        self.assertEqual(record['attempts'],1)
 
-    def test_failed_flexible_owner_reawakens_after_restart_without_a_new_user_request(self):
-        self.prepare()
-        record = self.service.recovery.get(self.run_id);record['last_wake'] = 0
-        self.service.recovery.save(record)
-        self.service.codex.sent.clear();self.service.codex.busy.clear()
-        with patch('server.run_recovery.time.time',return_value=1000):
-            self.service.recovery.tick()
-        self.assertEqual(len(self.service.codex.sent),1)
-        self.service.recovery = RunRecovery(self.service)
-        self.service.codex.busy.clear()
-        with patch('server.run_recovery.time.time',return_value=1299):
-            self.service.recovery.tick()
-        self.assertEqual(len(self.service.codex.sent),1)
-        with patch('server.run_recovery.time.time',return_value=1300):
-            self.service.recovery.tick()
-        self.assertEqual(len(self.service.codex.sent),2)
-        self.assertEqual(self.service.turn_origins[self.scope],'recovery')
-        self.assertTrue(self.service.recovery.allowed(self.scope,self.run_id))
-        self.assertEqual(self.service.recovery.get(self.run_id)['attempts'],1)
-        self.assertEqual(len(self.runs()),1)
 
 
 if __name__ == '__main__':unittest.main()
