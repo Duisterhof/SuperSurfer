@@ -162,6 +162,11 @@ for detailed protocols, and `update_experiment_brief` for the short overview.
 Reuse page IDs and reconcile concurrent edits. Live curve freshness needs no
 agent turn or periodic republishing task.
 
+A live-reader query/HTTP failure does not prove your trainer omitted a metric.
+Inspect the existing report/source error using the Results skill's bounded
+diagnosis, preserving cached rows and genuine ages. Do not change a running
+logger, rebind its writer or rerun science to repair a reader failure.
+
 For explicitly requested recurring analysis, `configure_worker_wakeup` confirms
 an interval/metric/run-status rule owned by this conversation. Then mark the task
 `watching` with its returned `wakeup_id`; creating a rule does not finish monitoring.
@@ -261,9 +266,10 @@ Stanford uses `backend: "stanford_slurm"`. Omitting `slurm.profile` keeps the
 original one-GPU smoke with at most 900 seconds, 100 updates and exactly matching
 `--smoke-updates`. The explicit `profile: "seven_l40s_training_v1"` requires exactly
 seven L40S GPUs, 28 CPUs, 112 GiB RAM, 86,400 seconds and 120 seconds of checkpoint
-grace; omit `max_updates` and smoke bounds. Use only this authorized profile.
+grace; omit `max_updates` and smoke bounds. Select the profile matching the user's
+actual authorization, including the separate flexible profile described below.
 Preparation stays held; suggestions and scheduled observations do not authorize
-either profile's launch.
+any profile's launch.
 
 Own the scientific source, recipe, distributed rank/sampling semantics, full-state
 checkpointing and telemetry in the exact-source PR. An until-stopped trainer must
@@ -290,3 +296,17 @@ its authorized scoped linked recovery with verified state and unchanged scope.
 Inspect the same run's job ID/state/reason, reconcile lost replies with the same
 request fields, and use `stop_run` for the requested recorded-run cancellation.
 Existing stops revoke continuation authority.
+
+
+### Explicit flexible Stanford placement
+
+When the user permits flexible Stanford placement, `single_node_training_v1`
+supports 1–8 GPUs of one explicit type on one node under installed
+`run.stanford_slurm.training.flexible.v1`. Follow the bounded resource contract in
+[host onboarding](../supersurfer-host-onboarding/SKILL.md#explicit-flexible-stanford-placement).
+Validate actual rank mapping, effective global batch, precision and hardware
+telemetry in the exact reviewed source before the owned submission. The profile
+does not adapt model code or certify VRAM. Preserve strict full-state resume
+compatibility; a linked retry retains its original resource contract. Do not
+create a second queue request when the manager owns submission. Supporting this
+profile grants no new autonomous launch authority.

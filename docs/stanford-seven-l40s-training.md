@@ -55,10 +55,8 @@ intent with the existing Slurm identity; it must never submit a second job.
 Owned cancellation uses the recorded Slurm job ID. Only one Stanford allocation
 is active at a time across projects, preserving the existing scheduler guard.
 
-The source owner owns the scientific recipe and launch readiness. The latest
-requested pair is two fresh arms at peak LR1e-5, QK off and direct latent Gaussian
-noise: Trinity with SIGReg and Stanford without SIGReg. This adapter does not
-silently rewrite source, LR, regularization, dataset membership or sampler ranks.
+The source owner owns the scientific recipe and launch readiness. This adapter
+does not rewrite source, LR, regularization, dataset membership or sampler ranks.
 All bulk source/runtime/input/cache/output I/O must resolve to allocated local
 scratch before CUDA; only sealed outputs return to the approved durable path.
 Do not allocate until immutable full data, runtime and reviewed source are ready.
@@ -67,3 +65,29 @@ Validation uses mocked Slurm calls and real service/engine validators. It checks
 exact resource flags, explicit reclamation policy, lost-reply idempotency,
 linked-retry resource preservation and unchanged PSC/smoke rejection behavior.
 These CPU tests are not evidence of a seven-GPU training launch or checkpoint.
+
+## Explicit flexible single-node profile
+
+A user may authorize choosing the largest compatible available single-node
+allocation instead of the fixed seven-L40S layout. Use the separate profile
+`single_node_training_v1`, only after the installed engine advertises
+`run.stanford_slurm.training.flexible.v1`. The old seven-L40S profile remains exact.
+
+The flexible profile admits 1–8 GPUs of one explicit Slurm type on one node,
+account `viscam`, partition `viscam` or `sc-loprio`, 1–24 hours, up to four CPUs
+and 16 GiB RAM per requested GPU, and the same 120-second TERM grace.
+`until_stopped` and user-authorized `allow_preemption` must be true. The type must
+be one safe typed-GRES identifier. This transport validation does not certify
+that a GPU supports the model precision or has enough VRAM.
+
+Before queueing, inspect current inventory, account/QOS/partition limits and an
+exact read-only scheduling estimate. Select a compatible homogeneous layout;
+estimates reserve nothing. The exact scientific source must admit that hardware
+and rank count, retain the intended global batch and keyed samples, and log MFU
+using the actual precision and GPU peak. Reject an unsupported layout rather than
+changing science silently. No multi-node support or automatic resource amendment
+is added. A linked retry keeps its original resource contract and resume rules.
+
+The same managed submit, uncertain-intent reconciliation, one-active-Stanford-run
+guard, source review, local scratch admission and recorded-job cancellation apply.
+A resource profile does not authorize stopping other work or launching a new arm.

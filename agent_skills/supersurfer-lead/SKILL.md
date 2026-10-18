@@ -154,6 +154,11 @@ metrics and a short schematic after the curves. The app handles refresh on openi
 without another handoff or wakeup. Preserve IDs, measured gaps, protocol and source
 identity when revising a report; do not treat a comparison request as launch intent.
 
+A query/HTTP failure can prevent reading existing measurements. Keep that gap
+distinct from an unmeasured split, preserve cached evidence and sample ages, and
+follow the Results skill's bounded reader diagnosis. Do not hand off replacement
+science, rebind writers or revive stopped work to repair a reporting reader.
+
 ## Task board and views
 
 Use `read_surfboard` for this task's applied workflow. Tasks snapshot project
@@ -241,7 +246,7 @@ its bounded archive cleanup is separate from human reorder/Restore controls.
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
 Stanford uses `backend: "stanford_slurm"`; omitting `slurm.profile` preserves
-its one-GPU, 900-second/100-update smoke. Production needs explicit
+its one-GPU, 900-second/100-update smoke. The fixed production profile uses explicit
 `profile: "seven_l40s_training_v1"`: exactly seven L40S GPUs, 28 CPUs, 112 GiB RAM,
 86,400 seconds and 120 seconds of checkpoint grace, with no `max_updates`.
 Support for this profile is not launch authorization.
@@ -267,3 +272,17 @@ scoped recovery, preserving full state and scientific exposure. An until-stopped
 does not make the allocation infinite. Reconcile uncertain submission against the
 same request/run identity and report actual job state. Suggestions, scheduled
 reviews and preparation alone never authorize launch or override stops.
+
+
+### Explicit flexible Stanford placement
+
+An explicit user choice may allow the manager to select a flexible Stanford
+layout. `single_node_training_v1` is separate from the fixed seven-L40S profile
+and requires installed `run.stanford_slurm.training.flexible.v1`. It supports
+1–8 GPUs of one explicit type on one node, account `viscam`, partition `viscam`
+or `sc-loprio`, and at most 24 hours. CPU and RAM limits are four CPUs and 16 GiB
+per GPU. Both `until_stopped` and `allow_preemption` must be true, with 120 seconds
+of TERM grace; omit `max_updates` and smoke flags. Keep scientific ownership with
+the worker, exact rank/global-batch/precision admission with the source, and a
+single submission owner. This lead still cannot queue. A read-only estimate grants
+no allocation or new research authority.

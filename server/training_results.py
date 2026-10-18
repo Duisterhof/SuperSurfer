@@ -68,7 +68,10 @@ def compile_report(fields):
     root = Path(__file__).resolve().parents[1]
     template = (root / 'ui/training-results.html').read_text()
     values = {'TITLE': html.escape(spec['title']), 'DESCRIPTION': html.escape(spec.get('description', '')),
-              'SPEC': encoded, 'PLOTLY': (root / 'ui/vendor/plotly-basic.min.js').read_text(),
+              # Plotly's old raw-trace cleanup treats UIDs as CSS selectors.
+              # Escape the selector instead of changing persisted series IDs.
+              'SPEC': encoded, 'PLOTLY': (root / 'ui/vendor/plotly-basic.min.js').read_text().replace(
+                  'n._infolayer.select(".cb"+f).remove()', 'n._infolayer.select(".cb"+CSS.escape(f)).remove()', 1),
               'RENDERER': (root / 'ui/training-results.js').read_text(), 'DETAILS': spec.get('details_html', '')}
     document = re.sub(r'\{\{([A-Z]+)\}\}', lambda match: values[match[1]], template)
     return {**{k: fields[k] for k in ('result_id', 'expected_sha256') if k in fields},

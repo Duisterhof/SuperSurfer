@@ -1,3 +1,6 @@
+- [x] Add bounded explicit1–8 GPU Stanford single-node profile, separate capability gate and resource-preserving recovery tests.
+- [ ] Deploy reviewed flexible profile and verify the authorized production allocation; no test-only reservation claim.
+
 # Slurm follow-up
 
 - [x] Explicit seven-L40S/24-hour Stanford profile with scheduler-managed
@@ -491,3 +494,11 @@ Native multi-select questions currently direct the agent to scoped ask_user.
   receipts before slow repository scans.
 
 - [x] Scope publication receipts to report/evidence/code and bind the actual published payload, avoiding unrelated experiment scans.
+
+## October 17: deployed-backend Results reader compatibility
+
+- [x] Restore the reviewed Int64 history-bound fix on the Stanford production baseline, including sparse held-out and built-in recent curves.
+- [x] Bound wide-run overview reads after the actual single-run baseline exceeded the response cap; retain the latest tail and sparse metric requests.
+- [x] Validate role guidance, all ordinary tests, packaged isolated setup and actual read-only writer history.
+- [x] Verify controlled workspace activation, all five live sources and actual900/650 refresh/reopen-data without replacing scientific writers or runs; same transfer resumed.
+- [ ] Restore the already-reviewed parent scale/hidden-series preference bridge and verify actual same-report reopening after deployment.

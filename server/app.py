@@ -1286,6 +1286,8 @@ class Service(SurfboardService, EditorService, WritingService):
                 required_capability = "run.stanford_slurm.v1"
                 if params.get("slurm", {}).get("profile") == "seven_l40s_training_v1":
                     required_capability = "run.stanford_slurm.training.v1"
+                elif params.get("slurm", {}).get("profile") == "single_node_training_v1":
+                    required_capability = "run.stanford_slurm.training.flexible.v1"
             if required_capability not in self.aml.call("ping").get("capabilities", []):
                 raise APIError("The workspace manager needs the Slurm backend update before submitting", 503)
             host = self.lookup("hosts", text_field(params, "host_id", 150))

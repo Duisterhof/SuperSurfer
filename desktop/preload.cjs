@@ -21,5 +21,9 @@ contextBridge.exposeInMainWorld('superSurferDesktop', {
   setTheme: value => ipcRenderer.invoke('appearance:set', value),
   getWorkspace: () => ipcRenderer.invoke('workspace:get'),
   setWorkspace: value => ipcRenderer.invoke('workspace:set', value),
+  getResultScale: key => ipcRenderer.invoke('results:scale:get', key),
+  setResultScale: (key, scale) => ipcRenderer.invoke('results:scale:set', key, scale),
+  getResultLegend: key => ipcRenderer.invoke('results:legend:get', key),
+  setResultLegend: (key, hidden) => ipcRenderer.invoke('results:legend:set', key, hidden),
   onStatus: callback => { const listener = (_, message) => callback(message); ipcRenderer.on('connection-status', listener); return () => ipcRenderer.removeListener('connection-status', listener); },
 });

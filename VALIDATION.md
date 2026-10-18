@@ -1,4 +1,97 @@
+## Flexible Stanford single-node placement — October 17, 2026
+
+Eight focused regressions cover real service-schema/engine roundtrips across 1–8 ranks, exact single-node typed Slurm argv, shorter site walltime, resource/policy rejection, uncertain-submission deduplication, linked resource-preserving retry and missing installed capability rejection before run creation. Existing PSC/smoke/seven-L40S regressions remain required. These isolated CPU fixtures do not establish real cluster availability or scientific rank/precision admission. Ordinary validation passed 841 Python tests and 49 Node tests (five opt-in SSH checks skipped). All 51 focused Slurm tests and capability-skill validation passed. Linux x64 packaging and isolated native Electron sandbox/profile/navigation checks passed. No live service was restarted or job submitted; installed capability and actual cluster/scientific admission remain pending.
+
 # Stanford production and complete status history — October 17, 2026
+
+## Combined flexible allocation and Results follow-through
+
+Reviewed manager PR56/8234c3f and reused its unchanged source/API/runner delta on
+the installed reader fix plus the reviewed Results preference bridge. The new
+explicit `single_node_training_v1` preserves exact-source PR and request dedup,
+one node,1–8 typed GPUs, account/partition policy, count-bounded CPU/memory,
+24h maximum, checkpoint signal grace and until-stopped semantics. Prior seven-L40S,
+PSC and smoke contracts remain intact. No scientific command was launched by
+these tests. This implements Bart's direct flexible-allocation instruction;
+actual capacity is checked only at the managed launch, never reserved by tests.
+
+Combined ordinary validation:841 Python and51 Node tests passed, five opt-in SSH
+tests skipped. All eight flexible-profile regressions,35 Stanford tests and24
+Slurm-matching tests passed. The previously run browser and native preference
+tests use unchanged UI/desktop sources. All five capability skills were reviewed
+again against the combined role contract, with no new autonomous launch authority.
+The combined Linux x64 package also passed a fresh isolated native launch with
+renderer sandbox and context isolation enabled, node integration disabled and
+no JS errors; the host-local OS process used --no-sandbox. CI and controlled
+installed engine/workspace verification remain separate operational steps. The single data transfer and all existing research
+run identities must survive that activation.
+
+## October 17, 2026: preserve live Results history reads on the Stanford backend
+
+Installed4ccc898 follow-through verified all five original writers with numeric
+rows and no errors/stale flags. The authenticated Results pane and every primary
+plot rendered at actual900px and650px with no JS errors or body overflow. The
+650px check used the app's expanded Results pane, retaining the same iframe and
+bridge. Refresh and reopening fetch real data; the independent manager PID and
+all456 prior run/source/host/GPU/status identities remained unchanged. The same
+transfer journal resumed after a controlled pause. Scale/legend reopening exposed
+an existing parent preference-bridge regression, separate from reader success.
+
+The reviewed preference implementation from PR53/ce9299 is now recovered without
+scientific report rewrites or engine changes: authenticated parent storage,
+opaque-frame scale/legend messages and native report/window preferences. The
+original browser and native regressions exercise real view choices, trace order,
+raw smoothing companions, stale refresh, late-read races, report isolation and
+native changed-port restart. Their current results are recorded after execution;
+this source preparation alone is not deployed-app or scientific proof. Browser
+and native window tests passed. The browser test initially reproduced the old
+Plotly raw-companion cleanup bug during smoothing/refresh; restoring the existing
+0620ed3 compiler CSS-selector escape resolved it without changing stable trace
+UIDs. The current shared scientific payloads already contain that same escape,
+so no report rewrite is needed. Native tests verified report/window isolation,
+detached panels, changed connection port and saved scale/legend after restart.
+The ordinary suite passed833 Python and51 Node tests, with five opt-in SSH tests
+skipped. Capability checks and all four skill tests passed. Linux x64 packaging
+completed; its fresh-profile packaged setup opened under Xvfb with renderer
+sandbox/context isolation enabled, node integration disabled and no JS errors.
+This native test used OS-process --no-sandbox and did not connect to live jobs.
+
+The installed Int64 repair restored fresh trainers and stopped SIGReg history.
+The original single-run 6×8 baseline separately exceeded the 8 MiB response cap.
+A read-only 500-sample request returned 500 real rows in 3,389,056 decoded bytes.
+The reader now retries only oversized initial overviews at 500, then 100 samples;
+the same URLs, keys, latest tail and sparse requests remain intact. Three new
+regressions cover retained sparse/latest points, bounded exhaustion with original
+cache timestamps, and no retry for unrelated access failures. All ten targeted
+Results tests pass. The ordinary suite passed 833 Python tests and 49 Node tests
+with five opt-in SSH checks skipped. Capability-skill validation passed. The
+candidate baseline reader returned 614 merged real rows (500-sample overview
+plus latest/sparse rows), no error and unchanged source bindings. Packaged-build
+and installed follow-through remain separate operational checks.
+
+Restored the already reviewed PR49/229155c W&B `Int64` history-range fix
+onto exact installed backend c2c4275. Both declared Results tails and built-in
+recent curves use the API scalar, including small step values. The existing
+regression covers sparse held-out reads and ordinary history; the test fixture
+flag no longer shadows `unittest.TestCase.fail`.
+
+Validation: 830 Python tests passed; 49 Node tests passed with five opt-in SSH
+checks skipped. Targeted Results tests and capability-skill checks passed.
+An initial Node run exposed missing workspace dependencies in a reused historic
+node_modules directory; isolated npm ci from the unchanged lockfile resolved it.
+The packaged Linux x64 app opened its setup screen under Xvfb with a fresh
+isolated profile, renderer sandbox and context isolation enabled, node integration
+disabled, and no JS errors. The host-local launch used --no-sandbox at the OS
+process layer; it did not connect to the live workspace. Direct read-only candidate
+reads returned numeric rows from all five existing study writers with no stale
+or error state. That is not yet a claim of installed app/iframe refresh success.
+
+All engine source and Stanford seven-L40S/pagination behavior remain unchanged
+from c2c4275. No scientific run, source binding, checkpoint or scheduler setting
+was changed. See CAPABILITY_REVIEW_INT64.md and the redacted diagnostic at
+tests/reports/wandb-history-int64.md. Live activation and post-activation
+refresh/readback require their own operational receipts.
+
 
 - 828 Python tests pass, including complete history aggregation beyond 16 MiB,
   stale-snapshot preservation on page failure and old-manager compatibility.

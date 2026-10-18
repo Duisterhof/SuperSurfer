@@ -161,6 +161,12 @@ content stays with its owner otherwise. Results opening requires no manager
 review, model turn or new monitoring task. Preserve existing report identities,
 measured gaps and source provenance.
 
+If a live-data query fails, record the bounded reader diagnosis described in that
+skill. A query/HTTP error does not establish missing scientific measurements or
+a failed writer. Preserve cached evidence and sample ages; do not dispatch a new
+worker, rebind sources or repeat a run to repair a reader. App repair still needs
+an app maintainer, not a manager deployment claim.
+
 ## Task board and views
 
 Use `read_surfboard` for this task's applied workflow. Tasks snapshot project
@@ -247,7 +253,7 @@ This is scoped reporting, not permission to take over another recovery owner.
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
 Stanford uses the separate `backend: "stanford_slurm"`. Omitting `slurm.profile`
 keeps the original one-GPU smoke, limited to 900 seconds and 100 updates with a
-matching `--smoke-updates` argument. The explicit production profile
+matching `--smoke-updates` argument. The explicit fixed production profile
 `seven_l40s_training_v1` requires exactly seven L40S GPUs, 28 CPUs, 112 GiB RAM,
 86,400 seconds and 120 seconds of checkpoint grace. It omits `max_updates`.
 Do not change the user's chosen resources or infer a wider production contract.
@@ -278,3 +284,19 @@ reply requires reconciliation of that request and intent, not another launch.
 Use `stop_run` only for a requested cancellation of the recorded run. An unavailable
 backend capability is a concrete app-maintainer dependency; this manager still
 cannot deploy or restart SuperSurfer and must not bypass it through shell `sbatch`.
+
+
+### Explicit flexible Stanford placement
+
+For an explicitly authorized flexible Stanford allocation, inspect current Slurm
+inventory and site/account limits after data seals. Select the largest compatible
+homogeneous layout on one node; a test-only estimate is not a reservation.
+The separate `single_node_training_v1` requires installed
+`run.stanford_slurm.training.flexible.v1`, 1–8 GPUs of one explicit type, account
+`viscam`, partition `viscam` or `sc-loprio`, and at most 24 hours. Request at most
+four CPUs and 16 GiB RAM per GPU. Both `until_stopped` and `allow_preemption` must
+be true, with 120 seconds of TERM grace; omit `max_updates` and smoke flags.
+Verify the scientist's exact source, ranks, precision and effective global batch
+before the one managed queue. Never silently amend an existing resource identity
+or deploy a missing capability from the manager role. This profile adds no
+autonomous launch authority.

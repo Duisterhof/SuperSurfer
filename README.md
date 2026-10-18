@@ -9,9 +9,10 @@ experiments and GPUs together—and shape the workspace around how you actually 
 Latest release: **0.1.43** adds direct agent workflow edits, generated-output
 exclusions for source checks, and fixes recovery steering and editor shortcuts.
 
-The managed Stanford extension supports an explicitly requested seven-L40S,
-24-hour training allocation. Exact-source review, scheduler-managed placement and
-checkpoint recovery remain required. See the [training profile](docs/stanford-seven-l40s-training.md).
+The managed Stanford extension supports a fixed seven-L40S profile and an
+explicitly authorized flexible 1–8 GPU single-node profile, up to24hours within
+site policy. Exact-source review, scheduler-managed placement and checkpoint
+recovery remain required. See the [training profile](docs/stanford-seven-l40s-training.md).
 
 ## Native VS Code preview
 
@@ -72,6 +73,8 @@ Use a page tab’s **⋯** menu or right-click → **Remove page**. Each block�
 Cmd/Ctrl +/− changes text size in the focused editor or panel; outside a panel it zooms the app. Detaching a PDF leaves the remaining editor at full width. New project terminals start in the project folder. Repository PDFs up to 512 MiB can be previewed.
 
 Research Results show all task attempts immediately. Workers use `check_experiment_results` to compare new attempts with earlier evidence, update an existing report and record a revision-checked review. Released attempts, status/source changes or a changed report reopen that checkpoint. Pending and failed measurements stay explicit; a review never authorizes another run.
+
+Each Results report remembers its selected linear/log scale and hidden curves when reopened. The desktop app also keeps these choices across connection-port changes and app restarts; other reports and workspaces keep separate choices.
 
 Mac releases are not Developer ID signed or notarized. If blocked, try
 **System Settings → Privacy & Security → Open Anyway**. If macOS says the app is
