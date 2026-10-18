@@ -4,6 +4,28 @@ Eight focused regressions cover real service-schema/engine roundtrips across 1�
 
 # Stanford production and complete status history — October 17, 2026
 
+## Combined flexible allocation and Results follow-through
+
+Reviewed manager PR56/8234c3f and reused its unchanged source/API/runner delta on
+the installed reader fix plus the reviewed Results preference bridge. The new
+explicit `single_node_training_v1` preserves exact-source PR and request dedup,
+one node,1–8 typed GPUs, account/partition policy, count-bounded CPU/memory,
+24h maximum, checkpoint signal grace and until-stopped semantics. Prior seven-L40S,
+PSC and smoke contracts remain intact. No scientific command was launched by
+these tests. This implements Bart's direct flexible-allocation instruction;
+actual capacity is checked only at the managed launch, never reserved by tests.
+
+Combined ordinary validation:841 Python and51 Node tests passed, five opt-in SSH
+tests skipped. All eight flexible-profile regressions,35 Stanford tests and24
+Slurm-matching tests passed. The previously run browser and native preference
+tests use unchanged UI/desktop sources. All five capability skills were reviewed
+again against the combined role contract, with no new autonomous launch authority.
+The combined Linux x64 package also passed a fresh isolated native launch with
+renderer sandbox and context isolation enabled, node integration disabled and
+no JS errors; the host-local OS process used --no-sandbox. CI and controlled
+installed engine/workspace verification remain separate operational steps. The single data transfer and all existing research
+run identities must survive that activation.
+
 ## October 17, 2026: preserve live Results history reads on the Stanford backend
 
 Installed4ccc898 follow-through verified all five original writers with numeric

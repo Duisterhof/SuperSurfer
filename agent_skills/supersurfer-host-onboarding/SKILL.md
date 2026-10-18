@@ -271,10 +271,10 @@ choice persists all three role defaults; compute-only nodes still need no login.
 ## Slurm allocations
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](references/slurm.md).
-Stanford uses `backend: "stanford_slurm"`, account/partition `viscam` and its
-approved GPU types. Omitting `slurm.profile` retains the one-GPU,
+Stanford uses `backend: "stanford_slurm"`; its smoke and fixed production profiles
+use account/partition `viscam` and their approved GPU types. Omitting `slurm.profile` retains the one-GPU,
 900-second/100-update smoke with explicit 1–8 CPUs, 1–64 GiB RAM and matching
-`--smoke-updates`. Production requires `profile: "seven_l40s_training_v1"`,
+`--smoke-updates`. The fixed production profile requires `profile: "seven_l40s_training_v1"`,
 `gpu_type: "l40s"`, top-level `gpu_count: 7`, `cpus_per_task: 28`,
 `memory_gib: 112`, `walltime_seconds: 86400` and `checkpoint_grace_seconds: 120`.
 It also requires `until_stopped: true` and `allow_preemption: true`; omit
@@ -319,4 +319,14 @@ missing backend capability remains an app-maintainer operation, not node setup.
 
 ### Explicit flexible Stanford placement
 
-For explicitly authorized flexible placement, the separate `single_node_training_v1` admits one homogeneous node, 1–8 typed GPUs, account viscam, partition viscam or sc-loprio, at most 24h/four CPUs/16 GiB RAM per GPU, TERM120, until-stop and explicit scheduler reclamation. Require installed `run.stanford_slurm.training.flexible.v1`. Check real account/QOS/partition constraints and exact scientific rank/precision/VRAM admission; transport syntax alone proves neither. Preserve exact-source/data/local-scratch and single-owner submit/reconcile rules; do not allocate from a test-only estimate.
+For explicitly authorized flexible placement, the separate
+`single_node_training_v1` admits 1–8 GPUs of one explicit type on one node,
+account `viscam`, partition `viscam` or `sc-loprio`, and at most 24 hours.
+CPU and RAM limits are four CPUs and 16 GiB per GPU. Require installed
+`run.stanford_slurm.training.flexible.v1`, `until_stopped: true`,
+`allow_preemption: true` and 120 seconds of TERM grace; omit `max_updates` and
+smoke flags. Check real account/QOS/partition constraints and exact scientific
+rank/precision/VRAM admission; transport syntax alone proves neither. Preserve
+exact-source/data/local-scratch and single-owner submit/reconcile rules. A
+test-only estimate reserves nothing; this profile adds no launch, deployment or
+other-job cancellation authority.

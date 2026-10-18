@@ -246,7 +246,7 @@ its bounded archive cleanup is separate from human reorder/Restore controls.
 
 For an authorized PSC one-V100 smoke, follow the [Slurm queue contract](../supersurfer-host-onboarding/references/slurm.md).
 Stanford uses `backend: "stanford_slurm"`; omitting `slurm.profile` preserves
-its one-GPU, 900-second/100-update smoke. Production needs explicit
+its one-GPU, 900-second/100-update smoke. The fixed production profile uses explicit
 `profile: "seven_l40s_training_v1"`: exactly seven L40S GPUs, 28 CPUs, 112 GiB RAM,
 86,400 seconds and 120 seconds of checkpoint grace, with no `max_updates`.
 Support for this profile is not launch authorization.
@@ -276,4 +276,13 @@ reviews and preparation alone never authorize launch or override stops.
 
 ### Explicit flexible Stanford placement
 
-An explicit user choice may allow the manager to select a flexible Stanford layout. `single_node_training_v1` is separate from the fixed seven-L40S profile and requires installed `run.stanford_slurm.training.flexible.v1`. It supports one homogeneous node with 1–8 GPUs within viscam account/viscam or sc-loprio partition policy, at most 24h/four CPUs/16 GiB RAM per GPU. Keep scientific ownership with the worker, exact rank/global-batch/precision admission with the source, and a single training submission owner. A read-only estimate grants no allocation or new research authority.
+An explicit user choice may allow the manager to select a flexible Stanford
+layout. `single_node_training_v1` is separate from the fixed seven-L40S profile
+and requires installed `run.stanford_slurm.training.flexible.v1`. It supports
+1–8 GPUs of one explicit type on one node, account `viscam`, partition `viscam`
+or `sc-loprio`, and at most 24 hours. CPU and RAM limits are four CPUs and 16 GiB
+per GPU. Both `until_stopped` and `allow_preemption` must be true, with 120 seconds
+of TERM grace; omit `max_updates` and smoke flags. Keep scientific ownership with
+the worker, exact rank/global-batch/precision admission with the source, and a
+single submission owner. This lead still cannot queue. A read-only estimate grants
+no allocation or new research authority.

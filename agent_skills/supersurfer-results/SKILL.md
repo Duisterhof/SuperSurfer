@@ -77,6 +77,13 @@ across attempts without splicing them into an uninterrupted curve. Missing actua
 MFU, checkpoint or allocated data admission remains missing, regardless of a
 successful source check, staged payload or queued receipt.
 
+The separate flexible `single_node_training_v1` permits an explicitly authorized
+layout of 1–8 GPUs of one type on one node. Report actual GPU type, physical ranks,
+effective global batch and measured exposure/throughput. Its resource contract
+and test-only estimate establish neither launch nor optimizer progress. Qualify
+hardware comparisons and keep missing measurements pending; hardware changes
+permit neither invented curves nor rewriting older source bindings.
+
 ## Reuse the reporting workflow, preserve the evidence
 
 Saving a Surfboard reuses its views and data-flow configuration; it does not copy
@@ -301,8 +308,3 @@ redundant other owned reports, keeping their source and unique evidence. Follow
 [Results checkpoint guidance](references/results-checkpoint.md) for scope, exact
 fields and the required task's reopen behavior. Nonresearch work and held-only
 drafts do not acquire this launch-related reporting checkpoint.
-
-
-### Explicit flexible Stanford placement
-
-Stanford flexible single-node placement must report actual GPU type, physical ranks, effective global batch and measured exposure/throughput. `single_node_training_v1` and its test-only estimate are resource contracts, not launch or optimizer evidence. Keep hardware comparisons qualified and missing measurements pending; changing hardware does not permit inventing curves or rewriting older source bindings.
