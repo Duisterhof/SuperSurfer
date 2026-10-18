@@ -336,3 +336,7 @@ reconciles the existing recovery request after uncertainty, and counts one linke
 child within the same three-attempt budget. Pending, running, cancelled or
 uncertain jobs cannot use this confirmed-failure route. Ordinary retry without
 these allocation fields retains its previous resource contract.
+An enabled failed flexible lineage below the three-attempt cap can redeliver its
+existing owner recovery turn after five minutes, including after a workspace
+restart. This restores the existing scoped grant, not a new user request or run;
+busy, paused and explicit Stop guards remain binding.

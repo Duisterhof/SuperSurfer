@@ -308,3 +308,6 @@ remain the scientist's responsibility. This path performs no cancellation and
 uses the same immutable recovery request and three-attempt budget. Do not turn
 a running, pending, cancelled or uncertain job into a failed retry, dispatch a
 second owner, or infer launch rights from a scheduled observation.
+The existing recovery tick may reawaken an enabled failed flexible lineage after
+five minutes to restore its owner's grant across a workspace restart. Preserve
+that owner; this does not grant the lead a fresh queue capability.

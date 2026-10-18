@@ -376,7 +376,10 @@ class RunRecovery:
                 unchanged = problem == record.get('last_problem')
                 # Saved replans must reconcile after a lost reply even when the
                 # parent remains terminal. Retain bounded backoff and one intent.
-                if unchanged and not replanning: continue
+                failed_flexible = (run['status'] == 'failed' and record['attempts'] < 3
+                    and run.get('config', {}).get('backend') == 'stanford_slurm'
+                    and run['config'].get('slurm', {}).get('profile') == 'single_node_training_v1')
+                if unchanged and not (replanning or failed_flexible): continue
                 if time.time() - record.get('last_wake', 0) < (300 if unchanged else 60): continue
                 if service.codex.chat(scope).get('busy') or service.store.get('agent_messages_paused:' + scope, False): continue
                 preferences = service.chat_preferences(scope, strict=True)['effective']

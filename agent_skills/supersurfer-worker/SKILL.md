@@ -339,3 +339,7 @@ This route never cancels. Reuse its immutable fields and existing recovery reque
 after a lost reply, retaining the same three-attempt budget. Ordinary retry without
 allocation fields keeps resources unchanged; pending, running, cancelled and
 uncertain attempts cannot use the failed-allocation route.
+If a workspace restart clears the active turn grant, the existing recovery tick
+can reawaken an enabled failed flexible lineage after five minutes when below the
+retry cap. Continue its saved task and request identity. Do not create a new run
+or manually edit recovery state; busy, paused and Stop guards still apply.

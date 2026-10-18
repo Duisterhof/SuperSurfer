@@ -1,6 +1,6 @@
 # Stanford allocation recovery capability review
 
-Reviewed 2026-10-18T06:58:19+00:00 against base `7c7b3eeb107e3ed87350cb426886cb04fa0254ee` and the exact working-tree file hashes below.
+Reviewed 2026-10-18T07:01:48+00:00 against base `6359dad051ab86cb1983c46f5961a490b7752feb` and the exact working-tree file hashes below.
 SuperSurfer version remains **0.1.43**; no version bump is part of this change.
 
 ## Disposition
@@ -30,10 +30,11 @@ responsibility.
   conditional pending cancellation of the exact known job, then requires owned
   terminal no-start cancellation proof. A started job is preserved. Unknown or
   incomplete outcomes do not authorize a replacement.
-- The existing recovery tick may redeliver an unchanged pending replan after
-  300 seconds, using the original saved fields and submission identity. It adds
-  no timer or launch operation, keeps busy/paused and ownership guards, and does
-  not change ordinary unchanged-failure deduplication.
+- The existing recovery tick may redeliver an unchanged pending replan or an
+  enabled failed flexible Stanford lineage below the three-attempt cap after
+  300 seconds. It restores only that owner's existing grant and preserves saved
+  fields/request identities, busy/paused/Stop guards and unrelated unchanged
+  failure deduplication. It adds no timer or scheduler operation.
 - Fresh queueing continues through the existing exact-source PR, Surfboard,
   telemetry, limits and single-active-Stanford checks. A saved replan may resume
   under its existing active recovery grant; polling cannot initiate one. Explicit
@@ -69,10 +70,13 @@ or add a scheduler/engine operation.
   exhausted-budget negatives pass.
 - The existing bounded redelivery tick retains a failed-allocation intent despite
   the failed parent's historical start timestamp and prompts its exact saved
-  action/fields. It does not create a new timer, request identity, run or attempt.
+  action/fields. An enabled failed flexible lineage with no new intent also
+  receives five-minute redelivery below the three-attempt cap, so a workspace
+  restart does not permanently lose its ephemeral active grant. It does not
+  create a new timer, request identity, run or attempt.
 
-Read-only review and eight new temporary-manager fixtures found no consequential
-issue in this extension. Actual fresh/full-state correctness across hardware
+Read-only review and nine temporary-manager failed-allocation fixtures found no
+consequential issue in this extension. Actual fresh/full-state correctness across hardware
 layouts remains a scientific source/admission requirement, not something this
 transport validates.
 
@@ -86,7 +90,8 @@ transport validates.
 | A confirmed start race could leave an impossible saved replan active. | Affirmative started/running/confirmed incompatible terminal state aborts that saved plan; the start-abort regression emits no replacement/wakeup. |
 | A transport-uncertain parent could lose its saved replan. | Unknown/unreachable states retain the saved phase and enabled grant without submitting a child. The uncertainty regression passes. |
 | An older in-flight status reply could revive an already cancelled parent. | Ordinary reconciliation now checks for a newer terminal row immediately after its awaited RPC, before timing, evidence or state writes. A held-status/real-pending-cancel regression preserves terminal cancellation. |
-| An unchanged saved replan could receive no further reconciliation wakeup after an interrupted submission reply. | Saved bounded allocation intents redeliver the same immutable fields after a 300-second unchanged-state backoff. The 1000/1299/1300 fixture verifies delivery, no early redelivery, delivery at the boundary, and no new run or attempt. Ordinary unchanged failures retain their prior deduplication. |
+| An unchanged saved replan could receive no further reconciliation wakeup after an interrupted submission reply. | Saved bounded allocation intents redeliver the same immutable fields after a 300-second unchanged-state backoff. The 1000/1299/1300 fixture verifies delivery, no early redelivery, delivery at the boundary, and no new run or attempt. Unrelated unchanged failures retain their prior deduplication. |
+| Restart could clear the ephemeral active grant after an unchanged failed flexible Stanford problem had already been delivered. | Only enabled failed flexible Stanford lineages below the three-attempt cap gain five-minute redelivery, using the existing tick and owner. The restart fixture clears RunRecovery state, verifies no early wake at 1299 and restores the active owned grant at 1300, with one original run and unchanged attempt count. Busy, paused and Stop guards remain. |
 
 The stale-poll finding was independently reproduced before repair as
 `cancelled -> starting` in an isolated fixture, then verified by the new passing
@@ -111,15 +116,21 @@ markers at 0.1.43, with review dates updated October 18, 2026:
   scientific outcomes; preserve actual failure, progress, checkpoint, exposure,
   attempt/writer and hardware provenance without splicing retries.
 
+All five skills also explain that failed flexible redelivery restores an existing
+owner's recovery continuity after restart, rather than supplying a new user
+request, launch, scientific result or lead queue capability.
+
 Preparation, explicit queue requests and autonomous suggestions remain distinct.
 Native owners without the scoped capability must report the limitation, rather
 than emulate it through shell commands or another owner.
 
 ## Checks run by this reviewer
 
-- `PYTHONPATH=engine:tests python3 -m unittest test_failed_allocation_retry test_pending_replan test_recovery_retry test_recovery_retry_engine -v`:
-  **42 tests passed**, 3.256 seconds, exit 0. This includes eight new failed-layout
-  cases, all 19 pending replan cases and 15 ordinary retry/restart regressions.
+- `PYTHONPATH=engine:tests python3 -m unittest test_failed_allocation_retry test_pending_replan test_recovery_retry -v`:
+  **38 tests passed**, 3.194 seconds, exit 0. This includes nine failed-layout
+  cases, all 19 pending replan cases and ten ordinary retry regressions. The prior
+  42-test review run also passed five real-manager retry/restart cases; those
+  engine cases were not repeated for the service-only redelivery follow-through.
 - `python3 scripts/check-agent-skills.py`: **passed**, all shipped capability
   skills match 0.1.43.
 - `git diff --check`: **passed** at the reviewed revision and after this record.
@@ -145,16 +156,16 @@ jobs, reset the recovery budget or bypass a failed/uncertain gate.
 | File | SHA256 |
 |---|---|
 | `server/run_replan.py` | `08f781310d77ebc886722adf54c60a4841116e88ee3578939485c0e5819051d8` |
-| `server/run_recovery.py` | `70b50f04faa1e83354a25b94baa4f4602eb2078aad4a1fdccdedd654959e89f9` |
+| `server/run_recovery.py` | `679257fef8e0aaedd007442c50ed00c792d43022305876557fb8e6cf939f6d65` |
 | `server/agent_tools.py` | `63114cbe1db39c88a23622de07424b7b7a577d2d441efef93e9d3c6b695f1504` |
 | `engine/aml/service.py` | `267d8011a0c64f89dce6b543a31f145c6f83c605413ddbb1f3c4e61edca3f422` |
 | `engine/aml/slurm_bridge.py` | `2eb06a7ada7a513b0cd3ef5e47575eb458a06016752ac6d69a3538cfc6ef0235` |
 | `tests/test_pending_replan.py` | `04c7fb92c5730f853571a2b52ac71975569aae3ed34ad140317ca4b63c5dc642` |
-| `agent_skills/supersurfer-manager/SKILL.md` | `64cc4695d0188d0e252335b9e72f11415b5fc31312c9f41861baea35bffcc3a7` |
-| `agent_skills/supersurfer-lead/SKILL.md` | `31bb7945f5745e2202d1a23b659e11d539b6f0e8f4aa385c2470cb600e00e935` |
-| `agent_skills/supersurfer-worker/SKILL.md` | `cc7e1e90fbef61a61fa0963c52a0276393883a861d827006e1ae76a044905dbc` |
-| `agent_skills/supersurfer-host-onboarding/SKILL.md` | `d452cfcc9f445e8b750c59410708237e46ab8e99c18c6875536d15983f0dedbe` |
-| `agent_skills/supersurfer-results/SKILL.md` | `a3512845f15aa7188afb118e7e8c1ed1bcfb93d73a7a3639f5536a73076da650` |
-| `tests/test_failed_allocation_retry.py` | `19c1db3e471c1f32610b4a45ce758c57166b455e4e34937da34b644fb6b04abe` |
+| `agent_skills/supersurfer-manager/SKILL.md` | `f0f346da9277d64eccd878d7779f0ab9d36232d7005d730911c1eccafe5535a6` |
+| `agent_skills/supersurfer-lead/SKILL.md` | `f6810e3618f542242bbee0a8c1efeada492a1d6eeb9b55be6026b0a270bbb3b5` |
+| `agent_skills/supersurfer-worker/SKILL.md` | `5173565255bf19b6df660cdf78521a05dc4626d2a5a9e97699a78c0afecac7ec` |
+| `agent_skills/supersurfer-host-onboarding/SKILL.md` | `6de21ac18c4098f028988ed3d4bb63ab19827b206f1af8a04cb3f97e085c35de` |
+| `agent_skills/supersurfer-results/SKILL.md` | `57904874a6785b394b8c3720022743b435f9931d0f4c273b00dcd38dcbda2438` |
+| `tests/test_failed_allocation_retry.py` | `57703edad1f4f62925b23f7133290bcf434db4d04b77bb58b6e22d27c7070cf9` |
 | `tests/test_recovery_retry.py` | `f2ac0c5d6d5762c92babd182a3ae1e2ae5546a8fc8726effd1fbe101c28d00ed` |
 | `tests/test_recovery_retry_engine.py` | `5af1fd2a1a4047836a7c576fa9f9d66caec484543b3a4603fbfde300a79ed8ae` |

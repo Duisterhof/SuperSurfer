@@ -393,3 +393,10 @@ submission is uncertain. The existing exact-source PR, ownership, Stop, policy,
 telemetry and maximum-three-attempt checks still apply. A saved intent can receive
 bounded reconciliation wakeups; those wakeups do not expand the user's placement
 or research authorization.
+
+The existing recovery tick also redelivers an enabled failed flexible Stanford
+lineage below the three-attempt cap after a five-minute unchanged-state backoff.
+This lets its existing owner regain the active recovery turn after a workspace
+restart without asking for a duplicate user request. It creates no timer, run or
+attempt; busy, paused and Stop guards remain. Unrelated unchanged failure states
+retain their previous deduplication behavior.

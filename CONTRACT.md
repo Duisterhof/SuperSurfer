@@ -1116,4 +1116,5 @@ The service saves immutable allocation-retry fields before submission and reuses
 the standard recovery request identity. Lost replies and service restarts
 reconcile one child and consume one attempt. The saved failed retry retains its
 owned five-minute reconciliation wakeup despite the parent's earlier allocation
-start; no wakeup itself launches a job. Explicit stops remain binding.
+start; enabled failed flexible allocations also re-wake after five minutes when
+a workspace restart interrupted the recovery turn, without resetting attempts; no wakeup itself launches a job. Explicit stops remain binding.

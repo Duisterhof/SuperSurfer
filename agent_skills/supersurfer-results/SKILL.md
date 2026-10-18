@@ -106,6 +106,9 @@ each attempt; unchanged source and an accepted retry do not establish successful
 resume, optimizer progress or comparable throughput. Do not score a technical
 setup error as a scientific failure, invent missing measurements or splice retries
 into one uninterrupted curve. Reporting and ordinary polling authorize no retry.
+An existing failed flexible lineage's five-minute recovery redelivery restores
+owner continuity after a workspace restart; it is not a new run, measured
+progress or permission to republish a scientific result.
 
 ## Reuse the reporting workflow, preserve the evidence
 
