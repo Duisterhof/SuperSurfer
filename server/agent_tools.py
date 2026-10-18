@@ -35,7 +35,7 @@ TOOL = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "name": {"type": "string", "minLength": 1, "maxLength": 100},
-            "backend": {"type": "string", "enum": ["direct", "slurm"], "description": "Use slurm for an allocated PSC job; its registered control host has gpus=[] and Slurm assigns the physical device. Initial support is one V100, up to 15 minutes/100 smoke updates."},
+            "backend": {"type": "string", "enum": ["direct", "slurm", "stanford_slurm"], "description": "Use slurm for an allocated PSC job; its registered control host has gpus=[] and Slurm assigns the physical device. Initial support is one V100, up to 15 minutes/100 smoke updates."},
             "slurm": SLURM_SCHEMA,
             "host_id": {"type": "string", "minLength": 1, "maxLength": 150},
             "gpu_count": {"type": "integer", "minimum": 0, "maximum": 1024},
@@ -576,7 +576,7 @@ def validate_arguments(tool, arguments):
             schema = {"properties": {key: properties[key] for key in ["run_id", "pr_url", *scope_fields]}, "required": ["run_id", "pr_url", *scope_fields]}
         else:
             pooled = arguments.get("use_project_pool") is True
-            slurm = arguments.get("backend") == "slurm"
+            slurm = arguments.get("backend") in {"slurm", "stanford_slurm"}
             if slurm and pooled:
                 raise ValueError("Slurm assigns nodes; do not use project-pool placement.")
             keys = set(TOOL["inputSchema"]["properties"])

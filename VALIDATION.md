@@ -1410,3 +1410,19 @@ The new integrated suite passes828 Python tests (5 skipped) and52 Node tests
 (5 optional SSH skips). Real isolated archive/Restore, owned block navigation
 and canonical Results browser checks pass. Skills/whitespace validation passes.
 Linux x64 packaging succeeds. No installed workspace or research process changed.
+
+
+October17 Stanford-installed baseline reconciliation: the connected workspace
+now runs be02624efabfecf8-pr50-pr51-stanford-ba7c898. Reused the already
+preserved isolated ba7c898 integration, without touching that live service.
+All71 installed Python files were audited: engine files are identical; only
+eight declared Results service modules differ. The full suite passes849 Python
+tests (5 skips) and52 Node tests (5 optional SSH skips). Actual isolated run
+Archive/readback/Restore, same-project block navigation and Results browsers
+pass. Capability skills and whitespace checks pass. Linux x64 package builds
+and opens its isolated setup profile under Xvfb; no workspace connected;
+renderer contextIsolation/sandbox enabled, OS --no-sandbox disclosed.
+Package SHA256 c34ea5180620bdd83675f4856e38073fa35f19b2663eeb6abb8525586e82eafc.
+Remote bundle SHA256 a6e5ec73c70d270c52bec610f7185f40db0c4973a5743e09f5e26180aba594fc.
+No live installation, restart, manager change or scientific execution occurred.
+Earlier97e CI receipts are historical; exact new-head CI must pass separately.
