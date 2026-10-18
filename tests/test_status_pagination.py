@@ -1,8 +1,11 @@
 """A growing run history must not make scoped queue/status tools unavailable."""
 import json
+import io
 import unittest
+from unittest.mock import MagicMock, patch
 
 from server.aml import AMLClient, ManagerError
+from server import engine
 import test_queue_recovery as fixtures
 
 
@@ -79,3 +82,16 @@ class StatusPaginationTests(unittest.TestCase):
         for params in ({'run_offset': -1}, {'run_limit': 101}, {'run_limit': True}):
             with self.subTest(params=params), self.assertRaises(ValueError):
                 self.wait(self.manager.status(**params))
+
+    def test_upgrade_can_inspect_large_legacy_status_before_paging_exists(self):
+        result = {'runs': [{'id': 'legacy', 'config': 'x' * (17 * 1024 * 1024)}]}
+        body = (json.dumps({'ok': True, 'result': result}) + '\n').encode()
+        connection = MagicMock()
+        connection.__enter__.return_value = connection
+        connection.makefile.return_value = io.BytesIO(body)
+        with patch.object(engine.socket, 'socket', return_value=connection):
+            self.assertEqual(engine.rpc(self.root / 'aml', 'status'), result)
+        connection.makefile.return_value = io.BytesIO(body)
+        with patch.object(engine.socket, 'socket', return_value=connection):
+            with self.assertRaises(engine.EngineError):
+                engine.rpc(self.root / 'aml', 'ping')

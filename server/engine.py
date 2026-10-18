@@ -35,15 +35,18 @@ class ManagerAbsent(EngineError):
 
 
 def rpc(home, operation, params=None):
+    # An explicit upgrade must inspect legacy managers that cannot page status
+    # yet. Keep this bootstrap allowance out of ordinary agent RPC responses.
+    response_limit = 64 * 1024 * 1024 if operation == "status" else 16 * 1024 * 1024
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(3)
             client.connect(str(Path(home) / "manager.sock"))
             client.sendall((json.dumps({"op": operation, "params": params or {}}) + "\n").encode())
             with client.makefile("rb") as stream:
-                data = stream.readline(16 * 1024 * 1024 + 1)
-        if len(data) > 16 * 1024 * 1024:
-            raise EngineError("Manager response exceeds 16 MiB")
+                data = stream.readline(response_limit + 1)
+        if len(data) > response_limit:
+            raise EngineError("Manager response exceeds its bounded upgrade limit")
         response = json.loads(data)
         if not response.get("ok"):
             raise EngineError(response.get("error") or "Manager rejected request")
