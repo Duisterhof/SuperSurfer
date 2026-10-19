@@ -28,6 +28,22 @@ class ProviderServiceTests(unittest.TestCase):
         self.service.action('chat.send',{'scope':self.scope,'text':'hello'});self.cli.wait(lambda:not self.service.codex.chat(self.scope)['busy'])
         self.assertEqual('completed',self.service.chat(self.scope)['status']);self.assertEqual('claude',self.service.codex.backend_for(self.scope))
         with self.assertRaises(BridgeError):self.service.action('chat.settings',{'scope':self.scope,'backend':'cursor'})
+    def test_opencode_selection_pins_and_survives_service_restart(self):
+        os.environ['SS_TEST_PROVIDER']='opencode'
+        self.service.action('chat.settings',{'scope':self.scope,'backend':'opencode','model':'local/test'})
+        self.service.action('chat.send',{'scope':self.scope,'text':'hello'})
+        self.cli.wait(lambda:not self.service.codex.chat(self.scope)['busy'])
+        before=self.service.chat(self.scope)
+        self.assertEqual('completed',before['status'])
+        self.assertEqual('opencode',before['backend'])
+        self.service.codex.close()
+        self.service.codex=BackendRouter(self.service.directory,self.service.store,self.service.context_provider,self.service._chat_scope,self.service.agent_action)
+        after=self.service.chat(self.scope)
+        self.assertEqual(before['thread_id'],after['thread_id'])
+        self.assertEqual('opencode',after['backend'])
+        self.assertTrue(any(row['scope']==self.scope for row in self.service.codex.list_chats()))
+        with self.assertRaises(BridgeError):self.service.action('chat.settings',{'scope':self.scope,'backend':'codex'})
+
     def test_login_rejects_credentials_and_only_returns_official_terminal_command(self):
         with self.assertRaises(ValueError):self.service.action('account.login',{'backend':'claude','token':'SECRET'})
         value=self.service.action('account.login',{'backend':'claude'});self.assertEqual([str(self.cli.binary.resolve()),'auth','login'],shlex.split(value['command']));self.assertEqual('terminal',value['type'])

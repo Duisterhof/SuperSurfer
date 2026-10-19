@@ -4,7 +4,7 @@ const {validateConfig}=require('./connection.cjs');
 const quote=value=>"'"+String(value).replaceAll("'","'\\''")+"'";
 
 function loginCommand(raw,backend,operation='login'){
-  if(!['cursor','claude'].includes(backend))throw new Error('Choose Cursor or Claude Code.');
+  if(!['cursor','claude','opencode'].includes(backend))throw new Error('Choose Cursor, Claude Code or OpenCode.');
   if(!['login','install'].includes(operation)||operation==='install'&&backend!=='cursor')throw new Error('Choose a supported provider setup action.');
   const config=validateConfig(raw);
   // No credentials or renderer-supplied command is ever accepted. SSH host
@@ -12,7 +12,7 @@ function loginCommand(raw,backend,operation='login'){
   const command='export PATH="$HOME/.local/bin:$PATH"; '+(operation==='install'
     ? 'curl https://cursor.com/install -fsS | bash'
     : backend==='cursor'?(config.mode==='remote'?'export NO_OPEN_BROWSER=1; ':'')+'if command -v agent >/dev/null 2>&1; then agent login; elif command -v cursor-agent >/dev/null 2>&1; then cursor-agent login; else printf "%s\\n" "Cursor CLI is missing on this computer. Return to SuperSurfer and choose Install Cursor CLI."; fi'
-    : 'claude auth login');
+    : backend==='opencode'?'opencode auth login':'claude auth login');
   return config.mode==='local'?command:['ssh','-t','-o','StrictHostKeyChecking=yes','-o','ClearAllForwardings=yes','-o','RemoteCommand=none','-o','SessionType=default','--',quote(config.target),quote(command)].join(' ');
 }
 

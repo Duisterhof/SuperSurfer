@@ -27,7 +27,7 @@ published 0.1.43 release.
   and save a named version. Ask an agent to apply a specific workflow change
   directly, or review its proposal first. Apply changes to one task, selected linked tasks,
   or future tasks; the detailed graph remains available under **Advanced**.
-- **Bring your agents.** Work with **Codex, Cursor or Claude Code** through
+- **Bring your agents.** Work with **Codex, Cursor, Claude Code or OpenCode** through
   persistent project leads and task workers. Give each a role, share context,
   ask questions and follow their progress across projects.
 - **Keep your editor.** Use the optional **VS Code backend with Open VSX
@@ -93,3 +93,23 @@ Bundled dependencies retain their own licenses and notices; see
 [third-party notices](LICENSES/THIRD-PARTY.md). Distributing the combined app with
 Apache-2.0 components such as PDF.js uses the GPLv3 option. Distributors must
 provide the corresponding source and build instructions required by that license.
+
+## OpenCode and local models
+
+Select **OpenCode** in Settings → Coding backends or in a new conversation's
+backend selector. Install and configure OpenCode on the workspace host first;
+SuperSurfer uses its existing `provider/model` configuration, including local
+OpenAI-compatible inference servers. Set `SUPERSURFER_OPENCODE` to a CLI or wrapper
+path if it is not on PATH. No ChatGPT account is required.
+
+The integration uses [OpenCode ACP](https://opencode.ai/docs/acp/), with a separate
+session per conversation and scoped SuperSurfer tools. Existing chats keep their
+backend. Ask/YOLO, streaming, resume and stop are supported; Codex Fast mode,
+reasoning controls and active-turn steering are not. Settings reports configured
+models, not proof that every upstream credential works; errors are surfaced on
+the turn without automatic replay or switching models.
+
+Use `opencode auth login` / `opencode auth logout` on the workspace host to manage
+upstream accounts. SuperSurfer never signs out all of a shared OpenCode setup.
+The adapter launches an ACP client process using that configuration; it does not
+attach to an unrelated OpenCode UI session or change a shared HTTP server.

@@ -10,6 +10,7 @@ import time
 import unittest
 from unittest.mock import patch
 from server.cli_backends import CliBridge
+from server.opencode import OpenCodeBridge
 from server.conversations import BridgeError
 from server.backends import BackendRouter
 from server.store import Store
@@ -32,15 +33,17 @@ if sys.argv[-1]=='logout':
  if auth:
   saved=json.loads(auth.read_text()) if auth.exists() else {};saved[backend]=False;auth.write_text(json.dumps(saved))
  sys.exit(0)
+if backend=='opencode' and 'models' in sys.argv:print('local/test');sys.exit(0)
+if backend=='opencode' and 'debug' in sys.argv:emit({'model':'local/test','provider':{'secret':'DO_NOT_LEAK'}});sys.exit(0)
 if '--list-models' in sys.argv:print('Available models\nauto\nmodel-test Test model');sys.exit(0)
 session=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--resume=')), 'session-'+backend)
 if backend=='claude':
  config=Path(sys.argv[sys.argv.index('--mcp-config')+1]);record({'config_mode':oct(config.stat().st_mode&0o777),'mcp':json.loads(config.read_text()),'args':sys.argv[1:]})
-else:record({'args':sys.argv[1:]})
+else:record({'args':sys.argv[1:],'config_content':os.environ.get('OPENCODE_CONFIG_CONTENT')})
 current=None
 for line in sys.stdin:
  v=json.loads(line);record(v)
- if backend=='cursor':
+ if backend in ('cursor','opencode'):
   method=v.get('method');p=v.get('params',{});key=v.get('id')
   if method=='initialize':
    if os.environ.get('SS_TEST_UNSUPPORTED_ACP'):emit({'jsonrpc':'2.0','id':key,'error':{'code':-32601,'message':'ACP unsupported'}})
@@ -48,7 +51,8 @@ for line in sys.stdin:
   elif method=='authenticate':emit({'jsonrpc':'2.0','id':key,'result':{}})
   elif method in ('session/new','session/load'):
    if method=='session/load':emit({'jsonrpc':'2.0','method':'session/update','params':{'sessionId':p['sessionId'],'update':{'sessionUpdate':'agent_message_chunk','content':{'type':'text','text':'HISTORICAL_REPLAY'}}}})
-   emit({'jsonrpc':'2.0','id':key,'result':{'sessionId':session}})
+   emit({'jsonrpc':'2.0','id':key,'result':{'sessionId':session,'configOptions':[{'id':'model','category':'model','options':[{'value':'local/test'}]}]}})
+  elif method=='session/set_config_option':emit({'jsonrpc':'2.0','id':key,'result':{}})
   elif method=='session/prompt':
    current=key;text=p['prompt'][0]['text'].split('User request:\n')[-1]
    if text=='crash':os._exit(2)
@@ -87,14 +91,14 @@ class CliBackendTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name).resolve();self.repo=self.root/'repo';self.repo.mkdir()
         self.binary=self.root/'provider';self.binary.write_text('#!'+sys.executable+'\n'+FAKE);self.binary.chmod(0o700)
         self.log=self.root/'wire.jsonl'
-        self.env=patch.dict(os.environ,{'SUPERSURFER_CURSOR':str(self.binary),'SUPERSURFER_CLAUDE':str(self.binary),'SS_TEST_WIRE':str(self.log),'SS_TEST_PROVIDER':'claude'})
+        self.env=patch.dict(os.environ,{'SUPERSURFER_CURSOR':str(self.binary),'SUPERSURFER_CLAUDE':str(self.binary),'SUPERSURFER_OPENCODE':str(self.binary),'SS_TEST_WIRE':str(self.log),'SS_TEST_PROVIDER':'claude'})
         self.env.start();self.bridges=[]
     def tearDown(self):
         for bridge in self.bridges:bridge.close()
         self.env.stop();self.tmp.cleanup()
     def bridge(self, backend='claude'):
         os.environ['SS_TEST_PROVIDER']=backend
-        b=CliBridge(backend,self.root/backend,lambda scope:{'cwd':str(self.repo),'name':scope,'role':'worker','instructions':'Follow scoped policy','mcp_servers':{'supersurfer':{'command':sys.executable,'args':['tools.py'],'env':{'SUPERSURFER_AGENT_CAPABILITY':'SCOPED_PRIVATE_CAPABILITY-'+scope}}}})
+        b=(OpenCodeBridge if backend=='opencode' else CliBridge)(backend,self.root/backend,lambda scope:{'cwd':str(self.repo),'name':scope,'role':'worker','instructions':'Follow scoped policy','mcp_servers':{'supersurfer':{'command':sys.executable,'args':['tools.py'],'env':{'SUPERSURFER_AGENT_CAPABILITY':'SCOPED_PRIVATE_CAPABILITY-'+scope}}}})
         self.bridges.append(b);return b
     def wait(self, condition):
         end=time.time()+5
@@ -104,7 +108,8 @@ class CliBackendTests(unittest.TestCase):
         self.fail('Provider condition timed out')
     def records(self):return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
     def test_account_and_login_never_expose_or_collect_credentials(self):
-        for backend in ('cursor','claude'):
+        for backend in ('cursor','claude','opencode'):
+            self.log.unlink(missing_ok=True)
             b=self.bridge(backend);account=b.account();self.assertFalse(account['login_required']);self.assertNotIn('NEVER_CAPTURE',json.dumps(account));self.assertEqual('terminal',b.login()['type']);self.assertFalse(self.log.exists())
     def test_cursor_status_json_legacy_output_and_false_positive_are_handled(self):
         bridge = self.bridge('cursor')
@@ -155,11 +160,12 @@ class CliBackendTests(unittest.TestCase):
             self.wait(lambda: not bridge.chat('manager')['busy'])
         chat = bridge.chat('manager')
         self.assertEqual('failed', chat['status'])
-        self.assertIn('Update the official Cursor CLI on this workspace computer', chat['error'])
+        self.assertIn('Update its CLI', chat['error'])
         self.assertIn('provider rejected this request', chat['error'])
         self.assertFalse(any(row.get('method') in {'session/new', 'session/load', 'session/prompt'} for row in self.records()))
     def test_stream_resume_and_scoped_mcp_for_both_providers(self):
-        for backend in ('cursor','claude'):
+        for backend in ('cursor','claude','opencode'):
+            self.log.unlink(missing_ok=True)
             b=self.bridge(backend);b.send('manager','hello');self.wait(lambda:not b.chat('manager')['busy']);chat=b.chat('manager')
             self.assertEqual('completed',chat['status'],chat.get('error'));self.assertEqual(['Hello world'],[m['text'] for m in chat['messages'] if m['role']=='assistant']);self.assertEqual('session-'+backend,chat['thread_id'])
             b.send('manager','hello again');self.wait(lambda:not b.chat('manager')['busy']);chat=b.chat('manager')
@@ -169,10 +175,11 @@ class CliBackendTests(unittest.TestCase):
                 self.assertTrue(all(x['config_mode']=='0o600' for x in records if 'config_mode'in x));self.assertTrue(any('--resume=session-claude' in x.get('args',[]) for x in records));self.assertEqual([],list(b.state_dir.glob('turn-*')))
                 self.assertFalse(any('SCOPED_PRIVATE' in arg for row in records for arg in row.get('args',[])))
             else:
-                self.assertTrue(any(x.get('method')=='authenticate' and x['params']['methodId']=='cursor_login' for x in records))
+                self.assertEqual(backend=='cursor',any(x.get('method')=='authenticate' and x['params']['methodId']=='cursor_login' for x in records if x.get('params')))
                 self.assertTrue(any(x.get('method')=='session/load' and x['params']['mcpServers'][0]['env'][0]['value'].endswith('manager') for x in records))
     def test_permission_is_once_scoped_and_redacts_sensitive_fields(self):
-        for backend in ('cursor','claude'):
+        for backend in ('cursor','claude','opencode'):
+            self.log.unlink(missing_ok=True)
             b=self.bridge(backend);b.send('manager','approval');self.wait(lambda:bool(b.chat('manager')['approvals']));chat=b.chat('manager');approval=chat['approvals'][0]
             self.assertEqual('pending',approval['status']);self.assertNotIn('NEVER_PERSIST',json.dumps(chat));self.assertIn('touch result.txt',approval['params']['command'])
             with self.assertRaises(BridgeError):b.approve('project:other',approval['id'],'approve')

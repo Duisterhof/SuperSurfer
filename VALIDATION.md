@@ -1,3 +1,26 @@
+# OpenCode provider — October 19, 2026
+
+OpenCode ACP is now selectable in new chats, role defaults and account setup.
+Regression coverage includes model selection before prompt delivery, scoped MCP,
+resume without history replay, persisted provider bindings, unknown-model failure,
+no replay on disconnect, stop/approval cleanup and preservation of host denials.
+The shared CLI lifecycle tests also exercise OpenCode alongside Cursor and Claude.
+
+Final full suite: 765 Python tests passed; 49 Node tests passed, 5 skipped.
+Capability skill validation and whitespace checks passed.
+
+The OpenCode browser fixture passed provider/model selection, streaming, pinned
+sessions, stop, unsupported-control handling and the unified Settings account row.
+Live OpenCode 1.18.34 checks against a local inference server passed a tiny reply,
+a native read-tool permission prompt, and reuse of the same session on the next
+turn. Only an isolated temporary file was read; no production chat was changed.
+
+`npm run package:linux` built `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+An isolated packaged-app launch under Xvfb passed setup readiness and absence of
+Node access in the renderer. The Linux test used `--no-sandbox`; it does not
+establish OS sandboxing, Mac signing/notarization or hosted-account authentication.
+No live service restart or release publication is part of this change.
+
 # Native VS Code workflow preview — October 12, 2026
 
 This is an experimental branch, not a release or a live workspace upgrade.
