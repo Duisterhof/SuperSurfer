@@ -1189,3 +1189,10 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+## Local operations
+
+Regression coverage verifies unchanged-state suppression, no replay after model
+failure/restart, daily quotas, disablement, disconnected snapshots, endpoint
+restriction and settings persistence. Interactive OpenCode remains independently
+covered by provider/ACP and browser tests.

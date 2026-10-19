@@ -113,3 +113,15 @@ Use `opencode auth login` / `opencode auth logout` on the workspace host to mana
 upstream accounts. SuperSurfer never signs out all of a shared OpenCode setup.
 The adapter launches an ACP client process using that configuration; it does not
 attach to an unrelated OpenCode UI session or change a shared HTTP server.
+
+Local operations summaries are opt-in under Settings. They use a tool-free local
+Qwen endpoint (default `http://127.0.0.1:8008/v1`, model `qwen3.8-27b`), separately
+from interactive OpenCode sessions. Native scheduling continues to own prepared
+launches and supported retries. Only changed run states invoke inference: no
+conversation history, no tools, at most 600 output tokens and 48 calls per UTC
+day, at least five minutes apart. Failures are recorded without replay or paid
+model escalation. `SUPERSURFER_OPERATIONS_URL` and
+`SUPERSURFER_OPERATIONS_MODEL` configure another local model. Hosted endpoints
+and redirects are rejected. Settings shows reported usage; it is not a billing
+estimate. OpenCode remains selectable for interactive operational work with the
+normal scoped tools and permissions.

@@ -16,7 +16,7 @@ from .time_context import validate_timezone
 
 DEFAULT_SETTINGS = {"backends": {"manager": "codex", "lead": "codex", "worker": "codex"}, "models": {"manager": "", "lead": "", "worker": ""},
                     "reasoning": {"manager": "medium", "lead": "high", "worker": "medium"},
-                    "monitor_interval_minutes": 15, "monitor_enabled": False,
+                    "monitor_interval_minutes": 15, "monitor_enabled": False, "operations_enabled": False,
                     "approval_mode": "ask", "timezone": None}
 
 
@@ -95,6 +95,10 @@ class Store:
                 if field == "backends" and setting not in {"codex", "cursor", "claude", "opencode"}:
                     raise ValueError("Choose codex, cursor, claude or opencode.")
                 settings[field][role] = setting
+        if "operations_enabled" in params:
+            if type(params["operations_enabled"]) is not bool:
+                raise ValueError("operations_enabled must be boolean")
+            settings["operations_enabled"] = params["operations_enabled"]
         if "monitor_enabled" in params:
             if not isinstance(params["monitor_enabled"], bool):
                 raise ValueError("monitor_enabled must be boolean")

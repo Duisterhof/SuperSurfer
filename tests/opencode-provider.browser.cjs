@@ -27,6 +27,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.waitForFunction(()=>document.querySelector('[data-provider-account="opencode"] .provider-account-status')?.textContent.includes('Configured'));
   assert.equal(await account.locator('[data-account-logout]').isVisible(),false);
   assert.equal(await page.locator('[name=backend_worker] option[value=opencode]').count(),1);
+  await page.locator('[name=operations_enabled]').check();
+  await page.locator('#settings-form button[type=submit]').click();
+  await page.waitForResponse(r=>r.url().endsWith('/api/state')&&r.status()===200).catch(()=>{});
+  await page.reload();await page.locator('[name=operations_enabled]').waitFor();
+  assert.equal(await page.locator('[name=operations_enabled]').isChecked(),true);
   await page.screenshot({path:'/tmp/opencode-settings.png'});
   assert.deepEqual(errors,[]);console.log('PASS OpenCode selection, local model, streaming, pinning, stop and capability controls');
  }finally{if(browser)await browser.close();fixture.stdin.end();await new Promise(resolve=>fixture.once('exit',resolve));}
