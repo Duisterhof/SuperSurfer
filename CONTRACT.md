@@ -1275,3 +1275,7 @@ raw-token, budget-unit, response-count or time bound. Budget units are not dolla
 ## Tool polling recovery (2026-10-19)
 
 Tool status polling consumes the normal turn allowance without a three-identical-request stop. Repeated mutating tool calls return a recoverable error; actual time/tool/usage exhaustion stops the turn with its specific reason preserved.
+
+
+## Codex cached-context budget repair
+New reservations for resolved Codex Astra/Sol models count uncached input and output fully and cached input at one tenth, as internal budget units rather than dollars. Historical reservations are unchanged. The standard one-million-unit allowance, daily caps, 24 responses, 40 tools and 15-minute limit remain; an additional ten-million raw-token ceiling applies. Missing or inconsistent cache counters remain conservatively charged. Regression: the reported 1,010,207-token/984,320-cached turn charges 124,319 units and continues.

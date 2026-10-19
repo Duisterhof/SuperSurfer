@@ -1509,3 +1509,9 @@ across policy/model switches. No real inference or research action was started.
 ## Tool polling recovery (2026-10-19)
 
 Regression coverage: repeated recover_run status polls remain usable up to the existing tool limit; repeated mutations are rejected without interrupting the agent; actual tool exhaustion retains its reason in the provider stop path.
+
+
+## Codex cached-context budget repair
+New reservations for resolved Codex Astra/Sol models count uncached input and output fully and cached input at one tenth, as internal budget units rather than dollars. Historical reservations are unchanged. The standard one-million-unit allowance, daily caps, 24 responses, 40 tools and 15-minute limit remain; an additional ten-million raw-token ceiling applies. Missing or inconsistent cache counters remain conservatively charged. Regression: the reported 1,010,207-token/984,320-cached turn charges 124,319 units and continues.
+
+Validated cache-budget repair: 902 Python tests passed; 53 Node tests passed with 5 optional skips. Linux x64 package built successfully, and isolated native Electron startup/persistence/security checks passed. No live model calls were used for regression tests.

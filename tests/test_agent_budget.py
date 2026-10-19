@@ -173,6 +173,23 @@ class LunaCacheAccountingTests(unittest.TestCase):
         for i in range(96): row=self.b.observe(responses['id'],{'inputTokens':i+1})
         self.assertIn('response-count allowance (96/96 responses)',row['reason'])
 
+    def test_astra_cached_context_does_not_interrupt_short_launch_turn(self):
+        receipt = self.b.reserve('launch', 'user', model='gpt-6-astra')
+        row = self.b.observe(receipt['id'], {'inputTokens':1004982, 'cachedInputTokens':984320, 'outputTokens':5225})
+        self.assertEqual(row['raw_tokens'], 1010207)
+        self.assertEqual(row['charged_units'], 124319)
+        self.assertIsNone(row['reason'])
+        self.assertEqual(row['raw_token_limit'], 10000000)
+        self.assertEqual(row['calls'], 24)
+        exhausted = self.b.observe(receipt['id'], {'inputTokens':10000000, 'cachedInputTokens':10000000})
+        self.assertIn('raw-token ceiling', exhausted['reason'])
+
+    def test_non_codex_provider_does_not_receive_discount_for_model_alias(self):
+        receipt = self.b.reserve('other', 'user', model='gpt-6-astra', provider='opencode')
+        row = self.b.observe(receipt['id'], {'inputTokens':1004982, 'cachedInputTokens':984320, 'outputTokens':5225})
+        self.assertEqual(row['charged_units'], 1010207)
+        self.assertIsNotNone(row['reason'])
+
     def test_missing_or_inconsistent_cache_is_charged_conservatively(self):
         missing=self.luna('missing')
         row=self.b.observe(missing['id'],{'inputTokens':100000,'outputTokens':5})
@@ -199,7 +216,7 @@ class LunaCacheAccountingTests(unittest.TestCase):
         row=self.b.observe(old['id'],{'inputTokens':2089723,'cachedInputTokens':1988864,'outputTokens':6720})
         self.assertEqual(row['charged_units'],2096443)
         self.assertIn('raw tokens',row['reason'])
-        standard=self.b.reserve('standard','user',model='gpt-6-astra')
+        standard=self.b.reserve('standard','user',model='unknown-model')
         row=self.b.observe(standard['id'],{'inputTokens':1000000,'cachedInputTokens':999999})
         self.assertEqual(row['charged_units'],1000000)
         self.assertIn('raw tokens',row['reason'])

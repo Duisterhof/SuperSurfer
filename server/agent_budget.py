@@ -27,6 +27,9 @@ CONTEXT_CHARS = 48_000
 TOOL_CHARS = 12_000
 LUNA_ACCOUNTING = 'luna_cached_0.1_v1'
 LUNA_RAW_TOKENS = 20_000_000
+CODEX_ACCOUNTING = 'codex_cached_0.1_v1'
+CACHE_ACCOUNTING = {LUNA_ACCOUNTING, CODEX_ACCOUNTING}
+CACHE_MODELS = {'gpt-6-astra', 'gpt-6-sol', 'gpt-6.1-sol', 'gpt-5.6-sol'}
 
 POLICIES = {
     'standard': dict(tokens=TURN_TOKENS, calls=TURN_CALLS, tools=40, seconds=TURN_SECONDS, agent_limit=AGENT_TOKENS),
@@ -44,7 +47,7 @@ def policy_name(model, provider='codex', bucket='paid'):
 def charge(row):
     """Only reservations that captured the new policy receive a cache discount."""
     raw = row['input_tokens'] + row['output_tokens']
-    if row.get('accounting_policy') != LUNA_ACCOUNTING or row.get('accounting_warning'):
+    if row.get('accounting_policy') not in CACHE_ACCOUNTING or row.get('accounting_warning'):
         return raw
     cached = row['cached_input_tokens']
     if not 0 <= cached <= row['input_tokens']:
@@ -103,6 +106,8 @@ class AgentBudget:
                            responses=0, last_total=None, reason=None)
                 row.update(accounting_policy=limits.get('accounting_policy', 'raw_tokens_v1'),
                            raw_token_limit=limits.get('raw_token_limit'), charged_units=0, raw_tokens=0)
+                if provider == 'codex' and bucket == 'paid' and model in CACHE_MODELS:
+                    row.update(accounting_policy=CODEX_ACCOUNTING, raw_token_limit=10_000_000)
                 self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)', (row['id'],scope,now,allowance,json.dumps(row)))
                 self.db.commit()
                 return row
@@ -140,7 +145,7 @@ class AgentBudget:
             if row.get('raw_token_limit') and row['raw_tokens'] >= row['raw_token_limit']:
                 row['reason'] = f"This turn reached its raw-token ceiling ({row['raw_tokens']:,}/{row['raw_token_limit']:,}). Unfinished work is saved."
             elif row['charged_units'] >= row['tokens']:
-                unit = 'budget units' if row.get('accounting_policy') == LUNA_ACCOUNTING else 'raw tokens'
+                unit = 'budget units' if row.get('accounting_policy') in CACHE_ACCOUNTING else 'raw tokens'
                 row['reason'] = f"This turn reached its usage allowance ({row['charged_units']:,}/{row['tokens']:,} {unit}). Unfinished work is saved."
             elif row['responses'] >= row.get('calls', TURN_CALLS):
                 row['reason'] = f"This turn reached its response-count allowance ({row['responses']}/{row.get('calls', TURN_CALLS)} responses). Unfinished work is saved."

@@ -531,3 +531,7 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 ## Tool polling recovery (2026-10-19)
 
 Fixed: recovery/status polling no longer silently interrupts an authorized agent after three identical tool calls.
+
+
+## Codex cached-context budget repair
+New reservations for resolved Codex Astra/Sol models count uncached input and output fully and cached input at one tenth, as internal budget units rather than dollars. Historical reservations are unchanged. The standard one-million-unit allowance, daily caps, 24 responses, 40 tools and 15-minute limit remain; an additional ten-million raw-token ceiling applies. Missing or inconsistent cache counters remain conservatively charged. Regression: the reported 1,010,207-token/984,320-cached turn charges 124,319 units and continues.
