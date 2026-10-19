@@ -1420,3 +1420,10 @@ calls or research launches were used for validation.
 - Runtime migration requires restarting the workspace-owned app-server; removing
   a setting alone does not replace configuration already held by loaded threads.
   Stored conversations and independently running training jobs are preserved.
+- Full `npm test` passed with local fixture sockets enabled; the initial sandbox
+  run was stopped after socket permission errors rather than treated as a code
+  regression. Linux x64 packaging and native isolated-profile Electron smoke
+  passed. Build: `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+- Workspace deployment used source `b9b2562` and a freshly restarted owned
+  app-server. Root operator verified service health and preserved conversation
+  history; no paid native provider turn was invoked to validate the deployment.
