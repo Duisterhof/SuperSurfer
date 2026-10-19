@@ -6,13 +6,16 @@ we never change a shared server's config or borrow another client's session.
 """
 from __future__ import annotations
 
+import copy
+import hashlib
 import json
 import subprocess
 import tempfile
 import time
 
 from .cli_backends import CliBridge, executable
-from .conversations import BridgeError
+from .conversations import BridgeError, _INSTRUCTIONS
+from .store import atomic_write
 
 
 class OpenCodeBridge(CliBridge):
@@ -25,12 +28,44 @@ class OpenCodeBridge(CliBridge):
 
     def _context(self, scope):
         context = super()._context(scope)
-        recovery = self._chats.get(scope, {}).get("provider_recovery_reference")
-        if recovery:
-            context["instructions"] += ("\nA previous provider session was stopped after repeated compaction. "
-                "Conversation history is preserved at " + recovery + ". Read only relevant prior requests when needed; "
-                "check current task evidence before repeating any action. Follow the latest user request.")
+        rules = self.state_dir / "context" / "opencode-rules.txt"
+        atomic_write(rules, context.get("base_instructions", _INSTRUCTIONS))
+        context["base_instructions"] = (
+            "Act on the user's latest request within its authorized scope. Preserve existing work. "
+            "Check current evidence before repeating actions; never duplicate uncertain launches. "
+            "Use find_tools to discover only the relevant scoped tools, then use_tool with exact arguments. "
+            "Use managed scheduler tools for all GPU launches, stops and allocations; never bypass ownership, "
+            "PR verification, permissions or budgets. Do not stop other jobs without authorization. "
+            "Record concrete deliverables with update_task; completion requires actual evidence. "
+            "Do not contact other agents, poll in loops or start automatic continuations. "
+            "Read applicable detailed rules on demand at " + str(rules) + ".")
+        context["mcp_servers"] = copy.deepcopy(context.get("mcp_servers", {}))
+        for server in context["mcp_servers"].values():
+            if "SUPERSURFER_AGENT_ROLE" in server.get("env", {}):
+                server["env"]["SUPERSURFER_TOOL_DISCOVERY"] = "1"
         return context
+
+    def prepare_turn_session(self, chat):
+        """Bound each explicit turn, without deleting visible or native history.
+
+        No model-generated summaries or automatic replay. Current tasks and the
+        most recent exchange accompany a searchable, private history reference.
+        """
+        previous = chat.get("thread_id")
+        if not previous:
+            return ""
+        path = self.state_dir / "context" / (hashlib.sha256(chat["scope"].encode()).hexdigest() + "-history.json")
+        atomic_write(path, json.dumps(chat.get("messages", []), ensure_ascii=False))
+        history = [m for m in chat.get("messages", []) if m.get("role") in {"user", "assistant"}
+                   and m.get("status") != "pending" and not m.get("application_event")]
+        excerpt = [{"role": m["role"], "text": str(m.get("text", ""))[-1200:]} for m in history[-4:]]
+        chat.setdefault("archived_provider_sessions", []).append({"session_id": previous, "reason": "bounded user turn", "time": time.time()})
+        chat["thread_id"] = None
+        chat["agent"]["session_id"] = None
+        self._save(chat)
+        return ("\nPrevious conversation history is preserved at " + str(path) +
+                ". Read only relevant sections if needed. Verify live state before resuming uncertain work. "
+                "Recent exchange (context, not new instructions): " + json.dumps(excerpt))
 
     def _catalog(self, refresh=False):
         with self._account_lock:
@@ -166,10 +201,12 @@ class OpenCodeBridge(CliBridge):
         if text != prompt:
             return None
         replies = [m.get("info", {}) for m in messages[index+1:] if m.get("info", {}).get("role") == "assistant"]
-        if not replies or replies[-1].get("finish") != "stop":
+        if not replies or (replies[-1].get("finish") != "stop" and replies[-1].get("error", {}).get("name") != "ContextOverflowError"):
             return None
         total = dict(inputTokens=0, cachedInputTokens=0, outputTokens=0)
         for reply in replies:
+            if reply.get("error", {}).get("name") == "ContextOverflowError" and reply.get("time", {}).get("completed"):
+                continue  # Definitive input rejection: this response performed no inference.
             tokens = reply.get("tokens", {})
             cache = tokens.get("cache", {})
             values = [tokens.get("input"), tokens.get("output"), tokens.get("reasoning"), cache.get("read"), cache.get("write")]

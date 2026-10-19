@@ -176,7 +176,9 @@ class CliBackendTests(unittest.TestCase):
                 self.assertFalse(any('SCOPED_PRIVATE' in arg for row in records for arg in row.get('args',[])))
             else:
                 self.assertEqual(backend=='cursor',any(x.get('method')=='authenticate' and x['params']['methodId']=='cursor_login' for x in records if x.get('params')))
-                self.assertTrue(any(x.get('method')=='session/load' and x['params']['mcpServers'][0]['env'][0]['value'].endswith('manager') for x in records))
+                self.assertTrue(any(x.get('method')==('session/new' if backend=='opencode' else 'session/load') and x['params']['mcpServers'][0]['env'][0]['value'].endswith('manager') for x in records))
+                if backend=='opencode':
+                    self.assertEqual(2, sum(x.get('method')=='session/new' for x in records))
     def test_permission_is_once_scoped_and_redacts_sensitive_fields(self):
         for backend in ('cursor','claude','opencode'):
             self.log.unlink(missing_ok=True)

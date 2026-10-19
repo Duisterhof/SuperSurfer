@@ -131,7 +131,9 @@ class ProtocolProcess:
                     waiter = self.pending.get(key) if is_response else None
                     if waiter:
                         # Provider errors can contain account data. Never return raw errors.
-                        waiter.update(error="The provider rejected this request. Check its CLI version, selected model and sign-in." if response.get("error") or response.get("subtype") == "error" else None,
+                        error_text = json.dumps(response.get("error", {})).lower()
+                        context_error = "contextoverflow" in error_text or "maximum context length" in error_text
+                        waiter.update(error=("The model context is full. This turn stopped without replay; the next user message starts with a smaller working context and preserved history." if context_error else "The provider rejected this request. Check its CLI version, selected model and sign-in.") if response.get("error") or response.get("subtype") == "error" else None,
                                       result=response.get("response", {}) if self.claude else value.get("result", {}))
                         waiter["event"].set()
                 if not waiter:
@@ -351,6 +353,8 @@ class CliBridge(ConversationBridge):
         connection = None
         temporary = None
         done = threading.Event()
+        prompt_started = None
+        session_id = None
         outcome = {"status": "failed", "error": "Provider disconnected; this turn's outcome is unknown and it was not replayed."}
         try:
             if approval_mode == "auto_review" or fast_mode or reasoning is not None:
@@ -367,6 +371,8 @@ class CliBridge(ConversationBridge):
                 if chat.get("request_id") != message_id or chat.get("cancel_requested") or self._closed:
                     return
                 instructions += "\nSaved deliverables: " + json.dumps(chat.get("tasks", []))
+                if self.backend == "opencode":
+                    instructions += self.prepare_turn_session(chat)
                 session_id = chat.get("thread_id")
             binary = executable(self.backend)
             env = {k: v for k, v in os.environ.items() if k not in {"CLAUDECODE", "SUPERSURFER_AGENT_CAPABILITY", "SUPERSURFER_AGENT_ENDPOINT"}}
@@ -474,6 +480,11 @@ class CliBridge(ConversationBridge):
                 connection.send({"type": "user", "message": {"role": "user", "content": message}, "parent_tool_use_id": None, "session_id": session_id or "default"})
                 done.wait()
         except Exception as exc:
+            if self.backend == "opencode" and prompt_started is not None and session_id and hasattr(self, "budget"):
+                usage = self.completed_usage(session_id, message, prompt_started)
+                if usage:
+                    with self._lock:
+                        self._observe_usage(chat, usage)
             outcome.update(status="failed", error=str(exc) if isinstance(exc, BridgeError) else "The provider could not complete this turn. Check its CLI version and sign-in; the message was not replayed.")
         finally:
             # Busy remains true until owned processes and private MCP files are

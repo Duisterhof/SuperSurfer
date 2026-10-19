@@ -1198,3 +1198,13 @@ larger context is a local reference file for targeted reading. Automatic provide
 compaction is disabled in the per-process configuration to prevent hidden
 summary loops. Historical summaries verified from provider metadata are displayed
 as collapsed activity, never treated as evidence of completed user work.
+
+OpenCode uses a bounded native session per explicit user turn. Visible history,
+prior provider session IDs and durable tasks remain available; a private history
+reference and recent exchange replace replaying the full transcript. Role rules
+are loaded on demand. Its MCP exposes `find_tools` and `use_tool`; discovery is
+restricted to the existing allowed tool set and invocation retains normal schema,
+scope, capability and budget checks. No automatic model summaries or error replay
+occur. Definitive context-overflow rejections show a context-specific error and
+can settle verified preceding completed usage; unknown interruptions retain their
+reservation.

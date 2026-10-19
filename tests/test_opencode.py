@@ -35,9 +35,49 @@ class OpenCodeTests(unittest.TestCase):
         self.assertLess(len(context['instructions']),2000)
         self.assertIn('Read the relevant sections',context['instructions'])
         files=list((self.bridge.state_dir/'context').glob('*.txt'))
-        self.assertEqual(files[0].read_text(),'x'*12000)
+        self.assertIn('x'*12000,[f.read_text() for f in files])
         config=json.loads(self.bridge.runtime_config(dict(os.environ),str(self.root)))
         self.assertEqual(config['compaction'],{'auto':False,'prune':True})
+
+    def test_next_user_turn_uses_small_context_preserving_history(self):
+        self.bridge.send('manager', 'first request', model='local/test')
+        self.wait(lambda: not self.bridge.chat('manager')['busy'])
+        before = self.bridge.chat('manager')['messages']
+        self.bridge.send('manager', 'second request', model='local/test')
+        self.wait(lambda: not self.bridge.chat('manager')['busy'])
+        self.assertEqual('completed', self.bridge.chat('manager')['status'])
+        methods = [r.get('method') for r in self.wire()]
+        self.assertEqual(2, methods.count('session/new'))
+        self.assertNotIn('session/load', methods)
+        chat = self.bridge._chats['manager']
+        self.assertTrue(chat['archived_provider_sessions'])
+        self.assertGreater(len(chat['messages']), len(before))
+        saved = list((self.bridge.state_dir/'context').glob('*-history.json'))
+        self.assertIn('first request', saved[0].read_text())
+        self.assertLess(len(self.bridge._context('manager')['base_instructions']), 2000)
+
+    def test_discovery_preserves_scope_and_argument_validation(self):
+        from server import agent_tools as tools
+        with patch.dict(os.environ, {'SUPERSURFER_TOOL_DISCOVERY':'1', 'SUPERSURFER_ALLOWED_TOOLS':'["inspect_project_compute"]'}):
+            listed=tools.handle({'jsonrpc':'2.0','id':1,'method':'tools/list'})['result']['tools']
+            self.assertEqual(['find_tools','use_tool'], [t['name'] for t in listed])
+            self.assertEqual([],tools.discover_tools({'query':'publish_result'})['tools'])
+            self.assertEqual('inspect_project_compute',tools.discover_tools({'query':'inspect_project_compute'})['tools'][0]['name'])
+            result=tools.handle({'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'use_tool','arguments':{'name':'publish_result','arguments':{}}}})
+            self.assertTrue(result['result']['isError'])
+            with patch.object(tools, 'call_tool', return_value={'ok':True}) as call:
+                result=tools.handle({'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'use_tool','arguments':{'name':'inspect_project_compute','arguments':{'host':'test'}}}})
+                call.assert_called_once_with('inspect_project_compute',{'host':'test'})
+                self.assertFalse(result['result']['isError'])
+
+    def test_definitive_overflow_accounts_completed_calls_not_unknown_disconnects(self):
+        reply={'role':'assistant','finish':'tool-calls','time':{'completed':2000},
+               'tokens':{'input':100,'output':5,'reasoning':7,'cache':{'read':0,'write':0}}}
+        data={'messages':[{'info':{'role':'user','time':{'created':1000}},'parts':[{'type':'text','text':'go'}]},
+                          {'info':reply}, {'info':{'role':'assistant','finish':'error','time':{'completed':2100},'error':{'name':'ContextOverflowError'}}}]}
+        self.assertEqual(112, sum(OpenCodeBridge.usage_from_export(data,'go',1)['total'][k] for k in ('inputTokens','outputTokens')))
+        data['messages'][-1]['info']['error']['name']='UnknownError'
+        self.assertIsNone(OpenCodeBridge.usage_from_export(data,'go',1))
 
     def tearDown(self):
         self.bridge.close()

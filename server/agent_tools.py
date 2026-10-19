@@ -653,6 +653,27 @@ def call_tool(name, arguments):
         raise ValueError(f"The SuperSurfer service is unavailable: {error.reason}") from error
 
 
+DISCOVERY_TOOLS = [
+    {"name": "find_tools", "description": "Find available scoped tools by name or keywords. Returns at most four exact tool schemas. Search before invoking an unfamiliar operation.", "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"], "additionalProperties": False}},
+    {"name": "use_tool", "description": "Invoke a tool found by find_tools with its exact arguments. Existing role, scope, permissions and validation still apply.", "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}, "arguments": {"type": "object", "additionalProperties": True}}, "required": ["name", "arguments"], "additionalProperties": False}},
+]
+
+
+def discover_tools(arguments):
+    query = arguments.get("query", "")
+    if not isinstance(query, str) or not query.strip() or len(query) > 200:
+        raise ValueError("Provide a short tool name or search phrase.")
+    words = query.lower().replace("_", " ").split()
+    ranked = []
+    for tool in available_tools():
+        name = tool["name"].lower()
+        score = (1000 if query.lower() == name else 0) + sum(
+            10 * (word in name) + (word in tool.get("description", "").lower()) for word in words)
+        if score:
+            ranked.append((score, name, tool))
+    return {"tools": [t for _, _, t in sorted(ranked, key=lambda item: (-item[0], item[1]))[:4]]}
+
+
 def handle(request):
     if not isinstance(request, dict) or request.get("jsonrpc") != "2.0":
         return {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid JSON-RPC request"}}
@@ -665,14 +686,22 @@ def handle(request):
     elif method == "ping":
         response["result"] = {}
     elif method == "tools/list":
-        response["result"] = {"tools": available_tools()}
+        response["result"] = {"tools": DISCOVERY_TOOLS if os.environ.get("SUPERSURFER_TOOL_DISCOVERY") == "1" else available_tools()}
     elif method == "tools/call":
         try:
             if not isinstance(params, dict):
                 raise ValueError("Invalid tool parameters.")
-            result = call_tool(params.get("name"), params.get("arguments"))
+            if os.environ.get("SUPERSURFER_TOOL_DISCOVERY") == "1" and params.get("name") in {"find_tools", "use_tool"}:
+                tool = next(t for t in DISCOVERY_TOOLS if t["name"] == params["name"])
+                validate_arguments(tool, params.get("arguments"))
+                args = params["arguments"]
+                result = discover_tools(args) if params["name"] == "find_tools" else call_tool(args["name"], args["arguments"])
+            else:
+                result = call_tool(params.get("name"), params.get("arguments"))
             images = []
-            if params.get("name") == "compile_latex" and params.get("arguments", {}).get("operation") == "inspect" and isinstance(result, dict):
+            effective_name = params.get("arguments", {}).get("name") if params.get("name") == "use_tool" else params.get("name")
+            effective_args = params.get("arguments", {}).get("arguments", {}) if params.get("name") == "use_tool" else params.get("arguments", {})
+            if effective_name == "compile_latex" and effective_args.get("operation") == "inspect" and isinstance(result, dict):
                 result = dict(result)
                 previews = result.pop("images", [])
                 result["rendered_pages"] = [preview["page"] for preview in previews]

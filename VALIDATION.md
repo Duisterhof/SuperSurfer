@@ -1450,3 +1450,8 @@ Regression coverage verifies unchanged-state suppression, no replay after model
 failure/restart, daily quotas, disablement, disconnected snapshots, endpoint
 restriction and settings persistence. Interactive OpenCode remains independently
 covered by provider/ACP and browser tests.
+
+OpenCode bounded-context regression: two explicit user turns use separate native
+sessions while preserving visible history; tool discovery excludes unauthorized
+tools and dispatches through the existing validation path. This addresses the
+observed 57,345-input + 8,192-output overflow of a 65,536-token local model.
