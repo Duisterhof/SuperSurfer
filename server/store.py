@@ -92,8 +92,8 @@ class Store:
                     raise ValueError(f"Invalid {field} value")
                 if field == "reasoning" and not re.fullmatch(r"[A-Za-z0-9_.-]+", setting):
                     raise ValueError("Reasoning effort must be a nonempty value from the model catalog")
-                if field == "backends" and setting not in {"codex", "cursor", "claude"}:
-                    raise ValueError("Choose codex, cursor or claude.")
+                if field == "backends" and setting not in {"codex", "cursor", "claude", "opencode"}:
+                    raise ValueError("Choose codex, cursor, claude or opencode.")
                 settings[field][role] = setting
         if "monitor_enabled" in params:
             if not isinstance(params["monitor_enabled"], bool):
@@ -125,8 +125,8 @@ class Store:
         with self.lock:
             settings = self.chat_settings(scope)
             for key, value in changes.items():
-                if key == "backend" and value not in {None, "codex", "cursor", "claude"}:
-                    raise ValueError("Choose codex, cursor, claude or null to inherit.")
+                if key == "backend" and value not in {None, "codex", "cursor", "claude", "opencode"}:
+                    raise ValueError("Choose codex, cursor, claude, opencode or null to inherit.")
                 if key == "approval_mode":
                     if value not in (None, "ask", "auto_review", "yolo"):
                         raise ValueError("approval_mode must be ask, auto_review, yolo or null to inherit")

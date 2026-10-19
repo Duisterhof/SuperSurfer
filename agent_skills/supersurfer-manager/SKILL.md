@@ -229,3 +229,14 @@ For a requested research review, use enabled `check_experiment_results` with
 revise the current comparison, and complete with its exact current version/SHA.
 Follow [Results checkpoint guidance](../supersurfer-results/references/results-checkpoint.md).
 This is scoped reporting, not permission to take over another recovery owner.
+
+## OpenCode backend
+
+OpenCode conversations use the same scoped SuperSurfer tools. Select it only for
+a new conversation; existing native sessions cannot change providers. The host's
+OpenCode configuration may point to a local model server, so a ChatGPT login is
+not required. Settings reports configuration readiness; an upstream error remains
+a real turn failure, never a reason to replay automatically or switch models.
+Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
+Use the scoped ask_user tool for questions. Manage upstream accounts in the host
+terminal, never by sharing credentials in chat or changing shared server config.

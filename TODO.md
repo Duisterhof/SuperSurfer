@@ -1,3 +1,6 @@
+- [x] Add OpenCode ACP as a selectable backend, including local configured models,
+  scoped tools, approvals, durable sessions and UI capability handling.
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.

@@ -27,3 +27,9 @@ test('Cursor installation is an explicit fixed host-bound action',async()=>{
  const result=await openProviderLogin({mode:'remote',target:'research'},'cursor',{platform:'darwin',run:(...args)=>args.at(-1)(new Error('Terminal unavailable'))});
  assert.equal(result.opened,false);assert.match(result.command,/ssh -t/);assert.match(result.error,/displayed command/);
 });
+
+test('OpenCode login uses the fixed host CLI command',()=>{
+ assert.match(loginCommand({mode:'remote',target:'research'},'opencode'),/opencode auth login/);
+ assert.doesNotMatch(loginCommand({mode:'local'},'opencode'),/claude|cursor/);
+ assert.throws(()=>loginCommand({mode:'local'},'opencode','install'));
+});

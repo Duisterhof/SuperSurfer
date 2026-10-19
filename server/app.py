@@ -183,7 +183,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.action_lock = threading.RLock()
         self.project_limits = ProjectLimits(self)
         self.model_lock = threading.RLock()
-        self.provider_model_locks = {name: threading.RLock() for name in ("cursor", "claude")}
+        self.provider_model_locks = {name: threading.RLock() for name in ("cursor", "claude", "opencode")}
         self._models_cache = None
         self._models_checked_at = 0
         self._models_error = None
