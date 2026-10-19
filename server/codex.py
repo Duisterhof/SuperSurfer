@@ -306,7 +306,9 @@ class CodexBridge(ConversationBridge):
                 params["config"] = {"model_reasoning_effort": reasoning}
             params.setdefault("config", {})["features.fast_mode"] = True
             params["config"]["tool_output_token_limit"] = 3000
-            params["config"]["model_auto_compact_token_limit"] = 32000
+            # Leave compaction to the provider/model policy. A fixed 32k limit
+            # can be smaller than the retained instructions + compacted history,
+            # triggering another expensive compaction after every tool call.
             # Native subagents bypass application admission and shared budgets.
             params["config"]["features.multi_agent"] = False
             # A leaf override preserves every other user shell-environment
@@ -343,6 +345,7 @@ class CodexBridge(ConversationBridge):
                 if chat["cancel_requested"]:
                     self._finish(chat, "interrupted", "Stopped before the message was sent to Codex.")
                     return
+                chat.pop("compaction_watch", None)
                 chat["status"] = "working"
                 next(x for x in chat["messages"] if x["id"] == message_id)["status"] = "sending"
                 self._save(chat)
@@ -580,6 +583,37 @@ class CodexBridge(ConversationBridge):
                 activity.update(changes=changes, truncated=truncated or len(item.get("changes", [])) > 20)
                 self._bound_file_activity(chat)
 
+    def _watch_compaction(self, chat, item, turn_id):
+        """Watch live completions only, never replayed turn history.
+
+        One tool followed by another compaction is the observed failure mode.
+        Two completed tools between compactions count as useful headroom. This
+        is a provider-health guard, not a claim that a deliverable is complete.
+        """
+        kind, item_id = item.get("type"), item.get("id")
+        if not item_id or not turn_id or turn_id != chat.get("turn_id"):
+            return
+        watch = chat.get("compaction_watch")
+        if not watch or watch["turn_id"] != turn_id:
+            watch = {"turn_id": turn_id, "seen": [], "times": [], "tools": 0}
+            chat["compaction_watch"] = watch
+        if item_id in watch["seen"]:
+            return
+        watch["seen"] = (watch["seen"] + [item_id])[-128:]
+        if kind in {"commandExecution", "fileChange", "mcpToolCall", "dynamicToolCall", "webSearch"}:
+            watch["tools"] += 1
+            if watch["tools"] >= 2:
+                watch["times"] = []
+        elif kind == "contextCompaction":
+            now = time.monotonic()
+            watch["times"] = [stamp for stamp in watch["times"] if now - stamp < 600] + [now]
+            watch["tools"] = 0
+            if len(watch["times"]) >= 3:
+                self._stop_for_budget(chat, "Agent stopped: repeated context compaction left too little room for work "
+                                      "(three compactions within ten minutes, at most one tool between them). "
+                                      "History and completed work are preserved. Check the provider compaction "
+                                      "configuration before explicitly continuing; no automatic retry was scheduled.")
+
     def _event(self, method, params):
         with self._lock:
             if method == "account/login/completed":
@@ -626,6 +660,8 @@ class CodexBridge(ConversationBridge):
                 self._assistant_item(chat, params.get("itemId"), params.get("delta", ""), delta=True, turn_id=turn_id)
             elif method in ("item/started", "item/completed"):
                 self._item(chat, params.get("item") or {}, turn_id, complete=method.endswith("completed"))
+                if method == "item/completed":
+                    self._watch_compaction(chat, params.get("item") or {}, turn_id)
             elif method == "item/commandExecution/outputDelta":
                 activity_id = params.get("itemId")
                 existing = next((x for x in chat["activity"] if x["id"] == activity_id), {})

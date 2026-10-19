@@ -1155,3 +1155,13 @@ Oversized app context/task records are saved as private files with explicit
 references. Model-facing scoped tool responses over 12k characters return a
 bounded preview plus a full-result file; service-internal results are unchanged.
 Settings show reserved allowance and reported input, cached input and output.
+
+Codex compaction uses the provider/model policy; SuperSurfer does not force a
+32,000-token total-context threshold. Tool-output limits and token, call and time
+allowances remain enforced. Three live compactions within ten minutes, with at
+most one completed tool between each, interrupt that turn with an explicit
+compaction-loop error. Duplicate events and historical turn replay do not count;
+two tool completions or a new turn reset the streak. This guard measures usable
+context headroom, not semantic task completion, and never schedules a retry.
+Deployment must restart the workspace's app-server to clear already-loaded
+thread overrides. Saved conversation history and external jobs are retained.
