@@ -1147,17 +1147,19 @@ New scheduled observations and recovery ticks record evidence without inference.
 They do not debug, launch evaluations or repair failures autonomously. Ordinary
 scheduler execution, telemetry, W&B refresh and live Results remain independent.
 
-Each direct activation atomically reserves a 1,000,000-token allowance from a
-rolling 24-hour ledger: 4,000,000 per agent and 20,000,000 across the workspace,
-shared by Codex, Claude and Cursor. New chats do not reset the workspace ledger.
+Each direct activation atomically reserves its model-policy allowance from a
+rolling 24-hour ledger. Standard/legacy paid models retain 1,000,000 per turn,
+4,000,000 per agent and a shared 20,000,000 expensive-model pool. Luna's larger
+limits and the total paid workspace ceiling are specified below. New chats do
+not reset the workspace ledger.
 Confirmed completed turns with usage release unused allowance; missing usage,
 interruptions and uncertain delivery retain it. Task edits, retries and restarts
 cannot reset reservations. User question answers and steering keep the same
 allowance and deadline, rather than minting new credit.
 
-Runtime circuit breakers: 15 minutes, 40 scoped tool invocations, and no more than
-three identical scoped tool requests per activation. Codex usage notifications
-interrupt at 24 response notifications or 1,000,000 input-plus-output tokens;
+Standard/legacy policy circuit breakers: 15 minutes, 40 scoped tool invocations,
+and no more than three identical scoped tool requests per activation. Standard
+Codex usage notifications interrupt at 24 response notifications or 1,000,000 input-plus-output tokens;
 cached input is included, never added twice. Counters are deduplicated. Claude
 also receives its native 24-turn limit. Cursor has time/tool and admission limits;
 its adapter does not expose reliable per-response token accounting. Provider
