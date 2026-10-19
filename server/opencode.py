@@ -15,9 +15,21 @@ from .conversations import BridgeError
 
 
 class OpenCodeBridge(CliBridge):
+    # Local context windows must retain room for tools and actual work.
+    CONTEXT_CHAR_LIMIT = 8000
+
     def __init__(self, *args, **kwargs):
         self._catalog_cache = None
         super().__init__(*args, **kwargs)
+
+    def _context(self, scope):
+        context = super()._context(scope)
+        recovery = self._chats.get(scope, {}).get("provider_recovery_reference")
+        if recovery:
+            context["instructions"] += ("\nA previous provider session was stopped after repeated compaction. "
+                "Conversation history is preserved at " + recovery + ". Read only relevant prior requests when needed; "
+                "check current task evidence before repeating any action. Follow the latest user request.")
+        return context
 
     def _catalog(self, refresh=False):
         with self._account_lock:
@@ -91,6 +103,9 @@ class OpenCodeBridge(CliBridge):
             permission.setdefault("*", "ask")
             permission["question"] = "deny"
             config["permission"] = permission
+            # Compaction was repeatedly summarizing the same oversized request
+            # before a single tool call. Never launch hidden inference loops.
+            config["compaction"] = {"auto": False, "prune": True}
             # Custom agents must not silently re-enable tools in Ask mode.
             for name, agent in resolved.get("agent", {}).items():
                 if isinstance(agent, dict) and "permission" in agent:

@@ -1192,3 +1192,9 @@ Verified, explicitly selected OpenCode models using a configured loopback
 OpenAI-compatible endpoint have a separate bounded local quota. Hosted, unknown
 and unselected models remain in the paid-provider quota. Runtime rechecks model
 configuration before sending a locally budgeted prompt. No paid quota is reset.
+
+OpenCode receives at most 8,000 characters of inline workspace instructions;
+larger context is a local reference file for targeted reading. Automatic provider
+compaction is disabled in the per-process configuration to prevent hidden
+summary loops. Historical summaries verified from provider metadata are displayed
+as collapsed activity, never treated as evidence of completed user work.

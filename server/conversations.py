@@ -200,7 +200,7 @@ class ConversationBridge:
                 raise ValueError("Agent skill must use an existing absolute file path from server context.")
             context["agent_skill"] = {"name": skill["name"], "path": str(path.resolve())}
         instructions = str(context.get("instructions", ""))
-        if len(instructions) > CONTEXT_CHARS:
+        if len(instructions) > getattr(self, "CONTEXT_CHAR_LIMIT", CONTEXT_CHARS):
             path = self.state_dir / "context" / (hashlib.sha256(scope.encode()).hexdigest() + ".txt")
             atomic_write(path, instructions)
             context["instructions"] = ("Role: " + str(context.get("role", "worker")) +

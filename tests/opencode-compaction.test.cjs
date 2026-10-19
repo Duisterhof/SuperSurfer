@@ -1,0 +1,2 @@
+const fs=require('fs'),assert=require('assert');
+(async()=>{const src=fs.readFileSync('ui/chat-checks.js','utf8');const {groupChatChecks}=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));let rows=groupChatChecks([{id:'a',role:'assistant',text:'summary',application_event:'provider_compaction'},{id:'b',role:'assistant',text:'actual answer'}]);assert.equal(rows[0].type,'checks');assert.equal(rows[1].type,'message');console.log('PASS compaction collapses without hiding actual answer')})()

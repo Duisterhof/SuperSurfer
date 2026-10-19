@@ -29,6 +29,16 @@ class OpenCodeTests(unittest.TestCase):
             {'cwd': str(self.root), 'name': scope, 'role': 'worker', 'mcp_servers': {
                 'supersurfer': {'command': sys.executable, 'args': ['scope.py'], 'env': {'SCOPE': scope}}}})
 
+    def test_small_context_is_externalized_and_compaction_disabled(self):
+        self.bridge.context_provider=lambda scope: {'cwd':str(self.root), 'instructions':'x'*12000}
+        context=self.bridge._context('project:p')
+        self.assertLess(len(context['instructions']),2000)
+        self.assertIn('Read the relevant sections',context['instructions'])
+        files=list((self.bridge.state_dir/'context').glob('*.txt'))
+        self.assertEqual(files[0].read_text(),'x'*12000)
+        config=json.loads(self.bridge.runtime_config(dict(os.environ),str(self.root)))
+        self.assertEqual(config['compaction'],{'auto':False,'prune':True})
+
     def tearDown(self):
         self.bridge.close()
         self.env.stop()
