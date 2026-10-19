@@ -516,3 +516,5 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Durable activation admission, shared rolling quotas, runtime limits and bounded tool output.
 - [ ] Provider-neutral pre-request metering; current native APIs expose post-response usage only.
 - [ ] Typed deterministic recurring evaluation plans. Do not claim arbitrary saved natural-language wakeups can execute without an agent.
+
+- [x] Remove forced total-context compaction threshold and stop repeated low-progress compaction cycles without automatic retries.

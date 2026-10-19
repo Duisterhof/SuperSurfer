@@ -1409,3 +1409,14 @@ persistence, usage deduplication, repeated tool limits, actual turn interruption
 continued manual chat/queue actions and full-result file references. Node suite:
 51 passed, 5 SSH-dependent skipped. Remote bundle built on Linux. No real model
 calls or research launches were used for validation.
+
+## Codex compaction-loop repair
+
+- `python3 -m unittest discover -s tests -p test_codex.py`: 60 passed.
+  Fixtures verify three-compaction interruption, preserved history, no automatic
+  second turn, duplicate/stale completion exclusion, progress/time resets, and
+  provider policy on both thread start and resume. No paid inference is used.
+- `python3 scripts/check-agent-skills.py`: passed.
+- Runtime migration requires restarting the workspace-owned app-server; removing
+  a setting alone does not replace configuration already held by loaded threads.
+  Stored conversations and independently running training jobs are preserved.

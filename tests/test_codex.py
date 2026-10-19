@@ -174,6 +174,62 @@ class CodexBridgeTests(unittest.TestCase):
         self.bridges.append(bridge)
         return bridge
 
+    def test_compaction_storm_interrupts_once_and_preserves_history(self):
+        scope = 'project:vla'
+        self.bridge.send(scope, 'hold')
+        self.wait_for(lambda: self.bridge.chat(scope).get('turn_id'))
+        chat = self.bridge._chats[scope]
+        turn, thread = chat['turn_id'], chat['thread_id']
+        for number in range(3):
+            for kind in ('commandExecution', 'contextCompaction'):
+                self.bridge._event('item/completed', {'threadId': thread, 'turnId': turn,
+                    'item': {'id': f'{kind}-{number}', 'type': kind}})
+        result = self.finished(scope)
+        self.assertIn('repeated context compaction', result['error'])
+        self.assertEqual(thread, result['thread_id'])
+        self.assertTrue(any(message['text'] == 'hold' for message in result['messages']))
+        interrupts = [row for row in self.requests() if row['method'] == 'turn/interrupt']
+        self.assertEqual(1, len(interrupts))
+        self.assertEqual(1, len([row for row in self.requests() if row['method'] == 'turn/start']))
+
+    def test_compaction_watch_ignores_replays_and_resets_after_progress(self):
+        chat = {'turn_id': 'new'}
+        watch = self.bridge._watch_compaction
+        with patch.object(self.bridge, '_stop_for_budget') as stop:
+            for index in range(4):
+                watch(chat, {'id': str(index), 'type': 'contextCompaction'}, 'old')
+            watch(chat, {'id': 'first', 'type': 'contextCompaction'}, 'new')
+            for _ in range(4):
+                watch(chat, {'id': 'first', 'type': 'contextCompaction'}, 'new')
+            for index in range(2):
+                watch(chat, {'id': f'work{index}', 'type': 'commandExecution'}, 'new')
+            watch(chat, {'id': 'second', 'type': 'contextCompaction'}, 'new')
+            self.assertEqual(1, len(chat['compaction_watch']['times']))
+            chat['turn_id'] = 'next'
+            watch(chat, {'id': 'third', 'type': 'contextCompaction'}, 'next')
+            self.assertEqual(1, len(chat['compaction_watch']['times']))
+            stop.assert_not_called()
+
+    def test_normal_compactions_spaced_over_time_do_not_stop(self):
+        chat = {'turn_id': 'turn'}
+        with patch.object(self.bridge, '_stop_for_budget') as stop, patch('server.codex.time.monotonic', side_effect=[0, 601, 1202]):
+            for index in range(3):
+                self.bridge._watch_compaction(chat, {'id': str(index), 'type': 'contextCompaction'}, 'turn')
+            stop.assert_not_called()
+
+    def test_provider_compaction_policy_on_start_and_resume(self):
+        self.bridge.send('project:vla', 'hello')
+        self.finished('project:vla')
+        self.bridge.send('project:vla', 'hello again')
+        self.finished('project:vla')
+        configs = [row['params']['config'] for row in self.requests()
+                   if row['method'] in ('thread/start', 'thread/resume')]
+        self.assertEqual(2, len(configs))
+        for config in configs:
+            self.assertNotIn('model_auto_compact_token_limit', config)
+            self.assertEqual(3000, config['tool_output_token_limit'])
+            self.assertFalse(config['features.multi_agent'])
+
     def test_server_required_checkpoint_is_logged_reused_and_preserved(self):
         requirement = {'key': 'research_results', 'title': 'Review research Results', 'status': 'working', 'summary': 'Compare the new attempt with previous evidence.'}
         self.bridge.context_provider = lambda scope: {'cwd': str(self.repo), 'name': 'Worker', 'role': 'worker', 'required_tasks': [requirement]}
