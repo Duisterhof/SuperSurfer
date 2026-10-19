@@ -1,9 +1,8 @@
 """Durable admission quotas plus runtime circuit breakers, shared by all providers.
 
-Automatic inference is prohibited. User turns reserve their entire allowance
-before dispatch. Reservations are not refunded: restarts, missing usage and new
-threads cannot manufacture credit. Provider usage notifications are post-response,
-so runtime token/call interruption can overshoot by an in-flight response.
+User-directed work is metered without token, response, tool, time or daily caps.
+Agent-initiated inference remains disabled. Durable receipts track usage and
+preserve the distinction between explicit user tasks and autonomous activations.
 """
 from __future__ import annotations
 import hashlib
@@ -88,38 +87,42 @@ class AgentBudget:
         now = self.clock()
         policy = policy_name(model, provider, bucket)
         limits = POLICIES[policy]
-        workspace_limit = LOCAL_WORKSPACE_TOKENS if bucket == 'local' else WORKSPACE_TOKENS
+        row = dict(id=uuid.uuid4().hex, bucket=bucket, policy=policy, model=model, provider=provider,
+                   scope=scope, source='user', user_directed=True, created=now,
+                   deadline=None, seconds=None, tokens=None, calls=None, tools=None, agent_limit=None,
+                   input_tokens=0, cached_input_tokens=0, output_tokens=0,
+                   responses=0, last_total=None, reason=None,
+                   accounting_policy=limits.get('accounting_policy', 'raw_tokens_v1'),
+                   raw_token_limit=None, charged_units=0, raw_tokens=0)
+        if provider == 'codex' and bucket == 'paid' and model in CACHE_MODELS:
+            row['accounting_policy'] = CODEX_ACCOUNTING
+        with self.lock, self.db:
+            self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)',
+                            (row['id'], scope, now, 0, json.dumps(row)))
+        return row
+
+    @staticmethod
+    def user_allowance(row):
+        # Every historical reservation was admitted only from source='user'.
+        # Upgrade enforcement without changing its historical usage counters.
+        row.update(user_directed=True, source='user', reason=None)
+        for key in ('deadline', 'seconds', 'tokens', 'calls', 'tools', 'agent_limit', 'raw_token_limit'):
+            row[key] = None
+        return row
+
+    def allowance(self, reservation):
         with self.lock:
-            self.db.execute('BEGIN IMMEDIATE')
-            try:
-                used, own = self.db.execute("SELECT COALESCE(SUM(tokens),0), COALESCE(SUM(CASE WHEN scope=? THEN tokens ELSE 0 END),0) FROM reservations WHERE created>? AND COALESCE(json_extract(data, '$.bucket'), 'paid')=?", (scope, now-WINDOW_SECONDS, bucket)).fetchone()
-                expensive = self.db.execute("SELECT COALESCE(SUM(tokens),0) FROM reservations WHERE created>? AND COALESCE(json_extract(data, '$.bucket'), 'paid')='paid' AND COALESCE(json_extract(data, '$.policy'), 'standard')!='luna'", (now-WINDOW_SECONDS,)).fetchone()[0]
-                allowance = min(limits['tokens'], workspace_limit - used, limits['agent_limit'] - own) if bucket == "local" or policy == "luna" else limits['tokens']
-                if (allowance < (65536 if bucket == "local" or policy == "luna" else limits['tokens']) or used + allowance > workspace_limit
-                        or own + allowance > limits['agent_limit']
-                        or bucket == 'paid' and policy != 'luna' and expensive + allowance > EXPENSIVE_WORKSPACE_TOKENS):
-                    raise BudgetError('Agent usage allowance exhausted for the rolling 24-hour window. Training and telemetry continue; no model turn was started.')
-                row = dict(id=uuid.uuid4().hex, bucket=bucket, policy=policy, model=model, provider=provider,
-                           scope=scope, created=now, deadline=now+limits['seconds'], seconds=limits['seconds'],
-                           tokens=allowance, calls=limits['calls'], tools=limits['tools'], agent_limit=limits['agent_limit'],
-                           input_tokens=0, cached_input_tokens=0, output_tokens=0,
-                           responses=0, last_total=None, reason=None)
-                row.update(accounting_policy=limits.get('accounting_policy', 'raw_tokens_v1'),
-                           raw_token_limit=limits.get('raw_token_limit'), charged_units=0, raw_tokens=0)
-                if provider == 'codex' and bucket == 'paid' and model in CACHE_MODELS:
-                    row.update(accounting_policy=CODEX_ACCOUNTING, raw_token_limit=10_000_000)
-                self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)', (row['id'],scope,now,allowance,json.dumps(row)))
-                self.db.commit()
-                return row
-            except BaseException:
-                self.db.rollback(); raise
+            saved = self.db.execute('SELECT data FROM reservations WHERE id=?', (reservation,)).fetchone()
+            if not saved:
+                raise BudgetError('Missing durable user-task receipt.')
+            return self.user_allowance(json.loads(saved[0]))
 
     def observe(self, reservation, total, last=None):
         """Deduplicate cumulative provider counters; never add the total twice."""
         with self.lock, self.db:
             raw = self.db.execute('SELECT data FROM reservations WHERE id=?', (reservation,)).fetchone()
             if not raw: raise BudgetError('Missing durable agent allowance; stopping inference.')
-            row = json.loads(raw[0])
+            row = self.user_allowance(json.loads(raw[0]))
             names = ('inputTokens','cachedInputTokens','outputTokens')
             if not isinstance(total,dict) or any(type(total.get(k,0)) is not int or total.get(k,0)<0 for k in names):
                 raise BudgetError('Invalid provider usage; stopping inference.')
@@ -142,14 +145,6 @@ class AgentBudget:
                 row['last_total'] = values
             row['raw_tokens'] = row['input_tokens'] + row['output_tokens']
             row['charged_units'] = charge(row)
-            if row.get('raw_token_limit') and row['raw_tokens'] >= row['raw_token_limit']:
-                row['reason'] = f"This turn reached its raw-token ceiling ({row['raw_tokens']:,}/{row['raw_token_limit']:,}). Unfinished work is saved."
-            elif row['charged_units'] >= row['tokens']:
-                unit = 'budget units' if row.get('accounting_policy') in CACHE_ACCOUNTING else 'raw tokens'
-                row['reason'] = f"This turn reached its usage allowance ({row['charged_units']:,}/{row['tokens']:,} {unit}). Unfinished work is saved."
-            elif row['responses'] >= row.get('calls', TURN_CALLS):
-                row['reason'] = f"This turn reached its response-count allowance ({row['responses']}/{row.get('calls', TURN_CALLS)} responses). Unfinished work is saved."
-            if self.clock() >= row['deadline']: row['reason'] = f"This turn reached its {row.get('seconds', TURN_SECONDS) // 60}-minute time allowance."
             self.db.execute('UPDATE reservations SET data=?,tokens=MAX(tokens,?) WHERE id=?',(json.dumps(row),row['charged_units'],reservation))
             return row
 
@@ -172,14 +167,8 @@ class AgentBudget:
             try:
                 raw = self.db.execute("SELECT data FROM reservations WHERE id=?",(reservation,)).fetchone()
                 if not raw: raise BudgetError("No active usage allowance.")
-                row = json.loads(raw[0])
+                row = self.user_allowance(json.loads(raw[0]))
                 count,same = self.db.execute("SELECT COUNT(*), COALESCE(SUM(fingerprint=?),0) FROM tool_calls WHERE reservation=?",(fingerprint,reservation)).fetchone()
-                if row.get("reason"):
-                    raise BudgetError(row["reason"])
-                if self.clock() >= row["deadline"]:
-                    raise BudgetError("Agent time allowance exhausted. Unfinished work is saved.")
-                if count >= row.get('tools', 40):
-                    raise BudgetError(f"This turn reached its tool-call allowance ({count}/{row.get('tools', 40)} calls). Unfinished work is saved.")
                 if same >= 3 and not is_status_poll(name, arguments):
                     raise RepeatedToolError("This identical action was already requested three times. Inspect its existing receipt or change the action; this turn remains active.")
                 self.db.execute("INSERT INTO tool_calls VALUES(?,?,?)",(reservation,fingerprint,self.clock()))
@@ -195,13 +184,13 @@ class AgentBudget:
         return dict(local_reserved_tokens=sum(r['reserved'] for r in local_rows), local_workspace_limit=LOCAL_WORKSPACE_TOKENS,
                     expensive_reserved_tokens=sum(r['reserved'] for r in rows if r.get('policy', 'standard') != 'luna'),
                     expensive_workspace_limit=EXPENSIVE_WORKSPACE_TOKENS, policies=POLICIES,
-                    automatic_model_calls=False, window_hours=24, workspace_limit=WORKSPACE_TOKENS,
+                    automatic_model_calls=False, user_directed_unlimited=True, window_hours=24, workspace_limit=None,
                     agent_limit=AGENT_TOKENS, turn_token_limit=TURN_TOKENS, turn_response_limit=TURN_CALLS,
                     turn_seconds=TURN_SECONDS, reserved_tokens=sum(r['reserved'] for r in rows),
                     input_tokens=sum(r['input_tokens'] for r in rows), cached_input_tokens=sum(r['cached_input_tokens'] for r in rows),
                     output_tokens=sum(r['output_tokens'] for r in rows),
                     charged_units=sum(charge(r) for r in rows), budget_unit_label='budget units (not currency)',
-                    accounting='New Luna reservations charge uncached input + output + ceil(cached input × 0.1), with a separate 20M raw-token ceiling. Legacy and other-model reservations retain raw charging. Admission reserves full allowances; provider usage is reported after responses, so interruption may include one in-flight response.')
+                    accounting='User-directed work has no application usage/time caps. Usage is recorded for visibility. Agent-initiated model calls remain disabled.')
 
     def close(self):
         with self.lock: self.db.close()

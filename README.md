@@ -169,3 +169,5 @@ cached input at 0.1× and uncached input/output at 1×, with a separate 20M raw-
 ceiling. These units are a usage policy, not currency. Other paid models retain their
 smaller limits. Settings shows the separate model policies and shared rolling
 usage; switching models does not reset an agent's spending.
+
+User-assigned agent work has no SuperSurfer token, time or daily usage cap. Usage remains visible in Settings; provider account limits still apply. Agent-initiated wakeups remain disabled.

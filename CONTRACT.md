@@ -1279,3 +1279,7 @@ Tool status polling consumes the normal turn allowance without a three-identical
 
 ## Codex cached-context budget repair
 New reservations for resolved Codex Astra/Sol models count uncached input and output fully and cached input at one tenth, as internal budget units rather than dollars. Historical reservations are unchanged. The standard one-million-unit allowance, daily caps, 24 responses, 40 tools and 15-minute limit remain; an additional ten-million raw-token ceiling applies. Missing or inconsistent cache counters remain conservatively charged. Regression: the reported 1,010,207-token/984,320-cached turn charges 124,319 units and continues.
+
+
+## User-directed work: no application usage caps
+Supersedes earlier per-turn and daily cap policies for user-assigned work. Explicit user messages receive uncapped metering receipts across all models/providers: no token, response, tool-call, time, or daily admission ceiling. Historical user receipts are likewise exempt during runtime checks without erasing recorded usage. Automatic/peer/scheduled activations remain disabled. Duplicate mutation guards, ownership checks, provider account limits, manual stop and training supervision are unchanged. Settings shows usage counters rather than a quota.

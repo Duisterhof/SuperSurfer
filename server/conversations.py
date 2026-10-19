@@ -561,8 +561,8 @@ class ConversationBridge:
 
     def _check_allowance(self, chat):
         allowance = chat.get("usage_allowance")
-        if allowance and (allowance.get("reason") or time.time() >= allowance["deadline"]):
-            raise BridgeError(allowance.get("reason") or "Agent time allowance exhausted.", 429)
+        if allowance and getattr(self, "budget", None):
+            chat["usage_allowance"] = self.budget.allowance(allowance["id"])
 
     def _observe_usage(self, chat, usage):
         if not getattr(self, "budget", None) or not chat.get("usage_allowance"):
