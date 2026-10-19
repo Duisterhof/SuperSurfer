@@ -27,10 +27,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.waitForFunction(()=>document.querySelector('[data-provider-account="opencode"] .provider-account-status')?.textContent.includes('Configured'));
   assert.equal(await account.locator('[data-account-logout]').isVisible(),false);
   assert.equal(await page.locator('[name=backend_worker] option[value=opencode]').count(),1);
+  for(const role of ['manager','lead','worker'])await page.locator(`[name=backend_${role}]`).selectOption('opencode');
   await page.locator('[name=operations_enabled]').check();
+  const savedResponse=page.waitForResponse(r=>r.request().method()==='POST'&&r.request().postData()?.includes('settings.save'));
   await page.locator('#settings-form button[type=submit]').click();
-  await page.waitForResponse(r=>r.url().endsWith('/api/state')&&r.status()===200).catch(()=>{});
-  await page.reload();await page.locator('[name=operations_enabled]').waitFor();
+  const saved=await savedResponse;assert.equal(saved.status(),200,await saved.text());
+  await page.waitForFunction(()=>document.querySelector('#settings-form button[type=submit]')?.disabled===false);
+  await page.reload();await page.locator('[data-view=settings]').click();await page.locator('[name=operations_enabled]').waitFor();
   assert.equal(await page.locator('[name=operations_enabled]').isChecked(),true);
   await page.screenshot({path:'/tmp/opencode-settings.png'});
   assert.deepEqual(errors,[]);console.log('PASS OpenCode selection, local model, streaming, pinning, stop and capability controls');
