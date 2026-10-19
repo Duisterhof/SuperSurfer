@@ -160,3 +160,24 @@ class OpenCodeBridge(CliBridge):
             total["cachedInputTokens"] += read
             total["outputTokens"] += outgoing + reasoning
         return {"total": total}
+
+    def usage_bucket(self, model):
+        """Only an explicitly selected, verified loopback model uses local quota."""
+        from urllib.parse import urlsplit
+        if not isinstance(model, str) or "/" not in model:
+            return "paid"
+        try:
+            result = subprocess.run([executable(self.backend), "debug", "config"], capture_output=True, text=True, timeout=15)
+            if result.returncode or len(result.stdout) > 2_000_000:
+                return "paid"
+            config = json.loads(result.stdout)
+            provider, name = model.split("/", 1)
+            entry = config.get("provider", {}).get(provider, {})
+            url = urlsplit(entry.get("options", {}).get("baseURL", ""))
+            if (entry.get("npm") == "@ai-sdk/openai-compatible" and name in entry.get("models", {})
+                    and url.scheme == "http" and url.hostname in {"127.0.0.1", "::1"}
+                    and not url.username and not url.password and not url.query and not url.fragment):
+                return "local"
+        except (OSError, ValueError, TypeError, AttributeError, subprocess.TimeoutExpired):
+            pass
+        return "paid"

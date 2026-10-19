@@ -522,7 +522,7 @@ class ConversationBridge:
             if len(chat.get("tasks", [])) + len(new_keys) > 200:
                 raise BridgeError("This conversation's task log is full. Create a new conversation for this work; no turn was started.", 409)
             if getattr(self, "budget", None):
-                chat["usage_allowance"] = self.budget.reserve(scope, "user")
+                chat["usage_allowance"] = self.budget.reserve(scope, "user", bucket=self.usage_bucket(model) if hasattr(self, "usage_bucket") else "paid")
             chat.update(busy=True, status="starting", error=None, turn_id=None, cancel_requested=False, budget_stopping=False, stalled_turns=0, continuation_progress=None, continuation_note=None)
             chat["agent"].update(name=context.get("name", chat["agent"]["name"]), role=context.get("role", chat["agent"]["role"]))
             chat["agent"].update(approval_mode=approval_mode, runtime_approval_mode=None, active_sandbox=None)

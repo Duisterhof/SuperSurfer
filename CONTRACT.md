@@ -1187,3 +1187,8 @@ separate from interactive provider sessions. Durable reservations precede each
 request; failed/uncertain requests consume budget and are not replayed. Native
 scheduler and recovery gates remain authoritative. Run transition summaries
 cannot authorize scientific changes, launches or agent-to-agent messages.
+
+Verified, explicitly selected OpenCode models using a configured loopback
+OpenAI-compatible endpoint have a separate bounded local quota. Hosted, unknown
+and unselected models remain in the paid-provider quota. Runtime rechecks model
+configuration before sending a locally budgeted prompt. No paid quota is reset.

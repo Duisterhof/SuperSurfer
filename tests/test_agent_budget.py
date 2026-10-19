@@ -28,6 +28,14 @@ class BudgetTests(unittest.TestCase):
         for t in threads:t.join()
         self.assertEqual(20,sum(results));self.assertEqual(20*TURN_TOKENS,self.b.summary()['reserved_tokens'])
         with self.assertRaises(BudgetError):self.b.reserve('new-thread','user')
+    def test_local_calls_have_independent_bounded_quota(self):
+        for i in range(20): self.b.reserve('paid:'+str(i),'user')
+        with self.assertRaises(BudgetError): self.b.reserve('paid:extra','user')
+        for i in range(4): self.b.reserve('local-chat','user',bucket='local')
+        with self.assertRaises(BudgetError): self.b.reserve('local-chat','user',bucket='local')
+        self.assertEqual(self.b.summary()['reserved_tokens'],20*TURN_TOKENS)
+        self.assertEqual(self.b.summary()['local_reserved_tokens'],4*TURN_TOKENS)
+
     def test_own_budget_survives_restarts_and_only_rolling_window_releases_it(self):
         for _ in range(4):self.b.reserve('same-agent','user')
         self.b.close();self.b=AgentBudget(self.path,clock=lambda:self.now)

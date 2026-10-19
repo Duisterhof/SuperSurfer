@@ -37,17 +37,19 @@ class AgentBudget:
         self.db.execute("CREATE TABLE IF NOT EXISTS tool_calls (reservation TEXT, fingerprint TEXT, created REAL)")
         self.db.commit()
 
-    def reserve(self, scope, source):
+    def reserve(self, scope, source, bucket="paid"):
+        if bucket not in {"paid", "local"}:
+            raise BudgetError("Unknown inference budget")
         if source != 'user':
             raise BudgetError(AUTOMATIC_REASON)
         now = self.clock()
         with self.lock:
             self.db.execute('BEGIN IMMEDIATE')
             try:
-                used, own = self.db.execute('SELECT COALESCE(SUM(tokens),0), COALESCE(SUM(CASE WHEN scope=? THEN tokens ELSE 0 END),0) FROM reservations WHERE created>?', (scope, now-WINDOW_SECONDS)).fetchone()
+                used, own = self.db.execute("SELECT COALESCE(SUM(tokens),0), COALESCE(SUM(CASE WHEN scope=? THEN tokens ELSE 0 END),0) FROM reservations WHERE created>? AND COALESCE(json_extract(data, '$.bucket'), 'paid')=?", (scope, now-WINDOW_SECONDS, bucket)).fetchone()
                 if used + TURN_TOKENS > WORKSPACE_TOKENS or own + TURN_TOKENS > AGENT_TOKENS:
                     raise BudgetError('Agent usage allowance exhausted for the rolling 24-hour window. Training and telemetry continue; no model turn was started.')
-                row = dict(id=uuid.uuid4().hex, scope=scope, created=now, deadline=now+TURN_SECONDS,
+                row = dict(id=uuid.uuid4().hex, bucket=bucket, scope=scope, created=now, deadline=now+TURN_SECONDS,
                            tokens=TURN_TOKENS, calls=TURN_CALLS, input_tokens=0, cached_input_tokens=0, output_tokens=0,
                            responses=0, last_total=None, reason=None)
                 self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)', (row['id'],scope,now,TURN_TOKENS,json.dumps(row)))
@@ -111,7 +113,9 @@ class AgentBudget:
     def summary(self):
         with self.lock:
             rows = [{**json.loads(r[0]), 'reserved': r[1]} for r in self.db.execute('SELECT data,tokens FROM reservations WHERE created>?',(self.clock()-WINDOW_SECONDS,))]
-        return dict(automatic_model_calls=False, window_hours=24, workspace_limit=WORKSPACE_TOKENS,
+        local_rows = [r for r in rows if r.get('bucket') == 'local']
+        rows = [r for r in rows if r.get('bucket', 'paid') == 'paid']
+        return dict(local_reserved_tokens=sum(r['reserved'] for r in local_rows), local_workspace_limit=WORKSPACE_TOKENS, automatic_model_calls=False, window_hours=24, workspace_limit=WORKSPACE_TOKENS,
                     agent_limit=AGENT_TOKENS, turn_token_limit=TURN_TOKENS, turn_response_limit=TURN_CALLS,
                     turn_seconds=TURN_SECONDS, reserved_tokens=sum(r['reserved'] for r in rows),
                     input_tokens=sum(r['input_tokens'] for r in rows), cached_input_tokens=sum(r['cached_input_tokens'] for r in rows),

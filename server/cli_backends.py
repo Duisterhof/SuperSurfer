@@ -397,6 +397,8 @@ class CliBridge(ConversationBridge):
                 # Ask every native tool first; YOLO is handled by the scoped
                 # approval callback, not a shared server-wide permission change.
                 env["OPENCODE_CONFIG_CONTENT"] = self.runtime_config(env, context["cwd"])
+                if (chat.get("usage_allowance") or {}).get("bucket") == "local" and self.usage_bucket(model) != "local":
+                    raise BridgeError("Local model configuration changed; no prompt was sent.")
                 args = [binary, "acp"]
             else:
                 args = [binary, "--sandbox", "disabled" if approval_mode == "yolo" else "enabled"]

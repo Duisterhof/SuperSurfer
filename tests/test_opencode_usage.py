@@ -20,3 +20,18 @@ class UsageTests(unittest.TestCase):
     def test_only_latest_turn_is_charged(self):
         d=self.data();d['messages']=self.data()['messages']+d['messages']
         self.assertEqual(OpenCodeBridge.usage_from_export(d,'hello')['total']['outputTokens'],30)
+
+class LocalQuotaTests(unittest.TestCase):
+    def test_only_configured_loopback_model_uses_local_quota(self):
+        import json
+        from unittest.mock import patch, Mock
+        bridge=object.__new__(OpenCodeBridge);bridge.backend='opencode'
+        config={'provider':{'local':{'npm':'@ai-sdk/openai-compatible','options':{'baseURL':'http://127.0.0.1:8008/v1'},'models':{'qwen':{}}}}}
+        with patch('server.opencode.executable',return_value='/fake'), patch('server.opencode.subprocess.run') as run:
+            run.return_value=Mock(returncode=0,stdout=json.dumps(config))
+            self.assertEqual(bridge.usage_bucket('local/qwen'),'local')
+            self.assertEqual(bridge.usage_bucket('local/unknown'),'paid')
+            self.assertEqual(bridge.usage_bucket(None),'paid')
+            config['provider']['local']['options']['baseURL']='https://hosted.example/v1'
+            run.return_value=Mock(returncode=0,stdout=json.dumps(config))
+            self.assertEqual(bridge.usage_bucket('local/qwen'),'paid')
