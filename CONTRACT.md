@@ -1193,13 +1193,13 @@ OpenAI-compatible endpoint have a separate bounded local quota. Hosted, unknown
 and unselected models remain in the paid-provider quota. Runtime rechecks model
 configuration before sending a locally budgeted prompt. No paid quota is reset.
 
-OpenCode receives at most 8,000 characters of inline workspace instructions;
+Full-workspace OpenCode receives at most 8,000 characters of inline workspace instructions;
 larger context is a local reference file for targeted reading. Automatic provider
 compaction is disabled in the per-process configuration to prevent hidden
 summary loops. Historical summaries verified from provider metadata are displayed
 as collapsed activity, never treated as evidence of completed user work.
 
-OpenCode uses a bounded native session per explicit user turn. Visible history,
+Full-workspace OpenCode uses a bounded native session per explicit user turn. Visible history,
 prior provider session IDs and durable tasks remain available; a private history
 reference and recent exchange replace replaying the full transcript. Role rules
 are loaded on demand. Its MCP exposes `find_tools` and `use_tool`; discovery is
@@ -1214,3 +1214,44 @@ one million tokens (minimum 65,536). The per-agent/workspace daily caps remain
 unchanged, and the runtime circuit breaker uses that smaller reservation. Paid
 inference admission is unchanged. Exact tool-name discovery returns only that
 schema rather than adjacent tools.
+
+
+## OpenCode operations workspace
+
+`chat.settings.workspace_profile` is `operations`, `full_workspace`, or null to
+inherit. OpenCode inherits operations; other providers retain full workspace.
+The effective/default profile is returned in chat preferences. A profile change
+is rejected while busy, and affects the next explicitly requested turn without
+replaying messages. Visible transcript and archived provider session IDs remain.
+
+Operations uses a per-scope isolated cwd, a bounded ID/status brief and no role
+skill, research Results checkpoint or transcript file context. The process denies
+native tools even in YOLO, and disables project config, external skills/plugins.
+Only `inspect_run_status`, `inspect_project_compute`, `queue_run`, `recover_run`,
+`stop_run`, `update_task`, and `ask_user` appear in its MCP catalogue. Actual
+OpenCode invocation names have the `supersurfer_` server prefix. The server
+independently validates that catalogue and schemas for every capability request.
+Queue accepts exactly an existing `run_id` and `pr_url`, derives the registered
+experiment, preserves Surfboard gates and native PR verification, and never
+submits a new run. Manager can select registered runs; lead/worker remain confined
+to their project/experiment. Recovery exposes only status/enable/pause. Coding,
+source amendments and new recipes require explicit full workspace or a user
+handoff to the implementation agent, never an automatic relay. Existing budget limits are unchanged.
+
+Model guidance uses GPT-6 Luna for routine launch/evaluation/report/monitoring,
+and GPT-6 Astra medium for implementing new ideas. It preserves explicit chat
+choices and local OpenCode, and does not add automatic purpose classification,
+model switching, escalation or agent activation.
+
+
+Budget policy is selected from the actual server-resolved model and provider,
+never a client-supplied budget bucket. Codex `gpt-6-luna` reserves up to 2M tokens,
+96 responses, 120 scoped tools and 60 minutes per user turn, with a 12M per-agent
+rolling-day limit. Paid workspace usage has a shared 60M ceiling plus an unchanged
+20M sublimit for other paid models; those retain 1M/24 responses/40 tools/15
+minutes per turn and 4M per agent. Existing reservations count across model
+switches and legacy rows remain in the conservative expensive-model pool.
+Limits are snapshotted durably per reservation, so runtime checks and restarts
+retain the admitted policy. Luna may reserve remaining daily allowance down to
+65,536 tokens; local inference retains its separate existing quotas. Identical
+tool requests still stop after three, and no automatic model activation is added.

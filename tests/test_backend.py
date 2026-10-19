@@ -493,29 +493,29 @@ class BackendTests(unittest.TestCase):
         worker = "experiment:" + self.service.state()["experiments"][0]["id"]
         self.service.action("chat.settings", {"scope": "manager", "model": "model-a", "reasoning": "ultra", "fast_mode": True, "approval_mode": "auto_review"})
         self.service.action("chat.settings", {"scope": "project:p1", "model": "model-b", "reasoning": "max"})
-        self.assertEqual(self.service.chat(worker)["preferences"]["overrides"], {"backend": None, "model": None, "reasoning": None, "fast_mode": None, "approval_mode": None})
+        self.assertEqual(self.service.chat(worker)["preferences"]["overrides"], {"backend": None, "model": None, "reasoning": None, "fast_mode": None, "approval_mode": None, "workspace_profile": None})
         self.service.close()
         self.service = Service(self.root / "state", self.root / "aml", aml=AMLClient(self.root / "aml", rpc=self.manager), codex=FakeCodex(), start_monitor=False, tracking=FakeTracking())
-        self.assertEqual(self.service.chat("manager")["preferences"]["effective"], {"model": "model-a", "reasoning": "ultra", "fast_mode": True, "approval_mode": "auto_review"})
-        self.assertEqual(self.service.chat("project:p1")["preferences"]["effective"], {"model": "model-b", "reasoning": "max", "fast_mode": False, "approval_mode": "ask"})
-        self.assertEqual(self.service.chat(worker)["preferences"]["effective"], {"model": "model-a", "reasoning": "medium", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(self.service.chat("manager")["preferences"]["effective"], {"model": "model-a", "reasoning": "ultra", "fast_mode": True, "approval_mode": "auto_review", "workspace_profile": "full_workspace"})
+        self.assertEqual(self.service.chat("project:p1")["preferences"]["effective"], {"model": "model-b", "reasoning": "max", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
+        self.assertEqual(self.service.chat(worker)["preferences"]["effective"], {"model": "model-a", "reasoning": "medium", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
     def test_chat_overrides_reset_independently_and_follow_new_role_defaults(self):
         self.service.action("chat.settings", {"scope": "manager", "model": "model-b", "reasoning": "max"})
         self.service.action("settings.save", {"models": {"manager": "model-a"}, "reasoning": {"manager": "ultra"}})
-        self.assertEqual(self.service.chat_preferences("manager")["effective"], {"model": "model-b", "reasoning": "max", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(self.service.chat_preferences("manager")["effective"], {"model": "model-b", "reasoning": "max", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
         reset_effort = self.service.action("chat.settings", {"scope": "manager", "reasoning": None})["preferences"]
-        self.assertEqual(reset_effort["overrides"], {"backend": None, "model": "model-b", "reasoning": None, "fast_mode": None, "approval_mode": None})
-        self.assertEqual(reset_effort["effective"], {"model": "model-b", "reasoning": "low", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(reset_effort["overrides"], {"backend": None, "model": "model-b", "reasoning": None, "fast_mode": None, "approval_mode": None, "workspace_profile": None})
+        self.assertEqual(reset_effort["effective"], {"model": "model-b", "reasoning": "low", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
         self.assertIn("ultra reasoning is unavailable", reset_effort["note"])
         reset_model = self.service.action("chat.settings", {"scope": "manager", "model": None})["preferences"]
-        self.assertEqual(reset_model["effective"], {"model": "model-a", "reasoning": "ultra", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(reset_model["effective"], {"model": "model-a", "reasoning": "ultra", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
         self.service.action("settings.save", {"models": {"manager": "model-b"}, "reasoning": {"manager": "high"}})
-        self.assertEqual(self.service.chat_preferences("manager")["effective"], {"model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(self.service.chat_preferences("manager")["effective"], {"model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
     def test_chat_models_validate_live_catalog_and_preserve_last_valid_settings(self):
         self.service.action("chat.settings", {"scope": "manager", "model": "model-a", "reasoning": "ultra"})
         for changes in [{"model": "missing"}, {"model": "model-b", "reasoning": "ultra"}, {"reasoning": "invented"}]:
             with self.assertRaises(APIError): self.service.action("chat.settings", {"scope": "manager", **changes})
-        self.assertEqual(self.service.store.chat_settings("manager"), {"backend": None, "model": "model-a", "reasoning": "ultra", "fast_mode": None, "approval_mode": None})
+        self.assertEqual(self.service.store.chat_settings("manager"), {"backend": None, "model": "model-a", "reasoning": "ultra", "fast_mode": None, "approval_mode": None, "workspace_profile": None})
         with self.assertRaises(APIError): self.service.action("settings.save", {"models": {"worker": "model-b"}, "reasoning": {"worker": "ultra"}})
         self.assertEqual(self.service.store.settings()["models"]["worker"], "")
         for scope in ["unknown", "project:missing", "experiment:missing", "agent:missing"]:
@@ -525,11 +525,11 @@ class BackendTests(unittest.TestCase):
         self.service.codex.default_model = "model-b"
         for _ in range(5):
             preferences = self.service.chat("manager")["preferences"]
-            self.assertEqual(preferences["effective"], {"model": "model-b", "reasoning": "medium", "fast_mode": False, "approval_mode": "ask"})
+            self.assertEqual(preferences["effective"], {"model": "model-b", "reasoning": "medium", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
         self.assertEqual(self.service.codex.model_calls, 1)
         self.service.action("chat.settings", {"scope": "manager", "model": "model-c", "reasoning": None})
         current = self.service.chat_preferences("manager")
-        self.assertEqual(current["effective"], {"model": "model-c", "reasoning": "low", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(current["effective"], {"model": "model-c", "reasoning": "low", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
         self.assertEqual(current["defaults"]["resolved_model"], "model-b")
         self.assertEqual(current["defaults"]["resolved_reasoning"], "medium")
     def test_valid_chat_override_survives_unavailable_role_default(self):
@@ -538,7 +538,7 @@ class BackendTests(unittest.TestCase):
         preferences = self.service.action("chat.settings", {"scope": "manager", "model": "model-b", "reasoning": "high"})["preferences"]
         self.assertTrue(preferences["available"])
         self.assertIsNone(preferences["error"])
-        self.assertEqual(preferences["effective"], {"model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask"})
+        self.assertEqual(preferences["effective"], {"model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask", "workspace_profile": "full_workspace"})
         self.assertIn("role default is unavailable", preferences["note"])
         self.service.action("chat.send", {"scope": "manager", "text": "Continue with the available model"})
         self.assertEqual(self.service.codex.sent[-1][2], {"activation_source": "user", "model": "model-b", "reasoning": "high", "fast_mode": False, "approval_mode": "ask"})

@@ -508,10 +508,20 @@ def validate_questions(arguments):
             labels.add(label)
 
 
+# Operations has its own reduced schemas, not merely fewer full-workspace names.
+OPERATIONS_TOOLS = [
+    _board_tool("inspect_run_status", "Read compact current run status in this scope. Supply run_id for one run; omit to list up to 20.", {"run_id": {"type": "string", "minLength": 1, "maxLength": 150}}),
+    _board_tool("inspect_project_compute", "Read current registered GPU observations and project limits, without probing or allocating. Manager supplies project_id; other scopes use their own project.", _PROJECT),
+    {**_board_tool("queue_run", "Queue an already-prepared held run using its reviewed PR. Source, command, recipe and resource changes require the implementation agent to prepare the run first. Never creates a run.", {key: QUEUE_TOOL["inputSchema"]["properties"][key] for key in ("run_id", "pr_url")}, ["run_id", "pr_url"]), "operations_only": True},
+    _board_tool("recover_run", "Read recovery status or explicitly enable/pause this run's existing recovery record. No source amendments, retries, new recipes or allocation changes.", {"run_id": {"type": "string", "minLength": 1, "maxLength": 150}, "action": {"type": "string", "enum": ["status", "enable", "pause"]}, "task": {"type": "string", "maxLength": 10000}}, ["run_id"]),
+    STOP_RUN_TOOL, TASK_TOOL, QUESTION_TOOL,
+]
+
+
 def available_tools():
     # Older worker sessions predate explicit role configuration. The server's
     # capability still independently enforces scope and permitted operations.
-    tools = ROLE_TOOLS.get(os.environ.get("SUPERSURFER_AGENT_ROLE", "worker"), [])
+    tools = OPERATIONS_TOOLS if os.environ.get("SUPERSURFER_WORKSPACE_PROFILE") == "operations" else ROLE_TOOLS.get(os.environ.get("SUPERSURFER_AGENT_ROLE", "worker"), [])
     configured = os.environ.get("SUPERSURFER_ALLOWED_TOOLS")
     if configured is None:
         return tools
@@ -572,7 +582,7 @@ def validate_arguments(tool, arguments):
     if tool["name"] == "ask_user":
         validate_questions(arguments)
         return
-    if tool["name"] in {"queue_run", "prepare_run"}:
+    if tool["name"] in {"queue_run", "prepare_run"} and not tool.get("operations_only"):
         if not isinstance(arguments, dict):
             raise ValueError("Queue arguments must be an object.")
         properties = tool["inputSchema"]["properties"]

@@ -48,6 +48,7 @@ from .project_artifacts import ProjectArtifacts, MAX_UPLOAD_BYTES
 from .code_editor import CodeEditor
 from .editor_service import EditorService
 from .writing_service import WritingService
+from .operations_workspace import OperationsService
 from .latex import LatexCompiler
 from .view_blocks import ViewBlocks
 
@@ -164,7 +165,7 @@ def directory_suggestions(value, limit=50, scan_limit=10000):
 from .node_setup import NodeSetup
 from .run_recovery import RunRecovery
 
-class Service(SurfboardService, EditorService, WritingService):
+class Service(OperationsService, SurfboardService, EditorService, WritingService):
     def __init__(self, state_dir, aml_home, read_only=False, aml=None, codex=None, start_monitor=True, tracking=None):
         self.store = Store(state_dir)
         self.directory = self.store.directory
@@ -545,6 +546,8 @@ class Service(SurfboardService, EditorService, WritingService):
         return f"[Workspace time: {clock['current_time']} ({clock['timezone']})]\n\n{text}"
 
     def context_provider(self, scope):
+        if self.workspace_profile(scope) == "operations":
+            return self.operations_context(scope)
         configured = self.board_context(scope)
         if configured is not None:
             return configured
@@ -719,6 +722,8 @@ class Service(SurfboardService, EditorService, WritingService):
     def bounded_agent_result(self, scope, result):
         # Bound all scoped HTTP/MCP clients, not just the displayed activity.
         text = json.dumps(result, ensure_ascii=False, default=str)
+        if len(text) > 12000 and self.workspace_profile(scope) == "operations":
+            return {"truncated": True, "preview": text[:10000], "instruction": "Request one run_id for a smaller status response."}
         if len(text) > 12000:
             import hashlib
             folder = self.directory / "tool-results" / hashlib.sha256(scope.encode()).hexdigest()
@@ -731,6 +736,8 @@ class Service(SurfboardService, EditorService, WritingService):
 
     def _agent_action_unmetered(self, scope, name, arguments):
         """Each capability is confined to its project or experiment and user turn."""
+        if self.workspace_profile(scope) == "operations":
+            return self.operations_action(scope, name, arguments)
         if name == "supersurfer_compile_latex" and isinstance(arguments, dict) and arguments.get("operation") == "inspect":
             # PDF decoding is a bounded read, but can take seconds. Chat Stop
             # must be able to reach the compiler while that read is running.
@@ -981,7 +988,7 @@ class Service(SurfboardService, EditorService, WritingService):
             raise APIError("This conversation's project is fixed", 403)
         global_host_action = role == "manager" and name in {"supersurfer_register_compute_host", "supersurfer_inspect_compute_host"}
         project_id = text_field(arguments, "project_id", 150, required=not global_host_action) if role == "manager" else (
-            scope.removeprefix("project:") if role == "lead" else self.experiment_for_scope(scope)["project_id"])
+            information["project_id"] if role == "lead" else self.experiment_for_scope(scope)["project_id"])
         if project_id:
             self.lookup("projects", project_id, fresh=True)
         fields = {key: value for key, value in arguments.items() if key != "project_id"}
@@ -1188,6 +1195,8 @@ class Service(SurfboardService, EditorService, WritingService):
                 ". Consult this conversation's task and preserve its protocol, inputs, resource limits and stop orders.")
 
     def seed_results_checkpoint(self, scope, experiment_id):
+        if self.workspace_profile(scope) == "operations":
+            return
         if (not experiment_id or not scope.startswith(("experiment:", "conversation:")) or
                 not hasattr(self.codex, "set_required_task")):
             return
@@ -1558,7 +1567,9 @@ class Service(SurfboardService, EditorService, WritingService):
             defaults.update(model=None, reasoning=None, fast_mode=False,
                             approval_mode="ask" if defaults["approval_mode"] == "auto_review" else defaults["approval_mode"])
 
+        defaults["workspace_profile"] = "operations" if backend == "opencode" else "full_workspace"
         effective = {key: overrides[key] if overrides[key] is not None else defaults[key] for key in ("model", "reasoning")}
+        effective["workspace_profile"] = (overrides.get("workspace_profile") or "operations") if backend == "opencode" else "full_workspace"
         effective["fast_mode"] = overrides.get("fast_mode") if overrides.get("fast_mode") is not None else defaults["fast_mode"]
         effective["approval_mode"] = overrides.get("approval_mode") or defaults["approval_mode"]
         preferences = {"backend": backend, "capabilities": capabilities, "role": role, "defaults": defaults, "overrides": overrides, "effective": effective,
@@ -1567,6 +1578,7 @@ class Service(SurfboardService, EditorService, WritingService):
             resolved, supported, note = self._model_choice(effective["model"], effective["reasoning"], overrides["reasoning"] is not None, information["cwd"], refresh, backend=backend)
             if backend != "codex" and (effective["fast_mode"] or effective["approval_mode"] == "auto_review"):
                 raise APIError("Fast mode and Codex automatic approval review are unavailable for this backend. Choose Ask or YOLO.")
+            resolved["workspace_profile"] = effective["workspace_profile"]
             resolved["fast_mode"] = effective["fast_mode"]
             resolved["approval_mode"] = effective["approval_mode"]
             preferences.update(effective=resolved, supported_reasoning=supported, note=note, available=True)
@@ -1861,7 +1873,10 @@ class Service(SurfboardService, EditorService, WritingService):
             if "agent" in self._chat_scope(scope):
                 raise APIError("Steer an existing AutoML conversation in its native console", 409)
             content = text_field(params, "text", 100000)
-            view_context = self.chat_view_context(scope, params.get("view"))
+            operations = self.workspace_profile(scope) == "operations"
+            if operations and params.get("attachments"):
+                raise APIError("Operations accepts text requests and prepared run IDs. Choose Full workspace to attach repository files.", 400)
+            view_context = "" if operations else self.chat_view_context(scope, params.get("view"))
             attached, attachment_context = chat_attachments(self, scope, params.get("attachments"))
             if len(content + view_context + attachment_context) > 100000:
                 raise APIError("Message and attached context exceed 100,000 characters")
@@ -1891,17 +1906,23 @@ class Service(SurfboardService, EditorService, WritingService):
             return self.codex.approve(scope, text_field(params, "approval_id", 256), decision)
         if op == "chat.settings":
             scope = text_field(params, "scope", 256)
-            if set(params) - {"scope", "backend", "model", "reasoning", "fast_mode", "approval_mode"}:
+            if set(params) - {"scope", "backend", "model", "reasoning", "fast_mode", "approval_mode", "workspace_profile"}:
                 raise APIError("Chat settings accept only scope, model, reasoning, fast_mode and approval_mode")
             information = self._chat_scope(scope)
             if "agent" in information:
                 raise APIError(self.chat_preferences(scope)["note"], 409)
-            changes = {key: params[key] for key in ("backend", "model", "reasoning", "fast_mode", "approval_mode") if key in params}
+            changes = {key: params[key] for key in ("backend", "model", "reasoning", "fast_mode", "approval_mode", "workspace_profile") if key in params}
             permission_update = None
             def validate_and_apply(values):
                 nonlocal permission_update
                 # Permission changes must work independently of model catalog
                 # availability, and only explicit permission writes affect a turn.
+                if "workspace_profile" in changes:
+                    backend = values.get("backend") or self.backend_for(scope)
+                    if values["workspace_profile"] is not None and backend != "opencode":
+                        raise APIError("Workspace profiles are available for OpenCode conversations only", 400)
+                    if self.codex.chat(scope).get("busy") and self.workspace_profile(scope, values) != self.workspace_profile(scope):
+                        raise APIError("Wait for this turn to finish or stop it before changing workspace profile", 409)
                 if "backend" in changes:
                     selected = values.get("backend") or self.store.settings()["backends"][information["role"]]
                     if hasattr(self.codex, "validate_selection"):
@@ -2395,7 +2416,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"inspect_run_status", "message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
                 result = self.server.service.bounded_agent_result(agent_scope, result)

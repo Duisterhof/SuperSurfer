@@ -343,3 +343,5 @@
 @container(max-width:600px){.agent-default-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}.agent-default-row>strong{grid-column:1/-1}.agent-default-model{grid-column:1}.agent-default-chat{grid-column:2;grid-row:2}.agent-default-effort{grid-column:2}}
 
 .chat-earlier{display:block;margin:8px auto 16px;color:var(--muted)}
+
+.chat-composer .composer-workspace-row{grid-column:1/-1;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;min-width:0}.composer-workspace-row .composer-backend-field{flex:0 1 auto;min-width:0}.composer-workspace-row select{max-width:150px}

@@ -71,6 +71,69 @@ class BudgetTests(unittest.TestCase):
         with self.assertRaises(BudgetError):self.b.tool(r['id'],'status',{})
         with self.assertRaises(BudgetError):self.b.observe('missing',{})
 
+class ModelBudgetTests(unittest.TestCase):
+    setUp = BudgetTests.setUp
+    tearDown = BudgetTests.tearDown
+    def luna(self, scope='worker'):
+        return self.b.reserve(scope, 'user', model='gpt-6-luna', provider='codex')
+
+    def test_luna_uses_persisted_response_tool_and_time_limits(self):
+        row = self.luna()
+        self.assertEqual((row['tokens'],row['calls'],row['tools'],row['seconds'],row['agent_limit']), (2000000,96,120,3600,12000000))
+        self.now += 901
+        for i in range(95):
+            observed = self.b.observe(row['id'], {'inputTokens':i+1})
+        self.assertIsNone(observed['reason'])
+        for i in range(120): self.b.tool(row['id'],'status',{'index':i})
+        with self.assertRaises(BudgetError): self.b.tool(row['id'],'status',{'index':121})
+        self.assertIsNotNone(self.b.observe(row['id'], {'inputTokens':96})['reason'])
+        timed = self.luna('other')
+        self.now += 3601
+        self.assertIn('60-minute', self.b.observe(timed['id'], {})['reason'])
+
+    def test_luna_remaining_allowance_and_cross_model_agent_spend_are_not_reset(self):
+        for _ in range(4): self.b.reserve('same','user',model='gpt-6-astra')
+        for _ in range(4): self.luna('same')
+        with self.assertRaises(BudgetError): self.luna('same')
+        with self.assertRaises(BudgetError): self.b.reserve('same','user',model='gpt-6-sol')
+        first = self.luna('partial')
+        self.b.observe(first['id'], {'inputTokens':100000})
+        self.b.settle(first['id'])
+        for _ in range(5): self.luna('partial')
+        self.assertEqual(1900000, self.luna('partial')['tokens'])
+        with self.assertRaises(BudgetError): self.luna('partial')
+
+    def test_expensive_sublimit_and_total_paid_pool_include_old_reservations(self):
+        for i in range(20): self.b.reserve('old:'+str(i),'user')
+        with self.assertRaises(BudgetError): self.b.reserve('new-expensive','user',model='gpt-6-astra')
+        for i in range(20): self.luna('luna:'+str(i))
+        summary = self.b.summary()
+        self.assertEqual((summary['reserved_tokens'],summary['workspace_limit']), (60000000,60000000))
+        self.assertEqual(summary['expensive_reserved_tokens'],20000000)
+        self.assertEqual(summary['expensive_workspace_limit'],20000000)
+        self.assertEqual(summary['local_workspace_limit'],20000000)
+        self.assertEqual(summary['policies']['luna']['calls'],96)
+        with self.assertRaises(BudgetError): self.luna('extra')
+        self.b.reserve('local','user',bucket='local')
+
+    def test_unknown_provider_alias_and_legacy_rows_keep_old_limits(self):
+        for model, provider in [('gpt-6-luna','opencode'),('luna','codex'),('gpt-6-luna-invented','codex'),(None,'codex')]:
+            row = self.b.reserve(str((model,provider)), 'user', model=model, provider=provider)
+            self.assertEqual((row['policy'],row['tokens']), ('standard',1000000))
+        row = self.b.reserve('legacy','user')
+        for key in ('policy','model','provider','tools','seconds','agent_limit'): row.pop(key,None)
+        with self.b.db: self.b.db.execute('UPDATE reservations SET data=? WHERE id=?',(json.dumps(row),row['id']))
+        self.b.close(); self.b=AgentBudget(self.path,clock=lambda:self.now)
+        for i in range(23): self.assertIsNone(self.b.observe(row['id'],{'inputTokens':i+1})['reason'])
+        self.assertIsNotNone(self.b.observe(row['id'],{'inputTokens':24})['reason'])
+        self.assertEqual(self.b.summary()['expensive_reserved_tokens'],5000000)
+
+    def test_luna_repeated_identical_tools_still_stop_at_three(self):
+        row = self.luna()
+        for _ in range(3): self.b.tool(row['id'],'status',{'run':'one'})
+        with self.assertRaises(BudgetError): self.b.tool(row['id'],'status',{'run':'one'})
+
+
 class NoContinuationTests(unittest.TestCase):
     def test_rewriting_summary_cannot_relaunch_or_review(self):
         with tempfile.TemporaryDirectory() as d:
@@ -124,6 +187,18 @@ class ProviderBudgetTests(unittest.TestCase):
     requests=protocol_fixtures.CodexBridgeTests.requests
     wait_for=protocol_fixtures.CodexBridgeTests.wait_for
     finished=protocol_fixtures.CodexBridgeTests.finished
+    def test_resolved_luna_model_is_bound_to_reservation_and_runtime(self):
+        budget=AgentBudget(self.root/'model-budget.sqlite3');self.addCleanup(budget.close)
+        self.bridge.budget=budget
+        with patch.object(self.bridge,'model_defaults',return_value={'model':'gpt-6-luna','reasoning':'medium'}):
+            self.bridge.send('project:vla','hold')
+            chat=self.wait_for(lambda:(c if (c:=self.bridge.chat('project:vla')).get('turn_id') else None))
+        self.assertEqual(chat['usage_allowance']['model'],'gpt-6-luna')
+        self.assertEqual(chat['usage_allowance']['tokens'],2000000)
+        request=next(r for r in self.requests() if r.get('method')=='turn/start')
+        self.assertEqual(request['params']['model'],'gpt-6-luna')
+        self.bridge.stop('project:vla');self.finished()
+
     def test_usage_limit_interrupts_real_fake_provider_without_continuation(self):
         budget=AgentBudget(self.root/'budget.sqlite3');self.addCleanup(budget.close)
         self.bridge.budget=budget

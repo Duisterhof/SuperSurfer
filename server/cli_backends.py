@@ -361,18 +361,20 @@ class CliBridge(ConversationBridge):
                 raise BridgeError("This backend supports Ask or YOLO permissions; Codex reasoning, Fast mode and automatic review are unavailable.", 400)
             self.require_chatgpt()
             clock = local_time_context(context.get("timezone"))
+            operations = self.backend == "opencode" and context.get("workspace_profile") == "operations"
             instructions = context.get("base_instructions", _INSTRUCTIONS) + "\n\n" + context.get("instructions", "")
             instructions = instructions.replace("If Codex requires", "If your CLI requires")
             if context.get("agent_skill"):
                 instructions += "\nRead and follow your role skill: " + context["agent_skill"]["path"]
-            instructions += "\nCurrent time: " + json.dumps(clock) + ". Permission mode: " + approval_mode + ". Research questions require the user's actual answer. Use ask_user and await it."
+            instructions += "\nCurrent time: " + json.dumps(clock) + ". Permission mode: " + approval_mode + ". Questions require the user's actual answer. Use supersurfer_ask_user and await it."
             with self._lock:
                 chat = self._chats[scope]
                 if chat.get("request_id") != message_id or chat.get("cancel_requested") or self._closed:
                     return
-                instructions += "\nSaved deliverables: " + json.dumps(chat.get("tasks", []))
+                if not operations:
+                    instructions += "\nSaved deliverables: " + json.dumps(chat.get("tasks", []))
                 if self.backend == "opencode":
-                    instructions += self.prepare_turn_session(chat)
+                    instructions += self.prepare_turn_session(chat, operations=operations)
                 session_id = chat.get("thread_id")
             binary = executable(self.backend)
             env = {k: v for k, v in os.environ.items() if k not in {"CLAUDECODE", "SUPERSURFER_AGENT_CAPABILITY", "SUPERSURFER_AGENT_ENDPOINT"}}
@@ -402,7 +404,10 @@ class CliBridge(ConversationBridge):
             elif self.backend == "opencode":
                 # Ask every native tool first; YOLO is handled by the scoped
                 # approval callback, not a shared server-wide permission change.
-                env["OPENCODE_CONFIG_CONTENT"] = self.runtime_config(env, context["cwd"])
+                if operations:
+                    env.update(OPENCODE_DISABLE_PROJECT_CONFIG="1", OPENCODE_DISABLE_EXTERNAL_SKILLS="1",
+                               OPENCODE_DISABLE_CLAUDE_CODE="1", OPENCODE_DISABLE_DEFAULT_PLUGINS="1", OPENCODE_PURE="1")
+                env["OPENCODE_CONFIG_CONTENT"] = self.runtime_config(env, context["cwd"], operations=operations)
                 if (chat.get("usage_allowance") or {}).get("bucket") == "local" and self.usage_bucket(model) != "local":
                     raise BridgeError("Local model configuration changed; no prompt was sent.")
                 args = [binary, "acp"]
@@ -426,7 +431,8 @@ class CliBridge(ConversationBridge):
                 chat.update(turn_id=uuid.uuid4().hex, status="starting")
                 chat["agent"].update(backend=self.backend, model=model, reasoning=None, fast_mode=False,
                                      approval_mode=approval_mode, runtime_approval_mode=approval_mode,
-                                     active_sandbox="provider-native" if approval_mode == "ask" else "danger-full-access", cwd=context["cwd"])
+                                     active_sandbox="operations" if operations else "provider-native" if approval_mode == "ask" else "danger-full-access",
+                                     workspace_profile="operations" if operations else "full_workspace", cwd=context["cwd"])
                 self._save(chat)
             if self.backend in {"cursor", "opencode"}:
                 try:
@@ -538,6 +544,14 @@ class CliBridge(ConversationBridge):
                         connection.respond(value["id"], {"outcome": {"outcome": "cancelled"}})
                         return
                     tool = params.get("toolCall", {})
+                    if chat["agent"].get("workspace_profile") == "operations":
+                        from .agent_tools import OPERATIONS_TOOLS
+                        permitted = {"supersurfer_" + item["name"] for item in OPERATIONS_TOOLS}
+                        title = str(tool.get("title", ""))
+                        if title not in permitted:
+                            connection.respond(value["id"], {"outcome": {"outcome": "selected", "optionId": deny}})
+                            self._activity(chat, "approval", "Operations workspace denied a native or unrecognized tool request.", tool.get("toolCallId"), "denied")
+                            return
                     inputs = safe_detail(tool.get("rawInput"))
                     preview = tool.get("title", "Tool action") + ("\n" + json.dumps(inputs, indent=2) if inputs is not None else "")
                     self._permission(scope, connection, {"command": preview, "cwd": chat["agent"]["cwd"]},

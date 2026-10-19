@@ -79,6 +79,45 @@ class OpenCodeTests(unittest.TestCase):
         data['messages'][-1]['info']['error']['name']='UnknownError'
         self.assertIsNone(OpenCodeBridge.usage_from_export(data,'go',1))
 
+    def test_operations_native_denials_hold_in_yolo_and_no_history_is_loaded(self):
+        self.bridge.context_provider = lambda scope: {
+            'cwd':str(self.root), 'workspace_profile':'operations',
+            'base_instructions':'Use supersurfer_inspect_run_status only.', 'instructions':'run_id: r2',
+            'mcp_servers':{'supersurfer':{'command':sys.executable,'args':['scope.py'],
+                'env':{'SUPERSURFER_AGENT_ROLE':'worker','SUPERSURFER_WORKSPACE_PROFILE':'operations'}}}}
+        self.bridge.send('manager', 'first', model='local/test', approval_mode='yolo')
+        self.wait(lambda: not self.bridge.chat('manager')['busy'])
+        self.bridge.send('manager', 'approval', model='local/test', approval_mode='yolo')
+        self.wait(lambda: not self.bridge.chat('manager')['busy'])
+        rows = [json.loads(line) for line in self.log.read_text().splitlines()]
+        configs = [json.loads(row['config_content']) for row in rows if row.get('config_content')]
+        for config in configs:
+            self.assertEqual(config['permission']['*'], 'deny')
+            self.assertEqual(config['permission']['supersurfer_*'], 'ask')
+            for native in ('bash','edit','write','read','glob','grep','task','webfetch'):
+                self.assertEqual(config['permission'][native], 'deny')
+        decision = next(row for row in rows if row.get('id') == 'permission-1')
+        self.assertEqual(decision['result']['outcome']['optionId'], 'deny')
+        self.assertEqual(self.bridge.chat('manager')['agent']['active_sandbox'], 'operations')
+        self.assertFalse(list((self.bridge.state_dir/'context').glob('*history*')))
+        prompts = [row['params']['prompt'][0]['text'] for row in rows if row.get('method')=='session/prompt']
+        self.assertNotIn('Saved deliverables', prompts[-1])
+        self.assertNotIn('Recent exchange', prompts[-1])
+        self.assertNotIn('Read applicable detailed rules', prompts[-1])
+        self.assertEqual(len(self.bridge.chat('manager')['archived_provider_sessions']), 1)
+        self.assertTrue(any(m.get('text') == 'first' for m in self.bridge.chat('manager')['messages']))
+
+    def test_operations_overrides_host_native_allows_and_custom_agents(self):
+        resolved = {'permission':{'bash':'allow','plugin_unsafe':'allow'},
+                    'agent':{'custom':{'permission':{'read':'allow','supersurfer_queue_run':'allow'}}},
+                    'mcp':{'unrelated':{'command':['secret-command']}}}
+        with patch('server.opencode.subprocess.run', return_value=Mock(returncode=0,stdout=json.dumps(resolved))):
+            config=json.loads(self.bridge.runtime_config({},str(self.root),operations=True))
+        self.assertEqual(config['permission']['plugin_unsafe'], 'deny')
+        self.assertEqual(config['agent']['custom']['permission']['read'], 'deny')
+        self.assertEqual(config['agent']['custom']['permission']['supersurfer_queue_run'], 'deny')
+        self.assertEqual(config['mcp']['unrelated'], {'enabled':False})
+
     def tearDown(self):
         self.bridge.close()
         self.env.stop()

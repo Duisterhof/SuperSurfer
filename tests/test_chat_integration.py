@@ -28,7 +28,7 @@ class ChatIntegrationTests(unittest.TestCase):
             fixture = FAKE.replace("if text in ('hold', 'partial'):", "if text in ('hold', 'partial', 'Queue this run using its PR') or text.startswith('The user requested work on experiment '):")
             binary.write_text("#!" + sys.executable + "\n" + fixture)
             binary.chmod(0o700)
-            with patch("server.agent_budget.AGENT_TOKENS", 100_000_000), patch("server.agent_budget.WORKSPACE_TOKENS", 200_000_000), patch.dict(os.environ, {"SUPERSURFER_CODEX": str(binary), "SS_FAKE_LOG": str(log), "SS_FAKE_DOC": str(root / "document.md")}):
+            with patch.dict("server.agent_budget.POLICIES", {"standard": {"tokens": 1_000_000, "calls": 24, "tools": 40, "seconds": 900, "agent_limit": 100_000_000}}), patch("server.agent_budget.WORKSPACE_TOKENS", 200_000_000), patch.dict(os.environ, {"SUPERSURFER_CODEX": str(binary), "SS_FAKE_LOG": str(log), "SS_FAKE_DOC": str(root / "document.md")}):
                 service = Service(root / "state", root / "aml", aml=AMLClient(root / "aml", rpc=FakeManager(repo)), start_monitor=False, tracking=FakeTracking())
                 server = create_server(service, port=0)
                 server_thread = threading.Thread(target=server.serve_forever, daemon=True)

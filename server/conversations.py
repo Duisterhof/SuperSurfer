@@ -510,6 +510,13 @@ class ConversationBridge:
             raise BridgeError("Automatic agent activations are disabled. The message remains in the inbox.", 429)
         context = self._context(scope)
         self.require_chatgpt()
+        if getattr(self, "budget", None) and not model:
+            model = self.model_defaults(context["cwd"]).get("model")
+            if not model:
+                default = next((entry for entry in self.models().get("models", []) if entry.get("isDefault")), {})
+                model = default.get("model") or default.get("id")
+            if not model:
+                raise BridgeError("Choose an available model before reserving a turn allowance.", 409)
         with self._lock:
             if self._closed:
                 raise BridgeError("The Codex bridge is closed.")
@@ -522,7 +529,8 @@ class ConversationBridge:
             if len(chat.get("tasks", [])) + len(new_keys) > 200:
                 raise BridgeError("This conversation's task log is full. Create a new conversation for this work; no turn was started.", 409)
             if getattr(self, "budget", None):
-                chat["usage_allowance"] = self.budget.reserve(scope, "user", bucket=self.usage_bucket(model) if hasattr(self, "usage_bucket") else "paid")
+                chat["usage_allowance"] = self.budget.reserve(scope, "user", bucket=self.usage_bucket(model) if hasattr(self, "usage_bucket") else "paid",
+                                                             model=model, provider=self.backend)
             chat.update(busy=True, status="starting", error=None, turn_id=None, cancel_requested=False, budget_stopping=False, stalled_turns=0, continuation_progress=None, continuation_note=None)
             chat["agent"].update(name=context.get("name", chat["agent"]["name"]), role=context.get("role", chat["agent"]["role"]))
             chat["agent"].update(approval_mode=approval_mode, runtime_approval_mode=None, active_sandbox=None)

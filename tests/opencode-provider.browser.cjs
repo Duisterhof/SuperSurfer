@@ -11,6 +11,17 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:'+meta.port);
   const backend=page.getByLabel('Conversation backend');await backend.selectOption('opencode');
   await page.waitForFunction(()=>document.querySelector('#chat-backend')?.value==='opencode'&&!document.querySelector('#chat-send').disabled);
+  const workspace=page.getByLabel('Conversation workspace');
+  assert.equal(await workspace.inputValue(),'operations');
+  await workspace.selectOption('full_workspace');
+  await page.waitForFunction(()=>document.querySelector('#chat-workspace-profile')?.value==='full_workspace'&&!document.querySelector('#chat-workspace-profile').disabled);
+  await page.reload();
+  await page.waitForFunction(()=>document.querySelector('#chat-workspace-profile')?.value==='full_workspace');
+  await workspace.selectOption('operations');
+  await page.waitForFunction(()=>document.querySelector('#chat-workspace-profile')?.value==='operations'&&!document.querySelector('#chat-workspace-profile').disabled);
+  const backendBounds=await backend.boundingBox(),workspaceBounds=await workspace.boundingBox();
+  assert.ok(backendBounds.x+backendBounds.width<=workspaceBounds.x||backendBounds.y+backendBounds.height<=workspaceBounds.y,'Backend and workspace controls do not overlap');
+  await page.screenshot({path:'/tmp/opencode-operations-workspace.png'});
   assert.equal(await page.getByLabel('Conversation reasoning effort').isDisabled(),true);
   await page.locator('#chat-model').selectOption('local/test');
   await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
@@ -19,8 +30,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.getByText('Hello world',{exact:true}).waitFor();
   await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
   assert.equal(await backend.isDisabled(),true,'Existing chat stays bound to OpenCode');
-  await page.locator('#chat-input').fill('approval');await page.locator('#chat-send').click();
+  await page.locator('#chat-input').fill('hold');await page.locator('#chat-send').click();
   await page.waitForFunction(()=>!document.querySelector('#chat-stop').disabled);
+  await page.waitForFunction(()=>document.querySelector('#chat-workspace-profile')?.disabled===true);
+  assert.equal(await workspace.isDisabled(),true);
   await page.locator('#chat-stop').click();await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
   await page.locator('[data-view=settings]').click();
   const account=page.locator('[data-provider-account="opencode"]');await account.waitFor();
@@ -36,6 +49,6 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.reload();await page.locator('[data-view=settings]').click();await page.locator('[name=operations_enabled]').waitFor();
   assert.equal(await page.locator('[name=operations_enabled]').isChecked(),true);
   await page.screenshot({path:'/tmp/opencode-settings.png'});
-  assert.deepEqual(errors,[]);console.log('PASS OpenCode selection, local model, streaming, pinning, stop and capability controls');
+  assert.deepEqual(errors,[]);console.log('PASS OpenCode operations/full-workspace persistence, busy guard, local model, streaming, pinning, stop and capability controls');
  }finally{if(browser)await browser.close();fixture.stdin.end();await new Promise(resolve=>fixture.once('exit',resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -34,6 +34,7 @@ if sys.argv[-1]=='logout':
   saved=json.loads(auth.read_text()) if auth.exists() else {};saved[backend]=False;auth.write_text(json.dumps(saved))
  sys.exit(0)
 if backend=='opencode' and 'models' in sys.argv:print('local/test');sys.exit(0)
+if backend=='opencode' and 'export' in sys.argv:emit({});sys.exit(0)
 if backend=='opencode' and 'debug' in sys.argv:emit({'model':'local/test','provider':{'secret':'DO_NOT_LEAK'}});sys.exit(0)
 if '--list-models' in sys.argv:print('Available models\nauto\nmodel-test Test model');sys.exit(0)
 session=next((x.split('=',1)[1] for x in sys.argv if x.startswith('--resume=')), 'session-'+backend)

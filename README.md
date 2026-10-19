@@ -131,6 +131,13 @@ SuperSurfer uses its existing `provider/model` configuration, including local
 OpenAI-compatible inference servers. Set `SUPERSURFER_OPENCODE` to a CLI or wrapper
 path if it is not on PATH. No ChatGPT account is required.
 
+OpenCode starts in **Operations**, a small isolated workspace for run status,
+compute observations and already-prepared jobs. Queueing needs a held `run_id`
+and its PR; ask the implementation agent to prepare code or a new run recipe first. Repository/native
+tools remain disabled in both Ask and YOLO. Choose **Full workspace** in the chat
+settings while idle to opt into repository work. Switching profiles keeps the
+visible conversation history and does not start a turn.
+
 The integration uses [OpenCode ACP](https://opencode.ai/docs/acp/), with a separate
 session per conversation and scoped SuperSurfer tools. Existing chats keep their
 backend. Ask/YOLO, streaming, resume and stop are supported; Codex Fast mode,
@@ -154,3 +161,9 @@ model escalation. `SUPERSURFER_OPERATIONS_URL` and
 and redirects are rejected. Settings shows reported usage; it is not a billing
 estimate. OpenCode remains selectable for interactive operational work with the
 normal scoped tools and permissions.
+
+
+Agent usage limits depend on the selected model: GPT-6 Luna has up to 60 minutes,
+96 responses and 2M tokens per user-started turn. Other paid models retain their
+smaller limits. Settings shows the separate model policies and shared rolling
+usage; switching models does not reset an agent's spending.

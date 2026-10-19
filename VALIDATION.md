@@ -1455,3 +1455,31 @@ OpenCode bounded-context regression: two explicit user turns use separate native
 sessions while preserving visible history; tool discovery excludes unauthorized
 tools and dispatches through the existing validation path. This addresses the
 observed 57,345-input + 8,192-output overflow of a 65,536-token local model.
+
+
+## OpenCode operations workspace and Luna budgets — October 19, 2026
+
+- Full regression suite: **893 Python tests pass; 53 Node tests pass, 5 optional
+  local-SSH integration cases skipped** (`npm test`).
+- Focused coverage checks persisted/default profile selection, idle-only changes,
+  isolated cwd/brief, scoped hidden-tool rejection, prepared-run PR verification,
+  no new submission, no Results checkpoint injection, native-tool denial under
+  YOLO, bounded context without history-file loading, and preserved transcript.
+- Model-budget tests bind actual resolved model/provider to a durable policy;
+  exercise Luna's response/tool/time limits, partial remaining allowance, the
+  paid workspace and expensive sublimit, model switches, legacy rows, restart,
+  local quota independence, and the three-identical-request limit.
+- `node tests/opencode-provider.browser.cjs` passes workspace selector persistence,
+  nonoverlapping layout, busy guard, provider/model selection, streaming and stop
+  using fake provider/scheduler services. Screenshot:
+  [Operations workspace](tests/reports/opencode-operations.png).
+- Installed OpenCode accepted the per-process restricted configuration through
+  `debug config`; no inference was requested and no shared configuration changed.
+- `npm run package:linux` produced
+  `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`; the native Electron test opened the
+  packaged app with a temporary profile and confirmed sandbox/context isolation,
+  settings persistence and rejection of untrusted-page connection requests.
+- All five required capability skills were reviewed and revised; the skill
+  validator passes. No live research job/service was changed by these tests.
+  Live deployment is a separate idle-gated action. No macOS package or paid-model
+  smoke test was run for this Linux patch.

@@ -335,6 +335,9 @@ class SurfboardService:
         return self.finish_board_context(scope, context)
 
     def finish_board_context(self, scope, context):
+        context["instructions"] += ("\nModel selection guidance: routine launches, evaluation, reporting and monitoring use GPT-6 Luna. "
+            "Implementing a new research idea uses GPT-6 Astra with medium reasoning. Preserve explicit per-chat model choices "
+            "and local OpenCode; do not switch models, escalate automatically or start another agent turn to enforce this guidance.")
         from .agent_tools import ROLE_TOOLS
         info = self._chat_scope(scope)
         configurator = scope.startswith("surfboard:")

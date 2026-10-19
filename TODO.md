@@ -523,3 +523,6 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [x] Remove forced total-context compaction threshold and stop repeated low-progress compaction cycles without automatic retries.
 
 - Measure local operations usage over a full day before estimating paid-token savings.
+
+- [x] Add the default OpenCode Operations workspace with isolated briefing, scoped prepared-run controls, and explicit full-workspace opt-in.
+- [x] Give GPT-6 Luna longer durable turn/daily budgets while retaining expensive-model and local-inference limits.

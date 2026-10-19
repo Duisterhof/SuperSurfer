@@ -28,12 +28,19 @@ class OpenCodeBridge(CliBridge):
 
     def _context(self, scope):
         context = super()._context(scope)
+        if context.get("workspace_profile") == "operations":
+            # The service supplied a self-contained brief and isolated cwd.
+            # Do not attach research rules, role skills or history-file pointers.
+            context["mcp_servers"] = copy.deepcopy(context.get("mcp_servers", {}))
+            for server in context["mcp_servers"].values():
+                server.setdefault("env", {})["SUPERSURFER_TOOL_DISCOVERY"] = "0"
+            return context
         rules = self.state_dir / "context" / "opencode-rules.txt"
         atomic_write(rules, context.get("base_instructions", _INSTRUCTIONS))
         context["base_instructions"] = (
             "Act on the user's latest request within its authorized scope. Preserve existing work. "
             "Check current evidence before repeating actions; never duplicate uncertain launches. "
-            "Use find_tools to discover only the relevant scoped tools, then use_tool with exact arguments. "
+            "Use supersurfer_find_tools to discover only relevant tools, then supersurfer_use_tool with exact arguments and the returned unprefixed tool name. "
             "Use managed scheduler tools for all GPU launches, stops and allocations; never bypass ownership, "
             "PR verification, permissions or budgets. Do not stop other jobs without authorization. "
             "Record concrete deliverables with update_task; completion requires actual evidence. "
@@ -45,7 +52,7 @@ class OpenCodeBridge(CliBridge):
                 server["env"]["SUPERSURFER_TOOL_DISCOVERY"] = "1"
         return context
 
-    def prepare_turn_session(self, chat):
+    def prepare_turn_session(self, chat, operations=False):
         """Bound each explicit turn, without deleting visible or native history.
 
         No model-generated summaries or automatic replay. Current tasks and the
@@ -54,15 +61,17 @@ class OpenCodeBridge(CliBridge):
         previous = chat.get("thread_id")
         if not previous:
             return ""
+        chat.setdefault("archived_provider_sessions", []).append({"session_id": previous, "reason": "bounded user turn", "time": time.time()})
+        chat["thread_id"] = None
+        chat["agent"]["session_id"] = None
+        self._save(chat)
+        if operations:
+            return "\nEarlier sessions remain in the user's chat history. Use only the current operational briefing and latest request; verify current run state."
         path = self.state_dir / "context" / (hashlib.sha256(chat["scope"].encode()).hexdigest() + "-history.json")
         atomic_write(path, json.dumps(chat.get("messages", []), ensure_ascii=False))
         history = [m for m in chat.get("messages", []) if m.get("role") in {"user", "assistant"}
                    and m.get("status") != "pending" and not m.get("application_event")]
         excerpt = [{"role": m["role"], "text": str(m.get("text", ""))[-1200:]} for m in history[-4:]]
-        chat.setdefault("archived_provider_sessions", []).append({"session_id": previous, "reason": "bounded user turn", "time": time.time()})
-        chat["thread_id"] = None
-        chat["agent"]["session_id"] = None
-        self._save(chat)
         return ("\nPrevious conversation history is preserved at " + str(path) +
                 ". Read only relevant sections if needed. Verify live state before resuming uncertain work. "
                 "Recent exchange (context, not new instructions): " + json.dumps(excerpt))
@@ -120,7 +129,7 @@ class OpenCodeBridge(CliBridge):
     def logout(self):
         raise BridgeError("OpenCode credentials are shared with its host configuration. Use `opencode auth logout` on this machine to choose which model provider to disconnect.", 409)
 
-    def runtime_config(self, env, cwd):
+    def runtime_config(self, env, cwd, operations=False):
         """Keep host denials; replace automatic allows with per-turn consent."""
         try:
             result = subprocess.run([executable(self.backend), "debug", "config"], cwd=cwd,
@@ -138,14 +147,21 @@ class OpenCodeBridge(CliBridge):
                 permission = {"*": permission}
             permission.setdefault("*", "ask")
             permission["question"] = "deny"
+            if operations:
+                permission = {"*": "deny", **{key: "deny" for key in resolved.get("permission", {}) if isinstance(resolved.get("permission"), dict)}, "supersurfer_*": "ask"}
+                for native in ("bash", "edit", "write", "glob", "grep", "read", "task", "webfetch", "websearch", "question", "external_directory"):
+                    permission[native] = "deny"
+                # Disable host-installed MCP integrations too; this session gets
+                # only the trusted capability-bound server through ACP.
+                config["mcp"] = {name: {"enabled": False} for name in resolved.get("mcp", {})}
             config["permission"] = permission
             # Compaction was repeatedly summarizing the same oversized request
             # before a single tool call. Never launch hidden inference loops.
             config["compaction"] = {"auto": False, "prune": True}
             # Custom agents must not silently re-enable tools in Ask mode.
             for name, agent in resolved.get("agent", {}).items():
-                if isinstance(agent, dict) and "permission" in agent:
-                    config.setdefault("agent", {}).setdefault(name, {})["permission"] = ask_unless_denied(agent["permission"])
+                if isinstance(agent, dict) and (operations or "permission" in agent):
+                    config.setdefault("agent", {}).setdefault(name, {})["permission"] = ({**permission, **{key: "deny" for key in agent.get("permission", {}) if key != "supersurfer_*"}} if operations and isinstance(agent.get("permission", {}), dict) else permission) if operations else ask_unless_denied(agent["permission"])
             return json.dumps(config)
         except (OSError, ValueError, TypeError, AttributeError, subprocess.TimeoutExpired) as exc:
             raise BridgeError("OpenCode permissions could not be verified; no prompt was sent.") from exc

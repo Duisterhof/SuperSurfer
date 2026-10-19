@@ -121,16 +121,21 @@ class Store:
 
     def chat_settings(self, scope):
         saved = self.get("chat_settings:" + scope, {})
-        return {"backend": saved.get("backend"), "model": saved.get("model"), "reasoning": saved.get("reasoning"), "fast_mode": saved.get("fast_mode"), "approval_mode": saved.get("approval_mode")}
+        return {"backend": saved.get("backend"), "model": saved.get("model"), "reasoning": saved.get("reasoning"), "fast_mode": saved.get("fast_mode"), "approval_mode": saved.get("approval_mode"), "workspace_profile": saved.get("workspace_profile")}
 
     def save_chat_settings(self, scope, changes, validate=None):
-        if not isinstance(changes, dict) or set(changes) - {"backend", "model", "reasoning", "fast_mode", "approval_mode"}:
+        if not isinstance(changes, dict) or set(changes) - {"backend", "model", "reasoning", "fast_mode", "approval_mode", "workspace_profile"}:
             raise ValueError("Chat settings accept only model, reasoning, fast_mode and approval_mode")
         with self.lock:
             settings = self.chat_settings(scope)
             for key, value in changes.items():
                 if key == "backend" and value not in {None, "codex", "cursor", "claude", "opencode"}:
                     raise ValueError("Choose codex, cursor, claude, opencode or null to inherit.")
+                if key == "workspace_profile":
+                    if value not in (None, "operations", "full_workspace"):
+                        raise ValueError("workspace_profile must be operations, full_workspace or null")
+                    settings[key] = value
+                    continue
                 if key == "approval_mode":
                     if value not in (None, "ask", "auto_review", "yolo"):
                         raise ValueError("approval_mode must be ask, auto_review, yolo or null to inherit")

@@ -7,7 +7,22 @@ metadata:
 
 # SuperSurfer workspace manager
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026. Token-containment policy reviewed.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 19, 2026. Token-containment policy reviewed.
+
+OpenCode defaults to the **Operations** workspace: a small isolated briefing and
+only scoped run-status/compute inspection, prepared-run queueing, recovery
+status/enable/pause, stop, task updates and questions. Queueing accepts only
+`run_id` and `pr_url`; The implementation agent must prepare source, recipe and the held run first.
+No repository, shell, Results-report requirement or automatic agent relay is
+available there, including under YOLO. Use actual `supersurfer_`-prefixed tool
+names. The user can select **Full workspace** explicitly while the chat is idle;
+only that profile uses the repository and full role workflow below.
+
+For Codex model selection, routine launches, evaluation, reporting and monitoring
+use GPT-6 Luna. Implementing a new idea uses GPT-6 Astra with medium reasoning.
+Preserve explicit chat model choices and local OpenCode. This guidance does not
+start an agent turn or authorize automatic escalation/model switching.
+
 
 Automatic continuation and completion-review turns are disabled. Scheduled LLM
 checks, recovery reviews and peer-message wakes are disabled by default and fail
