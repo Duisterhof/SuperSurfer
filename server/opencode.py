@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
 import time
 
 from .cli_backends import CliBridge, executable
@@ -137,11 +138,15 @@ class OpenCodeBridge(CliBridge):
         Export is read-only; its transcript is neither logged nor persisted here.
         """
         try:
-            result = subprocess.run([executable(self.backend), "export", session_id],
-                                    capture_output=True, text=True, timeout=15)
-            if result.returncode or len(result.stdout) > 20_000_000:
-                return None
-            data = json.loads(result.stdout)
+            # Some CLI builds exit before a large piped stdout is flushed.
+            # A regular file preserves the complete JSON without logging it.
+            with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as output:
+                result = subprocess.run([executable(self.backend), "export", session_id],
+                                        stdout=output, stderr=subprocess.DEVNULL, text=True, timeout=15)
+                if result.returncode or output.tell() > 20_000_000:
+                    return None
+                output.seek(0)
+                data = json.load(output)
             if data.get("info", {}).get("id") != session_id:
                 return None
             return self.usage_from_export(data, prompt, started)
