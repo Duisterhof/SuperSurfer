@@ -114,3 +114,49 @@ class OpenCodeBridge(CliBridge):
                 connection.call("session/set_model", {"sessionId": session_id, "modelId": model})
             else:
                 raise BridgeError("This OpenCode version cannot confirm model selection. Update OpenCode before sending a turn.")
+
+    def completed_usage(self, session_id, prompt, started):
+        """Read confirmed turn counters when ACP omits usage notifications.
+
+        Bind to the exact latest user prompt, never refund partial/unknown turns.
+        Export is read-only; its transcript is neither logged nor persisted here.
+        """
+        try:
+            result = subprocess.run([executable(self.backend), "export", session_id],
+                                    capture_output=True, text=True, timeout=15)
+            if result.returncode or len(result.stdout) > 20_000_000:
+                return None
+            data = json.loads(result.stdout)
+            if data.get("info", {}).get("id") != session_id:
+                return None
+            return self.usage_from_export(data, prompt, started)
+        except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+            return None
+
+    @staticmethod
+    def usage_from_export(data, prompt, started=0):
+        messages = data.get("messages", [])
+        users = [i for i, message in enumerate(messages) if message.get("info", {}).get("role") == "user"]
+        if not users:
+            return None
+        index = users[-1]
+        if messages[index].get("info", {}).get("time", {}).get("created", 0) < started * 1000:
+            return None
+        text = "".join(p.get("text", "") for p in messages[index].get("parts", []) if p.get("type") == "text")
+        if text != prompt:
+            return None
+        replies = [m.get("info", {}) for m in messages[index+1:] if m.get("info", {}).get("role") == "assistant"]
+        if not replies or replies[-1].get("finish") != "stop":
+            return None
+        total = dict(inputTokens=0, cachedInputTokens=0, outputTokens=0)
+        for reply in replies:
+            tokens = reply.get("tokens", {})
+            cache = tokens.get("cache", {})
+            values = [tokens.get("input"), tokens.get("output"), tokens.get("reasoning"), cache.get("read"), cache.get("write")]
+            if not reply.get("time", {}).get("completed") or any(type(v) is not int or v < 0 for v in values):
+                return None
+            incoming, outgoing, reasoning, read, write = values
+            total["inputTokens"] += incoming + read + write
+            total["cachedInputTokens"] += read
+            total["outputTokens"] += outgoing + reasoning
+        return {"total": total}
