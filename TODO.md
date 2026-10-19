@@ -473,3 +473,5 @@ Ongoing list of requested improvements. Unchecked items are planned, not impleme
 are complete; keep native macOS launch/Gatekeeper as the remaining packaging check.
 Cursor ACP does not expose usage receipts, and listed model IDs may be plan-restricted.
 Native multi-select questions currently direct the agent to scoped ask_user.
+
+- Measure local operations usage over a full day before estimating paid-token savings.

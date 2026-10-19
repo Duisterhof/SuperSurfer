@@ -222,6 +222,9 @@ class Service(SurfboardService, EditorService, WritingService):
         self.workbench = Workbench(self)
         self.nodes = NodeSetup(self)
         self.recovery = RunRecovery(self)
+        from .operations import Operations
+        self.operations = Operations(self.store)
+        self.operations_thread = None
         self.message_event = threading.Event()
         self.messages = AgentMessages(self)
         self.message_thread = None
@@ -231,6 +234,8 @@ class Service(SurfboardService, EditorService, WritingService):
         self.tracking.stop_event = self.shutdown
         self.tracking_thread = None
         if start_monitor and not self.read_only:
+            self.operations_thread = threading.Thread(target=self._operations_loop, name="supersurfer-operations", daemon=True)
+            self.operations_thread.start()
             self.message_thread = threading.Thread(target=self.messages.loop, name="supersurfer-agent-messages", daemon=True)
             self.message_thread.start()
             self.wakeup_thread = threading.Thread(target=self._wakeup_loop, name="supersurfer-worker-wakeups", daemon=True)
@@ -289,6 +294,7 @@ class Service(SurfboardService, EditorService, WritingService):
                     run["wandb_url"] = prepared.get("run_url") or run["wandb_url"]
         state["settings"] = self.store.settings()
         state["account_setup"] = self.account_setup()
+        state["operations"] = self.operations.status()
         state["monitoring"] = self.store.get("monitoring", {"last_check": None, "next_check": None, "alerts": []})
         if not state["settings"]["monitor_enabled"]:
             state["monitoring"]["next_check"] = None
@@ -355,6 +361,17 @@ class Service(SurfboardService, EditorService, WritingService):
                 monitoring.update(error=str(exc), last_check=time.time(), next_check=time.time() + settings["monitor_interval_minutes"] * 60)
                 monitoring.setdefault("alerts", [])
                 self.store.put("monitoring", monitoring)
+
+    def _operations_loop(self):
+        while not self.shutdown.wait(60):
+            if not self.store.settings().get("operations_enabled"):
+                continue
+            try:
+                snapshot, error, _ = self.manager_snapshot()
+                self.operations.tick({**normalize(snapshot), "manager_connected": error is None and bool(snapshot)})
+            except Exception:
+                # The inference worker cannot interrupt native scheduling.
+                pass
 
     def _wakeup_loop(self):
         while not self.shutdown.wait(10):
@@ -2028,6 +2045,8 @@ class Service(SurfboardService, EditorService, WritingService):
 
     def close(self):
         self.shutdown.set()
+        if self.operations_thread:
+            self.operations_thread.join(timeout=35)
         self.message_event.set()
         if self.message_thread:
             self.message_thread.join(timeout=30)
@@ -2044,7 +2063,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.codex.close()
         # A bounded external call may still be unwinding on process shutdown.
         # Do not close SQLite underneath a live background writer.
-        threads = (self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread, *self.nodes.threads)
+        threads = (self.operations_thread, self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread, *self.nodes.threads)
         if not any(thread and thread.is_alive() for thread in threads):
             self.store.close()
 

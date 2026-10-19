@@ -1039,3 +1039,9 @@ provider-native rules; permitted workspace edits may run without a callback. CLI
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.
+
+Local operations inference is explicitly enabled, stateless, tool-free and
+separate from interactive provider sessions. Durable reservations precede each
+request; failed/uncertain requests consume budget and are not replayed. Native
+scheduler and recovery gates remain authoritative. Run transition summaries
+cannot authorize scientific changes, launches or agent-to-agent messages.

@@ -455,7 +455,13 @@ class CliBridge(ConversationBridge):
                 chat["status"] = "working"
                 self._save(chat)
             if self.backend in {"cursor", "opencode"}:
+                prompt_started = time.time()
                 result = connection.call("session/prompt", {"sessionId": session_id, "prompt": [{"type": "text", "text": message}]}, timeout=self.QUESTION_TIMEOUT + 120)
+                if self.backend == "opencode" and result.get("stopReason") == "end_turn" and hasattr(self, "budget"):
+                    usage = self.completed_usage(session_id, message, prompt_started)
+                    if usage:
+                        with self._lock:
+                            self._observe_usage(chat, usage)
                 if result.get("stopReason") == "cancelled":
                     outcome.update(status="interrupted", error=None)
                 elif result.get("stopReason") in {"end_turn", "max_tokens", "max_turn_requests", "refusal"}:

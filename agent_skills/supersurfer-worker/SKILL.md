@@ -253,3 +253,14 @@ a real turn failure, never a reason to replay automatically or switch models.
 Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
 Use the scoped ask_user tool for questions. Manage upstream accounts in the host
 terminal, never by sharing credentials in chat or changing shared server config.
+
+## Local operations
+
+OpenCode can use a configured local model for explicitly requested operational
+turns. Keep research design, new implementation and scientific interpretation
+with the selected research/coding provider. Do not move a live conversation or
+its recovery ownership when selecting another backend. Native scheduling handles
+prepared launches and supported retries without a model call. Optional local
+operations summaries consume only changed run statuses, have no tools or chat
+history, and cannot authorize launches or wake another agent. They are visible
+in Settings with usage; do not relay routine reports between agents.
