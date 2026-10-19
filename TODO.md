@@ -526,3 +526,8 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 
 - [x] Add the default OpenCode Operations workspace with isolated briefing, scoped prepared-run controls, and explicit full-workspace opt-in.
 - [x] Give GPT-6 Luna longer durable turn/daily budgets while retaining expensive-model and local-inference limits.
+
+
+## Tool polling recovery (2026-10-19)
+
+Fixed: recovery/status polling no longer silently interrupts an authorized agent after three identical tool calls.

@@ -51,6 +51,19 @@ def charge(row):
         return raw
     return raw - cached + (cached + 9) // 10
 
+class RepeatedToolError(ValueError):
+    """Reject a repeated mutation without cancelling unrelated authorized work."""
+
+
+def is_status_poll(name, arguments):
+    # Provider dynamic tools use a prefix; HTTP tools use the short name.
+    name = name.removeprefix("supersurfer_")
+    # Explicit read operations only; mutations retain duplicate protection.
+    return (name in {"status", "inspect_project_compute", "inspect_run", "get_run", "inspect_run_status", "inspect_compute_host", "check_available_node"}
+            or (name in {"recover_run", "acquire_new_node", "check_available_node"}
+                and arguments.get("action", arguments.get("operation", "status" if name == "recover_run" else None)) in {"status", "inspect"}))
+
+
 class BudgetError(ValueError):
     status = 429
 
@@ -156,8 +169,14 @@ class AgentBudget:
                 if not raw: raise BudgetError("No active usage allowance.")
                 row = json.loads(raw[0])
                 count,same = self.db.execute("SELECT COUNT(*), COALESCE(SUM(fingerprint=?),0) FROM tool_calls WHERE reservation=?",(fingerprint,reservation)).fetchone()
-                if row.get("reason") or self.clock()>=row["deadline"] or count>=row.get('tools', 40) or same>=3:
-                    raise BudgetError("Tool budget exhausted or unchanged request repeated three times. Inspect saved evidence; automatic retries are stopped.")
+                if row.get("reason"):
+                    raise BudgetError(row["reason"])
+                if self.clock() >= row["deadline"]:
+                    raise BudgetError("Agent time allowance exhausted. Unfinished work is saved.")
+                if count >= row.get('tools', 40):
+                    raise BudgetError(f"This turn reached its tool-call allowance ({count}/{row.get('tools', 40)} calls). Unfinished work is saved.")
+                if same >= 3 and not is_status_poll(name, arguments):
+                    raise RepeatedToolError("This identical action was already requested three times. Inspect its existing receipt or change the action; this turn remains active.")
                 self.db.execute("INSERT INTO tool_calls VALUES(?,?,?)",(reservation,fingerprint,self.clock()))
                 self.db.commit()
             except BaseException:

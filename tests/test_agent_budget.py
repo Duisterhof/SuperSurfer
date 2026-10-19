@@ -4,7 +4,7 @@ import tempfile
 import threading
 import unittest
 from unittest.mock import patch
-from server.agent_budget import AgentBudget, BudgetError, TURN_TOKENS
+from server.agent_budget import AgentBudget, BudgetError, RepeatedToolError, TURN_TOKENS
 from server.conversations import ConversationBridge
 
 class BudgetTests(unittest.TestCase):
@@ -62,8 +62,8 @@ class BudgetTests(unittest.TestCase):
         self.assertIsNotNone(row['reason'])
     def test_repeated_tool_calls_and_new_receipts_do_not_reset_allowance(self):
         r=self.b.reserve('worker','user')
-        for _ in range(3):self.b.tool(r['id'],'status',{'run':'r1'})
-        with self.assertRaises(BudgetError):self.b.tool(r['id'],'status',{'run':'r1'})
+        for _ in range(3):self.b.tool(r['id'],'queue_run',{'run':'r1'})
+        with self.assertRaises(RepeatedToolError):self.b.tool(r['id'],'queue_run',{'run':'r1'})
         for i in range(37):self.b.tool(r['id'],'status',{'receipt':i})
         with self.assertRaises(BudgetError):self.b.tool(r['id'],'status',{'receipt':'new'})
     def test_deadline_and_missing_receipts_fail_closed(self):
@@ -128,10 +128,11 @@ class ModelBudgetTests(unittest.TestCase):
         self.assertIsNotNone(self.b.observe(row['id'],{'inputTokens':24})['reason'])
         self.assertEqual(self.b.summary()['expensive_reserved_tokens'],5000000)
 
-    def test_luna_repeated_identical_tools_still_stop_at_three(self):
+    def test_luna_status_polls_use_normal_tool_allowance(self):
         row = self.luna()
-        for _ in range(3): self.b.tool(row['id'],'status',{'run':'one'})
-        with self.assertRaises(BudgetError): self.b.tool(row['id'],'status',{'run':'one'})
+        for _ in range(120): self.b.tool(row['id'],'supersurfer_recover_run',{'run_id':'one'})
+        with self.assertRaisesRegex(BudgetError, '120/120'):
+            self.b.tool(row['id'],'recover_run',{'action':'status','run_id':'one'})
 
 
 class LunaCacheAccountingTests(unittest.TestCase):
@@ -291,3 +292,30 @@ class ProviderBudgetTests(unittest.TestCase):
         self.assertFalse(final['busy']);self.assertIn('allowance',final['error'])
         self.assertEqual(1,len([r for r in self.requests() if r.get('method')=='turn/start']))
         self.assertTrue(any(r.get('method')=='turn/interrupt' for r in self.requests()))
+
+
+class ToolGuardDispatchTests(unittest.TestCase):
+    def test_duplicate_action_does_not_interrupt_turn(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from server.app import Service, APIError
+        bridge = Mock()
+        bridge.chat.return_value = {"busy": True, "usage_allowance": {"id": "test"}}
+        bridge.budget.tool.side_effect = RepeatedToolError("inspect receipt")
+        app = SimpleNamespace(codex=bridge)
+        with self.assertRaises(APIError):
+            Service.agent_action(app, "experiment:x", "queue_run", {})
+        bridge.stop.assert_not_called()
+        bridge.stop_for_budget.assert_not_called()
+
+    def test_budget_exhaustion_preserves_reason(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from server.app import Service, APIError
+        bridge = Mock()
+        bridge.chat.return_value = {"busy": True, "usage_allowance": {"id": "test"}}
+        bridge.budget.tool.side_effect = BudgetError("Tool allowance 120/120")
+        app = SimpleNamespace(codex=bridge)
+        with self.assertRaises(APIError):
+            Service.agent_action(app, "experiment:x", "recover_run", {})
+        bridge.stop_for_budget.assert_called_once_with("experiment:x", "Tool allowance 120/120")

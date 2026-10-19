@@ -1504,3 +1504,8 @@ Coverage includes the 20M raw ceiling, 2M uncached ceiling, 96-response ceiling,
 integer ceiling rounding, confirmed weighted settlement, conservative missing or
 invalid cached counters, durable legacy raw charging and unchanged past spend
 across policy/model switches. No real inference or research action was started.
+
+
+## Tool polling recovery (2026-10-19)
+
+Regression coverage: repeated recover_run status polls remain usable up to the existing tool limit; repeated mutations are rejected without interrupting the agent; actual tool exhaustion retains its reason in the provider stop path.
