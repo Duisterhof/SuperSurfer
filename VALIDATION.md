@@ -1515,3 +1515,9 @@ Regression coverage: repeated recover_run status polls remain usable up to the e
 New reservations for resolved Codex Astra/Sol models count uncached input and output fully and cached input at one tenth, as internal budget units rather than dollars. Historical reservations are unchanged. The standard one-million-unit allowance, daily caps, 24 responses, 40 tools and 15-minute limit remain; an additional ten-million raw-token ceiling applies. Missing or inconsistent cache counters remain conservatively charged. Regression: the reported 1,010,207-token/984,320-cached turn charges 124,319 units and continues.
 
 Validated cache-budget repair: 902 Python tests passed; 53 Node tests passed with 5 optional skips. Linux x64 package built successfully, and isolated native Electron startup/persistence/security checks passed. No live model calls were used for regression tests.
+
+
+## User-directed work: no application usage caps
+Supersedes earlier per-turn and daily cap policies for user-assigned work. Explicit user messages receive uncapped metering receipts across all models/providers: no token, response, tool-call, time, or daily admission ceiling. Historical user receipts are likewise exempt during runtime checks without erasing recorded usage. Automatic/peer/scheduled activations remain disabled. Duplicate mutation guards, ownership checks, provider account limits, manual stop and training supervision are unchanged. Settings shows usage counters rather than a quota.
+
+Validation: 889 Python tests and 53 Node tests passed (5 optional skips). Linux x64 packaging and isolated native Electron startup/security/persistence checks passed. Provider fixture verifies a user turn survives formerly excessive usage and remains manually stoppable; historical receipt expiry and denied automatic activations are covered.
