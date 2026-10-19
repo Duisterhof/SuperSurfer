@@ -349,3 +349,14 @@ these allocation fields retains its previous resource contract.
 Recovery reviews are disabled by default, including after a workspace restart.
 Preserve the existing owner, scoped grant and pending task for user-triggered
 work; busy, paused and explicit Stop guards remain binding.
+
+## OpenCode backend
+
+OpenCode conversations use the same scoped SuperSurfer tools. Select it only for
+a new conversation; existing native sessions cannot change providers. The host's
+OpenCode configuration may point to a local model server, so a ChatGPT login is
+not required. Settings reports configuration readiness; an upstream error remains
+a real turn failure, never a reason to replay automatically or switch models.
+Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
+Use the scoped ask_user tool for questions. Manage upstream accounts in the host
+terminal, never by sharing credentials in chat or changing shared server config.

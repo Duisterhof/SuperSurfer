@@ -346,3 +346,25 @@ uncertain attempts cannot use the failed-allocation route.
 A workspace restart does not automatically reactivate the recovery owner.
 Preserve its task, request identity and pending recovery for user-triggered work;
 do not create a new run or manually edit recovery state.
+
+## OpenCode backend
+
+OpenCode conversations use the same scoped SuperSurfer tools. Select it only for
+a new conversation; existing native sessions cannot change providers. The host's
+OpenCode configuration may point to a local model server, so a ChatGPT login is
+not required. Settings reports configuration readiness; an upstream error remains
+a real turn failure, never a reason to replay automatically or switch models.
+Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
+Use the scoped ask_user tool for questions. Manage upstream accounts in the host
+terminal, never by sharing credentials in chat or changing shared server config.
+
+## Local operations
+
+OpenCode can use a configured local model for explicitly requested operational
+turns. Keep research design, new implementation and scientific interpretation
+with the selected research/coding provider. Do not move a live conversation or
+its recovery ownership when selecting another backend. Native scheduling handles
+prepared launches and supported retries without a model call. Optional local
+operations summaries consume only changed run statuses, have no tools or chat
+history, and cannot authorize launches or wake another agent. They are visible
+in Settings with usage; do not relay routine reports between agents.

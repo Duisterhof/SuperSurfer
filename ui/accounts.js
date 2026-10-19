@@ -1,5 +1,5 @@
-const providers={codex:'ChatGPT / Codex',cursor:'Cursor',claude:'Claude Code'};
-const installUrls={codex:'https://developers.openai.com/codex/cli/',cursor:'https://cursor.com/docs/cli/installation',claude:'https://code.claude.com/docs/en/setup'};
+const providers={codex:'ChatGPT / Codex',cursor:'Cursor',claude:'Claude Code',opencode:'OpenCode'};
+const installUrls={codex:'https://developers.openai.com/codex/cli/',cursor:'https://cursor.com/docs/cli/installation',claude:'https://code.claude.com/docs/en/setup',opencode:'https://opencode.ai/docs'};
 export function createWorkspaceAccounts({api,action,gate,readOnly,onError}){
  const records=new Map(),busy=new Set(),inflight=new Map(),revisions=new Map();let root=null;
  const markup=()=>`<div class="workspace-accounts">${Object.entries(providers).map(([id,label])=>`<div class="workspace-account-row" data-provider-account="${id}"><div><strong>${label}</strong><small class="provider-account-status" role="status">Checking…</small></div><a class="provider-install" href="${installUrls[id]}" target="_blank" rel="noopener noreferrer" hidden>Install CLI</a><button type="button" class="button small-button" data-account-login="${id}">Sign in</button><button type="button" class="button small-button" data-account-logout="${id}" hidden>Sign out</button><button type="button" class="icon-button" data-account-refresh="${id}" title="Refresh ${label} status" aria-label="Refresh ${label} status">↻</button></div>`).join('')}</div>`;
@@ -8,7 +8,7 @@ export function createWorkspaceAccounts({api,action,gate,readOnly,onError}){
   if(!row)continue;const working=busy.has(id),loading=inflight.has(id),active=value?.active_turns>0;
   row.querySelector('.provider-account-status').textContent=working?'Signing out…':!value?'Checking…':value.error||value.note||(connected?['Signed in',value.account.email||value.account.authMethod,active?value.active_turns+' active turn'+(value.active_turns===1?'':'s'):''].filter(Boolean).join(' · '):'Signed out');
   row.querySelector('.provider-install').hidden=value?.installed!==false;
-  const login=row.querySelector('[data-account-login]'),logout=row.querySelector('[data-account-logout]');login.hidden=connected;logout.hidden=!connected;
+  const login=row.querySelector('[data-account-login]'),logout=row.querySelector('[data-account-logout]');login.hidden=connected;logout.hidden=!connected||value?.logout_supported===false;
   login.disabled=readOnly()||working||loading;login.textContent=value?.installed===false?'Set up':'Sign in';logout.disabled=readOnly()||working||active;logout.title=active?'Finish or stop this provider’s active turns before signing out.':'Sign out on this machine';row.querySelector('[data-account-refresh]').disabled=working||loading;
  }}
  function observe(value){records.set(value.backend||'codex',{value,at:Date.now()});paint();}

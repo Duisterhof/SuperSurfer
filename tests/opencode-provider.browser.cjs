@@ -1,0 +1,38 @@
+'use strict';
+const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
+(async()=>{
+ const root=path.resolve(__dirname,'..'),fixture=spawn(process.env.PYTHON||'python3',['tests/backend_runtime_fixture.py'],{cwd:root,stdio:['pipe','pipe','pipe']});let browser,stderr='';fixture.stderr.on('data',v=>stderr+=v);
+ try{
+  const meta=await new Promise((resolve,reject)=>{let text='';fixture.stdout.on('data',v=>{text+=v;if(text.includes('\n'))resolve(JSON.parse(text.split('\n')[0]));});fixture.on('exit',code=>reject(new Error(code+' '+stderr)));});
+  const token=fs.readFileSync(path.join(meta.directory,'token'),'utf8').trim();
+  browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/opt/google/chrome/chrome',headless:true,args:['--no-sandbox']});
+  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(15000);
+  await page.addInitScript(({token,id})=>{sessionStorage.setItem('supersurfer-token',token);localStorage.setItem('supersurfer-workspace',JSON.stringify({view:'workspace',projectId:'p1',experimentId:id,tab:'overview',chatVisible:true}));},{token,id:meta.experiment});
+  await page.goto('http://127.0.0.1:'+meta.port);
+  const backend=page.getByLabel('Conversation backend');await backend.selectOption('opencode');
+  await page.waitForFunction(()=>document.querySelector('#chat-backend')?.value==='opencode'&&!document.querySelector('#chat-send').disabled);
+  assert.equal(await page.getByLabel('Conversation reasoning effort').isDisabled(),true);
+  await page.locator('#chat-model').selectOption('local/test');
+  await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
+  assert.equal(await page.locator('#chat-model').inputValue(),'local/test');
+  await page.locator('#chat-input').fill('hello');await page.locator('#chat-send').click();
+  await page.getByText('Hello world',{exact:true}).waitFor();
+  await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
+  assert.equal(await backend.isDisabled(),true,'Existing chat stays bound to OpenCode');
+  await page.locator('#chat-input').fill('approval');await page.locator('#chat-send').click();
+  await page.waitForFunction(()=>!document.querySelector('#chat-stop').disabled);
+  await page.locator('#chat-stop').click();await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
+  await page.locator('[data-view=settings]').click();
+  const account=page.locator('[data-provider-account="opencode"]');await account.waitFor();
+  await page.waitForFunction(()=>document.querySelector('[data-provider-account="opencode"] .provider-account-status')?.textContent.includes('Configured'));
+  assert.equal(await account.locator('[data-account-logout]').isVisible(),false);
+  assert.equal(await page.locator('[name=backend_worker] option[value=opencode]').count(),1);
+  await page.locator('[name=operations_enabled]').check();
+  await page.locator('#settings-form button[type=submit]').click();
+  await page.waitForResponse(r=>r.url().endsWith('/api/state')&&r.status()===200).catch(()=>{});
+  await page.reload();await page.locator('[name=operations_enabled]').waitFor();
+  assert.equal(await page.locator('[name=operations_enabled]').isChecked(),true);
+  await page.screenshot({path:'/tmp/opencode-settings.png'});
+  assert.deepEqual(errors,[]);console.log('PASS OpenCode selection, local model, streaming, pinning, stop and capability controls');
+ }finally{if(browser)await browser.close();fixture.stdin.end();await new Promise(resolve=>fixture.once('exit',resolve));}
+})().catch(error=>{console.error(error);process.exitCode=1;});

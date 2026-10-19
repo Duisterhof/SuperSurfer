@@ -20,6 +20,9 @@
 - [ ] Generalize Slurm resources and clusters after the bounded PSC smoke is verified.
 - [ ] Extend owner-bound automatic failed-run recovery to Slurm; direct-host pool recovery remains separate.
 
+- [x] Add OpenCode ACP as a selectable backend, including local configured models,
+  scoped tools, approvals, durable sessions and UI capability handling.
+
 # Native VS Code preview
 
 - [x] Attach workflow tools to the same native Agent Host chat without copying caches.
@@ -518,3 +521,5 @@ Native multi-select questions currently direct the agent to scoped ask_user.
 - [ ] Typed deterministic recurring evaluation plans. Do not claim arbitrary saved natural-language wakeups can execute without an agent.
 
 - [x] Remove forced total-context compaction threshold and stop repeated low-progress compaction cycles without automatic retries.
+
+- Measure local operations usage over a full day before estimating paid-token savings.

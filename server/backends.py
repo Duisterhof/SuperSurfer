@@ -7,6 +7,8 @@ from .cli_backends import CliBridge, PROVIDERS, provider_name
 from .conversations import BridgeError
 from .agent_budget import AgentBudget, BudgetError, AUTOMATIC_REASON
 
+from .opencode import OpenCodeBridge
+
 
 class BackendRouter:
     def __init__(self, directory, store, context_provider, scope_provider, action_handler=None):
@@ -35,7 +37,7 @@ class BackendRouter:
         backend = provider_name(backend)
         with self.lock:
             if backend not in self.bridges:
-                self.bridges[backend] = CliBridge(backend, self.directory / backend, self.context_provider, self.action_handler)
+                self.bridges[backend] = (OpenCodeBridge if backend == "opencode" else CliBridge)(backend, self.directory / backend, self.context_provider, self.action_handler)
             self.bridges[backend].budget = self.budget
             return self.bridges[backend]
 
@@ -127,7 +129,9 @@ class BackendRouter:
 
     def list_chats(self):
         # Load existing databases without starting any provider CLI.
-        for backend in ("cursor", "claude"):
+        for backend in PROVIDERS:
+            if backend == "codex":
+                continue
             if (self.directory / backend / (backend + ".sqlite3")).exists():
                 self.provider(backend)
         settings = self.store.settings()["backends"]

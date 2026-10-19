@@ -23,6 +23,22 @@ the default. Agent-side validation preserves Slurm's explicit Python, data and
 package requirements even though Slurm does not use project-pool placement.
 See [the contract](docs/psc-slurm-bridge.md).
 
+# OpenCode backend
+
+OpenCode is a selectable, durable backend for new chats and role defaults. Its
+ACP sessions use the existing conversation lifecycle, scoped MCP tools, explicit
+model selection, Ask/YOLO permission callbacks and no replay after disconnect.
+Model selection is verified in the project session before any prompt is sent.
+Native tool permissions are set to ask in the owned process; YOLO grants each
+request through the existing turn-scoped callback. Native question tools are
+disabled in favor of scoped SuperSurfer ask_user. Host provider credentials are
+never returned in account/model payloads or modified by global sign-out.
+
+Configured-model status is distinct from authenticated upstream access. Local
+models need no hosted account. Existing Codex/Cursor/Claude sessions and global
+defaults are unchanged. OpenCode ACP is a host process using existing config, not
+an attachment to an arbitrary running HTTP server or another user's session.
+
 # Native VS Code workflow preview — October 12, 2026
 
 An authenticated host companion attaches an existing Agent Host session/chat to
@@ -1165,3 +1181,9 @@ two tool completions or a new turn reset the streak. This guard measures usable
 context headroom, not semantic task completion, and never schedules a retry.
 Deployment must restart the workspace's app-server to clear already-loaded
 thread overrides. Saved conversation history and external jobs are retained.
+
+Local operations inference is explicitly enabled, stateless, tool-free and
+separate from interactive provider sessions. Durable reservations precede each
+request; failed/uncertain requests consume budget and are not replayed. Native
+scheduler and recovery gates remain authoritative. Run transition summaries
+cannot authorize scientific changes, launches or agent-to-agent messages.

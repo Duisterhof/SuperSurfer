@@ -320,3 +320,14 @@ a running, pending, cancelled or uncertain job into a failed retry, dispatch a
 second owner, or infer launch rights from a scheduled observation.
 Recovery reviews do not automatically reactivate the owner by default. Preserve
 its pending lineage across restarts; the lead gains no fresh queue capability.
+
+## OpenCode backend
+
+OpenCode conversations use the same scoped SuperSurfer tools. Select it only for
+a new conversation; existing native sessions cannot change providers. The host's
+OpenCode configuration may point to a local model server, so a ChatGPT login is
+not required. Settings reports configuration readiness; an upstream error remains
+a real turn failure, never a reason to replay automatically or switch models.
+Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
+Use the scoped ask_user tool for questions. Manage upstream accounts in the host
+terminal, never by sharing credentials in chat or changing shared server config.

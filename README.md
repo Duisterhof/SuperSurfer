@@ -32,7 +32,7 @@ published 0.1.43 release.
   and save a named version. Ask an agent to apply a specific workflow change
   directly, or review its proposal first. Apply changes to one task, selected linked tasks,
   or future tasks; the detailed graph remains available under **Advanced**.
-- **Bring your agents.** Work with **Codex, Cursor or Claude Code** through
+- **Bring your agents.** Work with **Codex, Cursor, Claude Code or OpenCode** through
   persistent project leads and task workers. Give each a role, share context,
   ask questions and follow their progress across projects.
 - **Keep your editor.** Use the optional **VS Code backend with Open VSX
@@ -122,3 +122,35 @@ agent wakeups are paused on upgrade. Training and ordinary telemetry continue.
 Settings shows usage and rolling allowances. Per-turn time/tool limits and
 provider usage circuit breakers bound interactive work; these are not exact
 billing caps. See CONTRACT.md for provider-specific accounting limits.
+
+## OpenCode and local models
+
+Select **OpenCode** in Settings → Coding backends or in a new conversation's
+backend selector. Install and configure OpenCode on the workspace host first;
+SuperSurfer uses its existing `provider/model` configuration, including local
+OpenAI-compatible inference servers. Set `SUPERSURFER_OPENCODE` to a CLI or wrapper
+path if it is not on PATH. No ChatGPT account is required.
+
+The integration uses [OpenCode ACP](https://opencode.ai/docs/acp/), with a separate
+session per conversation and scoped SuperSurfer tools. Existing chats keep their
+backend. Ask/YOLO, streaming, resume and stop are supported; Codex Fast mode,
+reasoning controls and active-turn steering are not. Settings reports configured
+models, not proof that every upstream credential works; errors are surfaced on
+the turn without automatic replay or switching models.
+
+Use `opencode auth login` / `opencode auth logout` on the workspace host to manage
+upstream accounts. SuperSurfer never signs out all of a shared OpenCode setup.
+The adapter launches an ACP client process using that configuration; it does not
+attach to an unrelated OpenCode UI session or change a shared HTTP server.
+
+Local operations summaries are opt-in under Settings. They use a tool-free local
+Qwen endpoint (default `http://127.0.0.1:8008/v1`, model `qwen3.8-27b`), separately
+from interactive OpenCode sessions. Native scheduling continues to own prepared
+launches and supported retries. Only changed run states invoke inference: no
+conversation history, no tools, at most 600 output tokens and 48 calls per UTC
+day, at least five minutes apart. Failures are recorded without replay or paid
+model escalation. `SUPERSURFER_OPERATIONS_URL` and
+`SUPERSURFER_OPERATIONS_MODEL` configure another local model. Hosted endpoints
+and redirects are rejected. Settings shows reported usage; it is not a billing
+estimate. OpenCode remains selectable for interactive operational work with the
+normal scoped tools and permissions.

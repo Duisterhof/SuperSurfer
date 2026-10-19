@@ -1,6 +1,6 @@
 """Official provider CLIs; credentials and login flows remain CLI-owned.
 
-Cursor uses ACP v1. Claude uses the CLI's bidirectional stream protocol, as
+Cursor and OpenCode use ACP v1. Claude uses the CLI's bidirectional stream protocol, as
 specified by Anthropic's published claude-agent-sdk-python transport/query.
 Each scope has a separate process and scoped MCP connection. Nothing is replayed
 after an uncertain disconnect. Raw CLI output and authentication output are never
@@ -30,19 +30,20 @@ from .time_context import local_time_context
 PROVIDERS = {
     "codex": {"label": "Codex", "account_label": "ChatGPT", "reasoning": True, "fast_mode": True, "auto_review": True, "steering": True},
     "cursor": {"label": "Cursor", "account_label": "Cursor", "reasoning": False, "fast_mode": False, "auto_review": False, "steering": False},
+    "opencode": {"label": "OpenCode", "account_label": "OpenCode", "reasoning": False, "fast_mode": False, "auto_review": False, "steering": False},
     "claude": {"label": "Claude Code", "account_label": "Claude", "reasoning": False, "fast_mode": False, "auto_review": False, "steering": False},
 }
 
 
 def provider_name(value):
     if value not in PROVIDERS:
-        raise ValueError("Choose codex, cursor or claude.")
+        raise ValueError("Choose codex, cursor, claude or opencode.")
     return value
 
 
 def executable(backend):
     override = os.environ.get("SUPERSURFER_" + backend.upper())
-    names = ("agent", "cursor-agent") if backend == "cursor" else ("claude",)
+    names = ("agent", "cursor-agent") if backend == "cursor" else (backend,)
     candidates = [override] if override else [shutil.which(name) or str(Path.home() / ".local/bin" / name) for name in names]
     for path in candidates:
         if path and Path(path).is_file() and os.access(path, os.X_OK):
@@ -392,6 +393,11 @@ class CliBridge(ConversationBridge):
                     args.append("--resume=" + session_id)
                 if model:
                     args.append("--model=" + model)
+            elif self.backend == "opencode":
+                # Ask every native tool first; YOLO is handled by the scoped
+                # approval callback, not a shared server-wide permission change.
+                env["OPENCODE_CONFIG_CONTENT"] = self.runtime_config(env, context["cwd"])
+                args = [binary, "acp"]
             else:
                 args = [binary, "--sandbox", "disabled" if approval_mode == "yolo" else "enabled"]
                 if model:
@@ -414,26 +420,28 @@ class CliBridge(ConversationBridge):
                                      approval_mode=approval_mode, runtime_approval_mode=approval_mode,
                                      active_sandbox="provider-native" if approval_mode == "ask" else "danger-full-access", cwd=context["cwd"])
                 self._save(chat)
-            if self.backend == "cursor":
+            if self.backend in {"cursor", "opencode"}:
                 try:
                     init = connection.call("initialize", {"protocolVersion": 1, "clientCapabilities": {"fs": {"readTextFile": False, "writeTextFile": False}, "terminal": False}, "clientInfo": {"name": "supersurfer", "version": "1"}})
-                    if any(method.get("id") == "cursor_login" for method in init.get("authMethods", []) if isinstance(method, dict)):
+                    if self.backend == "cursor" and any(method.get("id") == "cursor_login" for method in init.get("authMethods", []) if isinstance(method, dict)):
                         connection.call("authenticate", {"methodId": "cursor_login"})
                 except BridgeError as exc:
-                    raise BridgeError("Cursor CLI could not connect using ACP. Update the official Cursor CLI on this workspace computer and check its sign-in, then retry. " + str(exc)) from exc
+                    raise BridgeError(PROVIDERS[self.backend]["label"] + " could not connect using ACP. Update its CLI and check its configuration, then retry. " + str(exc)) from exc
                 servers = [{"name": name, "command": config["command"], "args": config.get("args", []), "env": [{"name": k, "value": v} for k, v in config.get("env", {}).items()]} for name, config in mcp.items()]
                 if session_id and not init.get("agentCapabilities", {}).get("loadSession"):
-                    raise BridgeError("This Cursor CLI cannot resume the saved session. Update its CLI; no new session or message was created.")
+                    raise BridgeError("This provider cannot resume the saved session. Update its CLI; no new session or message was created.")
                 with self._lock:
                     chat["loading_history"] = bool(session_id)
                 result = connection.call("session/load" if session_id else "session/new", {"cwd": context["cwd"], "mcpServers": servers, **({"sessionId": session_id} if session_id else {})})
                 session_id = session_id or result.get("sessionId")
                 if not isinstance(session_id, str) or not session_id or len(session_id) > 256:
-                    raise BridgeError("Cursor returned an invalid session ID; the message was not sent.")
+                    raise BridgeError("The provider returned an invalid session ID; the message was not sent.")
                 with self._lock:
                     chat.update(thread_id=session_id, loading_history=False, status="working")
                     chat["agent"]["session_id"] = session_id
                     self._save(chat)
+                if self.backend == "opencode":
+                    self.configure_session(connection, session_id, result, model)
                 message = instructions + "\n\nUser request:\n" + text
             else:
                 # Rebuild per-turn role guidance on resumes rather than retaining
@@ -446,14 +454,14 @@ class CliBridge(ConversationBridge):
                 next(m for m in chat["messages"] if m["id"] == message_id)["status"] = "sent"
                 chat["status"] = "working"
                 self._save(chat)
-            if self.backend == "cursor":
+            if self.backend in {"cursor", "opencode"}:
                 result = connection.call("session/prompt", {"sessionId": session_id, "prompt": [{"type": "text", "text": message}]}, timeout=self.QUESTION_TIMEOUT + 120)
                 if result.get("stopReason") == "cancelled":
                     outcome.update(status="interrupted", error=None)
                 elif result.get("stopReason") in {"end_turn", "max_tokens", "max_turn_requests", "refusal"}:
-                    outcome.update(status="completed" if result["stopReason"] == "end_turn" else "failed", error=None if result["stopReason"] == "end_turn" else "Cursor stopped: " + result["stopReason"])
+                    outcome.update(status="completed" if result["stopReason"] == "end_turn" else "failed", error=None if result["stopReason"] == "end_turn" else PROVIDERS[self.backend]["label"] + " stopped: " + result["stopReason"])
                 else:
-                    raise BridgeError("Cursor returned an unknown stop reason; inspect the turn before continuing.")
+                    raise BridgeError("The provider returned an unknown stop reason; inspect the turn before continuing.")
             else:
                 connection.send({"type": "user", "message": {"role": "user", "content": message}, "parent_tool_use_id": None, "session_id": session_id or "default"})
                 done.wait()
@@ -485,7 +493,7 @@ class CliBridge(ConversationBridge):
             if not chat["busy"] or chat.get("cancel_requested"):
                 return
             stream_only = False
-            if self.backend == "cursor":
+            if self.backend in {"cursor", "opencode"}:
                 method, params = value.get("method"), value.get("params", {})
                 if method == "session/update":
                     if chat.get("loading_history") or params.get("sessionId") != chat.get("thread_id"):

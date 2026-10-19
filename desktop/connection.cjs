@@ -76,7 +76,7 @@ if not modern:
             result=subprocess.run([candidate,'-c','import sys; print(int(sys.version_info >= (3,11)))'],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,timeout=2)
             if result.returncode==0 and result.stdout.strip()==b'1':modern=True;break
         except (OSError,subprocess.SubprocessError):pass
-print(json.dumps({'supersurfer_requirements':True,'python':list(sys.version_info[:3]),'manager_python':modern,'git':bool(shutil.which('git')),'providers':{k:bool(shutil.which(v)) for k,v in [('codex','codex'),('cursor','agent'),('claude','claude')]},'cursor_legacy':bool(shutil.which('cursor-agent'))}))`;
+print(json.dumps({'supersurfer_requirements':True,'python':list(sys.version_info[:3]),'manager_python':modern,'git':bool(shutil.which('git')),'providers':{k:bool(shutil.which(v)) for k,v in [('codex','codex'),('cursor','agent'),('claude','claude'),('opencode','opencode')]},'cursor_legacy':bool(shutil.which('cursor-agent'))}))`;
 function parseRequirements(output) {
   for (const line of String(output).split(/\r?\n/).reverse()) {
     let value;try {value=JSON.parse(line.trim());}catch {continue;}
