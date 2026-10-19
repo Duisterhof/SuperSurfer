@@ -157,6 +157,13 @@ class BackendRouter:
             raise AttributeError(name)
         return lambda scope, *args, **kwargs: getattr(self.provider(self.backend_for(scope)), name)(scope, *args, **kwargs)
 
+    def stop_for_budget(self, scope, reason):
+        bridge = self.provider(self.backend_for(scope))
+        with bridge._lock:
+            chat = bridge._chats.get(scope)
+            if chat:
+                bridge._stop_for_budget(chat, reason)
+
     def _watch_budgets(self):
         while not self._budget_stop.wait(1):
             with self.lock:

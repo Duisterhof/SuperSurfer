@@ -22,6 +22,7 @@ import time
 import uuid
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 from . import results_review
+from .agent_budget import BudgetError, RepeatedToolError
 
 from .chat_context import attachments as chat_attachments
 
@@ -714,9 +715,11 @@ class Service(OperationsService, SurfboardService, EditorService, WritingService
                 raise APIError("Agent tools require an active user-started turn with a usage allowance.", 429)
             try:
                 self.codex.budget.tool(allowance["id"], name, arguments)
-            except ValueError:
-                self.codex.stop(scope)
-                raise
+            except RepeatedToolError as error:
+                raise APIError(str(error), 429) from error
+            except BudgetError as error:
+                self.codex.stop_for_budget(scope, str(error))
+                raise APIError(str(error), 429) from error
         return self._agent_action_unmetered(scope, name, arguments)
 
     def bounded_agent_result(self, scope, result):

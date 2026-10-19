@@ -1270,3 +1270,8 @@ response deltas, disables discounts for that reservation and records a warning.
 Only confirmed completed usage releases unused reserved units. Unknown or
 interrupted turns retain their allowance. Runtime stop messages name the exact
 raw-token, budget-unit, response-count or time bound. Budget units are not dollars.
+
+
+## Tool polling recovery (2026-10-19)
+
+Tool status polling consumes the normal turn allowance without a three-identical-request stop. Repeated mutating tool calls return a recoverable error; actual time/tool/usage exhaustion stops the turn with its specific reason preserved.
