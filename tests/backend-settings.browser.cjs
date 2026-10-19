@@ -14,7 +14,7 @@ const {install}=require('./fixtures/workspace-demo.cjs');
   await page.goto('http://demo.test/');await page.locator('[data-view=settings]').click();
   await page.locator('.coding-backends [data-provider-account]').first().waitFor();
   assert.equal(await page.getByRole('heading',{name:'Coding backends',exact:true}).count(),1);
-  assert.equal(await page.locator('.coding-backends [data-provider-account]').count(),3);
+  assert.equal(await page.locator('.coding-backends [data-provider-account]').count(),4);
   assert.equal(await page.locator('.coding-backends .agent-default-row').count(),3);
   assert.equal(await page.getByRole('heading',{name:/Other accounts|Agent models/}).count(),0);
   for(const width of [1600,1100,850]){
