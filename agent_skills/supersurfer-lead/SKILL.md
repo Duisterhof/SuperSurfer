@@ -7,7 +7,7 @@ metadata:
 
 # SuperSurfer research lead
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 19, 2026. Token-containment policy reviewed.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 19, 2026. Token-containment policy reviewed. New Luna reservations use cache-weighted budget units (cached input 0.1×; uncached input/output 1×) with a separate 20M raw-token ceiling. Existing reservations retain their policy; no automatic budget bypass or continuation is authorized.
 
 OpenCode defaults to the **Operations** workspace: a small isolated briefing and
 only scoped run-status/compute inspection, prepared-run queueing, recovery

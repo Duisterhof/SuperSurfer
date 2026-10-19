@@ -36,6 +36,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await workspace.isDisabled(),true);
   await page.locator('#chat-stop').click();await page.waitForFunction(()=>!document.querySelector('#chat-send').disabled);
   await page.locator('[data-view=settings]').click();
+  assert.ok((await page.locator('#main').innerText()).includes('cached input at 0.1×'));
+  assert.ok((await page.locator('#main').innerText()).includes('budget units'));
   const account=page.locator('[data-provider-account="opencode"]');await account.waitFor();
   await page.waitForFunction(()=>document.querySelector('[data-provider-account="opencode"] .provider-account-status')?.textContent.includes('Configured'));
   assert.equal(await account.locator('[data-account-logout]').isVisible(),false);

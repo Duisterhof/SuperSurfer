@@ -1247,9 +1247,9 @@ model switching, escalation or agent activation.
 
 
 Budget policy is selected from the actual server-resolved model and provider,
-never a client-supplied budget bucket. Codex `gpt-6-luna` reserves up to 2M tokens,
+never a client-supplied budget bucket. Codex `gpt-6-luna` reserves up to 2M budget units,
 96 responses, 120 scoped tools and 60 minutes per user turn, with a 12M per-agent
-rolling-day limit. Paid workspace usage has a shared 60M ceiling plus an unchanged
+rolling-day limit. Paid workspace usage has a shared 60M budget-unit ceiling plus an unchanged
 20M sublimit for other paid models; those retain 1M/24 responses/40 tools/15
 minutes per turn and 4M per agent. Existing reservations count across model
 switches and legacy rows remain in the conservative expensive-model pool.
@@ -1257,3 +1257,16 @@ Limits are snapshotted durably per reservation, so runtime checks and restarts
 retain the admitted policy. Luna may reserve remaining daily allowance down to
 65,536 tokens; local inference retains its separate existing quotas. Identical
 tool requests still stop after three, and no automatic model activation is added.
+
+
+New Luna reservations snapshot `accounting_policy=luna_cached_0.1_v1` and a
+20,000,000 raw-token ceiling. Their policy charge is uncached input + output +
+ceil(cached input / 10); the 2M turn and 12M/60M daily caps use those budget units.
+Raw input, cached input and output remain separately reported. Other models,
+local inference and all old reservations retain their captured raw policy;
+existing ledger charges are never rewritten by switching models or upgrading.
+Missing cache earns no discount. Cache larger than input, including inconsistent
+response deltas, disables discounts for that reservation and records a warning.
+Only confirmed completed usage releases unused reserved units. Unknown or
+interrupted turns retain their allowance. Runtime stop messages name the exact
+raw-token, budget-unit, response-count or time bound. Budget units are not dollars.

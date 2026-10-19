@@ -1493,3 +1493,14 @@ created run ID; an identical request after restart returns the same already-read
 run with one submit/review/ready sequence and zero provider chats. All 30 focused
 release-queue, operations-workspace and queue-recovery tests pass. See the
 [redacted diagnostic](tests/reports/manual-queue-scope.md). No live run actions.
+
+
+## Luna cached-input accounting — October 19, 2026
+
+All 23 focused budget tests pass, including the reported 22-response sample:
+2,089,723 input, 1,988,864 cached input and 6,720 output remain visible as raw
+counters, while the new reservation charges 306,466 budget units and keeps working.
+Coverage includes the 20M raw ceiling, 2M uncached ceiling, 96-response ceiling,
+integer ceiling rounding, confirmed weighted settlement, conservative missing or
+invalid cached counters, durable legacy raw charging and unchanged past spend
+across policy/model switches. No real inference or research action was started.

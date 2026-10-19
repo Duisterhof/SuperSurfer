@@ -134,6 +134,87 @@ class ModelBudgetTests(unittest.TestCase):
         with self.assertRaises(BudgetError): self.b.tool(row['id'],'status',{'run':'one'})
 
 
+class LunaCacheAccountingTests(unittest.TestCase):
+    setUp = BudgetTests.setUp
+    tearDown = BudgetTests.tearDown
+
+    def luna(self, scope='worker'):
+        return self.b.reserve(scope,'user',model='gpt-6-luna')
+
+    def test_cached_context_at_22_responses_retains_raw_counts_without_stopping(self):
+        receipt=self.luna()
+        for response in range(1,23):
+            total={'inputTokens':2089723*response//22,'cachedInputTokens':1988864*response//22,'outputTokens':6720*response//22}
+            row=self.b.observe(receipt['id'],total)
+        self.assertEqual(row['responses'],22)
+        self.assertEqual((row['input_tokens'],row['cached_input_tokens'],row['output_tokens']), (2089723,1988864,6720))
+        self.assertEqual(row['raw_tokens'],2096443)
+        self.assertEqual(row['charged_units'],306466)
+        self.assertIsNone(row['reason'])
+        self.assertEqual(self.b.observe(receipt['id'],total)['responses'],22)
+        self.assertEqual(self.b.summary()['reserved_tokens'],2000000)
+        self.b.settle(receipt['id'])
+        summary=self.b.summary()
+        self.assertEqual(summary['reserved_tokens'],306466)
+        self.assertEqual(summary['charged_units'],306466)
+        self.assertEqual(summary['input_tokens'],2089723)
+        self.assertEqual(summary['budget_unit_label'],'budget units (not currency)')
+
+    def test_distinct_raw_uncached_and_response_limit_reasons(self):
+        raw=self.luna('raw')
+        row=self.b.observe(raw['id'],{'inputTokens':20000000,'cachedInputTokens':20000000})
+        self.assertIn('raw-token ceiling (20,000,000/20,000,000)',row['reason'])
+        uncached=self.luna('uncached')
+        row=self.b.observe(uncached['id'],{'inputTokens':2000001})
+        self.assertEqual(row['charged_units'],2000001)
+        self.assertIn('2,000,001/2,000,000 budget units',row['reason'])
+        responses=self.luna('responses')
+        for i in range(96): row=self.b.observe(responses['id'],{'inputTokens':i+1})
+        self.assertIn('response-count allowance (96/96 responses)',row['reason'])
+
+    def test_missing_or_inconsistent_cache_is_charged_conservatively(self):
+        missing=self.luna('missing')
+        row=self.b.observe(missing['id'],{'inputTokens':100000,'outputTokens':5})
+        self.assertEqual(row['charged_units'],100005)
+        invalid=self.luna('invalid')
+        row=self.b.observe(invalid['id'],{'inputTokens':100000,'cachedInputTokens':100001})
+        self.assertEqual(row['cached_input_tokens'],0)
+        self.assertEqual(row['charged_units'],100000)
+        self.assertIn('conservative',row['accounting_warning'])
+        row=self.b.observe(invalid['id'],{'inputTokens':200000,'cachedInputTokens':200000})
+        self.assertEqual(row['charged_units'],200000)
+        delayed=self.luna('delayed')
+        self.b.observe(delayed['id'],{'inputTokens':100000})
+        row=self.b.observe(delayed['id'],{'inputTokens':100001,'cachedInputTokens':100000})
+        self.assertEqual(row['charged_units'],100001)
+        self.assertLessEqual(row['cached_input_tokens'],row['input_tokens'])
+        with self.assertRaises(BudgetError): self.b.observe(missing['id'],{'inputTokens':-1})
+
+    def test_policy_is_durable_and_old_luna_and_standard_charges_do_not_change(self):
+        old=self.luna('same')
+        for key in ('accounting_policy','raw_token_limit','charged_units','raw_tokens'):
+            old.pop(key,None)
+        with self.b.db:self.b.db.execute('UPDATE reservations SET data=? WHERE id=?',(json.dumps(old),old['id']))
+        row=self.b.observe(old['id'],{'inputTokens':2089723,'cachedInputTokens':1988864,'outputTokens':6720})
+        self.assertEqual(row['charged_units'],2096443)
+        self.assertIn('raw tokens',row['reason'])
+        standard=self.b.reserve('standard','user',model='gpt-6-astra')
+        row=self.b.observe(standard['id'],{'inputTokens':1000000,'cachedInputTokens':999999})
+        self.assertEqual(row['charged_units'],1000000)
+        self.assertIn('raw tokens',row['reason'])
+        fresh=self.luna('same')
+        self.b.close();self.b=AgentBudget(self.path,clock=lambda:self.now)
+        row=self.b.observe(fresh['id'],{'inputTokens':101,'cachedInputTokens':101})
+        self.assertEqual(row['charged_units'],11)
+        self.b.settle(fresh['id'])
+        self.assertEqual(self.b.summary()['reserved_tokens'],3096454)
+        self.assertEqual(self.b.summary()['expensive_reserved_tokens'],1000000)
+        for _ in range(4):self.luna('same')
+        partial=self.luna('same')
+        self.assertEqual(partial['tokens'],1903546)
+        with self.assertRaises(BudgetError):self.luna('same')
+
+
 class NoContinuationTests(unittest.TestCase):
     def test_rewriting_summary_cannot_relaunch_or_review(self):
         with tempfile.TemporaryDirectory() as d:

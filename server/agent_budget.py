@@ -25,10 +25,13 @@ AGENT_TOKENS = 4_000_000
 WINDOW_SECONDS = 86400
 CONTEXT_CHARS = 48_000
 TOOL_CHARS = 12_000
+LUNA_ACCOUNTING = 'luna_cached_0.1_v1'
+LUNA_RAW_TOKENS = 20_000_000
 
 POLICIES = {
     'standard': dict(tokens=TURN_TOKENS, calls=TURN_CALLS, tools=40, seconds=TURN_SECONDS, agent_limit=AGENT_TOKENS),
-    'luna': dict(tokens=2_000_000, calls=96, tools=120, seconds=3600, agent_limit=12_000_000),
+    'luna': dict(tokens=2_000_000, calls=96, tools=120, seconds=3600, agent_limit=12_000_000,
+                 accounting_policy=LUNA_ACCOUNTING, cached_input_weight=0.1, raw_token_limit=LUNA_RAW_TOKENS),
 }
 
 
@@ -36,6 +39,17 @@ def policy_name(model, provider='codex', bucket='paid'):
     # Only the actual resolved Codex catalog ID gets the larger allowance.
     # Aliases on other providers and unknown/legacy models remain conservative.
     return 'luna' if bucket == 'paid' and provider == 'codex' and model == 'gpt-6-luna' else 'standard'
+
+
+def charge(row):
+    """Only reservations that captured the new policy receive a cache discount."""
+    raw = row['input_tokens'] + row['output_tokens']
+    if row.get('accounting_policy') != LUNA_ACCOUNTING or row.get('accounting_warning'):
+        return raw
+    cached = row['cached_input_tokens']
+    if not 0 <= cached <= row['input_tokens']:
+        return raw
+    return raw - cached + (cached + 9) // 10
 
 class BudgetError(ValueError):
     status = 429
@@ -74,6 +88,8 @@ class AgentBudget:
                            tokens=allowance, calls=limits['calls'], tools=limits['tools'], agent_limit=limits['agent_limit'],
                            input_tokens=0, cached_input_tokens=0, output_tokens=0,
                            responses=0, last_total=None, reason=None)
+                row.update(accounting_policy=limits.get('accounting_policy', 'raw_tokens_v1'),
+                           raw_token_limit=limits.get('raw_token_limit'), charged_units=0, raw_tokens=0)
                 self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)', (row['id'],scope,now,allowance,json.dumps(row)))
                 self.db.commit()
                 return row
@@ -92,17 +108,31 @@ class AgentBudget:
             values = [total.get(k,0) for k in names]
             previous = row['last_total']
             if previous != values:
+                if previous is None and last and (not isinstance(last, dict) or any(type(last.get(k, 0)) is not int or last.get(k, 0) < 0 for k in names)):
+                    raise BudgetError('Invalid last-response usage; stopping inference.')
                 delta = [max(0,a-b) for a,b in zip(values,previous)] if previous is not None else [int((last or {}).get(k,0)) for k in names]
                 # First notification normally has a last-response breakdown. If
                 # absent, charge the cumulative total conservatively.
                 if previous is None and not last: delta = values
+                if values[1] > values[0] or delta[1] > delta[0]:
+                    # Keep the original reported cumulative tuple for diagnosis,
+                    # but never create discount credit from inconsistent cache.
+                    row['accounting_warning'] = 'Cached input exceeded reported input; this reservation uses conservative raw-token charging.'
+                    delta = [delta[0], 0, delta[2]]
                 for key,value in zip(('input_tokens','cached_input_tokens','output_tokens'),delta): row[key] += max(0,value)
                 row['responses'] += 1
                 row['last_total'] = values
-            if row['input_tokens'] + row['output_tokens'] >= row['tokens'] or row['responses'] >= row.get('calls', TURN_CALLS):
-                row['reason'] = 'This turn reached its model usage allowance. Unfinished work is saved; no automatic continuation will start.'
+            row['raw_tokens'] = row['input_tokens'] + row['output_tokens']
+            row['charged_units'] = charge(row)
+            if row.get('raw_token_limit') and row['raw_tokens'] >= row['raw_token_limit']:
+                row['reason'] = f"This turn reached its raw-token ceiling ({row['raw_tokens']:,}/{row['raw_token_limit']:,}). Unfinished work is saved."
+            elif row['charged_units'] >= row['tokens']:
+                unit = 'budget units' if row.get('accounting_policy') == LUNA_ACCOUNTING else 'raw tokens'
+                row['reason'] = f"This turn reached its usage allowance ({row['charged_units']:,}/{row['tokens']:,} {unit}). Unfinished work is saved."
+            elif row['responses'] >= row.get('calls', TURN_CALLS):
+                row['reason'] = f"This turn reached its response-count allowance ({row['responses']}/{row.get('calls', TURN_CALLS)} responses). Unfinished work is saved."
             if self.clock() >= row['deadline']: row['reason'] = f"This turn reached its {row.get('seconds', TURN_SECONDS) // 60}-minute time allowance."
-            self.db.execute('UPDATE reservations SET data=?,tokens=MAX(tokens,?) WHERE id=?',(json.dumps(row),row['input_tokens']+row['output_tokens'],reservation))
+            self.db.execute('UPDATE reservations SET data=?,tokens=MAX(tokens,?) WHERE id=?',(json.dumps(row),row['charged_units'],reservation))
             return row
 
     def settle(self, reservation):
@@ -114,7 +144,8 @@ class AgentBudget:
             row=json.loads(raw[0])
             if row.get("last_total") is not None and row.get("responses",0)>0:
                 row["settled"]=True
-                self.db.execute("UPDATE reservations SET tokens=?, data=? WHERE id=?",(max(1,row['input_tokens']+row['output_tokens']),json.dumps(row),reservation))
+                row['charged_units'] = charge(row)
+                self.db.execute("UPDATE reservations SET tokens=?, data=? WHERE id=?",(max(1,row['charged_units']),json.dumps(row),reservation))
 
     def tool(self, reservation, name, arguments):
         fingerprint = hashlib.sha256(json.dumps([name,arguments],sort_keys=True).encode()).hexdigest()
@@ -145,7 +176,8 @@ class AgentBudget:
                     turn_seconds=TURN_SECONDS, reserved_tokens=sum(r['reserved'] for r in rows),
                     input_tokens=sum(r['input_tokens'] for r in rows), cached_input_tokens=sum(r['cached_input_tokens'] for r in rows),
                     output_tokens=sum(r['output_tokens'] for r in rows),
-                    accounting='Admission reserves full turn allowances; provider usage is reported after responses, so interruption may include one in-flight response.')
+                    charged_units=sum(charge(r) for r in rows), budget_unit_label='budget units (not currency)',
+                    accounting='New Luna reservations charge uncached input + output + ceil(cached input × 0.1), with a separate 20M raw-token ceiling. Legacy and other-model reservations retain raw charging. Admission reserves full allowances; provider usage is reported after responses, so interruption may include one in-flight response.')
 
     def close(self):
         with self.lock: self.db.close()

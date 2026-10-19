@@ -164,6 +164,8 @@ normal scoped tools and permissions.
 
 
 Agent usage limits depend on the selected model: GPT-6 Luna has up to 60 minutes,
-96 responses and 2M tokens per user-started turn. Other paid models retain their
+96 responses and 2M budget units per user-started turn. New Luna turns count
+cached input at 0.1× and uncached input/output at 1×, with a separate 20M raw-token
+ceiling. These units are a usage policy, not currency. Other paid models retain their
 smaller limits. Settings shows the separate model policies and shared rolling
 usage; switching models does not reset an agent's spending.
