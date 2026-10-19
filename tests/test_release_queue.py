@@ -1,10 +1,14 @@
 """Queue retries preserve run identity and keep telemetry off the launch path."""
 import tempfile
+import json
+import threading
+from urllib.request import Request, urlopen
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from server.app import APIError, Service
+from server.app import APIError, Service, create_server
+from server.backends import BackendRouter
 from server.aml import AMLClient
 from test_backend import FakeCodex, FakeManager, FakeTracking
 
@@ -27,6 +31,32 @@ class ReleaseQueueTests(unittest.TestCase):
 
     def tearDown(self):
         self.service.close(); self.temp.cleanup()
+
+    def test_manual_queue_http_with_real_router_returns_created_run_and_retry_after_restart(self):
+        results = []
+        for attempt in range(2):
+            if attempt:
+                self.service.close(); self.open()
+            self.service.codex = BackendRouter(self.service.directory, self.service.store,
+                self.service.context_provider, self.service._chat_scope, self.service.agent_action)
+            server = create_server(self.service, port=0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+            try:
+                request = Request(f'http://127.0.0.1:{server.server_port}/api/action',
+                    data=json.dumps({'op':'run.queue','params':self.params}).encode(),
+                    headers={'Authorization':'Bearer '+self.service.token,'Content-Type':'application/json'})
+                with urlopen(request, timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    results.append(json.load(response))
+                self.assertEqual(self.service.codex.bindings, {})
+                self.assertFalse(self.service.codex.list_chats())
+            finally:
+                server.shutdown(); server.server_close(); thread.join()
+        self.assertTrue(results[0]['ready'])
+        self.assertTrue(results[1]['already_queued'])
+        self.assertEqual(results[0]['run_id'], results[1]['run_id'])
+        self.assertEqual([op for op, _ in self.manager.calls if op.startswith('run.')],
+                         ['run.submit', 'run.review', 'run.ready'])
 
     def test_duplicate_queue_after_restart_reuses_released_run(self):
         first = self.service.action('run.queue', self.params)

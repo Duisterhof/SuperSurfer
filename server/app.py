@@ -1195,12 +1195,14 @@ class Service(OperationsService, SurfboardService, EditorService, WritingService
                 ". Consult this conversation's task and preserve its protocol, inputs, resource limits and stop orders.")
 
     def seed_results_checkpoint(self, scope, experiment_id):
-        if self.workspace_profile(scope) == "operations":
-            return
         if (not experiment_id or not scope.startswith(("experiment:", "conversation:")) or
                 not hasattr(self.codex, "set_required_task")):
             return
         try:
+            # Manual queue request IDs are not conversations. Optional agent
+            # bookkeeping must not turn an already-released run into an error.
+            if self.workspace_profile(scope) == "operations":
+                return
             experiment = self.store.experiment(experiment_id)
             tools = self.board_record(experiment["project_id"], experiment_id)["compiled"]["tools_by_role"]["worker"]
             if "check_experiment_results" not in tools:

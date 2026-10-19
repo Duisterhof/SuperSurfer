@@ -1483,3 +1483,13 @@ observed 57,345-input + 8,192-output overflow of a 65,536-token local model.
   validator passes. No live research job/service was changed by these tests.
   Live deployment is a separate idle-gated action. No macOS package or paid-model
   smoke test was run for this Linux patch.
+
+
+## Manual queue response correction — October 19, 2026
+
+The real-router/fake-manager authenticated HTTP regression reproduces the former
+post-creation `Unknown conversation scope` error. It now returns HTTP 200 and the
+created run ID; an identical request after restart returns the same already-ready
+run with one submit/review/ready sequence and zero provider chats. All 30 focused
+release-queue, operations-workspace and queue-recovery tests pass. See the
+[redacted diagnostic](tests/reports/manual-queue-scope.md). No live run actions.
