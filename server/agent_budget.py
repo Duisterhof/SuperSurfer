@@ -47,12 +47,13 @@ class AgentBudget:
             self.db.execute('BEGIN IMMEDIATE')
             try:
                 used, own = self.db.execute("SELECT COALESCE(SUM(tokens),0), COALESCE(SUM(CASE WHEN scope=? THEN tokens ELSE 0 END),0) FROM reservations WHERE created>? AND COALESCE(json_extract(data, '$.bucket'), 'paid')=?", (scope, now-WINDOW_SECONDS, bucket)).fetchone()
-                if used + TURN_TOKENS > WORKSPACE_TOKENS or own + TURN_TOKENS > AGENT_TOKENS:
+                allowance = min(TURN_TOKENS, WORKSPACE_TOKENS - used, AGENT_TOKENS - own) if bucket == "local" else TURN_TOKENS
+                if allowance < (65536 if bucket == "local" else TURN_TOKENS) or used + allowance > WORKSPACE_TOKENS or own + allowance > AGENT_TOKENS:
                     raise BudgetError('Agent usage allowance exhausted for the rolling 24-hour window. Training and telemetry continue; no model turn was started.')
                 row = dict(id=uuid.uuid4().hex, bucket=bucket, scope=scope, created=now, deadline=now+TURN_SECONDS,
-                           tokens=TURN_TOKENS, calls=TURN_CALLS, input_tokens=0, cached_input_tokens=0, output_tokens=0,
+                           tokens=allowance, calls=TURN_CALLS, input_tokens=0, cached_input_tokens=0, output_tokens=0,
                            responses=0, last_total=None, reason=None)
-                self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)', (row['id'],scope,now,TURN_TOKENS,json.dumps(row)))
+                self.db.execute('INSERT INTO reservations VALUES(?,?,?,?,?)', (row['id'],scope,now,allowance,json.dumps(row)))
                 self.db.commit()
                 return row
             except BaseException:
@@ -77,7 +78,7 @@ class AgentBudget:
                 for key,value in zip(('input_tokens','cached_input_tokens','output_tokens'),delta): row[key] += max(0,value)
                 row['responses'] += 1
                 row['last_total'] = values
-            if row['input_tokens'] + row['output_tokens'] >= TURN_TOKENS or row['responses'] >= TURN_CALLS:
+            if row['input_tokens'] + row['output_tokens'] >= row['tokens'] or row['responses'] >= TURN_CALLS:
                 row['reason'] = 'This turn reached its model usage allowance. Unfinished work is saved; no automatic continuation will start.'
             if self.clock() >= row['deadline']: row['reason'] = 'This turn reached its 15-minute time allowance.'
             self.db.execute('UPDATE reservations SET data=?,tokens=MAX(tokens,?) WHERE id=?',(json.dumps(row),row['input_tokens']+row['output_tokens'],reservation))

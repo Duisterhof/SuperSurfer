@@ -12,6 +12,18 @@ class BudgetTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.path=Path(self.tmp.name)/'usage.sqlite3'
         self.now=1000;self.b=AgentBudget(self.path,clock=lambda:self.now)
     def tearDown(self):self.b.close();self.tmp.cleanup()
+    def test_local_partial_reservation_stays_inside_daily_cap(self):
+        first=self.b.reserve('partial','user',bucket='local')
+        self.b.observe(first['id'],{'inputTokens':300000,'cachedInputTokens':0,'outputTokens':0})
+        self.b.settle(first['id'])
+        for _ in range(3):self.b.reserve('partial','user',bucket='local')
+        last=self.b.reserve('partial','user',bucket='local')
+        self.assertEqual(700000,last['tokens'])
+        self.assertEqual(4000000,self.b.summary()['local_reserved_tokens'])
+        with self.assertRaises(BudgetError):self.b.reserve('partial','user',bucket='local')
+        result=self.b.observe(last['id'],{'inputTokens':700000,'cachedInputTokens':0,'outputTokens':0})
+        self.assertIsNotNone(result['reason'])
+
     def test_zero_automatic_calls_regardless_of_origin_or_restart(self):
         for source in ('schedule','recovery','peer','answer','continuation',None):
             with self.assertRaises(BudgetError):self.b.reserve('worker',source)

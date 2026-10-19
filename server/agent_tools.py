@@ -663,6 +663,9 @@ def discover_tools(arguments):
     query = arguments.get("query", "")
     if not isinstance(query, str) or not query.strip() or len(query) > 200:
         raise ValueError("Provide a short tool name or search phrase.")
+    exact = [tool for tool in available_tools() if tool["name"] == query.strip()]
+    if exact:
+        return {"tools": exact}
     words = query.lower().replace("_", " ").split()
     ranked = []
     for tool in available_tools():

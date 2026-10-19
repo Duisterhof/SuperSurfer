@@ -1208,3 +1208,9 @@ scope, capability and budget checks. No automatic model summaries or error repla
 occur. Definitive context-overflow rejections show a context-specific error and
 can settle verified preceding completed usage; unknown interruptions retain their
 reservation.
+
+Local inference may reserve the remaining daily allowance when it is less than
+one million tokens (minimum 65,536). The per-agent/workspace daily caps remain
+unchanged, and the runtime circuit breaker uses that smaller reservation. Paid
+inference admission is unchanged. Exact tool-name discovery returns only that
+schema rather than adjacent tools.
