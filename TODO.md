@@ -1,3 +1,11 @@
+# Concurrent flexible Stanford admission
+
+- [x] Admit concurrent authorized flexible jobs within a shared eight-GPU allowance.
+- [x] Count pending, running, cancelling and unreachable allocations across projects.
+- [x] Retain legacy profile exclusivity and report budget-related queue reasons.
+- [x] Exercise two four-GPU admissions, a blocked third job and terminal release.
+- [ ] Deploy after the focused source review; live training is unaffected by this patch.
+
 # Pending Stanford placement replacement
 
 - [x] Add owner-bound pending-only cancellation and idempotent linked replacement.

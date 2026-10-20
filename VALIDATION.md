@@ -1,3 +1,24 @@
+# Concurrent flexible Stanford admission — October 20, 2026
+
+An actual second four-GPU request remained queued while the first was pending,
+despite both fitting the user's aggregate allowance. The scheduler used a single
+Stanford-job exclusion instead of counting the flexible allocations' GPUs.
+The fix admits concurrent flexible requests up to eight GPUs across projects and
+keeps uncertain/cancelling allocations counted. Legacy profiles stay exclusive.
+
+The nine flexible-profile tests pass, including real service-to-scheduler
+admission for two four-GPU requests in different projects, a blocked third job,
+uncertain-state accounting and release only after confirmed cancellation.
+Tests use isolated local fixtures; no cluster allocation or provider call occurs.
+
+The full suite passes: 870 Python tests and 51 Node tests, with five opt-in SSH
+checks skipped. Capability-skill and diff checks pass. The Linux x64 package
+was built at `dist/SuperSurfer-0.1.43-linux-x64.tar.gz`; the packaged app passed
+the real sandboxed Electron test under Xvfb with a separate profile, including
+layout/theme persistence and denial of untrusted-page connection requests.
+No live workspace service was restarted and no cluster job was launched for
+these checks.
+
 # Confirmed failed Stanford allocation retry — October18,2026
 
 The pending job later started and failed before CUDA during local scratch

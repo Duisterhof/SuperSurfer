@@ -7,7 +7,7 @@ metadata:
 
 # Prepare project compute
 
-Reviewed for SuperSurfer 0.1.43. Capability review updated October 18, 2026.
+Reviewed for SuperSurfer 0.1.43. Capability review updated October 20, 2026.
 Necessary bounded node preparation belongs to the
 worker's existing authorized task. Use its own tools first; a missing environment,
 file or first candidate is work to investigate, not automatically a reason to stop
@@ -318,6 +318,13 @@ missing backend capability remains an app-maintainer operation, not node setup.
 
 
 ### Explicit flexible Stanford placement
+
+Concurrent explicitly requested flexible jobs share an aggregate eight-GPU
+allowance across projects and control hosts. Two four-GPU requests can be admitted
+together; a pending, cancelling or unreachable allocation still counts until its
+terminal state is confirmed. Inspect the queue's allowance reason before treating
+a ready job as a cluster-capacity wait. Legacy smoke and fixed seven-L40S profiles
+remain exclusive. This admission rule grants no extra launch or resource authority.
 
 For explicitly authorized flexible placement, the separate
 `single_node_training_v1` admits 1–8 GPUs of one explicit type on one node,
