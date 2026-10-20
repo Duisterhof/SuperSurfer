@@ -185,3 +185,39 @@ class FlexibleQueueTests(unittest.TestCase):
             self.wait(self.manager.schedule_runs())
             self.assertEqual(transport.call_count, 1)
             self.assertEqual(result['run_id'], self.runs()[0]['id'])
+
+    def test_two_flexible_jobs_share_budget_and_third_waits(self):
+        from unittest.mock import AsyncMock, patch
+        import test_queue_recovery as fixtures
+        first = self.prepare()
+        self.db('execute', 'UPDATE projects SET gpu_limit=16,run_limit=8 WHERE id=?', ('p1',))
+        self.params.update(request_id='stanford-second-flexible-20261020', name='second-flexible')
+        second = fixtures.QueueRecoveryTests.queue(self, self.params)
+        self.db('execute', "INSERT INTO projects SELECT 'p2','other-project',repo,goal,gpu_limit,run_limit,priority,created FROM projects WHERE id='p1'")
+        self.db('execute', 'UPDATE runs SET project_id=? WHERE id=?', ('p2', second['run_id']))
+        self.params.update(request_id='stanford-third-flexible-20261020', name='third-flexible')
+        third = fixtures.QueueRecoveryTests.queue(self, self.params)
+        transport = AsyncMock(return_value={'state':'starting', 'job_id':'123', 'slurm_state':'PENDING'})
+        with patch.object(self.manager.transport, 'request', transport):
+            self.wait(self.manager.schedule_runs())
+            self.assertEqual(transport.call_count, 2)
+            self.assertEqual(self.db('get', 'runs', first['run_id'])['status'], 'starting')
+            self.assertEqual(self.db('get', 'runs', second['run_id'])['status'], 'starting')
+            row = self.db('get', 'runs', third['run_id'])
+            self.assertEqual(row['status'], 'queued')
+            reasons, _ = self.wait_reason(row)
+            self.assertIn('stanford_gpu_limit', [code for code, _ in reasons])
+            # An uncertain or cancelling job still owns its resource allowance.
+            for status in ('running', 'unreachable', 'cancelling'):
+                self.db('execute', 'UPDATE runs SET status=? WHERE id=?', (status, first['run_id']))
+                self.wait(self.manager.schedule_runs())
+                self.assertEqual(transport.call_count, 2)
+            self.db('execute', 'UPDATE runs SET status=? WHERE id=?', ('cancelled', first['run_id']))
+            self.wait(self.manager.schedule_runs())
+            self.assertEqual(transport.call_count, 3)
+            self.assertEqual(self.db('get', 'runs', third['run_id'])['status'], 'starting')
+
+    def wait_reason(self, row):
+        async def inspect():
+            return self.manager.slurm_wait(row)
+        return self.wait(inspect())

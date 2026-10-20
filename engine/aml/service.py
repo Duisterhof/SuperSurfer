@@ -1297,7 +1297,23 @@ class Manager:
 
     def slurm_wait(self, run):
         reasons = []
-        preflight = json.loads(run["config"]).get("slurm_preflight", {})
+        config = json.loads(run["config"])
+        if config.get("backend") == "stanford_slurm":
+            # Flexible production requests share the user's eight-GPU allowance.
+            # Keep legacy smoke/production profiles exclusive and retain uncertain
+            # allocations until their cancellation or completion is confirmed.
+            active = self.store.rows(
+                "SELECT gpu_count,config FROM runs WHERE id!=? AND status IN "
+                "('starting','running','cancelling','unreachable') AND "
+                "json_extract(config, '$.backend')='stanford_slurm'", (run["id"],))
+            flexible = config.get("slurm", {}).get("profile") == "single_node_training_v1"
+            legacy = any(json.loads(row["config"]).get("slurm", {}).get("profile")
+                         != "single_node_training_v1" for row in active)
+            if active and (not flexible or legacy):
+                reasons.append(("stanford_exclusive_profile", "Legacy Stanford profiles require an exclusive allocation"))
+            elif sum(row["gpu_count"] for row in active) + run["gpu_count"] > 8:
+                reasons.append(("stanford_gpu_limit", "Stanford aggregate eight-GPU allowance is in use"))
+        preflight = config.get("slurm_preflight", {})
         if preflight.get("retry_at", 0) > time.time():
             reasons.append(("slurm_preflight", preflight.get("error", "PSC preparation pending")))
         try:
@@ -1528,12 +1544,6 @@ class Manager:
                 current = self.store.get("runs", run["id"])
                 if current["status"] != "queued":
                     continue
-                if json.loads(current["config"]).get("backend") == "stanford_slurm":
-                    # Keep a single Stanford allocation across projects/hosts.
-                    # Its reviewed profile admits one smoke GPU or seven L40S.
-                    active_stanford = self.store.one("SELECT id FROM runs WHERE id!=? AND status IN ('starting','running','cancelling','unreachable') AND json_extract(config, '$.backend')='stanford_slurm' LIMIT 1", (current["id"],))
-                    if active_stanford:
-                        continue
                 selected_host, reasons, available = self.select_host(current)
                 if reasons:
                     continue
