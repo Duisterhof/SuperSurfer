@@ -1,3 +1,23 @@
+# Metric wakeup history tail — October 23, 2026
+
+Thirty wakeup unit/integration tests pass, including a crossing omitted by the
+old sampled history, asynchronous summary updates, sparse metrics, stale and
+invalid latest evidence, run-name mismatches, caching and once-per-arm delivery.
+The five existing W&B reader tests also pass. Independent Astra high review found
+no actionable code issues. Capability-skill validation and whitespace checks pass.
+
+Read-only validation against the already-running trainer returned exactly 500
+history rows in the requested 500-step range. The patched reader returned the
+requested action-exposure metric with its recorded timestamp, 21.3 seconds old
+at receipt. Both response run names matched. Private run details are omitted.
+No trainer, production service, wakeup rule or deployment was changed.
+
+The broad suite was attempted in the restricted sandbox; local socket fixtures
+failed and the run stalled in an unrelated candidate-admission test. The focused
+integration suite passed with localhost access. Linux packaging was attempted but
+blocked by `spawnSync tar EPERM`; no packaged-app launch was performed. The user
+requested the focused backend patch rather than a desktop rebuild.
+
 # OpenCode provider — October 19, 2026
 
 OpenCode ACP is now selectable in new chats, role defaults and account setup.
