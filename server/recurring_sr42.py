@@ -274,6 +274,10 @@ class RecurringSR42:
 
     def reconcile(self, record, method, spec, runs, now):
         state = record['state'][method]
+        if state.get('cleanup'):
+            self.adapter.cleanup(state['cleanup'])
+            state.pop('cleanup')
+            self.service.store.put(KEY, record)
         all_evaluations = [run for run in runs.values() if evaluation(run)]
         evaluations = [run for run in all_evaluations if evaluation_method(run) in {method, None}]
         state['active'] = [r['id'] for r in evaluations if r['status'] not in TERMINAL]
@@ -308,18 +312,26 @@ class RecurringSR42:
         if blockers:
             return
         if submission is None:
-            pin = state['pending']
+            pin = state.get('staging') or state['pending']
             if not pin or pin['sha256'] in state['seen']:
+                if state.get('staging'):
+                    # An evaluation may have completed during a retry. Its local
+                    # bytes are still bounded until an owned receipt is resolved.
+                    raise ScheduleError('Staged checkpoint already evaluated; resolve its admission provenance')
                 state['pending'] = None
                 return
             if any(option(run['command'], '--checkpoint-sha256') == pin['sha256']
                    and evaluation_method(run) is None for run in all_evaluations):
                 raise ScheduleError('Existing evaluation of this checkpoint lacks verified method/cohort provenance')
+            state['staging'] = pin
+            if state['pending'] and state['pending']['sha256'] == pin['sha256']:
+                state['pending'] = None
+            self.service.store.put(KEY, record)
             request = self.adapter.prepare(method, pin, record['bindings'][method])
             request['request_id'] = request_id(method, pin['sha256'])
             submission = {'request': request, 'pin': pin}
             state['submission'] = submission
-            state['pending'] = None
+            state.pop('staging', None)
             self.service.store.put(KEY, record)
         # A frozen uncertain request always wins over newer pending discoveries.
         # The canonical queue helper reconciles the same durable request ID.
@@ -342,3 +354,7 @@ class RecurringSR42:
         state['last_submitted'] = {'run_id': result['run_id'], 'checkpoint': submission['pin'], 'at': now}
         state['active'] = [result['run_id']]
         state['submission'] = None
+        state['cleanup'] = submission['pin']
+        self.service.store.put(KEY, record)
+        self.adapter.cleanup(state['cleanup'])
+        state.pop('cleanup')

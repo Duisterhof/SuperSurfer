@@ -44,6 +44,9 @@ class Adapter:
         value = self.pins.get(method)
         return {**value, 'training_run_id': run['id']} if value else None
 
+    def cleanup(self, pin):
+        self.calls.append(('cleanup', pin['sha256']))
+
     def prepare(self, method, pin, binding):
         self.calls.append(('prepare', method, pin['sha256']))
         return {'command': ['python', '-m', 'readable_vla.evaluate', 'sr42', '--weights', 'ema',
@@ -258,6 +261,40 @@ class RecurringSR42Tests(unittest.TestCase):
         self.enable(); self.schedule.tick(0)
         self.assertFalse(self.submissions)
         self.assertIn('provenance', self.store.get(KEY)['state']['contrastive']['error'])
+
+    def test_interrupted_staging_keeps_one_download_while_latest_pending_advances(self):
+        self.adapter.pins['mse'] = {'sha256': 'a' * 64, 'step': 1}
+        prepare = self.adapter.prepare
+        self.adapter.prepare = Mock(side_effect=RuntimeError('interrupted copy'))
+        self.enable(); self.schedule.tick(0)
+        state = self.store.get(KEY)['state']['mse']
+        self.assertEqual('a' * 64, state['staging']['sha256'])
+        self.adapter.pins['mse'] = {'sha256': 'b' * 64, 'step': 2}
+        self.adapter.prepare = prepare
+        self.schedule.tick(7200)
+        state = self.store.get(KEY)['state']['mse']
+        self.assertEqual('a' * 64, self.submissions[0]['command'][-1])
+        self.assertEqual('b' * 64, state['pending']['sha256'])
+        self.assertNotIn('staging', state)
+        self.assertNotIn('cleanup', state)
+        self.assertIn(('cleanup', 'a' * 64), self.adapter.calls)
+
+    def test_accepted_receipt_persists_before_cleanup_and_cleanup_retries_without_submit(self):
+        self.adapter.pins['mse'] = {'sha256': 'a' * 64, 'step': 1}
+        def failed_cleanup(pin):
+            state = self.store.get(KEY)['state']['mse']
+            self.assertEqual('new-1', state['native_seen'][pin['sha256']])
+            self.assertIsNone(state['submission'])
+            raise RuntimeError('local cleanup unavailable')
+        self.adapter.cleanup = failed_cleanup
+        self.enable(); self.schedule.tick(0)
+        self.assertEqual(1, len(self.submissions))
+        self.assertEqual('a' * 64, self.store.get(KEY)['state']['mse']['cleanup']['sha256'])
+        self.adapter.cleanup = Mock()
+        self.schedule.tick(1)
+        self.adapter.cleanup.assert_called_once()
+        self.assertEqual(1, len(self.submissions))
+        self.assertNotIn('cleanup', self.store.get(KEY)['state']['mse'])
 
     def test_unknown_terminal_arriving_during_stage_blocks_duplicate(self):
         self.adapter.pins['mse'] = {'sha256': 'a' * 64, 'step': 1}

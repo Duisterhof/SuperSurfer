@@ -78,6 +78,24 @@ class RemotePinTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlinks'): self.invoke(self.payload)
 
 
+class TrainingRecipeTests(unittest.TestCase):
+    def test_reviewed_recovery_accepts_only_single_explicit_performance_migration_flag(self):
+        revision = '6a346b3e9bdfa49fbf68a3c72a97201531ab6414'
+        run = {'id':'repaired', 'project_id':PROJECT, 'host_id':'host', 'revision':revision, 'pr_url':PR,
+               'command':['/python','-m','indexed_ar.managed','--config','/code/indexed_ar/configs/future_native_deep_vit.json',
+                          '--data','/data','--ranks','8','--output','/output','--resume','/parent/checkpoints/000039000-evaluation.pt',
+                          '--resume-sha256','a'*64,'--allow-performance-migration'],
+               'config':{'review_receipt':{'revision':revision,'head_sha':revision,'pr_url':PR,'repository':'duisterhof/vla_wam'}}}
+        binding = {'repo':'/repo','evidence':{'files':{'observations/metadata.pt':'m','observations/index.json':'i','split_manifest.json':'s'}}}
+        adapter = SR42Adapter(SimpleNamespace(lookup=lambda *args,**kwargs:{}))
+        with patch('server.sr42_adapter.subprocess.check_output', return_value=b'{}'):
+            self.assertEqual(revision, adapter.training_payload('mse',run,binding)['revision'])
+            run['command'].append('--allow-performance-migration')
+            with self.assertRaises(ScheduleError): adapter.training_payload('mse',run,binding)
+            run['command'][-1] = '--unreviewed-option'
+            with self.assertRaises(ScheduleError): adapter.training_payload('mse',run,binding)
+
+
 class PartialTransferTests(unittest.TestCase):
     def test_existing_partial_copy_is_resumed_and_revalidated(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -111,11 +129,23 @@ class PartialTransferTests(unittest.TestCase):
             with patch.dict('os.environ', {'SUPERSURFER_SR42_CACHE': str(cache)}):
                 result = adapter.prepare('mse', pin, binding)
             self.assertFalse((root / 'sr42-pins').exists())
+            self.assertEqual(checkpoint, (local / Path(pin['path']).name).read_bytes())
+            with patch.dict('os.environ', {'SUPERSURFER_SR42_CACHE': str(cache)}):
+                owned = local / Path(pin['path']).name
+                owned.write_bytes(b'changed after acceptance')
+                with self.assertRaisesRegex(ScheduleError, 'changed'):
+                    adapter.cleanup(pin)
+                self.assertTrue(owned.exists())
+                owned.write_bytes(checkpoint)
+                adapter.cleanup(pin)
+                adapter.cleanup(pin)
+                self.assertFalse(owned.exists())
+                self.assertTrue((local / 'download.json').exists())
+                self.assertTrue((local / Path(pin['seal']).name).exists())
             cache.chmod(0o755)
             with patch.dict('os.environ', {'SUPERSURFER_SR42_CACHE': str(cache)}):
                 with self.assertRaisesRegex(ScheduleError, 'private'):
                     adapter.prepare('mse', pin, binding)
-            self.assertEqual(checkpoint, (local / Path(pin['path']).name).read_bytes())
             self.assertEqual(4, len(copied))
             self.assertEqual('evaluation', result['job_type'])
             self.assertEqual(1, result['gpu_count'])

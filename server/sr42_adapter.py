@@ -93,9 +93,15 @@ class SR42Adapter:
         command = trainer['command']
         expected_config = 'indexed_ar/configs/' + ('future_native_deep_vit.json' if method == 'mse' else 'contrastive_large.json')
         allowed = {'--config', '--data', '--ranks', '--output', '--resume', '--resume-sha256'}
-        if (command[1:3] != ['-m', 'indexed_ar.managed'] or len(command[3:]) % 2
-                or any(flag not in allowed for flag in command[3::2])
-                or len(command[3::2]) != len(set(command[3::2]))
+        # Reviewed numerical repairs may explicitly acknowledge performance-only
+        # migration while preserving the exact scientific recipe and parent SHA.
+        options = command[3:]
+        if options.count('--allow-performance-migration') > 1:
+            raise ScheduleError('Repeated performance migration acknowledgement')
+        options = [item for item in options if item != '--allow-performance-migration']
+        if (command[1:3] != ['-m', 'indexed_ar.managed'] or len(options) % 2
+                or any(flag not in allowed for flag in options[::2])
+                or len(options[::2]) != len(set(options[::2]))
                 or trainer['project_id'] != PROJECT or not reviewed(trainer)):
             raise ScheduleError('Recovery changed the authorized training entry point or options')
         config = option(command, '--config')
@@ -142,13 +148,7 @@ class SR42Adapter:
             pin.update(training_run_id=trainer['id'], training_revision=trainer['revision'], source_host_id=trainer['host_id'])
         return pin
 
-    def prepare(self, method, pin, binding):
-        # Recheck data before each queue request, including normalization and seed maps.
-        current = self.remote(binding['host_id'], binding['inspection'])
-        if current['files'] != binding['evidence']['files']:
-            raise ScheduleError('Canonical destination data changed')
-        root = '/scratch/bduister/supersurfer-sr42/' + binding['host_id'] + '/' + method + '/' + pin['sha256']
-        self.remote(binding['host_id'], {'operation': 'destination', 'directory': root})
+    def transfer_cache(self, pin):
         # Operator-owned transfer storage may be on a separate filesystem.
         # Source/destination pins remain authoritative if this cache disappears.
         configured = os.environ.get('SUPERSURFER_SR42_CACHE')
@@ -159,11 +159,51 @@ class SR42Adapter:
         if configured and (cache.stat().st_uid != os.getuid() or cache.stat().st_mode & 0o077):
             raise ScheduleError('Configured SR42 cache must be private to the service user')
         local = cache / pin['sha256']
+        if local.is_symlink():
+            raise ScheduleError('Refusing symlinked SR42 cache entry')
         local.mkdir(parents=True, exist_ok=True)
+        return local
+
+    def cleanup(self, pin):
+        """Remove only an owned local download after durable queue acceptance."""
+        local = self.transfer_cache(pin)
+        marker = {'sha256': pin['sha256'], 'checkpoint': Path(pin['path']).name}
+        receipt = local / 'download.json'
+        if receipt.is_symlink():
+            raise ScheduleError('Refusing symlinked SR42 cache receipt')
+        if not receipt.exists():
+            # Cache loss is safe: remote retained pins remain authoritative.
+            if not (local / marker['checkpoint']).exists():
+                return
+            raise ScheduleError('SR42 download has no ownership receipt')
+        if json.loads(receipt.read_text()) != marker:
+            raise ScheduleError('SR42 download ownership receipt differs')
+        path = local / marker['checkpoint']
+        if path.is_symlink():
+            raise ScheduleError('Refusing symlinked SR42 download')
+        if path.exists():
+            from .sr42_remote import digest
+            if digest(path) != pin['sha256']:
+                raise ScheduleError('Accepted SR42 download changed; refusing cleanup')
+            path.unlink()
+
+    def prepare(self, method, pin, binding):
+        # Recheck data before each queue request, including normalization and seed maps.
+        current = self.remote(binding['host_id'], binding['inspection'])
+        if current['files'] != binding['evidence']['files']:
+            raise ScheduleError('Canonical destination data changed')
+        root = '/scratch/bduister/supersurfer-sr42/' + binding['host_id'] + '/' + method + '/' + pin['sha256']
+        self.remote(binding['host_id'], {'operation': 'destination', 'directory': root})
+        local = self.transfer_cache(pin)
+        from .sr42_remote import publish
+        marker = {'sha256': pin['sha256'], 'checkpoint': Path(pin['path']).name}
+        publish(local / 'download.json', json.dumps(marker, sort_keys=True).encode())
         source = self.service.lookup('hosts', pin['source_host_id'], fresh=True)
         destination = self.service.lookup('hosts', binding['host_id'], fresh=True)
         for name, expected in [('path', pin['sha256']), ('seal', pin['seal_sha256'])]:
             path = local / Path(pin[name]).name
+            if path.is_symlink():
+                raise ScheduleError('Refusing symlinked SR42 download')
             from .sr42_remote import digest
             if not path.exists() or digest(path) != expected:
                 self.service.nodes.copy(source, pin[name], None, str(path), self.cancelled)
