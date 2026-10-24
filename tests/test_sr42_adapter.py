@@ -50,6 +50,14 @@ class RemotePinTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'binding validation failed'):
             self.invoke(self.payload)
 
+    def test_pin_subprocess_uses_python36_compatible_arguments(self):
+        def python36_run(args, input, universal_newlines, stdout, stderr, timeout, env):
+            self.assertTrue(universal_newlines)
+            self.assertEqual('', env['CUDA_VISIBLE_DEVICES'])
+            return SimpleNamespace(returncode=0)
+        with patch('server.sr42_remote.subprocess.run', python36_run):
+            self.assertEqual(1000, self.invoke(self.payload)['step'])
+
     def test_changed_config_and_sha_fail_closed(self):
         self.config.write_text('{"changed":true}')
         with self.assertRaisesRegex(ValueError, 'config bytes changed'): self.invoke(self.payload)
@@ -79,7 +87,8 @@ class PartialTransferTests(unittest.TestCase):
             pin = {'sha256': digest(checkpoint), 'seal_sha256': digest(seal), 'step': 1000,
                    'path': '/fixture/000001000-evaluation.pt', 'seal': '/fixture/000001000-evaluation.json',
                    'source_host_id': 'source'}
-            local = root / 'sr42-pins' / pin['sha256']; local.mkdir(parents=True)
+            cache = root / 'private-external-cache'; cache.mkdir(mode=0o700)
+            local = cache / pin['sha256']; local.mkdir()
             (local / Path(pin['path']).name).write_bytes(b'partial')
             copied = []
             def copy(source, path, destination, target, cancelled):
@@ -99,7 +108,13 @@ class PartialTransferTests(unittest.TestCase):
             binding = {'host_id':'destination','inspection':{'operation':'inspect'},'evidence':{'files':{},'readiness':{}},
                        'python':'/python','runtime':'/runtime','torch_home':'/torch','runtime_identity':'c'*64,
                        'data':'/data','repo':'/repo','python_packages':{}}
-            result = adapter.prepare('mse', pin, binding)
+            with patch.dict('os.environ', {'SUPERSURFER_SR42_CACHE': str(cache)}):
+                result = adapter.prepare('mse', pin, binding)
+            self.assertFalse((root / 'sr42-pins').exists())
+            cache.chmod(0o755)
+            with patch.dict('os.environ', {'SUPERSURFER_SR42_CACHE': str(cache)}):
+                with self.assertRaisesRegex(ScheduleError, 'private'):
+                    adapter.prepare('mse', pin, binding)
             self.assertEqual(checkpoint, (local / Path(pin['path']).name).read_bytes())
             self.assertEqual(4, len(copied))
             self.assertEqual('evaluation', result['job_type'])

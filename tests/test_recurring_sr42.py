@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock
 
 from server.recurring_sr42 import (CONTRACT, KEY, METHODS, OWNER, PAUSED, PR, PROJECT, REVISION,
-                                    RecurringSR42, ScheduleError)
+                                    RecurringSR42, ScheduleError, HISTORICAL_EVALUATIONS, evaluation_method, request_id)
 from server.run_recovery import receipt_identity
 from server.store import Store
 
@@ -22,7 +22,7 @@ def trainer(method, status='running'):
 
 
 def evaluation(method, sha='a' * 64, status='running', run_id='evaluation'):
-    return {'id': run_id, 'experiment_id': METHODS[method]['experiment_id'], 'revision': REVISION,
+    return {'id': run_id, 'project_id': PROJECT, 'experiment_id': METHODS[method]['experiment_id'], 'revision': REVISION,
             'status': status, 'ready': True, 'command': ['python', '-m', 'readable_vla.evaluate', 'sr42',
                                       '--weights', 'ema', '--checkpoint-sha256', sha]}
 
@@ -217,6 +217,73 @@ class RecurringSR42Tests(unittest.TestCase):
         self.enable(); self.schedule.tick(0)
         self.assertFalse(self.submissions)
         self.assertIsNotNone(self.store.get(KEY)['state']['mse']['submission'])
+
+    def test_historical_contrastive_filed_as_mse_rebuilds_poisoned_seen(self):
+        run_id = 'run_5c56bc244f87'
+        method, checkpoint_sha = HISTORICAL_EVALUATIONS[run_id]
+        historic = evaluation('mse', checkpoint_sha, 'succeeded', run_id)
+        self.runs[run_id] = historic
+        record = self.enable()
+        record['state']['mse']['seen'][checkpoint_sha] = run_id
+        self.store.put(KEY, record)
+        self.schedule.tick(0)
+        state = self.store.get(KEY)['state']
+        self.assertNotIn(checkpoint_sha, state['mse']['seen'])
+        self.assertEqual(run_id, state['contrastive']['seen'][checkpoint_sha])
+        self.assertEqual('contrastive', evaluation_method(historic))
+        historic['command'][-1] = 'f' * 64
+        self.assertIsNone(evaluation_method(historic))
+
+    def test_unknown_active_blocks_both_methods_and_terminal_is_not_seen(self):
+        self.runs['unknown'] = evaluation('mse', 'f' * 64, run_id='unknown')
+        for method in METHODS:
+            self.adapter.pins[method] = {'sha256': method[0] * 64, 'step': 3}
+        self.enable(); self.schedule.tick(0)
+        for state in self.store.get(KEY)['state'].values():
+            self.assertEqual(['unknown'], state['unclassified_active'])
+            self.assertNotIn('f' * 64, state['seen'])
+        self.assertFalse(self.submissions)
+        self.runs['unknown']['status'] = 'succeeded'
+        self.adapter.pins.clear()
+        record = self.store.get(KEY)
+        for state in record['state'].values(): state['pending'] = None
+        self.store.put(KEY, record)
+        self.schedule.tick(1)
+        self.assertFalse(self.submissions)
+        self.assertTrue(all(not s['seen'] for s in self.store.get(KEY)['state'].values()))
+
+    def test_unknown_terminal_same_discovered_checkpoint_blocks_duplicate(self):
+        self.runs['unknown'] = evaluation('mse', 'f' * 64, 'succeeded', 'unknown')
+        self.adapter.pins['contrastive'] = {'sha256': 'f' * 64, 'step': 3}
+        self.enable(); self.schedule.tick(0)
+        self.assertFalse(self.submissions)
+        self.assertIn('provenance', self.store.get(KEY)['state']['contrastive']['error'])
+
+    def test_unknown_terminal_arriving_during_stage_blocks_duplicate(self):
+        self.adapter.pins['mse'] = {'sha256': 'a' * 64, 'step': 1}
+        prepare = self.adapter.prepare
+        def staging(*args):
+            result = prepare(*args)
+            self.runs['unknown'] = evaluation('contrastive', 'a' * 64, 'succeeded', 'unknown')
+            return result
+        self.adapter.prepare = staging
+        self.enable(); self.schedule.tick(0)
+        self.assertFalse(self.submissions)
+        self.assertIn('provenance', self.store.get(KEY)['state']['mse']['error'])
+
+    def test_native_receipt_binds_method_checkpoint_and_survives_omitted_history(self):
+        run = evaluation('mse', 'a' * 64)
+        run['config'] = {'supersurfer_request_id': receipt_identity(
+            'native-sr42:sr42-anytime8-two-large-20261023', METHODS['contrastive']['experiment_id'],
+            request_id('contrastive', 'a' * 64))}
+        self.assertEqual('contrastive', evaluation_method(run))
+        run['command'][-1] = 'b' * 64
+        self.assertIsNone(evaluation_method(run))
+        self.adapter.pins['mse'] = {'sha256': 'a' * 64, 'step': 1}
+        self.enable(); self.schedule.tick(0)
+        del self.runs['new-1']
+        RecurringSR42(self.service, self.adapter).tick(7200)
+        self.assertEqual(1, len(self.submissions))
 
 
 if __name__ == '__main__': unittest.main()

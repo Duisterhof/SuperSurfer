@@ -33,6 +33,16 @@ CONTRACT = {'schema_version': 1, 'schedule_id': SCHEDULE, 'owner_experiment_id':
             'evaluator_revision': REVISION, 'evaluator_pr': PR,
             'max_active_per_method': 1, 'max_pending_per_method': 1}
 TERMINAL = {'succeeded', 'completed', 'failed', 'cancelled'}
+# Exact run/checkpoint identities verified from canonical SR42 completion
+# receipts and the two current seed receipts. Historical evaluations were filed
+# under the MSE experiment even when their checkpoint was contrastive.
+HISTORICAL_EVALUATIONS = {
+    'run_5c56bc244f87': ('contrastive', '78684b69bae2a0d8f5af64a36b29be6be38305a56f55736b8d7410ffcb66be65'),
+    'run_ed4d52d7e35a': ('contrastive', '65171132445308cce48d8c784560bee8a43fe322a83dda8f6c3140df52dc70f9'),
+    'run_70bf31ef0b25': ('contrastive', '65171132445308cce48d8c784560bee8a43fe322a83dda8f6c3140df52dc70f9'),
+    'run_0a4a59e998f6': ('mse', '1dbe12dcf15266b5f823b12c5ddd305ea434d906fbdaeb4635778de32b1f9177'),
+    'run_bc1d2764d02d': ('mse', 'a7ba2be4b610b35479f457cb3648def880cd3dad9b4a2aafc189dc1768b65b43'),
+}
 
 
 class ScheduleError(ValueError):
@@ -52,10 +62,33 @@ def reviewed(run):
             and receipt.get('repository', '').lower() == 'duisterhof/vla_wam')
 
 
-def evaluation(run, experiment_id):
+def evaluation(run):
     command = run.get('command', [])
-    return (run.get('experiment_id') == experiment_id and 'readable_vla.evaluate' in command
-            and 'sr42' in command and '--weights' in command and option(command, '--weights') == 'ema')
+    return (run.get('project_id') == PROJECT
+            and run.get('experiment_id') in {spec['experiment_id'] for spec in METHODS.values()}
+            and 'readable_vla.evaluate' in command and 'sr42' in command
+            and '--weights' in command and option(command, '--weights') == 'ema')
+
+
+def request_id(method, checkpoint_sha):
+    identity = [METHODS[method]['training_run_id'], checkpoint_sha, 'ema', COHORT, PROTOCOL]
+    return 'sr42_' + hashlib.sha256(json.dumps(identity).encode()).hexdigest()
+
+
+def evaluation_method(run):
+    """Method requires checkpoint or exact native request provenance, not filing."""
+    from .run_recovery import receipt_identity
+    if not evaluation(run) or run.get('revision') != REVISION:
+        return None
+    checkpoint_sha = option(run['command'], '--checkpoint-sha256')
+    historic = HISTORICAL_EVALUATIONS.get(run['id'])
+    if historic and historic[1] == checkpoint_sha:
+        return historic[0]
+    for method, spec in METHODS.items():
+        identity = receipt_identity('native-sr42:' + SCHEDULE, spec['experiment_id'], request_id(method, checkpoint_sha))
+        if run.get('config', {}).get('supersurfer_request_id') == identity:
+            return method
+    return None
 
 
 class RecurringSR42:
@@ -241,12 +274,16 @@ class RecurringSR42:
 
     def reconcile(self, record, method, spec, runs, now):
         state = record['state'][method]
-        evaluations = [run for run in runs.values() if evaluation(run, spec['experiment_id'])]
+        all_evaluations = [run for run in runs.values() if evaluation(run)]
+        evaluations = [run for run in all_evaluations if evaluation_method(run) in {method, None}]
         state['active'] = [r['id'] for r in evaluations if r['status'] not in TERMINAL]
-        # Adopt manually queued work, including unknown/uncertain statuses, before
-        # discovering or releasing anything. Never cancel or replace a live run.
+        state['unclassified_active'] = [r['id'] for r in evaluations
+                                        if r['status'] not in TERMINAL and evaluation_method(r) is None]
+        # Rebuild legacy seen maps: experiment filing is not scientific identity.
+        # Native receipts survive omitted/archived manager rows independently.
+        state['seen'] = dict(state.get('native_seen', {}))
         for run in evaluations:
-            if run.get('revision') == REVISION:
+            if evaluation_method(run) == method:
                 state['seen'][option(run['command'], '--checkpoint-sha256')] = run['id']
         trainer = self.trainer(spec, runs, record)
         state['training_run_id'] = trainer['id']
@@ -275,9 +312,11 @@ class RecurringSR42:
             if not pin or pin['sha256'] in state['seen']:
                 state['pending'] = None
                 return
+            if any(option(run['command'], '--checkpoint-sha256') == pin['sha256']
+                   and evaluation_method(run) is None for run in all_evaluations):
+                raise ScheduleError('Existing evaluation of this checkpoint lacks verified method/cohort provenance')
             request = self.adapter.prepare(method, pin, record['bindings'][method])
-            identity = [spec['training_run_id'], pin['sha256'], 'ema', COHORT, PROTOCOL]
-            request['request_id'] = 'sr42_' + hashlib.sha256(json.dumps(identity).encode()).hexdigest()
+            request['request_id'] = request_id(method, pin['sha256'])
             submission = {'request': request, 'pin': pin}
             state['submission'] = submission
             state['pending'] = None
@@ -288,12 +327,17 @@ class RecurringSR42:
             if self.service.shutdown.is_set() or self.service.store.get(PAUSED, False) or not self.service.store.get(KEY)['enabled']:
                 return
             latest = self.snapshot()
-            if any(evaluation(run, spec['experiment_id']) and run['status'] not in TERMINAL
+            if any(evaluation(run) and evaluation_method(run) is None
+                   and option(run['command'], '--checkpoint-sha256') == submission['pin']['sha256']
+                   for run in latest.values()):
+                raise ScheduleError('Existing evaluation of this checkpoint lacks verified method/cohort provenance')
+            if any(evaluation(run) and evaluation_method(run) in {method, None} and run['status'] not in TERMINAL
                    and not (own_identity and run.get('config', {}).get('supersurfer_request_id') == own_identity and not run.get('ready'))
                    for run in latest.values()):
                 return
             experiment = self.service.store.experiment(spec['experiment_id'])
             result = self.service.queue_agent_run('native-sr42:' + SCHEDULE, submission['request'], experiment)
+        state.setdefault('native_seen', {})[submission['pin']['sha256']] = result['run_id']
         state['seen'][submission['pin']['sha256']] = result['run_id']
         state['last_submitted'] = {'run_id': result['run_id'], 'checkpoint': submission['pin'], 'at': now}
         state['active'] = [result['run_id']]

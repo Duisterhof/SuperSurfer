@@ -44,7 +44,10 @@ def publish(path, contents):
             os.fsync(stream.fileno())
         os.replace(temporary, path)
     finally:
-        temporary.unlink(missing_ok=True)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 CHECKPOINT_CHECK = """
@@ -131,7 +134,7 @@ def main(payload):
             check = {key: payload[key] for key in ('expected_config', 'revision', 'protocol_sha256', 'data_bindings')}
             check.update(path=str(dest), step=record['step'])
             result = subprocess.run([payload['python'], '-c', CHECKPOINT_CHECK], input=json.dumps(check),
-                text=True, capture_output=True, timeout=120,
+                universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120,
                 env={**os.environ, 'CUDA_VISIBLE_DEVICES': '', 'OMP_NUM_THREADS': '2'})
             if result.returncode:
                 raise ValueError('CPU checkpoint binding validation failed: ' + result.stderr[-2000:])

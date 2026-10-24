@@ -2,6 +2,7 @@
 from copy import deepcopy
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -148,7 +149,16 @@ class SR42Adapter:
             raise ScheduleError('Canonical destination data changed')
         root = '/scratch/bduister/supersurfer-sr42/' + binding['host_id'] + '/' + method + '/' + pin['sha256']
         self.remote(binding['host_id'], {'operation': 'destination', 'directory': root})
-        local = Path(self.service.directory) / 'sr42-pins' / pin['sha256']
+        # Operator-owned transfer storage may be on a separate filesystem.
+        # Source/destination pins remain authoritative if this cache disappears.
+        configured = os.environ.get('SUPERSURFER_SR42_CACHE')
+        cache = Path(configured) if configured else Path(self.service.directory) / 'sr42-pins'
+        if not cache.is_absolute() or cache.is_symlink():
+            raise ScheduleError('SR42 cache must be an absolute owned directory')
+        cache.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if configured and (cache.stat().st_uid != os.getuid() or cache.stat().st_mode & 0o077):
+            raise ScheduleError('Configured SR42 cache must be private to the service user')
+        local = cache / pin['sha256']
         local.mkdir(parents=True, exist_ok=True)
         source = self.service.lookup('hosts', pin['source_host_id'], fresh=True)
         destination = self.service.lookup('hosts', binding['host_id'], fresh=True)
