@@ -883,6 +883,8 @@ Experiment creation and background reconciliation use the existing W&B credentia
 
 The worker-only `configure_worker_wakeup` tool accepts `action:add|update|pause|remove|list`, optional rule `id`, task, enabled flag and a typed condition. Conditions use `kind:interval` with `minutes:1..10080`; `kind:metric` with `metric,operator:lt|lte|gt|gte,value`; or `kind:run_status` with an AutoML lifecycle status. Metric/status conditions may select a registered `run_id`; otherwise they bind the newest current/future run, not old completed work. There are at most 20 rules per experiment.
 
+Metric wakeups read an unsampled tail of at most 500 history steps, pinned to W&B’s reported last step. They use the newest row containing the selected metric and its own timestamp; summary updates do not refresh or invalidate that evidence. Both reads must identify the linked training run. Samples older than five minutes, more than sixty seconds in the future, missing, invalid or outside the tail cannot trigger. A sparse metric absent from the bounded tail waits for new evidence. Reads are cached per run for sixty seconds.
+
 Intervals recur without overlapping busy work; metric/status events fire once per explicit arm. Busy workers retain a pending trigger. Uncertain dispatch/restart pauses instead of replaying, and explicit update/rearm is required. Wakeups use the saved conversation's current preferences and a scheduled origin: they cannot prepare/queue runs, delegate or mutate wakeup rules. Listing rules remains available. A threshold or lifecycle event is evidence, not new launch authorization.
 
 ## Role tools and skills

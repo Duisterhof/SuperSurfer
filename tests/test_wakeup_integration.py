@@ -117,11 +117,13 @@ class WakeupIntegrationTests(unittest.TestCase):
         calls = []
         def metrics(query, variables):
             calls.append(variables)
-            return {'project': {'run': {'name': 'training1', 'summaryMetrics': {'loss': 0.2},
+            return {'project': {'run': {'name': 'training1', 'historyKeys': {'lastStep': 20}, 'summaryMetrics': {'loss': 0.2},
                                         'history': [{'_timestamp': self.now, '_step': 20, 'loss': 0.2}]}}}
         self.service.wandb.fetcher = metrics
         self.assertEqual([rule['id']], self.tick())
-        self.assertEqual([{'entity': 'test', 'project': 'research', 'run': 'training1'}], calls)
+        self.assertEqual([{'entity': 'test', 'project': 'research', 'run': 'training1'},
+                          {'entity': 'test', 'project': 'research', 'run': 'training1',
+                           'minStep': 0, 'maxStep': 21, 'samples': 500}], calls)
         self.assertIn('"value": 0.2', self.service.codex.sent[0][1])
         self.assertIn('"run_id": "r1"', self.service.codex.sent[0][1])
         self.assertFalse(self.service.wakeups.list(self.experiment['id'])[0]['enabled'])
@@ -202,7 +204,7 @@ class WakeupIntegrationTests(unittest.TestCase):
         calls = []
         def metrics(query, variables):
             calls.append(variables)
-            return {'project': {'run': {'summaryMetrics': {'loss': 0.1}, 'history': [{'_timestamp': self.now, '_step': 1, 'loss': 0.1}]}}}
+            return {'project': {'run': {'name': variables['run'], 'historyKeys': {'lastStep': 1}, 'summaryMetrics': {'loss': 0.1}, 'history': [{'_timestamp': self.now, '_step': 1, 'loss': 0.1}]}}}
         self.service.wandb.fetcher = metrics
         rule = self.add({**self.args, 'condition': {'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 1, 'run_id': 'r1'}})
         self.assertEqual([rule['id']], self.tick())

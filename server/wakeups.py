@@ -21,6 +21,7 @@ class WakeupError(ValueError):
 KEY = 'worker_wakeups'
 MAX_RULES = 20
 METRIC_CACHE_SECONDS = 60
+METRIC_HISTORY_STEPS = 500
 STATUS_CHECK_SECONDS = 10
 METRIC_STALE_SECONDS = 300
 SNAPSHOT_STALE_SECONDS = 90
@@ -195,13 +196,31 @@ class Wakeups:
         if not cached or now - cached['checked_at'] >= METRIC_CACHE_SECONDS:
             if self.stop_event.is_set():
                 raise WakeupError('Wakeup checking stopped')
-            query = 'query WorkerWakeup($entity: String!, $project: String!, $run: String!) { project(name: $project, entityName: $entity) { run(name: $run) { name summaryMetrics history(samples: 500) } } }'
             cached = {'checked_at': now, 'run': None, 'error': None}
             try:
-                response = self.reader.fetcher(query, {key: target[key] for key in ('entity', 'project', 'run')})
-                cached['run'] = (response.get('project') or {}).get('run')
-                if not cached['run']:
-                    raise WakeupError('W&B run is unavailable; check its link and remote account access')
+                variables = {key: target[key] for key in ('entity', 'project', 'run')}
+                def fetch_run(query, variables):
+                    response = self.reader.fetcher(query, variables)
+                    remote = (response.get('project') or {}).get('run')
+                    if not remote:
+                        raise WakeupError('W&B run is unavailable; check its link and remote account access')
+                    if remote.get('name') != target['run']:
+                        raise WakeupError('W&B returned a different training run; waiting for matching evidence')
+                    return remote
+
+                remote = fetch_run('query WorkerWakeupHead($entity: String!, $project: String!, $run: String!) { project(name: $project, entityName: $entity) { run(name: $run) { name historyKeys } } }', variables)
+                last_step = (remote.get('historyKeys') or {}).get('lastStep')
+                if type(last_step) is not int or not 0 <= last_step < 2**63 - 1:
+                    raise WakeupError('W&B history has no valid latest step')
+                # W&B scan_history uses this half-open range with samples >= its
+                # step span to avoid sampling. Pin the head before reading the tail;
+                # summaryMetrics is independently updated and is not sample evidence.
+                lower, upper = max(0, last_step + 1 - METRIC_HISTORY_STEPS), last_step + 1
+                if self.stop_event.is_set():
+                    raise WakeupError('Wakeup checking stopped')
+                cached['run'] = fetch_run('query WorkerWakeupTail($entity: String!, $project: String!, $run: String!, $minStep: Int64!, $maxStep: Int64!, $samples: Int!) { project(name: $project, entityName: $entity) { run(name: $run) { name history(minStep: $minStep, maxStep: $maxStep, samples: $samples) } } }',
+                    {**variables, 'minStep': lower, 'maxStep': upper, 'samples': METRIC_HISTORY_STEPS})
+                cached.update(min_step=lower, max_step=upper)
             except Exception as exc:
                 cached['error'] = str(exc) if isinstance(exc, ValueError) else 'W&B metrics are unavailable; check remote login and connection'
             self._metrics[url] = cached
@@ -210,27 +229,28 @@ class Wakeups:
         if cached['error']:
             raise WakeupError(cached['error'])
         remote = cached['run']
-        summary = remote.get('summaryMetrics') or {}
-        if isinstance(summary, str):
-            try: summary = json.loads(summary)
-            except ValueError: summary = {}
-        latest = summary.get(name) if isinstance(summary, dict) else None
-        if not _finite(latest):
-            raise WakeupError('Latest W&B metric is missing or not finite: ' + name)
+        history = remote.get('history')
+        if not isinstance(history, list) or len(history) > METRIC_HISTORY_STEPS:
+            raise WakeupError('W&B history tail is invalid')
         rows = []
-        for raw in remote.get('history', [])[:500]:
+        for raw in history:
             try: row = json.loads(raw) if isinstance(raw, str) else raw
-            except ValueError: continue
-            if isinstance(row, dict) and name in row and _finite(row.get('_timestamp')):
+            except ValueError:
+                raise WakeupError('W&B history tail contains an invalid row')
+            if not isinstance(row, dict) or type(row.get('_step')) is not int or not cached['min_step'] <= row['_step'] < cached['max_step']:
+                raise WakeupError('W&B history tail contains an invalid step')
+            if name in row:
                 rows.append(row)
         if not rows:
-            raise WakeupError('No timestamped sample for W&B metric: ' + name)
-        row = max(rows, key=lambda item: (item['_timestamp'], item.get('_step') if _finite(item.get('_step')) else 0))
-        if not _finite(row[name]) or row[name] != latest:
-            raise WakeupError('Latest summary and timestamped metric sample do not agree; waiting for fresh evidence')
-        if now - row['_timestamp'] > METRIC_STALE_SECONDS or row['_timestamp'] > now + 60:
+            raise WakeupError('No recent history sample for W&B metric: ' + name)
+        row = max(rows, key=lambda item: item['_step'])
+        if sum(item['_step'] == row['_step'] for item in rows) != 1:
+            raise WakeupError('W&B history tail contains an ambiguous metric step')
+        if not _finite(row[name]):
+            raise WakeupError('Latest W&B metric sample is not finite: ' + name)
+        if not _finite(row.get('_timestamp')) or now - row['_timestamp'] > METRIC_STALE_SECONDS or row['_timestamp'] > now + 60:
             raise WakeupError('W&B metric sample is stale or has an invalid timestamp')
-        return {'value': latest, 'sample_at': row['_timestamp'], 'observed_at': cached['checked_at'], 'wandb_url': url}
+        return {'value': row[name], 'sample_at': row['_timestamp'], 'observed_at': cached['checked_at'], 'wandb_url': url}
 
     def tick(self, snapshot, try_start):
         """Return accepted rule IDs; callbacks run without the Store lock held."""

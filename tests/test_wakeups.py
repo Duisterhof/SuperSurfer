@@ -37,7 +37,7 @@ class WakeupTests(unittest.TestCase):
     def fetch(self, query, variables):
         self.calls.append((query, variables))
         if self.remote_error: raise self.remote_error
-        return {'project': {'run': {'name': variables['run'], 'summaryMetrics': json.dumps({'loss': self.metric_value}),
+        return {'project': {'run': {'name': variables['run'], 'historyKeys': {'lastStep': 5}, 'summaryMetrics': json.dumps({'loss': self.metric_value}),
                   'history': [json.dumps({'_timestamp': self.sample_at, '_step': 5, 'loss': self.metric_value})]}}}
 
     def add(self, condition=None, **extra):
@@ -85,16 +85,114 @@ class WakeupTests(unittest.TestCase):
         condition = {'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 0.3}
         first = self.add(condition); second = self.add(condition)
         self.assertEqual([first['id']], self.wakeups.tick(self.snapshot, self.start))
-        self.assertEqual(1, len(self.calls))
+        self.assertEqual(2, len(self.calls))
         self.wakeups.tick(self.snapshot, self.start)
-        self.assertEqual(2, len(self.sent)); self.assertEqual(1, len(self.calls))
+        self.assertEqual(2, len(self.sent)); self.assertEqual(2, len(self.calls))
         self.advance(120)
         self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
         self.wakeups.configure(self.scope, self.experiment['id'], {'action': 'update', 'id': first['id']})
         self.sample_at = self.now
         self.wakeups.tick(self.snapshot, self.start)
-        self.assertEqual(3, len(self.sent)); self.assertEqual(2, len(self.calls))
+        self.assertEqual(3, len(self.sent)); self.assertEqual(4, len(self.calls))
         self.assertEqual('fired', self.rule(second['id'])['status'])
+
+    def history_fetcher(self, rows, last_step=2000, summary_value=0.9, names=None):
+        """Model SDK scan ranges separately from a sampled whole-run response."""
+        def fetch(query, variables):
+            self.calls.append((query, variables))
+            remote = {'name': variables['run'], 'summaryMetrics': json.dumps({'loss': summary_value})}
+            if 'historyKeys' in query:
+                remote['historyKeys'] = {'lastStep': last_step}
+                if names: remote['name'] = names[0]
+            elif 'minStep' in variables:
+                self.assertIn('history(minStep: $minStep, maxStep: $maxStep, samples: $samples)', query)
+                self.assertEqual(last_step + 1, variables['maxStep'])
+                self.assertLessEqual(variables['maxStep'] - variables['minStep'], variables['samples'])
+                remote['history'] = copy.deepcopy(rows)
+                if names: remote['name'] = names[1]
+            else:
+                # The old whole-run sample omits the newest crossing entirely.
+                remote['history'] = [json.dumps({'_step': 1, '_timestamp': self.now - 400, 'loss': 0.9})]
+            return {'project': {'run': remote}}
+        self.reader.fetcher = fetch
+
+    def test_tail_observes_crossing_omitted_by_sampling_despite_async_summary(self):
+        rule = self.add({'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 0.3})
+        rows = [{'_step': 1999, '_timestamp': self.now - 2, 'loss': 0.4},
+                {'_step': 2000, '_timestamp': self.now, 'loss': 0.2}]
+        self.history_fetcher(rows, summary_value=0.1)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+        self.assertEqual(0.2, self.sent[0][1]['value'])
+        self.assertEqual(self.now, self.sent[0][1]['sample_at'])
+        self.advance(60)
+        self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        self.assertEqual(1, len(self.sent))
+
+    def test_summary_crossing_cannot_trigger_before_timestamped_history_crosses(self):
+        rule = self.add({'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 0.3})
+        rows = [{'_step': 2000, '_timestamp': self.now, 'loss': 0.4}]
+        self.history_fetcher(rows, summary_value=0.1)
+        self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        self.assertIsNone(self.rule(rule['id'])['error'])
+        self.advance(60)
+        rows[0].update(loss=0.2, _timestamp=self.now)
+        self.assertEqual([rule['id']], self.wakeups.tick(self.snapshot, self.start))
+
+    def test_sparse_metrics_keep_their_own_timestamp_and_share_cached_tail(self):
+        self.history_fetcher([
+            {'_step': 1970, '_timestamp': self.now - 60, 'loss': 0.2},
+            {'_step': 2000, '_timestamp': self.now, 'accuracy': 0.8}])
+        loss = self.wakeups._metric(self.run, 'loss', self.now)
+        accuracy = self.wakeups._metric(self.run, 'accuracy', self.now)
+        self.assertEqual(self.now - 60, loss['sample_at'])
+        self.assertEqual(self.now, accuracy['sample_at'])
+        self.assertEqual(2, len(self.calls))
+
+    def test_stale_sparse_metric_is_not_refreshed_by_recent_other_metrics(self):
+        self.history_fetcher([
+            {'_step': 1700, '_timestamp': self.now - 301, 'loss': 0.2},
+            {'_step': 2000, '_timestamp': self.now, 'accuracy': 0.8}], summary_value=0.2)
+        rule = self.add({'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 0.3})
+        self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+        self.assertIn('stale', self.rule(rule['id'])['error'])
+
+    def test_invalid_latest_evidence_never_falls_back_to_earlier_crossing(self):
+        rule = self.add({'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 0.3})
+        invalid = [
+            {'loss': None}, {'loss': float('nan')}, {'loss': float('inf')}, {'loss': True},
+            {'_timestamp': None}, {'_timestamp': float('nan')}, {'_timestamp': True},
+            {'_timestamp': self.now + 1000}, {'_timestamp': self.now - 301},
+            {'_step': None}, {'_step': True}, {'_step': 2001}, {'_step': 1500}]
+        for replacement in invalid:
+            with self.subTest(replacement=replacement):
+                self.wakeups._metrics.clear()
+                self.history_fetcher([
+                    {'_step': 1999, '_timestamp': self.now, 'loss': 0.2},
+                    {'_step': 2000, '_timestamp': self.now, 'loss': 0.1, **replacement}])
+                self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+                self.assertIsNotNone(self.rule(rule['id'])['error'])
+                self.advance(60)
+        self.assertEqual([], self.sent)
+
+    def test_mismatched_run_identity_at_either_read_never_fires(self):
+        rule = self.add({'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 0.3})
+        for names in [('other', 'training1'), ('training1', 'other')]:
+            self.history_fetcher([{'_step': 2000, '_timestamp': self.now, 'loss': 0.2}], names=names)
+            self.assertEqual([], self.wakeups.tick(self.snapshot, self.start))
+            self.assertIn('different training run', self.rule(rule['id'])['error'])
+            self.advance(60)
+
+    def test_missing_or_malformed_tail_and_head_fail_closed(self):
+        cases = [(None, 2000), ([], 2000), (['bad json'], 2000),
+                 ([{'_step': 2000, '_timestamp': self.now, 'accuracy': 0.8}], 2000),
+                 ([{'_step': 2000, '_timestamp': self.now, 'loss': 0.2}] * 2, 2000),
+                 ([], None), ([], True), ([], -1), ([], float('nan'))]
+        for rows, last_step in cases:
+            with self.subTest(rows=rows, last_step=last_step):
+                self.wakeups._metrics.clear()
+                self.history_fetcher(rows, last_step=last_step)
+                with self.assertRaises(WakeupError):
+                    self.wakeups._metric(self.run, 'loss', self.now)
 
     def test_missing_stale_nan_future_metrics_and_disconnected_state_never_fire(self):
         rule = self.add({'kind': 'metric', 'metric': 'loss', 'operator': 'lt', 'value': 1})
@@ -121,7 +219,7 @@ class WakeupTests(unittest.TestCase):
         self.assertIn('W&B needs access', self.rule(rule['id'])['error'])
         self.remote_error = None; self.advance(40); self.sample_at = self.now
         self.wakeups.tick(self.snapshot, self.start)
-        self.assertEqual(2, len(self.calls)); self.assertEqual(1, len(self.sent))
+        self.assertEqual(3, len(self.calls)); self.assertEqual(1, len(self.sent))
 
     def test_status_binds_current_run_then_fires_at_its_transition_not_other_runs(self):
         rule = self.add({'kind': 'run_status', 'status': 'failed'})

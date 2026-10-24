@@ -1,3 +1,5 @@
+- [x] Read timestamped unsampled history tails for metric wakeups; preserve freshness and once-per-arm delivery.
+
 - [x] Add OpenCode ACP as a selectable backend, including local configured models,
   scoped tools, approvals, durable sessions and UI capability handling.
 
