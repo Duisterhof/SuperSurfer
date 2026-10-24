@@ -1189,3 +1189,25 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+### Native two-lineage SR42 recurrence (2026-10-23)
+
+Isolated controller tests cover owner/user-turn authorization, fixed scope,
+checkpoint dedupe across restart, concurrent reconciliation locks, adoption of
+existing evaluations, latest-pending coalescing, uncertain held submission retry,
+terminal trainer/recovery handling, pause during staging and a competing user
+queue request during transfer. Existing release-queue tests verify durable submit
+identity and exact-source review/release. No production database, service restart,
+research job or GPU allocation is used by these tests. Live activation is a
+separate coordinated deployment and owner action.
+
+The full source suite passed 782 Python tests and 49 Node tests (5 existing Node
+skips). Final targeted SR42 tests pass; three additional Operations integration
+tests are intentionally skipped on main, which has no Operations profile, and
+pass against the exact deployed-base overlay. That overlay passed 56 controller,
+checkpoint, Operations, queue/review and recovery tests. Independent Astra-high
+review approved its exact manifest after reviewing the additive diff and original
+terminal-status, transfer, crash and race fixes. A read-only actual-node activation
+preflight verified canonical cohort, protocol, normalization and evaluator source.
+Linux x64 packaging succeeds. Production activation and a repaired MSE successor
+remain separate owner-coordinated operations; no test launches research work.
