@@ -26,7 +26,10 @@ def resolved_training_command(trainer):
     command = trainer.get('command')
     if not isinstance(command, list) or not command or not all(isinstance(x, str) and x for x in command):
         raise ScheduleError('Invalid training command')
-    contracts = trainer.get('config', {}).get('host_contracts', {})
+    config = trainer.get('config', {})
+    if not isinstance(config, dict):
+        raise ScheduleError('Invalid training configuration')
+    contracts = config.get('host_contracts', {})
     if not isinstance(contracts, dict):
         raise ScheduleError('Invalid training host contracts')
     placeholders = any('{' in x or '}' in x for x in command)
@@ -45,12 +48,14 @@ def resolved_training_command(trainer):
                 raise ScheduleError('Training host command changed a concrete argument')
             continue
         if raw == '{python}' and index == 0:
-            expected = contract.get('environment', {}).get('python')
+            metadata, key = contract.get('environment'), 'python'
         elif raw == '{data}' and index > 0 and command[index - 1] == '--data':
-            expected = contract.get('env', {}).get('SUPERSURFER_DATA_PATH')
+            metadata, key = contract.get('env'), 'SUPERSURFER_DATA_PATH'
         else:
             raise ScheduleError('Unsupported training command placeholder')
-        if actual != expected or not Path(actual).is_absolute() or '..' in Path(actual).parts:
+        if not isinstance(metadata, dict):
+            raise ScheduleError('Training host path metadata is missing')
+        if actual != metadata.get(key) or not Path(actual).is_absolute() or '..' in Path(actual).parts:
             raise ScheduleError('Training host path is missing or inconsistent')
     return list(resolved)
 

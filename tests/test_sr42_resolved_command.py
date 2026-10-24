@@ -64,7 +64,8 @@ class ResolvedRecoveryTests(unittest.TestCase):
     def test_missing_conflicting_and_unresolved_contract_arguments_rejected(self):
         original = deepcopy(self.contract)
         changes = [lambda c: c.pop('command'), lambda c: c['env'].clear(),
-            lambda c: c['environment'].clear(), lambda c: c['command'].__setitem__(0, '/other/python'),
+            lambda c: c['environment'].clear(), lambda c: c.__setitem__('env', None),
+            lambda c: c.__setitem__('environment', []), lambda c: c['command'].__setitem__(0, '/other/python'),
             lambda c: c['command'].__setitem__(6, '{data}'),
             lambda c: c['command'].__setitem__(2, 'different.entrypoint'),
             lambda c: c['command'].__setitem__(8, '4')]
