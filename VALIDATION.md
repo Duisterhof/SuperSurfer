@@ -1,3 +1,18 @@
+# SR42 bound placement and short output — October 24, 2026
+
+Eight new isolated regressions pass for native adapter destination binding, the
+normal Service queue path, ineligible-host and backend rejection, unchanged
+hostless pool behavior, preserved runtime/source contracts, short simulator
+TMPDIR paths and fresh UUID attempts. The exact deployed-runtime candidate also
+passes the applicable SR42, compute and observation-only wakeup integration suite.
+Read-only resolution of the actual saved project pool confirmed the bound host
+is eligible with its existing GPU mask and binding runtime/data overrides.
+
+A CPU-only NVRTC 12.8 tiny-kernel probe passes with a 90-byte TMPDIR. It does not
+reproduce the full Warp failure or establish successful GPU evaluation. See the
+redacted diagnostic in tests/reports/sr42-placement-output.md. No production
+service, saved pool, active job or recovery ownership was changed.
+
 # OpenCode provider — October 19, 2026
 
 OpenCode ACP is now selectable in new chats, role defaults and account setup.
