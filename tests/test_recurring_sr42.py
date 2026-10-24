@@ -262,6 +262,32 @@ class RecurringSR42Tests(unittest.TestCase):
         self.assertFalse(self.submissions)
         self.assertIn('provenance', self.store.get(KEY)['state']['contrastive']['error'])
 
+    def test_cancelled_legacy_readiness_commands_do_not_block_canonical_admission(self):
+        legacy = evaluation('contrastive', status='cancelled', run_id='legacy-readiness')
+        legacy['revision'] = 'legacy-revision'
+        legacy['command'] = ['python','-m','readable_vla.evaluate','sr42','--policy','indexed_ar',
+                             '--checkpoint-dir','/old/checkpoints','--weights','ema','--prepare-readiness']
+        self.runs[legacy['id']] = legacy
+        self.adapter.pins['contrastive'] = {'sha256':'b'*64,'step':23334}
+        self.enable(); self.schedule.tick(0)
+        self.assertEqual(1, len(self.submissions))
+        self.assertEqual('b'*64, self.submissions[0]['command'][-1])
+        self.assertNotIn('error', self.store.get(KEY)['state']['contrastive'])
+
+    def test_unsealed_legacy_active_or_completed_evaluation_still_blocks(self):
+        legacy = evaluation('contrastive', run_id='legacy')
+        legacy['command'] = ['python','-m','readable_vla.evaluate','sr42','--weights','ema',
+                             '--checkpoint-dir','/legacy/checkpoints','--prepare-readiness']
+        self.runs[legacy['id']] = legacy
+        self.adapter.pins['contrastive'] = {'sha256':'b'*64,'step':23334}
+        self.enable(); self.schedule.tick(0)
+        self.assertFalse(self.submissions)
+        self.assertEqual(['legacy'], self.store.get(KEY)['state']['contrastive']['unclassified_active'])
+        legacy['status'] = 'succeeded'
+        self.schedule.tick(1)
+        self.assertFalse(self.submissions)
+        self.assertIn('provenance', self.store.get(KEY)['state']['contrastive']['error'])
+
     def test_interrupted_staging_keeps_one_download_while_latest_pending_advances(self):
         self.adapter.pins['mse'] = {'sha256': 'a' * 64, 'step': 1}
         prepare = self.adapter.prepare

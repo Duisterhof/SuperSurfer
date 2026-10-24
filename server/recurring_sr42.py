@@ -8,6 +8,7 @@ from copy import deepcopy
 import fcntl
 import hashlib
 import json
+import re
 from pathlib import Path
 import time
 
@@ -70,6 +71,25 @@ def evaluation(run):
             and '--weights' in command and option(command, '--weights') == 'ema')
 
 
+def checkpoint_sha(run):
+    """Legacy readiness commands have a directory, not a sealed checkpoint."""
+    command = run.get('command', [])
+    if command.count('--checkpoint-sha256') != 1:
+        return None
+    index = command.index('--checkpoint-sha256') + 1
+    value = command[index] if index < len(command) else None
+    return value if isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value) else None
+
+
+def unverified_checkpoint_conflict(run, selected_sha):
+    if not evaluation(run) or evaluation_method(run) is not None:
+        return False
+    identity = checkpoint_sha(run)
+    # Cancelled legacy readiness probes never established a completed score.
+    # Unknown completed evaluations without a sealed identity need review.
+    return identity == selected_sha or (identity is None and run['status'] in {'succeeded', 'completed'})
+
+
 def request_id(method, checkpoint_sha):
     identity = [METHODS[method]['training_run_id'], checkpoint_sha, 'ema', COHORT, PROTOCOL]
     return 'sr42_' + hashlib.sha256(json.dumps(identity).encode()).hexdigest()
@@ -80,12 +100,14 @@ def evaluation_method(run):
     from .run_recovery import receipt_identity
     if not evaluation(run) or run.get('revision') != REVISION:
         return None
-    checkpoint_sha = option(run['command'], '--checkpoint-sha256')
+    identity_sha = checkpoint_sha(run)
+    if identity_sha is None:
+        return None
     historic = HISTORICAL_EVALUATIONS.get(run['id'])
-    if historic and historic[1] == checkpoint_sha:
+    if historic and historic[1] == identity_sha:
         return historic[0]
     for method, spec in METHODS.items():
-        identity = receipt_identity('native-sr42:' + SCHEDULE, spec['experiment_id'], request_id(method, checkpoint_sha))
+        identity = receipt_identity('native-sr42:' + SCHEDULE, spec['experiment_id'], request_id(method, identity_sha))
         if run.get('config', {}).get('supersurfer_request_id') == identity:
             return method
     return None
@@ -288,7 +310,7 @@ class RecurringSR42:
         state['seen'] = dict(state.get('native_seen', {}))
         for run in evaluations:
             if evaluation_method(run) == method:
-                state['seen'][option(run['command'], '--checkpoint-sha256')] = run['id']
+                state['seen'][checkpoint_sha(run)] = run['id']
         trainer = self.trainer(spec, runs, record)
         state['training_run_id'] = trainer['id']
         state['trainer_status'] = trainer['status']
@@ -320,8 +342,7 @@ class RecurringSR42:
                     raise ScheduleError('Staged checkpoint already evaluated; resolve its admission provenance')
                 state['pending'] = None
                 return
-            if any(option(run['command'], '--checkpoint-sha256') == pin['sha256']
-                   and evaluation_method(run) is None for run in all_evaluations):
+            if any(unverified_checkpoint_conflict(run, pin['sha256']) for run in all_evaluations):
                 raise ScheduleError('Existing evaluation of this checkpoint lacks verified method/cohort provenance')
             state['staging'] = pin
             if state['pending'] and state['pending']['sha256'] == pin['sha256']:
@@ -339,9 +360,7 @@ class RecurringSR42:
             if self.service.shutdown.is_set() or self.service.store.get(PAUSED, False) or not self.service.store.get(KEY)['enabled']:
                 return
             latest = self.snapshot()
-            if any(evaluation(run) and evaluation_method(run) is None
-                   and option(run['command'], '--checkpoint-sha256') == submission['pin']['sha256']
-                   for run in latest.values()):
+            if any(unverified_checkpoint_conflict(run, submission['pin']['sha256']) for run in latest.values()):
                 raise ScheduleError('Existing evaluation of this checkpoint lacks verified method/cohort provenance')
             if any(evaluation(run) and evaluation_method(run) in {method, None} and run['status'] not in TERMINAL
                    and not (own_identity and run.get('config', {}).get('supersurfer_request_id') == own_identity and not run.get('ready'))
