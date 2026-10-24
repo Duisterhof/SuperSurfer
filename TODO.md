@@ -473,3 +473,7 @@ Ongoing list of requested improvements. Unchecked items are planned, not impleme
 are complete; keep native macOS launch/Gatekeeper as the remaining packaging check.
 Cursor ACP does not expose usage receipts, and listed model IDs may be plan-restricted.
 Native multi-select questions currently direct the agent to scoped ask_user.
+
+- [x] Add a fixed native two-lineage canonical EMA SR42 schedule with durable
+  authorization, normal queue admission, retained pins and explicit legacy recovery.
+- [ ] Consider a separately reviewed retained-SR42-pin garbage collection policy.

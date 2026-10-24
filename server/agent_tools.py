@@ -242,6 +242,14 @@ COMPUTE_TOOLS = [*WORKER_COMPUTE_TOOLS, CONFIGURE_COMPUTE_TOOL]
 MANAGER_COMPUTE_TOOLS = [{**tool, "inputSchema": {**tool["inputSchema"],
     "properties": {**tool["inputSchema"]["properties"], "project_id": {"type": "string", "minLength": 1, "maxLength": 150}},
     "required": [*tool["inputSchema"].get("required", []), *([] if tool["name"] in {"register_compute_host", "inspect_compute_host"} else ["project_id"])]}} for tool in COMPUTE_TOOLS] + [REGISTER_GPUS_TOOL]
+SR42_TOOL = {
+    "name": "configure_recurring_sr42",
+    "description": "Enable, pause or inspect the fixed native two-large-Anytime8 EMA SR42 schedule. Only its MSE owner experiment may configure it, during a user-requested active turn. It discovers every two hours, adopts existing evaluations, retains one active and one latest pending pin per method, and uses normal exact-source queue admission. It never starts an LLM turn. No command, host, source, cadence or lineage overrides are accepted. Enable only after the user explicitly requests recurring evaluations of both baselines. Status reports actual stored state and blockers; unsupported profiles fail closed.",
+    "inputSchema": {"type": "object", "additionalProperties": False,
+                    "properties": {"action": {"type": "string", "enum": ["status", "enable", "pause", "bind_recovery"]},
+                                   "method": {"type": "string", "enum": ["mse", "contrastive"]}, "run_id": {"type": "string"}}, "required": ["action"]},
+}
+
 WAKEUP_TOOL = {
     "name": "configure_worker_wakeup",
     "description": "Save a check explicitly requested by the user for this experiment worker. Use interval minutes (for example 10) for recurring checks, metric for a W&B threshold, or run_status for a lifecycle event. Include the concrete task to perform (for example inspect progress and debug failures). Event rules fire once; update with enabled=true explicitly rearms. Omit run_id to bind the latest current or future run in this experiment. The service keeps rules across disconnects and waits for busy workers. A scheduled wakeup cannot queue/launch jobs, create agents or add more schedules. Use list to inspect, pause or remove to stop. Never claim a schedule exists before this tool succeeds.",
@@ -385,7 +393,7 @@ RECOVER_RUN_TOOL = {
         "pr_url":{"type":"string","maxLength":2048},"command":{"type":"array","minItems":1,"items":{"type":"string"}},
         "reason":{"type":"string","minLength":1,"maxLength":4000}}}}
 
-ROLE_TOOLS = {"worker": [TOOL, QUEUE_TOOL, *WORKER_COMPUTE_TOOLS, WAKEUP_TOOL, QUESTION_TOOL, TASK_TOOL, RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL],
+ROLE_TOOLS = {"worker": [TOOL, QUEUE_TOOL, *WORKER_COMPUTE_TOOLS, WAKEUP_TOOL, SR42_TOOL, QUESTION_TOOL, TASK_TOOL, RESULT_TOOL, BRIEF_TOOL, PAGE_TOOL],
               "lead": [CREATE_EXPERIMENT_TOOL, CREATE_AGENT_TOOL, HANDOFF_TOOL, UPDATE_TOOL, *COMPUTE_TOOLS, QUESTION_TOOL, TASK_TOOL, PROJECT_RESULT_TOOL, PROJECT_BRIEF_TOOL, PROJECT_PAGE_TOOL],
               "manager": [MANAGER_CREATE_EXPERIMENT_TOOL, MANAGER_QUEUE_TOOL, MANAGER_CREATE_AGENT_TOOL, MANAGER_HANDOFF_TOOL, *MANAGER_COMPUTE_TOOLS, QUESTION_TOOL, TASK_TOOL, PROJECT_RESULT_TOOL, PROJECT_BRIEF_TOOL, PROJECT_PAGE_TOOL]}
 for _tools in ROLE_TOOLS.values():

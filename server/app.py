@@ -38,6 +38,7 @@ from .compute import ComputePools, ComputeError
 from .runner_python import resolve_runner_python
 from .tracking import Tracking
 from .wakeups import Wakeups
+from .recurring_sr42 import RecurringSR42
 from .results import Results
 from .coordination import AgentMessages
 from . import brief, telemetry
@@ -222,6 +223,8 @@ class Service(SurfboardService, EditorService, WritingService):
         self.workbench = Workbench(self)
         self.nodes = NodeSetup(self)
         self.recovery = RunRecovery(self)
+        self.recurring_sr42 = RecurringSR42(self)
+        self.sr42_thread = None
         self.message_event = threading.Event()
         self.messages = AgentMessages(self)
         self.message_thread = None
@@ -235,6 +238,8 @@ class Service(SurfboardService, EditorService, WritingService):
             self.message_thread.start()
             self.wakeup_thread = threading.Thread(target=self._wakeup_loop, name="supersurfer-worker-wakeups", daemon=True)
             self.wakeup_thread.start()
+            self.sr42_thread = threading.Thread(target=self._sr42_loop, name="supersurfer-native-sr42", daemon=True)
+            self.sr42_thread.start()
             self.tracking_thread = threading.Thread(target=self._tracking_loop, name="supersurfer-wandb", daemon=True)
             self.tracking_thread.start()
         self.monitor_thread = None
@@ -355,6 +360,10 @@ class Service(SurfboardService, EditorService, WritingService):
                 monitoring.update(error=str(exc), last_check=time.time(), next_check=time.time() + settings["monitor_interval_minutes"] * 60)
                 monitoring.setdefault("alerts", [])
                 self.store.put("monitoring", monitoring)
+
+    def _sr42_loop(self):
+        while not self.shutdown.wait(30):
+            self.recurring_sr42.tick()
 
     def _wakeup_loop(self):
         while not self.shutdown.wait(10):
@@ -768,6 +777,8 @@ class Service(SurfboardService, EditorService, WritingService):
             alias = ALIASES.get(name.removeprefix("supersurfer_"))
             if alias:
                 name = "supersurfer_" + alias
+            if name == "supersurfer_configure_recurring_sr42":
+                return self.recurring_sr42.receipt(self.recurring_sr42.configure(scope, arguments))
             if name == "supersurfer_message_agent":
                 return self.messages.send(scope, arguments)
             if name == "supersurfer_list_agent_messages":
@@ -2037,6 +2048,8 @@ class Service(SurfboardService, EditorService, WritingService):
             self.tracking_thread.join(timeout=20)
         if self.monitor_thread:
             self.monitor_thread.join(timeout=30)
+        if self.sr42_thread:
+            self.sr42_thread.join(timeout=30)
         self.nodes.close()
         self.workbench.close()
         self.latex.close()
@@ -2044,7 +2057,7 @@ class Service(SurfboardService, EditorService, WritingService):
         self.codex.close()
         # A bounded external call may still be unwinding on process shutdown.
         # Do not close SQLite underneath a live background writer.
-        threads = (self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread, *self.nodes.threads)
+        threads = (self.sr42_thread, self.wakeup_thread, self.tracking_thread, self.monitor_thread, self.message_thread, *self.nodes.threads)
         if not any(thread and thread.is_alive() for thread in threads):
             self.store.close()
 
@@ -2370,7 +2383,7 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/code/save":
                 result = self.server.service.action("code.save", request)
             elif path == "/api/agent-tool":
-                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
+                if set(request) - {"name", "arguments"} or request.get("name") not in {"message_agent", "list_agent_messages", "prepare_run", "queue_run", "create_experiment", "create_experiment_agent", "handoff_experiment", "update_experiment", "ask_user", "update_task", "publish_result", "update_experiment_brief", "publish_markdown_tab", "configure_worker_wakeup", "configure_recurring_sr42", "inspect_project_compute", "inspect_compute_host", "register_compute_host", "register_compute_gpus", "onboard_project_node", "configure_project_compute", "set_project_limits", "publish_training_results", "check_experiment_results", "stop_run", "check_available_node", "acquire_new_node", "recover_run", "list_view_blocks", "publish_view_block", "read_surfboard", "propose_surfboard", "apply_surfboard", "read_view_layout", "update_view_layout", "present_code", "manage_todos", "inspect_board_data", "run_board_action", "compile_latex", "create_work_item", "create_work_item_agent", "handoff_work_item", "update_work_item", "list_project_artifacts", "publish_artifact", "inspect_project_activity", "export_diagnostics"}:
                     raise APIError("This capability exposes only scoped experiment tools", 403)
                 result = self.server.service.agent_action(agent_scope, "supersurfer_" + request["name"], request.get("arguments"))
             else:

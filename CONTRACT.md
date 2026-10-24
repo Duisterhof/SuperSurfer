@@ -1039,3 +1039,20 @@ provider-native rules; permitted workspace edits may run without a callback. CLI
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.
+
+### Native canonical SR42 schedule
+
+The `configure_recurring_sr42` worker action owns one fixed, explicitly requested
+Anytime8 MSE/contrastive schedule. Enable/pause and explicit legacy recovery binding
+require the active user-origin owner experiment; ticks cannot create or widen a
+schedule and never forge a conversation turn. Exact trainer identities, source
+reviews, EMA weights, frozen cohort/protocol and resolved normalization are bound
+at activation. A native thread discovers every two hours, retains one active and
+one latest pending checkpoint per method, adopts existing evaluation jobs and
+uses the unchanged idempotent `queue_agent_run` source-review/admission path.
+Unknown evaluator states remain blocking. Successful/failed/cancelled terminal
+states allow the next pin; terminal trainers stop discovery while retaining the
+schedule for verified recovery. Checkpoints and seals are retained before queueing.
+Uncertain submissions retain their exact durable request ID and frozen arguments.
+Pause cancels staging and future dispatch, never submitted research jobs. Pinned
+copies are retained; automatic garbage collection is intentionally absent.

@@ -113,3 +113,11 @@ Use `opencode auth login` / `opencode auth logout` on the workspace host to mana
 upstream accounts. SuperSurfer never signs out all of a shared OpenCode setup.
 The adapter launches an ACP client process using that configuration; it does not
 attach to an unrelated OpenCode UI session or change a shared HTTP server.
+
+The existing two-large-Anytime8 baseline workflow also has a bounded native EMA
+SR42 recurrence action: it verifies and retains new checkpoints about every two
+hours, preserves existing evaluations and uses normal reviewed queue admission
+without repeated agent turns. Its owner can inspect, pause and explicitly bind a
+verified legacy recovery; it is not a general command scheduler.
+
+The fixed native SR42 scheduler accepts the operator environment `SUPERSURFER_SR42_CACHE` for its local transfer cache (default: `sr42-pins` under the workspace state directory). An override must be an absolute private directory owned by the service user. Remote retained pins remain authoritative if the cache is lost; transfers are hash-verified and resumable. One checkpoint download per method is retained during preparation/acceptance. After destination verification and durable native queue acceptance, its owned local checkpoint bytes are removed; small ownership/seal receipts and all remote pins remain. Interrupted staging and cleanup retry before another download, preventing unbounded local checkpoint accumulation.

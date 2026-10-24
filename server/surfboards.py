@@ -30,7 +30,7 @@ COMPUTE_TOOLS = {"inspect_project_compute", "inspect_compute_host", "register_co
 SHARED_CONTENT = {"check_experiment_results", "publish_result", "publish_markdown_tab", "update_experiment_brief", "publish_training_results", "run_board_action", "compile_latex",
                   "list_project_artifacts", "publish_artifact", "inspect_project_activity"}
 ROLE_TOOLS = {
-    "worker": COMMON_TOOLS | SHARED_CONTENT | COMPUTE_TOOLS | {"prepare_run", "queue_run", "configure_worker_wakeup"},
+    "worker": COMMON_TOOLS | SHARED_CONTENT | COMPUTE_TOOLS | {"prepare_run", "queue_run", "configure_worker_wakeup", "configure_recurring_sr42"},
     "lead": COMMON_TOOLS | SHARED_CONTENT | COMPUTE_TOOLS | ITEM_TOOLS | EXPERIMENT_TOOLS | {"configure_project_compute"},
     "manager": COMMON_TOOLS | SHARED_CONTENT | COMPUTE_TOOLS | ITEM_TOOLS | (EXPERIMENT_TOOLS - {"update_experiment"}) |
                {"queue_run", "configure_project_compute", "register_compute_gpus"},
@@ -748,7 +748,7 @@ def compile_board(board):
     def capabilities(block_kinds):
         enabled = set(COMMON_TOOLS)
         for kind, tool in [("brief", "update_experiment_brief"), ("document", "publish_markdown_tab"),
-                           ("timer", "configure_worker_wakeup"), ("artifacts", "list_project_artifacts"),
+                           ("timer", "configure_worker_wakeup"), ("timer", "configure_recurring_sr42"), ("artifacts", "list_project_artifacts"),
                            ("artifacts", "publish_artifact"), ("activity", "inspect_project_activity")]:
             if kind in block_kinds:
                 enabled.add(tool)
@@ -764,7 +764,7 @@ def compile_board(board):
             enabled.add("compile_latex")
         if workflow == "research":
             if "experiment" in block_kinds:
-                enabled.update(EXPERIMENT_TOOLS | {"prepare_run", "queue_run"})
+                enabled.update(EXPERIMENT_TOOLS | {"prepare_run", "queue_run", "configure_recurring_sr42"})
             if "compute" in block_kinds:
                 enabled.update(COMPUTE_TOOLS | {"configure_project_compute", "register_compute_gpus"})
         elif "brief" in block_kinds:

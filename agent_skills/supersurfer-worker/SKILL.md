@@ -253,3 +253,25 @@ a real turn failure, never a reason to replay automatically or switch models.
 Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
 Use the scoped ask_user tool for questions. Manage upstream accounts in the host
 terminal, never by sharing credentials in chat or changing shared server config.
+
+## Native two-baseline SR42 recurrence
+
+`configure_recurring_sr42` is a narrow native scheduler for the existing large
+Anytime8 MSE and contrastive trainer lineages. Only the owning MSE experiment can
+enable or pause it in an active user-requested turn. It accepts no commands,
+paths, hosts, arbitrary sources, cadence changes or additional experiments.
+Use it only after an explicit request for recurring evaluations of both baselines.
+The service verifies canonical EMA SR42 source/data, pins checkpoints before
+submission, adopts existing evaluations and releases through normal exact-source
+queue admission. It discovers every two hours and coalesces one latest pending
+checkpoint behind each active evaluation without starting an LLM turn.
+
+Use `action=status` for the saved state and concrete errors. `action=pause` stops
+future native work and staging, preserving submitted jobs and retained pins.
+An original terminal trainer remains recorded while waiting for a verified
+recovery. Native recovery links are followed; a legacy manually queued recovery
+requires `action=bind_recovery`, `method` and the existing successor `run_id` in
+an active owner turn. The service verifies the failed predecessor, exact reviewed repair source, unchanged
+recipe/data/ranks and the exact retained resume checkpoint SHA.
+Never infer a successor from its name or claim recurrence is active until enable
+returns its persisted receipt. Ordinary scheduled reviews still cannot queue.
