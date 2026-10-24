@@ -17,6 +17,49 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def resolved_training_command(trainer):
+    """Use only the selected host's concrete, template-consistent command.
+
+    Paths belong to the remote host: do not resolve symlinks on the service
+    filesystem. Recipe/content and retained-checkpoint checks still run remotely.
+    """
+    command = trainer.get('command')
+    if not isinstance(command, list) or not command or not all(isinstance(x, str) and x for x in command):
+        raise ScheduleError('Invalid training command')
+    config = trainer.get('config', {})
+    if not isinstance(config, dict):
+        raise ScheduleError('Invalid training configuration')
+    contracts = config.get('host_contracts', {})
+    if not isinstance(contracts, dict):
+        raise ScheduleError('Invalid training host contracts')
+    placeholders = any('{' in x or '}' in x for x in command)
+    if not contracts and not placeholders:
+        return list(command)  # Legacy, already concrete predecessor.
+    contract = contracts.get(trainer.get('host_id'))
+    if not isinstance(contract, dict):
+        raise ScheduleError('Training command needs its selected host contract')
+    resolved = contract.get('command')
+    if (not isinstance(resolved, list) or len(resolved) != len(command)
+            or not all(isinstance(x, str) and x and '{' not in x and '}' not in x for x in resolved)):
+        raise ScheduleError('Training host command is missing or unresolved')
+    for index, (raw, actual) in enumerate(zip(command, resolved)):
+        if '{' not in raw and '}' not in raw:
+            if raw != actual:
+                raise ScheduleError('Training host command changed a concrete argument')
+            continue
+        if raw == '{python}' and index == 0:
+            metadata, key = contract.get('environment'), 'python'
+        elif raw == '{data}' and index > 0 and command[index - 1] == '--data':
+            metadata, key = contract.get('env'), 'SUPERSURFER_DATA_PATH'
+        else:
+            raise ScheduleError('Unsupported training command placeholder')
+        if not isinstance(metadata, dict):
+            raise ScheduleError('Training host path metadata is missing')
+        if actual != metadata.get(key) or not Path(actual).is_absolute() or '..' in Path(actual).parts:
+            raise ScheduleError('Training host path is missing or inconsistent')
+    return list(resolved)
+
+
 class SR42Adapter:
     def __init__(self, service):
         self.service = service
@@ -91,7 +134,7 @@ class SR42Adapter:
                 raise ScheduleError('Normalization receipt differs')
 
     def training_payload(self, method, trainer, binding):
-        command = trainer['command']
+        command = resolved_training_command(trainer)
         expected_config = 'indexed_ar/configs/' + ('future_native_deep_vit.json' if method == 'mse' else 'contrastive_large.json')
         allowed = {'--config', '--data', '--ranks', '--output', '--resume', '--resume-sha256'}
         # Reviewed numerical repairs may explicitly acknowledge performance-only
@@ -131,11 +174,13 @@ class SR42Adapter:
         payload = self.training_payload(method, successor, binding)
         parent = self.training_payload(method, predecessor, binding)
         self.remote(successor['host_id'], {**payload, 'operation': 'recipe'})
-        resume = option(successor['command'], '--resume')
-        expected_sha = option(successor['command'], '--resume-sha256')
+        successor_command = resolved_training_command(successor)
+        predecessor_command = resolved_training_command(predecessor)
+        resume = option(successor_command, '--resume')
+        expected_sha = option(successor_command, '--resume-sha256')
         if (Path(resume).parent != Path(parent['training_output']) / 'checkpoints'
-                or option(successor['command'], '--data') != option(predecessor['command'], '--data')
-                or option(successor['command'], '--ranks') != option(predecessor['command'], '--ranks')):
+                or option(successor_command, '--data') != option(predecessor_command, '--data')
+                or option(successor_command, '--ranks') != option(predecessor_command, '--ranks')):
             raise ScheduleError('Recovery does not resume the predecessor data, ranks and checkpoint directory')
         pin = self.remote(predecessor['host_id'], {**parent, 'operation': 'pin', 'checkpoint': resume})
         if not pin or pin['sha256'] != expected_sha:
