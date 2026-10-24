@@ -1284,9 +1284,15 @@ class Service(SurfboardService, EditorService, WritingService):
         review_url = text_field(params, "pr_url", 2048, required=False)
         payload = {"project": project["id"], "name_": name, "gpu_count": count, "command": command, "config": config}
         if use_pool:
-            if params.get("host_id"):
-                raise APIError("Project pool runs use eligible nodes from the pool; omit host_id")
             resolved = self.compute.resolve_run(project["id"], params, project)
+            if "host_id" in params:
+                host_id = text_field(params, "host_id", 150)
+                if host_id not in resolved["allowed_hosts"] or host_id not in resolved["host_contracts"]:
+                    raise APIError("Selected host is not eligible in this project's compute pool")
+                # Restrict only the resolved request, preserving validation, source
+                # staging and the saved pool. Never fall back to another host.
+                resolved = {**resolved, "allowed_hosts": [host_id], "preferred_host": host_id,
+                            "host_contracts": {host_id: resolved["host_contracts"][host_id]}}
             config.update(host_contracts=resolved["host_contracts"], project_compute=resolved["pool_snapshot"],
                           source_repo=resolved["source_repo"], stage_source=True,
                           supersurfer_run_request={key: value for key, value in params.items() if not key.startswith("_")})

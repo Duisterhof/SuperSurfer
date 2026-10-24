@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import uuid
 
 from .compute import SSH_OPTIONS
 from .recurring_sr42 import COHORT, METHODS, PAUSED, PR, PROJECT, PROTOCOL, REVISION, ScheduleError, option, reviewed
@@ -212,6 +213,10 @@ class SR42Adapter:
             self.service.nodes.copy(None, str(path), destination, root + '/' + path.name, self.cancelled)
         staged = self.remote(binding['host_id'], {'operation': 'finalize', 'directory': root,
                              'pin': pin, 'readiness': binding['evidence']['readiness']})
+        # Simulator TMPDIR adds /processes/NNN/tmp. Keep output independent of
+        # the full-SHA staging path; UUIDs isolate fresh attempts while the command
+        # and retained checkpoint/seal still carry the complete provenance.
+        output = '/scratch/bduister/sr42-o/' + {'mse': 'm', 'contrastive': 'c'}[method] + '-' + pin['sha256'][:12] + '-' + uuid.uuid4().hex
         command = ['env', 'OMP_NUM_THREADS=2', 'PYTHONUNBUFFERED=1']
         caches = {'XDG_CACHE_HOME': 'xdg', 'TORCHINDUCTOR_CACHE_DIR': 'inductor', 'TRITON_CACHE_DIR': 'triton',
                   'TORCH_EXTENSIONS_DIR': 'extensions', 'CUDA_CACHE_PATH': 'cuda', 'WANDB_DIR': 'wandb',
@@ -219,11 +224,11 @@ class SR42Adapter:
         command += [key + '=' + root + '/cache/' + value for key, value in caches.items()]
         command += [binding['python'], '-m', 'readable_vla.evaluate', 'sr42', '--policy', 'indexed_ar',
                     '--checkpoint', staged['checkpoint'], '--checkpoint-sha256', pin['sha256'], '--weights', 'ema',
-                    '--data', binding['data'], '--output', root + '/output', '--device', 'cuda',
+                    '--data', binding['data'], '--output', output, '--device', 'cuda',
                     '--runtime', binding['runtime'], '--torch-home', binding['torch_home'],
                     '--runtime-identity', binding['runtime_identity'], '--readiness', staged['readiness']]
         return {'name': 'sr42-' + method + '-ema' + str(pin['step']) + '-' + pin['sha256'][:10],
-                'use_project_pool': True, 'repo': binding['repo'], 'revision': REVISION, 'pr_url': PR,
+                'use_project_pool': True, 'host_id': binding['host_id'], 'repo': binding['repo'], 'revision': REVISION, 'pr_url': PR,
                 'job_type': 'evaluation', 'gpu_count': 1, 'storage_gib': 10, 'min_free_mib': 11000,
                 'python': binding['python'], 'data_path': binding['data'], 'command': command,
                 'python_packages': binding['python_packages'],

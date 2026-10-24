@@ -1,3 +1,5 @@
+- [x] Pin native SR42 requests to their verified eligible destination and use fresh short output paths without changing staging or scientific provenance.
+
 - [x] Add OpenCode ACP as a selectable backend, including local configured models,
   scoped tools, approvals, durable sessions and UI capability handling.
 
