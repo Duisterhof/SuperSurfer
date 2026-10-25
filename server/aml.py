@@ -51,7 +51,7 @@ class AMLClient:
             return self._rpc(operation, params or {})
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-                client.settimeout(120 if operation in {"run.ready", "run.review", "run.submit"} else 5 if operation == "status" else 25)
+                client.settimeout(120 if operation in {"run.ready", "run.review", "run.submit"} else 25)
                 client.connect(str(self.home / "manager.sock"))
                 client.sendall((json.dumps({"op": operation, "params": params or {}}) + "\n").encode())
                 with client.makefile("rb") as stream:
@@ -81,10 +81,13 @@ class AMLClient:
         if type(total) is not int or total < len(runs):
             raise ManagerError("Invalid paged AutoML status")
         while len(runs) < total:
-            page = self.call("status", {"run_limit": 50, "run_offset": len(runs)})
-            if page.get("runs_offset") != len(runs) or not page.get("runs"):
+            # Only the first page needs projects, agents, hosts and GPU state.
+            # Repeating that workspace scan for every history page delays scoped
+            # launch/recovery requests and can leave newly created runs invisible.
+            page = self.call("run.list", {"limit": 50, "offset": len(runs)})
+            if not isinstance(page, list) or not page:
                 raise ManagerError("Incomplete paged AutoML status")
-            runs.extend(page["runs"][:total - len(runs)])
+            runs.extend(page[:total - len(runs)])
         if len({run["id"] for run in runs}) != total:
             raise ManagerError("Duplicate run in paged AutoML status")
         return {key: value for key, value in snapshot.items()

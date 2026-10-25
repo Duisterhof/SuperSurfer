@@ -1521,3 +1521,20 @@ Validated cache-budget repair: 902 Python tests passed; 53 Node tests passed wit
 Supersedes earlier per-turn and daily cap policies for user-assigned work. Explicit user messages receive uncapped metering receipts across all models/providers: no token, response, tool-call, time, or daily admission ceiling. Historical user receipts are likewise exempt during runtime checks without erasing recorded usage. Automatic/peer/scheduled activations remain disabled. Duplicate mutation guards, ownership checks, provider account limits, manual stop and training supervision are unchanged. Settings shows usage counters rather than a quota.
 
 Validation: 889 Python tests and 53 Node tests passed (5 optional skips). Linux x64 packaging and isolated native Electron startup/security/persistence checks passed. Provider fixture verifies a user turn survives formerly excessive usage and remains manually stoppable; historical receipt expiry and denied automatic activations are covered.
+
+## 2026-10-25 — historical status scan and recovery visibility
+
+Status reads fetch metadata once and subsequent run history through bounded
+`run.list` pages. `test_status_pagination` (5) and
+`test_recovery_retry test_recovery_status` (13) pass outside the restricted
+sandbox; sandbox fixture initialization timed out. A read-only live check returned
+all 1,267 native runs with no omissions/duplicates in 13.74 s. See
+`tests/reports/status-history-read-timeout.md` for the redacted diagnosis.
+
+Full validation after the focused change: all 889 Python tests passed; Node
+reported 53 passes and 5 skips, no failures. Linux x64 packaging succeeded at
+`/tmp/supersurfer-status-run-pages-build-20261025/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+The packaged application opened its connection screen under Xvfb using an isolated
+profile, with Chromium sandbox enabled. No live workspace was connected by that
+package smoke test. The narrowly changed workspace adapter was deployed separately
+and the authorized live service was restarted; remote trainers remained running.

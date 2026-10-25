@@ -34,8 +34,9 @@ class StatusPaginationTests(unittest.TestCase):
                     tuple(row.values()))
             return config
         config = self.wait(populate())
-        sizes = []
+        sizes, operations = [], []
         def bounded_rpc(operation, params):
+            operations.append(operation)
             value = self.rpc(operation, params)
             size = len(json.dumps(value).encode())
             sizes.append(size)
@@ -54,10 +55,12 @@ class StatusPaginationTests(unittest.TestCase):
         self.assertGreater(sum(sizes), 16 * 1024 * 1024)
         self.assertLess(max(sizes), 16 * 1024 * 1024)
         self.assertNotIn('runs_total', snapshot)
+        self.assertEqual(operations.count('status'), 1)
+        self.assertEqual(operations.count('run.list'), 2)
 
     def test_failed_later_page_preserves_timestamped_previous_snapshot(self):
         def rpc(operation, params):
-            if params['run_offset']:
+            if operation == 'run.list':
                 raise ManagerError('Page disconnected')
             return {'projects': [], 'runs': [{'id': 'new'}],
                     'runs_total': 2, 'runs_offset': 0}
