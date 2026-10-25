@@ -1463,6 +1463,23 @@ class Manager:
             await self.schedule_runs()
             self.dispatch_messages()
 
+    async def message_dispatch_loop(self, stop):
+        """Deliver existing messages without waiting for remote GPU inspections.
+
+        Dispatch is local and single-threaded; existing per-agent turn/native
+        delivery records prevent duplicate starts when tick also dispatches.
+        This loop performs no SSH requests or experiment submissions itself.
+        """
+        while not stop.is_set():
+            try:
+                self.dispatch_messages()
+            except Exception as exc:
+                self.store.event("manager.error", {"error": str(exc), "phase": "message_dispatch"})
+            try:
+                await asyncio.wait_for(stop.wait(), 1)
+            except TimeoutError:
+                pass
+
     async def scheduler_loop(self, stop, interval=HOST_POLL_INTERVAL):
         poll_interval = max(0.01, min(interval, ACTIVE_RUN_POLL_INTERVAL))
         while not stop.is_set():
@@ -1544,12 +1561,14 @@ async def serve(home, interval=300):
 
     poll_task = asyncio.create_task(poll_hosts())
     tick_task = asyncio.create_task(manager.scheduler_loop(stop, interval))
+    dispatch_task = asyncio.create_task(manager.message_dispatch_loop(stop))
     try:
         await stop.wait()
     finally:
         tick_task.cancel()
         poll_task.cancel()
-        await asyncio.gather(tick_task, poll_task, return_exceptions=True)
+        dispatch_task.cancel()
+        await asyncio.gather(tick_task, poll_task, dispatch_task, return_exceptions=True)
         server.close()
         await server.wait_closed()
         for task in list(clients):

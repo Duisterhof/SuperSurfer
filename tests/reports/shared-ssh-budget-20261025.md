@@ -69,3 +69,14 @@ An additional process-based regression creates two simultaneous cold destination
 masters whose startup waits on nested relays, under a real shared two-slot lock
 budget. Both complete; ordinary commands remain capped. This catches the
 nested-admission cycle that the original concurrency-only regression missed.
+
+## Local dispatch during slow SSH inspection
+
+The manager previously reached message dispatch only after remote status
+reconciliation and scheduling. A slow remote batch could therefore leave an
+idle eligible owner waiting with queued work. Run local message dispatch in its
+own asynchronous loop, retaining existing per-agent exclusivity and dependency
+checks. A regression holds remote reconciliation blocked and verifies message
+dispatch still occurs, without issuing an extra SSH request. Existing CPU-only
+staging requests were observed starting under the unchanged allocation rules;
+completed qualification and payload assertion failures remain distinct outcomes.

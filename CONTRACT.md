@@ -1056,3 +1056,9 @@ Steady run status checks use a 120-second cadence; starting/cancelling checks us
 repository or storage contracts back off for 30 minutes; known fresh busy nodes
 are not repeatedly prepared. Explicit setup and existing ownership checks remain
 in force. Remote startup/readiness timeouts allow time for shared-budget admission.
+
+Existing queued agent messages are dispatched by a local loop independent of
+remote run-status reconciliation. Slow SSH reads cannot leave an idle eligible
+agent waiting for the GPU scheduler's current status batch. The same per-agent
+turn/native-delivery exclusivity and task dependency checks remain in force;
+this loop does not probe hosts or submit experiments.
