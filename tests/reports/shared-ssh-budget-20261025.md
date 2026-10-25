@@ -1,0 +1,54 @@
+# Automated SSH request amplification
+
+Observed incident: independent research-monitoring processes repeatedly opened
+SSH sessions through a shared gateway during an overnight campaign. This excerpt
+contains only the relevant configuration and reconstructed demand, not private
+remote commands, credentials, account details or experiment data.
+
+## Cause
+
+- Host telemetry refreshed every 300 seconds, but each active run independently
+  requested status every 10 seconds. Transitions used one-second status checks
+  for 30 seconds. These were separate schedules.
+- Eleven active remote records imply 66 status requests/minute; nine imply 54.
+  These are nominal rates reconstructed from local event history, **not measured
+  authentication or packet counts**. Queue transitions, candidate checks,
+  checkpoint mirrors and independent monitors added requests.
+- The user's SSH configuration disabled connection multiplexing. Each request
+  started a new client/connection. A process-local semaphore constrained only
+  concurrency within one caller, not the aggregate start rate across callers.
+- Static admission failures were retried every five minutes across candidates;
+  an obsolete campaign monitor was still running after its jobs had terminated.
+
+## Fix
+
+All bundled scheduler, compute-probe, interpreter and node-setup SSH entrypoints
+now call one shared guard. Per-user/per-gateway file locks cover independent
+processes. Commands start at least 3 seconds apart (20/minute), at most two control
+commands are active, and new persistent-master attempts start at least 15 seconds
+apart (4/minute). Trinity worker aliases use the same gateway key. Masters persist
+for 600 seconds. Multiplexed clients use a false ProxyCommand, refusing an
+unshared network fallback if reuse fails. Killing a Linux wrapper also kills its
+owned client, so it cannot silently escape the active-command accounting.
+
+Steady run status polling is 120 seconds; transitions use 10 seconds for a bounded
+30-second window. Static missing environment/storage/repository checks back off
+for 30 minutes. Fresh busy candidates are not repeatedly prepared. Startup and
+readiness timeouts allow shared-budget admission. Existing ownership/reservation,
+cancellation and exact-source requirements remain in force.
+
+Operationally, the existing CPU monitors were put behind the same guard; an
+obsolete monitor was disabled, controller ticks changed to 180 seconds and
+checkpoint mirror ticks to 300 seconds. No remote trainer was restarted or
+cancelled. All four trainer process identities and subsequent progress were
+verified after the manager reload. Interactive SSH/local config queries are
+exempt; unrelated programs deliberately invoking another SSH binary are outside
+this framework boundary.
+
+## Regression checks
+
+Tests exercise six independent competing processes, aggregate rate and active
+caps, master reuse, refusal of unshared fallback, unchanged remote command text,
+interactive/local-query behavior, reboot clock reset, bounded scheduler polling,
+negative-admission backoff and busy-node preparation. Existing gateway-outage,
+cancel intent and reservation tests remain in the ordinary suite.

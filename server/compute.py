@@ -15,6 +15,7 @@ import sys
 import time
 
 from .aml import decoded
+from engine.aml.ssh_budget import ssh_command
 
 
 class ComputeError(ValueError):
@@ -275,7 +276,7 @@ class ComputePools:
         hints.update(requirements(params, hints["data_path"]))
         hints["verify_runtime"] = verify_runtime or bool(hints["python_packages"])
         script = _PROBE + "\nprobe(json.loads(" + repr(json.dumps(hints)) + "))\n"
-        command = ["ssh", *SSH_OPTIONS, "--", target, "python3 -"] if target else [sys.executable, "-"]
+        command = ssh_command(*SSH_OPTIONS, "--", target, "python3 -") if target else [sys.executable, "-"]
         try:
             result = subprocess.run(command, input=script, text=True, capture_output=True, timeout=20, check=False)
         except (OSError, subprocess.TimeoutExpired) as exc:

@@ -80,7 +80,7 @@ class RunnerPythonTests(unittest.TestCase):
 
 class GatewayBackoffTests(unittest.TestCase):
     def transport(self):
-        spec=importlib.util.spec_from_file_location('isolated_transport',Path(__file__).parents[1]/'engine/aml/transport.py')
+        spec=importlib.util.spec_from_file_location('engine.aml.isolated_transport',Path(__file__).parents[1]/'engine/aml/transport.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         return module.Transport()
 

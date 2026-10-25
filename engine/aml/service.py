@@ -21,15 +21,16 @@ from .util import git, name, process_ticks
 ACTIVE_RUNS = ("starting", "running", "unreachable", "orphaned", "cancelling")
 TERMINAL_RUNS = ("succeeded", "failed", "cancelled", "lost")
 TASK_STATES = ("pending", "working", "blocked", "done", "failed", "archived")
-HOST_POLL_TIMEOUT = 4
+HOST_POLL_TIMEOUT = 60
 HOST_POLL_INTERVAL = 300
-ACTIVE_RUN_POLL_INTERVAL = 10
-TRANSITION_POLL_INTERVAL = 1
+ACTIVE_RUN_POLL_INTERVAL = 120
+TRANSITION_POLL_INTERVAL = 10
 TRANSITION_POLL_WINDOW = 30
 HOST_STALE_AFTER = HOST_POLL_INTERVAL + 30
 ALLOCATION_MAX_AGE = 15
 ALLOCATION_PROBE_INTERVAL = 60
 CONTRACT_STALE_AFTER = HOST_POLL_INTERVAL
+INVALID_CONTRACT_RETRY_INTERVAL = 1800
 
 
 class Manager:
@@ -1231,6 +1232,12 @@ class Manager:
         if not placement.has_contract(run) or not self.preparation_allowed(run["id"]):
             return
         for host_id in placement.candidates(run):
+            reasons, _ = self.host_wait(run, host_id)
+            # Preparing an unusable busy candidate on every run amplifies SSH
+            # load. Explicit node setup remains available independently.
+            codes = {code for code, _ in reasons}
+            if 'gpu_busy' in codes and not codes.intersection({'host_stale', 'host_unknown', 'host_unavailable'}):
+                continue
             key = (run["id"], host_id)
             task = self.placement_checks.get(key)
             if task and not task.done():
@@ -1239,7 +1246,10 @@ class Manager:
             waiting_for_source = observation and observation.get("retry_after_staging")
             if waiting_for_source and self.staging_owner is not None:
                 continue
-            if observation and not waiting_for_source and time.time() - observation["checked_at"] < HOST_POLL_INTERVAL:
+            blocker_codes = {item.get('code') for item in (observation or {}).get('blockers', [])}
+            retry_interval = INVALID_CONTRACT_RETRY_INTERVAL if blocker_codes.intersection(
+                {'environment_missing', 'storage_missing', 'repository_missing'}) else HOST_POLL_INTERVAL
+            if observation and not waiting_for_source and time.time() - observation["checked_at"] < retry_interval:
                 continue
             self.placement_checks[key] = asyncio.create_task(self.check_candidate(run, host_id))
 
@@ -1256,7 +1266,7 @@ class Manager:
             if not mapping and not resolved.get("repo"):
                 raise ValueError("Register this project's repository on candidate " + host["name"])
             spec = {"repo": mapping["path"] if mapping else resolved["repo"], "revision": run["revision"], "root": host["root"], **resolved}
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=60)
             self.record_admission(key, result)
             codes = {item["code"] for item in result["blockers"]}
             if "code_missing" in codes and config.get("stage_source"):
@@ -1272,7 +1282,7 @@ class Manager:
                 await self.transport.stage_source(config["source_repo"], host, spec, timeout=600)
                 if not self.preparation_allowed(run["id"]):
                     raise asyncio.CancelledError()
-                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=60)
                 self.record_admission(key, result)
                 codes = {item["code"] for item in result["blockers"]}
                 self.staging_owner = None
@@ -1304,7 +1314,7 @@ class Manager:
                 else:
                     source_host = self.store.get("hosts", item["source_host"]) if item["source_host"] else None
                     await self.transport.copy_file(source_host, host, item, storage, timeout=600)
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=60)
             self.record_admission(key, result)
         except asyncio.CancelledError:
             self.placement_observations[key] = {"state": "blocked", "checked_at": time.time(),

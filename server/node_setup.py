@@ -16,6 +16,7 @@ import threading
 import time
 
 from .aml import decoded
+from engine.aml.ssh_budget import ssh_command
 from .compute import ComputeError, DEFAULTS, SSH_OPTIONS, _path
 
 
@@ -87,7 +88,7 @@ class NodeSetup:
 
     def remote(self, host, payload, timeout=60, cancelled=None):
         script = (Path(__file__).with_name('node_setup_remote.py').read_text() + '\nmain(' + repr(payload) + ')\n').encode()
-        command = ['ssh', *SSH_OPTIONS, '--', host['target'], 'python3 -'] if host.get('target') else [sys.executable, '-']
+        command = ssh_command(*SSH_OPTIONS, '--', host['target'], 'python3 -') if host.get('target') else [sys.executable, '-']
         output = self.command(command, timeout=timeout, input=script, cancelled=cancelled)
         marked = [line[len('SUPERSURFER_NODE:'):] for line in output.splitlines() if line.startswith('SUPERSURFER_NODE:')]
         if not marked:
@@ -298,7 +299,7 @@ class NodeSetup:
                 raise ComputeError('Invalid SSH target')
             return target + ':' + path if target else path
         self.command(['rsync', '-rlt', '--safe-links', '--partial', '--checksum', '--protect-args',
-            '-e', shlex.join(['ssh', *SSH_OPTIONS]), '--', endpoint(source_host, source), endpoint(destination_host, destination)],
+            '-e', shlex.join(ssh_command(*SSH_OPTIONS)), '--', endpoint(source_host, source), endpoint(destination_host, destination)],
             timeout=24*3600, cancelled=cancelled)
 
     def prepared_nodes(self, project_id):

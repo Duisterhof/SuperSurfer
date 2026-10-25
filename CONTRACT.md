@@ -869,7 +869,7 @@ Planning status is separate from execution state. Active, queued or uncertain ru
 
 A pool submission snapshots per-node placement contracts, the source revision and resource requirements. `{python}` and `{data}` command placeholders resolve for the chosen node. AutoML selects the eligible host/devices, validates allocation-time freshness and prerequisites, and stages verified Git objects without altering a node's worktree. Pool edits do not mutate queued contracts. A pool-capability mismatch fails explicitly instead of silently binding a different host or bypassing the scheduler.
 
-Host observations include `observed_at`, `age_seconds`, `next_refresh_at`, `stale_after_seconds` and `stale`. The client shows age/next refresh and obeys the backend stale flag; its normal state polling does not run node probes. GPU availability excludes unregistered indices and does not become unknown solely because a CPU-only host has no GPU readings. Job-state notification and the backend's ten-second fallback checks are separate from node telemetry probes.
+Host observations include `observed_at`, `age_seconds`, `next_refresh_at`, `stale_after_seconds` and `stale`. The client shows age/next refresh and obeys the backend stale flag; its normal state polling does not run node probes. GPU availability excludes unregistered indices and does not become unknown solely because a CPU-only host has no GPU readings. Job-state notification and the backend's two-minute fallback checks are separate from node telemetry probes.
 
 ## W&B metadata and Results
 
@@ -1039,3 +1039,20 @@ provider-native rules; permitted workspace edits may run without a callback. CLI
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.
+
+
+Automated SSH control calls from the bundled scheduler, compute probes, interpreter
+checks and node setup share per-user, per-gateway locks across processes. Trinity
+worker aliases share one gateway budget: at most two active control commands,
+request starts at least three seconds apart, and new destination-master attempts
+at least fifteen seconds apart. Connections use persistent OpenSSH masters
+(600-second persistence); a failed multiplexed client cannot fall back to opening
+an unshared connection. Interactive SSH and local configuration/control queries
+remain available. These limits cover the framework entrypoints, not unrelated
+programs deliberately invoking another SSH executable.
+
+Steady run status checks use a 120-second cadence; starting/cancelling checks use
+10 seconds for a bounded 30-second transition window. Missing static environment,
+repository or storage contracts back off for 30 minutes; known fresh busy nodes
+are not repeatedly prepared. Explicit setup and existing ownership checks remain
+in force. Remote startup/readiness timeouts allow time for shared-budget admission.

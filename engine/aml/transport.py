@@ -12,6 +12,8 @@ import time
 
 MAX_SOURCE_PACK_BYTES = 512 * 1024 * 1024
 
+from .ssh_budget import ssh_command
+
 class HostConfigurationError(RuntimeError):
     """A node trust, interpreter or runner protocol error; other nodes can work."""
 
@@ -48,7 +50,7 @@ class Transport:
         if host.get("target"):
             command = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "ConnectionAttempts=1", "--", host["target"],
                        shlex.join(command)]
-        return command
+        return ssh_command(*command[1:]) if host.get("target") else command
 
     async def request(self, host, payload, timeout=20):
         target = host.get("target")
@@ -139,7 +141,7 @@ class Transport:
         source = None
         async def transfer():
             nonlocal source
-            first = await asyncio.wait_for(destination.stdout.readline(), 4)
+            first = await asyncio.wait_for(destination.stdout.readline(), 60)
             if not first or not json.loads(first).get("ready"):
                 error = (await destination.stderr.read()).decode(errors="replace")
                 raise RuntimeError(error.strip() or "Destination refused staging")
@@ -188,7 +190,7 @@ class Transport:
         source = None
         async def transfer():
             nonlocal source
-            first = await asyncio.wait_for(destination.stdout.readline(), 10)
+            first = await asyncio.wait_for(destination.stdout.readline(), 60)
             if not first:
                 _, error = await destination.communicate()
                 raise RuntimeError(error.decode(errors="replace")[-2000:] or "Node refused source staging")
