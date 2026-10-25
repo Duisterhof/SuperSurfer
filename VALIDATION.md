@@ -1530,3 +1530,11 @@ Status reads fetch metadata once and subsequent run history through bounded
 sandbox; sandbox fixture initialization timed out. A read-only live check returned
 all 1,267 native runs with no omissions/duplicates in 13.74 s. See
 `tests/reports/status-history-read-timeout.md` for the redacted diagnosis.
+
+Full validation after the focused change: all 889 Python tests passed; Node
+reported 53 passes and 5 skips, no failures. Linux x64 packaging succeeded at
+`/tmp/supersurfer-status-run-pages-build-20261025/SuperSurfer-0.1.43-linux-x64.tar.gz`.
+The packaged application opened its connection screen under Xvfb using an isolated
+profile, with Chromium sandbox enabled. No live workspace was connected by that
+package smoke test. The narrowly changed workspace adapter was deployed separately
+and the authorized live service was restarted; remote trainers remained running.
