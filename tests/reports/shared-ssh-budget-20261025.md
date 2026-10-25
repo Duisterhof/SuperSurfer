@@ -52,3 +52,20 @@ caps, master reuse, refusal of unshared fallback, unchanged remote command text,
 interactive/local-query behavior, reboot clock reset, bounded scheduler polling,
 negative-admission backoff and busy-node preparation. Existing gateway-outage,
 cancel intent and reservation tests remain in the ordinary suite.
+
+## Nested netcat proxy correction
+
+A legacy `ProxyCommand ssh -qX GATEWAY nc %h %p` initially occupied a
+control-command slot for its entire tunnel lifetime. With another caller holding
+the remaining slot during destination setup, its nested relay could wait on the
+same two-slot budget. Normalize only that exact configured TCP route to the
+equivalent guarded `ssh -W %h:%p GATEWAY` stream. Starts and master creation remain
+rate-limited; arbitrary remote `nc` commands retain normal active-slot admission.
+The operational Trinity route also uses guarded `-W` forwarding, and the single
+legacy destination master was told to stop accepting new multiplexed sessions
+and drained, releasing its old slot without stopping remote jobs.
+
+An additional process-based regression creates two simultaneous cold destination
+masters whose startup waits on nested relays, under a real shared two-slot lock
+budget. Both complete; ordinary commands remain capped. This catches the
+nested-admission cycle that the original concurrency-only regression missed.

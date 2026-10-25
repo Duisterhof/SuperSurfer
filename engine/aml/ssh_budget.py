@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shlex
 import subprocess
 import sys
 import time
@@ -110,6 +111,30 @@ class Budget:
                 stream.close()
 
 
+def configured_proxy_stream(proxy_command):
+    """Normalize only the configured SSH→netcat TCP relay, never user commands.
+
+    A netcat ProxyCommand lives as long as the destination master. Treating it
+    as a normal command consumes an active slot forever and can deadlock its
+    parent. OpenSSH's equivalent -W stream already has bounded start admission
+    without holding a control-command slot for the tunnel lifetime.
+    """
+    if not proxy_command or proxy_command == 'none':
+        return []
+    try:
+        words = shlex.split(proxy_command)
+    except ValueError:
+        return []
+    if not words or words[0] not in ('ssh', REAL_SSH):
+        return []
+    options, gateway, command = split_target(words[1:])
+    if (not gateway or gateway.startswith('-') or command != ['nc', '%h', '%p']
+            or any(value not in ('-q', '-X', '-qX', '-x', '-T') for value in options)):
+        return []
+    relay = shlex.join(ssh_command(*options, '-W', '%h:%p', gateway))
+    return ['-o', 'ProxyCommand=' + relay]
+
+
 def connection_settings(options, target, root):
     common = ['-o', 'ControlMaster=auto', '-o', 'ControlPersist=600',
               '-o', 'ControlPath=' + str(root / '%C')]
@@ -118,6 +143,7 @@ def connection_settings(options, target, root):
     settings = dict(line.split(' ', 1) for line in result.stdout.splitlines() if ' ' in line)
     if settings.get('controlpath') in (None, 'none'):
         raise RuntimeError('A persistent SSH control path is required')
+    common.extend(configured_proxy_stream(settings.get('proxycommand')))
     jump = settings.get('proxyjump')
     gateway = jump if jump and jump != 'none' else settings.get('hostname', target)
     if target.rsplit('@', 1)[-1] == 'trinity' or target.rsplit('@', 1)[-1].startswith('trinity-'):
@@ -201,7 +227,7 @@ def run(arguments):
                 budget.start('connect', CONNECT_INTERVAL)
                 budget.start()
                 subprocess.run([REAL_SSH, '-M', '-N', '-f', '-o', 'ControlMaster=yes',
-                                '-o', 'ControlPersist=600', '-S', control_path, *master_options, target],
+                                '-o', 'ControlPersist=600', '-S', control_path, *common, *master_options, target],
                                stdin=subprocess.DEVNULL, check=True, timeout=30)
             if not master_alive(master_options, target, control_path):
                 raise RuntimeError('SSH master unavailable; refusing an unshared connection')
