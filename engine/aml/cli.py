@@ -66,6 +66,7 @@ def parser():
         p.add_argument("--backend-args", type=json.loads, default=[], help="JSON argv list; permissions remain configured by the CLI")
 
     daemon = group("daemon", ["start", "serve", "stop", "status"])
+    daemon["serve"].add_argument("--acknowledge-messages", type=Path, help="Apply exact queued-message acknowledgement JSON before starting dispatch")
     daemon["serve"].add_argument("--interval", type=float, default=300, help="Run reconciliation interval in seconds")
     project = group("project", ["add", "list", "update"])
     p = project["add"]
@@ -102,18 +103,24 @@ def parser():
     p.add_argument("--findings")
     p.add_argument("--briefing", help="Replace task scope and notify its lead and worker")
 
-    agent = group("agent", ["add", "list", "send", "pause", "resume", "archive", "history"])
+    agent = group("agent", ["add", "list", "send", "notify", "pause", "resume", "archive", "history"])
     agent["list"].add_argument("--include-archived", action="store_true")
     p = agent["add"]
     p.add_argument("name")
     p.add_argument("--task", required=True)
     p.add_argument("--read-only", action="store_true", help="Research worker in the project checkout with read-only/plan controls")
     backend(p)
-    for action in ["send", "pause", "resume", "archive", "history"]:
+    for action in ["send", "notify", "pause", "resume", "archive", "history"]:
         agent[action].add_argument("agent")
     agent["send"].add_argument("text")
-    message = group("message", ["retry"])
+    agent["notify"].add_argument("text")
+    agent["notify"].add_argument("--key", required=True, help="Stable monitor topic; pending alerts coalesce")
+    agent["notify"].add_argument("--attention", action="store_true", dest="requires_attention", help="Queue a model turn only when action is required")
+    message = group("message", ["retry", "acknowledge"])
     message["retry"].add_argument("message")
+    message["acknowledge"].add_argument("agent")
+    message["acknowledge"].add_argument("--messages-file", type=Path, required=True, help="JSON list of exact message id/sha256 pairs")
+    message["acknowledge"].add_argument("--reason", required=True)
 
     host = group("host", ["add", "list", "repo", "update"])
     host["update"].add_argument("host")
@@ -253,12 +260,12 @@ def render(result, as_json=False):
         print(json.dumps(result, indent=2))
 
 
-def daemon(home, action, interval=300):
+def daemon(home, action, interval=300, acknowledge_messages=None):
     if action == "serve":
         from .service import serve
         if interval <= 0:
             raise ValueError("Interval must be positive")
-        asyncio.run(serve(home, interval))
+        asyncio.run(serve(home, interval, acknowledge_messages=acknowledge_messages))
         return {"status": "stopped"}
     if action == "status":
         return rpc(home, "ping")
@@ -624,11 +631,16 @@ def main(argv=None):
                 values["dependencies"] = values.pop("depends_on")
             if group == "project" and action == "update":
                 values["project"] = values.pop("project_key")
-            elif group in {"task", "agent", "run"} and action in {"add", "update", "submit", "list", "queue", "send", "pause", "resume", "archive", "history"}:
+            elif group in {"task", "agent", "run"} and action in {"add", "update", "submit", "list", "queue", "send", "notify", "pause", "resume", "archive", "history"}:
                 values["project"] = project
             elif group == "task" and action == "show":
                 values["project"] = project
             elif group in {"status", "events"} or group == "host" and action == "repo":
+                values["project"] = project
+            if group == "agent" and action == "notify":
+                values["content"] = values.pop("text")
+            if group == "message" and action == "acknowledge":
+                values["messages"] = json.loads(values.pop("messages_file").read_text())
                 values["project"] = project
             if group == "agent" and action == "send":
                 values["content"] = values.pop("text")

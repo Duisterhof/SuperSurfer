@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -105,6 +106,7 @@ class Manager:
             "project.update": self.project_update, "task.add": self.task_add,
             "task.list": self.task_list, "task.show": self.task_show, "task.update": self.task_update,
             "agent.add": self.agent_add, "agent.list": self.agent_list,
+            "agent.notify": self.agent_notify, "message.acknowledge": self.message_acknowledge,
             "agent.send": self.agent_send, "agent.pause": self.agent_pause,
             "agent.resume": self.agent_resume, "agent.history": self.agent_history,
             "agent.archive": self.agent_archive,
@@ -334,6 +336,68 @@ class Manager:
         if row["status"] == "archived":
             raise ValueError("Archived agents cannot receive new work")
         return {"id": self.store.message(row["id"], sender, content), "agent_id": row["id"]}
+
+    async def agent_notify(self, agent, key, content, requires_attention=False, project=None):
+        """Monitors publish keyed attention events, never routine progress turns."""
+        row = self.get_agent(agent, project)
+        if (not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,120}', key)
+                or type(requires_attention) is not bool):
+            raise ValueError('Expected a stable monitor key and boolean requires_attention')
+        notification_key = 'monitor:' + key
+        pending = self.store.rows("SELECT * FROM messages WHERE agent_id=? AND notification_key=? AND status='queued'",
+                                  (row['id'], notification_key))
+        if any(item['sender'] != 'monitor' for item in pending):
+            raise ValueError('Monitor key collides with a non-monitor message')
+        if not requires_attention:
+            # A recovered state invalidates only its still-queued typed alert.
+            if pending:
+                await self.message_acknowledge(row['id'], [dict(id=item['id'], sha256=hashlib.sha256(
+                    item['content'].encode()).hexdigest()) for item in pending],
+                    'Monitor state no longer requires attention', project=project)
+            return dict(agent_id=row['id'], queued=False, reason='no_attention_required')
+        if not isinstance(content, str) or not content.strip() or len(content) > 4000:
+            raise ValueError('Attention notification needs 1–4000 characters')
+        last = self.store.one("SELECT * FROM messages WHERE agent_id=? AND notification_key=? ORDER BY updated DESC,id DESC LIMIT 1",
+                              (row['id'], notification_key))
+        if last and last['content'] == content and last['status'] not in ('failed', 'interrupted'):
+            return dict(agent_id=row['id'], queued=False, reason='duplicate_attention', id=last['id'])
+        message = self.store.message(row['id'], 'monitor', content, notification_key)
+        return dict(agent_id=row['id'], queued=True, id=message)
+
+    async def message_acknowledge(self, agent, messages, reason, project=None):
+        """Explicitly retire exact queued notifications without erasing history.
+
+        The caller selects IDs and content hashes; validation is atomic. A
+        dispatched/finished message, changed body or foreign agent rejects the
+        whole batch. This never interrupts a model or changes the agent's state.
+        """
+        row = self.get_agent(agent, project)
+        if (not isinstance(messages, list) or not 1 <= len(messages) <= 100
+                or not isinstance(reason, str) or not reason.strip() or len(reason) > 1000):
+            raise ValueError('Expected 1–100 message identities and an acknowledgement reason')
+        selected, seen = [], set()
+        with self.store.transaction():
+            for item in messages:
+                if not isinstance(item, dict) or set(item) != {'id', 'sha256'} or not isinstance(item['id'], str):
+                    raise ValueError('Each message needs its exact id and sha256')
+                if item['id'] in seen:
+                    raise ValueError('Duplicate message identity')
+                seen.add(item['id'])
+                message = self.store.get('messages', item['id'])
+                if (message['agent_id'] != row['id'] or not isinstance(item['sha256'], str)
+                        or hashlib.sha256(message['content'].encode()).hexdigest() != item['sha256']):
+                    raise ValueError('Message agent or content changed; inspect before acknowledging')
+                if message['status'] not in ('queued', 'acknowledged'):
+                    raise ValueError('Only queued messages can be acknowledged; active/history messages are preserved')
+                selected.append(message)
+            changed = [item['id'] for item in selected if item['status'] == 'queued']
+            for identity in changed:
+                self.store.execute("UPDATE messages SET status='acknowledged',response=?,updated=? WHERE id=?",
+                                   (reason, time.time(), identity))
+            if changed:
+                self.store.event('message.acknowledged', dict(ids=changed, reason=reason), row['project_id'], row['id'])
+        return dict(agent_id=row['id'], acknowledged=changed,
+                    already_acknowledged=[item['id'] for item in selected if item['status'] == 'acknowledged'])
 
     async def agent_pause(self, agent, project=None):
         row = self.get_agent(agent, project)
@@ -1510,7 +1574,7 @@ class Manager:
         self.store.conn.close()
 
 
-async def serve(home, interval=300):
+async def serve(home, interval=300, acknowledge_messages=None):
     home.mkdir(parents=True, exist_ok=True, mode=0o700)
     lock = (home / "manager.lock").open("w")
     try:
@@ -1522,6 +1586,9 @@ async def serve(home, interval=300):
         path.unlink()
     manager = Manager(home)
     await manager.recover_agents()
+    if acknowledge_messages is not None:
+        plan = json.loads(Path(acknowledge_messages).read_text())
+        await manager.message_acknowledge(**plan)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

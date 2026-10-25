@@ -1062,3 +1062,28 @@ remote run-status reconciliation. Slow SSH reads cannot leave an idle eligible
 agent waiting for the GPU scheduler's current status batch. The same per-agent
 turn/native-delivery exclusivity and task dependency checks remain in force;
 this loop does not probe hosts or submit experiments.
+
+CPU monitors use `agent.notify {agent,key,content,requires_attention}`. Healthy
+samples (`requires_attention=false`) do not queue model turns. Attention events
+use a typed `monitor:` notification key and coalesce one pending alert per owner
+and topic; duplicate event content is suppressed. Only still-queued typed alerts
+can be retired by an explicit quiet/recovered update. Ordinary user/root messages
+are not classified by sender name or overwritten by monitor topics.
+
+`message.acknowledge {agent,messages:[{id,sha256}],reason,project?}` retires an
+operator-selected exact queued batch as `acknowledged`, preserving message bodies
+and adding an audit event. All IDs, owner bindings and hashes are validated before
+any change. Active, delivered/completed, foreign or changed messages reject the
+batch. Repeating an already-applied acknowledgement is idempotent. The CLI exposes
+`aml message acknowledge OWNER --messages-file PLAN --reason TEXT`; the file is a
+JSON list of exact id/hash pairs. `aml agent notify OWNER TEXT --key TOPIC
+--attention` submits an attention event; omitting `--attention` stays quiet.
+The daemon's optional `--acknowledge-messages PLAN` applies a full acknowledgement
+request before starting dispatch, for controlled maintenance between model turns.
+
+Monitor policy treats ordinary optimizer progress as telemetry, not an agent
+instruction. First scans/migrations establish a baseline rather than replaying
+historical runs. New failures/completions, newly stalled work and persistent
+transport failures while work is outstanding are actionable edges. Transient
+transport errors and healthy recovery remain quiet. Durable local outboxes retry
+keyed events through the manager without falling back to untyped user chat.

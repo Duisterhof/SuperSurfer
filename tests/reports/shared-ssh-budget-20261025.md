@@ -80,3 +80,18 @@ checks. A regression holds remote reconciliation blocked and verifies message
 dispatch still occurs, without issuing an extra SSH request. Existing CPU-only
 staging requests were observed starting under the unchanged allocation rules;
 completed qualification and payload assertion failures remain distinct outcomes.
+
+## Repeated monitor turns
+
+The artifact reader previously sent complete historical state arrays through the
+ordinary user-message path. An expanding registry or fluctuating transport state
+could queue another large turn even when no new work was required. Stable typed
+monitor notifications now coalesce pending attention by topic; healthy progress
+creates no model messages. Legacy pending snapshots can be acknowledged through
+an explicit owner/id/content-hash manager operation without erasing history or
+stopping an active turn. Real instructions are selected and preserved separately.
+
+Regression coverage exercises 20 healthy cycles, first-scan history suppression,
+transient and persistent transport errors, terminal/stall edges, tuple/JSON cursor
+normalization, acknowledgement idempotence and atomic rejection of active,
+foreign or changed messages. Startup cleanup is verified to precede dispatch.
