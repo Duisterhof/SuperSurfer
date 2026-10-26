@@ -122,3 +122,20 @@ skips). Skills and whitespace checks passed. Linux package rebuilt and the
 isolated sandboxed setup launch passed. Initial missing Node dependencies were
 restored from the lockfile before the passing Node run. No installed app or live
 workspace was changed by packaging.
+
+
+## Priority changes after contract enqueue
+
+Native priority changes now cancel and discard only that queued run's pending
+CPU contract checks. Their replacements inherit the new priority, instead of
+remaining behind the old backlog. Active source/input transfers, other runs,
+unchanged priorities and running GPU jobs remain untouched. Removing the
+cancelled check's transient retry observation avoids a spurious backoff.
+
+Four new regressions exercise reprioritization, unchanged-priority idempotence,
+transfer/foreign-check preservation and rejection of running-job mutation.
+The exact staged production runtime passed 34 focused regressions before its
+idle-boundary deployment; no model turn or candidate staging was active.
+
+Final reprioritization checks: 819 Python tests, 49 Node tests passed (5 Node skips).
+Skills, whitespace, Linux build and isolated sandboxed launch passed.

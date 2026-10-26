@@ -1,3 +1,16 @@
+# Pending contract reprioritization — October 25, 2026
+
+Changing a queued run priority now refreshes only its pending CPU contract checks,
+so requests already waiting use the new priority. Active source/input transfers,
+other runs, unchanged priorities and running GPU jobs are preserved.
+
+All 819 Python tests and 49 Node tests passed (5 Node skips). The staged production
+runtime passed 34 focused tests, including four new reprioritization regressions.
+Capability skills and whitespace checks passed. Linux packaging and the isolated
+sandboxed setup launch passed. The production repair was applied only after
+verifying no active model messages or candidate staging; live GPU jobs continued.
+No version bump, installed-app replacement or release publication is included.
+
 # Contract admission control progress — October 25, 2026
 
 A contract backlog now queues before the two-slot gateway cap, retaining a slot

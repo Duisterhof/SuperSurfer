@@ -6,7 +6,9 @@ so a contract backlog cannot occupy both slots ahead of live-job status, fresh
 capacity observations or launch requests. The existing global SSH budget and
 spacing remain in force. Higher native run priority precedes older lower-priority
 contract checks; equal priorities retain arrival order. Cancellation releases both
-queues. Ready/hold, exact-source review, input verification, GPU occupancy and
+queues. Changing a queued run priority refreshes pending CPU contract checks
+that captured the old priority; active source/input transfers continue.
+Ready/hold, exact-source review, input verification, GPU occupancy and
 transactional reservations still gate every launch.
 
 # OpenCode backend

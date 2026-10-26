@@ -935,6 +935,22 @@ class Manager:
             self.store.execute("UPDATE runs SET priority=?,updated=? WHERE id=?", (priority, time.time(), row["id"]))
             self.order_by_priority()
             self.store.event("run.priority", {"id": row["id"], "priority": priority}, row["project_id"])
+        if row["priority"] != priority:
+            # Waiting contract requests captured the previous priority. Refresh
+            # only their CPU checks; an active source/input transfer keeps its
+            # ownership and continues. No runner or GPU job is cancelled.
+            pending = []
+            for key, task in list(self.placement_checks.items()):
+                observation = self.placement_observations.get(key, {})
+                if key[0] == row["id"] and not task.done() and observation.get("state") == "checking":
+                    task.cancel()
+                    pending.append((key, task))
+            if pending:
+                await asyncio.gather(*(task for _, task in pending), return_exceptions=True)
+                for key, task in pending:
+                    if self.placement_checks.get(key) is task:
+                        self.placement_checks.pop(key)
+                        self.placement_observations.pop(key, None)
         self.wake_scheduler()
         return await self.run_queue()
 
