@@ -139,3 +139,14 @@ idle-boundary deployment; no model turn or candidate staging was active.
 
 Final reprioritization checks: 819 Python tests, 49 Node tests passed (5 Node skips).
 Skills, whitespace, Linux build and isolated sandboxed launch passed.
+
+
+## Obsolete candidate checks after allocation
+
+After an allocation is transactionally reserved, the scheduler cancels only that
+run's pending CPU contract checks on other candidates. It does not interrupt
+active source/input transfers, another run's checks or any GPU process. This
+prevents obsolete higher-priority checks from delaying subsequent SR42 work.
+A regression verifies exactly one launch while pending checks are cancelled and
+transfer/foreign-check ownership remains intact. The staged production runtime
+passed all 35 focused control, priority, admission and SSH-budget regressions.

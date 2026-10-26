@@ -1,3 +1,14 @@
+# Drop obsolete contract checks after allocation — October 25, 2026
+
+After transactional allocation, pending CPU checks on other candidates are
+cancelled. Source/input transfers, foreign checks and GPU jobs continue. This
+prevents launched jobs' obsolete checks from blocking the next SR42 request.
+
+Validation: 820 Python tests and 49 Node tests passed (5 Node skips). The exact
+staged production runtime passed 35 focused tests. Skills and whitespace checks,
+Linux packaging and isolated sandboxed setup launch passed. Deployment waited
+for no active model messages or candidate staging. No version bump or release.
+
 # Pending contract reprioritization — October 25, 2026
 
 Changing a queued run priority now refreshes only its pending CPU contract checks,

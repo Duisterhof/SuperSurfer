@@ -8,6 +8,8 @@ spacing remain in force. Higher native run priority precedes older lower-priorit
 contract checks; equal priorities retain arrival order. Cancellation releases both
 queues. Changing a queued run priority refreshes pending CPU contract checks
 that captured the old priority; active source/input transfers continue.
+Once a job receives its allocation, obsolete pending checks on other candidates
+are cancelled; existing transfers are allowed to finish.
 Ready/hold, exact-source review, input verification, GPU occupancy and
 transactional reservations still gate every launch.
 

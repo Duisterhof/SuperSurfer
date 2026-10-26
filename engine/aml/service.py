@@ -939,12 +939,7 @@ class Manager:
             # Waiting contract requests captured the previous priority. Refresh
             # only their CPU checks; an active source/input transfer keeps its
             # ownership and continues. No runner or GPU job is cancelled.
-            pending = []
-            for key, task in list(self.placement_checks.items()):
-                observation = self.placement_observations.get(key, {})
-                if key[0] == row["id"] and not task.done() and observation.get("state") == "checking":
-                    task.cancel()
-                    pending.append((key, task))
+            pending = self.cancel_pending_contract_checks(row["id"])
             if pending:
                 await asyncio.gather(*(task for _, task in pending), return_exceptions=True)
                 for key, task in pending:
@@ -1301,6 +1296,16 @@ class Manager:
         else:
             run["placement_state"] = "blocked"
 
+    def cancel_pending_contract_checks(self, run_id):
+        """Drop obsolete CPU checks without interrupting source/input transfers."""
+        pending = []
+        for key, task in list(self.placement_checks.items()):
+            observation = self.placement_observations.get(key, {})
+            if key[0] == run_id and not task.done() and observation.get("state") == "checking":
+                task.cancel()
+                pending.append((key, task))
+        return pending
+
     def cancel_preparations(self, run_id):
         for key, task in self.placement_checks.items():
             if key[0] == run_id and not task.done():
@@ -1458,6 +1463,9 @@ class Manager:
                 self.store.execute("UPDATE runs SET status='starting',host_id=?,job_dir=?,allocated_gpus=?,error='',updated=? WHERE id=?",
                                    (selected_host, job_dir, json.dumps(gpus), time.time(), current["id"]))
                 self.store.event("run.starting", {"id": current["id"], "gpus": gpus}, current["project_id"])
+            # This job owns its allocation now. Other candidates' pending
+            # checks no longer help placement and must not delay later work.
+            self.cancel_pending_contract_checks(current["id"])
             mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                      (host["id"], current["project_id"]))
             spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved["repo"], "revision": current["revision"],

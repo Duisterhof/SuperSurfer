@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'engine'))
 from aml.service import Manager
@@ -70,6 +71,29 @@ class PendingContractPriorityTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await self.manager.run_priority('r',20)
         self.assertFalse(task.done())
+
+
+    async def test_launch_drops_other_candidate_checks_but_preserves_transfers(self):
+        self.manager.store.execute("INSERT INTO host_repos VALUES('h','p','/tmp/repo')")
+        checking = await self.pending(('r','other-host'))
+        staging = await self.pending(('r','staging-host'),'staging')
+        foreign = await self.pending(('other-run','h'))
+        self.manager.staging_owner = ('r','staging-host')
+
+        async def launch(host, payload, timeout):
+            self.assertEqual(payload['op'],'launch')
+            await asyncio.sleep(0)
+            return {'state':'running'}
+
+        with patch.object(self.manager,'select_host',return_value=('h',[],[])), \
+             patch.object(self.manager.transport,'request',new=AsyncMock(side_effect=launch)) as request:
+            await self.manager.schedule_runs()
+        self.assertTrue(checking.cancelled())
+        self.assertFalse(staging.done())
+        self.assertFalse(foreign.done())
+        self.assertEqual(self.manager.staging_owner,('r','staging-host'))
+        self.assertEqual(request.await_count,1)
+        self.assertEqual(self.manager.store.get('runs','r')['status'],'running')
 
 
 if __name__ == '__main__':
