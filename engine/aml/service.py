@@ -64,6 +64,8 @@ class Manager:
         self.placement_observations = {}
         self.staging_owner = None
         self.tick_lock = asyncio.Lock()
+        self.admission_lock = asyncio.Lock()
+        self.admission_wake = asyncio.Event()
         self.scheduler_wake = asyncio.Event()
         self.run_next_poll = {}
         self.run_transition_polls = {}
@@ -76,6 +78,7 @@ class Manager:
         if run_id is not None:
             self.run_next_poll.pop(run_id, None)
         self.scheduler_wake.set()
+        self.admission_wake.set()
 
     @staticmethod
     def runner_timing(state):
@@ -1397,6 +1400,12 @@ class Manager:
         self.wake_scheduler()
 
     async def schedule_runs(self):
+        # Reconciliation and the admission loop may both reach this method.
+        # Serialize reservation + launch delivery without holding tick_lock.
+        async with self.admission_lock:
+            await self._schedule_runs()
+
+    async def _schedule_runs(self):
         attempted = set()
         while not self.stopping:
             queued = self.store.rows("SELECT * FROM runs WHERE status='queued' ORDER BY queue_order,id")
@@ -1527,6 +1536,24 @@ class Manager:
             await self.schedule_runs()
             self.dispatch_messages()
 
+    async def admission_loop(self, stop):
+        """Use completed probes/contracts immediately, outside remote status ticks.
+
+        Reuses the existing scheduler and its coalesced probe/preparation due
+        times. It adds no host/status polling path and never relaxes freshness,
+        ready/hold, occupancy or transactional reservation checks.
+        """
+        while not stop.is_set():
+            self.admission_wake.clear()
+            try:
+                await self.schedule_runs()
+            except Exception as exc:
+                self.store.event('manager.error', {'error': str(exc), 'phase': 'admission'})
+            try:
+                await asyncio.wait_for(self.admission_wake.wait(), 1)
+            except TimeoutError:
+                pass
+
     async def message_dispatch_loop(self, stop):
         """Deliver existing messages without waiting for remote GPU inspections.
 
@@ -1629,13 +1656,15 @@ async def serve(home, interval=300, acknowledge_messages=None):
     poll_task = asyncio.create_task(poll_hosts())
     tick_task = asyncio.create_task(manager.scheduler_loop(stop, interval))
     dispatch_task = asyncio.create_task(manager.message_dispatch_loop(stop))
+    admission_task = asyncio.create_task(manager.admission_loop(stop))
     try:
         await stop.wait()
     finally:
         tick_task.cancel()
         poll_task.cancel()
         dispatch_task.cancel()
-        await asyncio.gather(tick_task, poll_task, dispatch_task, return_exceptions=True)
+        admission_task.cancel()
+        await asyncio.gather(tick_task, poll_task, dispatch_task, admission_task, return_exceptions=True)
         server.close()
         await server.wait_closed()
         for task in list(clients):

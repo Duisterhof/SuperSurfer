@@ -95,3 +95,9 @@ Regression coverage exercises 20 healthy cycles, first-scan history suppression,
 transient and persistent transport errors, terminal/stall edges, tuple/JSON cursor
 normalization, acknowledgement idempotence and atomic rejection of active,
 foreign or changed messages. Startup cleanup is verified to precede dispatch.
+
+## Admission starvation during remote reconciliation
+
+`tick()` awaited all remote status reconciliation under `tick_lock` before scheduling. A fresh allocation observation could therefore expire while unrelated SSH/Slurm status calls were still pending. An independent admission loop now consumes probe/contract wakeups through the existing scheduler, with a separate admission lock preventing duplicate reservation/launch delivery. Existing status/host polling rates and transport limits remain unchanged.
+
+Six regressions block an actual remote status request: eligible prepared work launches before that request returns; a newly completed fresh probe wakes admission; hold, stale observations, occupied GPUs and unverified input contracts still block. All 807 Python tests and 49 Node tests passed (5 Node skips), including these six tests against the narrowly patched production runtime. Linux package rebuilt; isolated sandboxed setup launch passed.

@@ -1087,3 +1087,7 @@ historical runs. New failures/completions, newly stalled work and persistent
 transport failures while work is outstanding are actionable edges. Transient
 transport errors and healthy recovery remain quiet. Durable local outboxes retry
 keyed events through the manager without falling back to untyped user chat.
+
+### Admission responsiveness
+
+Completed host probes and candidate contracts wake a dedicated admission loop. Remote run-status reconciliation may remain blocked without delaying a ready run’s transactional reservation and launch. Admission shares one lock with tick-triggered scheduling; exact-source/inputs, ready/hold, fresh observations and GPU occupancy checks remain required. The loop reuses existing coalesced preparation/probe due times and does not add another SSH status poller.
