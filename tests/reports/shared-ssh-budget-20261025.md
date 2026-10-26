@@ -101,3 +101,24 @@ foreign or changed messages. Startup cleanup is verified to precede dispatch.
 `tick()` awaited all remote status reconciliation under `tick_lock` before scheduling. A fresh allocation observation could therefore expire while unrelated SSH/Slurm status calls were still pending. An independent admission loop now consumes probe/contract wakeups through the existing scheduler, with a separate admission lock preventing duplicate reservation/launch delivery. Existing status/host polling rates and transport limits remain unchanged.
 
 Six regressions block an actual remote status request: eligible prepared work launches before that request returns; a newly completed fresh probe wakes admission; hold, stale observations, occupied GPUs and unverified input contracts still block. All 807 Python tests and 49 Node tests passed (5 Node skips), including these six tests against the narrowly patched production runtime. Linux package rebuilt; isolated sandboxed setup launch passed.
+
+
+## Contract backlog and native priority
+
+A separate one-at-a-time contract queue now precedes the two-slot gateway gate.
+This preserves room for status, probes and launch requests when many candidate
+contracts are queued. Contract checks inherit the native run's priority and use
+arrival order within equal priorities. Both waiting and active cancellation
+release the contract gate. The global SSH guard, rate limits, freshness checks,
+source/PR checks and transactional reservation path are unchanged.
+
+Four CPU-only regressions hold twelve contracts pending while control operations
+complete under a peak of two requests; verify priority ordering; and cancel both
+a waiting and an active contract without blocking later work. The existing six
+poll-budget and six reconciliation/admission tests also pass.
+
+Final backport validation: all 815 Python tests and 49 Node tests passed (5 Node
+skips). Skills and whitespace checks passed. Linux package rebuilt and the
+isolated sandboxed setup launch passed. Initial missing Node dependencies were
+restored from the lockfile before the passing Node run. No installed app or live
+workspace was changed by packaging.

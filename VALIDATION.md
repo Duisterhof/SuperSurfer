@@ -1,3 +1,21 @@
+# Contract admission control progress — October 25, 2026
+
+A contract backlog now queues before the two-slot gateway cap, retaining a slot
+for status, probes and launch requests. Native priority orders contract waiters;
+ready/hold, source review, input verification and GPU reservations stay enforced.
+
+Validation: 815 Python tests passed; 49 Node tests passed, 5 skipped. This includes
+four new contract-control tests and twelve existing poll/admission regressions.
+Capability-skill checks and `git diff --check` passed. Locked Node dependencies
+were restored after the initial Node run found missing `ws`; the subsequent Node
+suite passed. The first sandboxed Python attempt lacked local fixture sockets;
+the full Python suite passed with those fixture permissions.
+
+The Linux package rebuilt at `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` and opened
+under Xvfb with an isolated profile, setup ready, renderer sandbox enabled and
+Node integration disabled. No live service was restarted for this source backport;
+no version bump or release publication is included.
+
 # OpenCode provider — October 19, 2026
 
 OpenCode ACP is now selectable in new chats, role defaults and account setup.

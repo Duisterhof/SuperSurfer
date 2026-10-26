@@ -1333,7 +1333,7 @@ class Manager:
             if not mapping and not resolved.get("repo"):
                 raise ValueError("Register this project's repository on candidate " + host["name"])
             spec = {"repo": mapping["path"] if mapping else resolved["repo"], "revision": run["revision"], "root": host["root"], **resolved}
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=60)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec, "_admission_priority": run["priority"]}, timeout=60)
             self.record_admission(key, result)
             codes = {item["code"] for item in result["blockers"]}
             if "code_missing" in codes and config.get("stage_source"):
@@ -1349,7 +1349,7 @@ class Manager:
                 await self.transport.stage_source(config["source_repo"], host, spec, timeout=600)
                 if not self.preparation_allowed(run["id"]):
                     raise asyncio.CancelledError()
-                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=60)
+                result = await self.transport.request(host, {"op": "admit", "spec": spec, "_admission_priority": run["priority"]}, timeout=60)
                 self.record_admission(key, result)
                 codes = {item["code"] for item in result["blockers"]}
                 self.staging_owner = None
@@ -1381,7 +1381,7 @@ class Manager:
                 else:
                     source_host = self.store.get("hosts", item["source_host"]) if item["source_host"] else None
                     await self.transport.copy_file(source_host, host, item, storage, timeout=600)
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=60)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec, "_admission_priority": run["priority"]}, timeout=60)
             self.record_admission(key, result)
         except asyncio.CancelledError:
             self.placement_observations[key] = {"state": "blocked", "checked_at": time.time(),

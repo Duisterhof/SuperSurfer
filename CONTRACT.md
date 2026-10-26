@@ -1,3 +1,14 @@
+# SSH contract admission and control progress
+
+Prepared candidate checks use one priority-ordered contract slot per SSH gateway.
+They enter that queue before acquiring either of the gateway's two command slots,
+so a contract backlog cannot occupy both slots ahead of live-job status, fresh
+capacity observations or launch requests. The existing global SSH budget and
+spacing remain in force. Higher native run priority precedes older lower-priority
+contract checks; equal priorities retain arrival order. Cancellation releases both
+queues. Ready/hold, exact-source review, input verification, GPU occupancy and
+transactional reservations still gate every launch.
+
 # OpenCode backend
 
 OpenCode is a selectable, durable backend for new chats and role defaults. Its
