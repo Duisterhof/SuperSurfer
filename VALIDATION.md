@@ -1189,3 +1189,15 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+October 25 InfiniBand enforcement: 811 Python and 49 enabled Node tests passed
+(5 Node skips). The real-process nested-relay fixture now uses an isolated HOME,
+so the live account's cluster policy cannot change its simulated SSH endpoints.
+The optional fabric-policy regressions reject blocked IPs, compute-alias hostname
+overrides and forwarding DNS fallback, while preserving ordinary accounts.
+Linux packaging and an isolated packaged Electron startup passed with renderer
+sandbox enabled and no live workspace connection. A separate live campaign
+transfer moved 370,393,801 bytes directly from 172.16.1.77 to 172.16.1.218 and
+matched its retained SHA256. Full-state checkpoint backup on the second node
+verified raw/EMA weights, optimizer moments, rank RNG and exposure on CPU; this
+is an operational receipt, not coverage of arbitrary third-party SSH clients.

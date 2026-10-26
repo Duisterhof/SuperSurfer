@@ -1091,3 +1091,15 @@ keyed events through the manager without falling back to untyped user chat.
 ### Admission responsiveness
 
 Completed host probes and candidate contracts wake a dedicated admission loop. Remote run-status reconciliation may remain blocked without delaying a ready run’s transactional reservation and launch. Admission shares one lock with tick-triggered scheduling; exact-source/inputs, ready/hold, fresh observations and GPU occupancy checks remain required. The loop reuses existing coalesced preparation/probe due times and does not add another SSH status poller.
+
+### Optional cluster fabric enforcement
+
+An installed `~/.ssh/supersurfer-infiniband.json` policy pins named compute aliases
+and forwarding destinations to the configured InfiniBand subnet. The SSH guard
+rejects blocked Ethernet addresses, hostname overrides and compute-alias DNS
+fallback before network execution. Accounts without a policy retain their normal
+routing. Host-key verification, persistent connection reuse and the shared
+command/connection rate limits remain required; route failures do not permit an
+Ethernet fallback. Bulk checkpoint staging should stream between compute nodes,
+with hash verification at the destination, rather than relaying through the
+workspace host.

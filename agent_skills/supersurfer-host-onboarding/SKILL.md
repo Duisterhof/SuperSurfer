@@ -261,3 +261,9 @@ a real turn failure, never a reason to replay automatically or switch models.
 Ask/YOLO are supported; steering, Codex Fast/reasoning and auto-review are not.
 Use the scoped ask_user tool for questions. Manage upstream accounts in the host
 terminal, never by sharing credentials in chat or changing shared server config.
+
+For clusters with an installed InfiniBand policy, prepare and verify the IB route
+before bulk data transfer. Use direct compute-node transfers with destination
+checksums; preserve the shared SSH guard and never fall back to Ethernet or relay
+checkpoint payloads through the workspace host. See the worker's
+[network policy](../supersurfer-worker/references/run-submission.md#cluster-network-policy).

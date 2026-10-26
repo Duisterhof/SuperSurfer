@@ -95,7 +95,8 @@ class ProxyRouteTests(unittest.TestCase):
                 guard.main()
             '''))
             processes = [subprocess.Popen([sys.executable, str(harness), target, 'true'],
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         env=dict(os.environ, HOME=str(root)))
                          for target in ('trinity-1-3', 'trinity-3-13')]
             try:
                 for process in processes:

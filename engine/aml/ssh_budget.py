@@ -10,6 +10,7 @@ import contextlib
 import ctypes
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -135,12 +136,51 @@ def configured_proxy_stream(proxy_command):
     return ['-o', 'ProxyCommand=' + relay]
 
 
+def validate_network_policy(options, target, settings=None, policy_path=None):
+    """Optional account-wide fabric policy; an invalid/missing route fails closed.
+
+    Managed SSH configuration supplies routes. This guard also rejects explicit
+    hostname/forwarding overrides that would escape an installed fabric policy.
+    No policy is assumed on accounts that have not installed one.
+    """
+    path = Path(policy_path) if policy_path else Path.home()/'.ssh/supersurfer-infiniband.json'
+    if not path.exists():
+        return
+    policy = json.loads(path.read_text())
+    aliases = policy['aliases']
+    required = ipaddress.ip_network(policy['required_cidr'])
+    blocked = [ipaddress.ip_network(value) for value in policy['blocked_cidrs']]
+    base = target.rsplit('@', 1)[-1]
+    def disallowed(value):
+        try:
+            address = ipaddress.ip_address(value)
+        except ValueError:
+            return False
+        return any(address in network for network in blocked)
+    if disallowed(base):
+        raise RuntimeError('Ethernet compute destinations are prohibited by the installed InfiniBand policy')
+    if '-W' in options:
+        value = options[options.index('-W') + 1].rsplit(':', 1)[0].strip('[]')
+        if disallowed(value) or value in aliases or value.startswith(policy['alias_prefix']):
+            raise RuntimeError('Compute forwarding must use the explicit InfiniBand address, without Ethernet DNS fallback')
+    if settings is None:
+        return
+    hostname = settings.get('hostname', base)
+    if disallowed(hostname):
+        raise RuntimeError('Ethernet hostname override is prohibited by the installed InfiniBand policy')
+    if base.startswith(policy['alias_prefix']):
+        expected = aliases.get(base)
+        if (not expected or ipaddress.ip_address(expected) not in required or hostname != expected):
+            raise RuntimeError('Compute alias has no matching enforced InfiniBand route')
+
+
 def connection_settings(options, target, root):
     common = ['-o', 'ControlMaster=auto', '-o', 'ControlPersist=600',
               '-o', 'ControlPath=' + str(root / '%C')]
     result = subprocess.run([REAL_SSH, '-G', *common, *options, target],
                             text=True, capture_output=True, check=True, timeout=10)
     settings = dict(line.split(' ', 1) for line in result.stdout.splitlines() if ' ' in line)
+    validate_network_policy(options, target, settings)
     if settings.get('controlpath') in (None, 'none'):
         raise RuntimeError('A persistent SSH control path is required')
     common.extend(configured_proxy_stream(settings.get('proxycommand')))
@@ -209,8 +249,11 @@ def run(arguments):
     options, target, command = split_target(arguments)
     if target is None or '-G' in options or '-O' in options:
         os.execv(REAL_SSH, [REAL_SSH, *arguments])
+    validate_network_policy(options, target)
     automated = bool(command) or any('batchmode=yes' in value.lower() for value in options)
     if not automated and '-W' not in options:
+        # Validate configured fabric routing, without consuming network budget.
+        connection_settings(options, target, private_directory())
         os.execv(REAL_SSH, [REAL_SSH, *arguments])
     root = private_directory()
     common, control_path, gateway = connection_settings(options, target, root)
