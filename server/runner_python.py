@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 from .compute import ComputeError, SSH_OPTIONS
+from engine.aml.ssh_budget import ssh_command
 
 _VERSION = 'import json,sys; print(json.dumps({"path":sys.executable,"version":list(sys.version_info[:3])}))'
 # This discovery program deliberately works with Python 3.6 system installations.
@@ -35,7 +36,7 @@ def resolve_runner_python(target, configured):
     script=('VERSION = '+repr(_VERSION)+'\n'+_DISCOVER) if auto else _VERSION
     executable=('python3' if target else sys.executable) if auto else configured
     argv=[executable,'-I','-c',script]
-    command=['ssh',*SSH_OPTIONS,'--',target,shlex.join(argv)] if target else argv
+    command=ssh_command(*SSH_OPTIONS,'--',target,shlex.join(argv)) if target else argv
     try:
         result=subprocess.run(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=25)
         if result.returncode or len(result.stdout)>16000:

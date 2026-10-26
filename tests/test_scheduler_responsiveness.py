@@ -58,30 +58,30 @@ class SchedulerResponsivenessTests(unittest.IsolatedAsyncioTestCase):
         await self.manager.close()
         self.temp.cleanup()
 
-    async def test_starting_and_cancelling_fast_poll_is_bounded_running_stays_ten_seconds(self):
+    async def test_starting_and_cancelling_fast_poll_is_bounded_running_stays_two_minutes(self):
         with patch("aml.service.time.monotonic", return_value=100):
             await self.manager.reconcile_runs(due_only=True)
-        self.assertEqual(101, self.manager.run_next_poll["r1"])
+        self.assertEqual(110, self.manager.run_next_poll["r1"])
         with patch("aml.service.time.monotonic", return_value=100.9):
             await self.manager.reconcile_runs(due_only=True)
         self.assertEqual(1, len(self.transport.calls))
         with patch("aml.service.time.monotonic", return_value=131):
             await self.manager.reconcile_runs(due_only=True)
-        self.assertEqual(141, self.manager.run_next_poll["r1"], "A stuck transition must not poll every second forever")
+        self.assertEqual(251, self.manager.run_next_poll["r1"], "A stuck transition must not poll every second forever")
         self.store.execute("UPDATE runs SET status='running' WHERE id='r1'")
         self.transport.state = {"state": "running"}
         self.manager.wake_scheduler("r1")
         with patch("aml.service.time.monotonic", return_value=150):
             await self.manager.reconcile_runs(due_only=True)
-        self.assertEqual(160, self.manager.run_next_poll["r1"])
+        self.assertEqual(270, self.manager.run_next_poll["r1"])
         self.assertNotIn("r1", self.manager.run_transition_polls)
         await self.manager.run_cancel("r1")
         with patch("aml.service.time.monotonic", return_value=151):
             await self.manager.reconcile_runs(due_only=True)
         self.assertEqual("cancel", self.transport.calls[-1][1]["op"])
-        self.assertEqual(152, self.manager.run_next_poll["r1"])
+        self.assertEqual(161, self.manager.run_next_poll["r1"])
         self.transport.state = {"state": "cancelled", "exit_code": -15}
-        with patch("aml.service.time.monotonic", return_value=152):
+        with patch("aml.service.time.monotonic", return_value=161):
             await self.manager.reconcile_runs(due_only=True)
         self.assertEqual("cancelled", self.store.get("runs", "r1")["status"])
         self.assertNotIn("r1", self.manager.run_transition_polls)
@@ -117,7 +117,7 @@ class SchedulerResponsivenessTests(unittest.IsolatedAsyncioTestCase):
         release.set()
         await task
         self.assertEqual(["status", "cancel"], [payload["op"] for _, payload in self.transport.calls])
-        self.assertLessEqual(self.manager.run_next_poll["r2"] - time.monotonic(), 1)
+        self.assertLessEqual(self.manager.run_next_poll["r2"] - time.monotonic(), 10)
 
     async def test_successful_fresh_probe_resumes_owned_status_after_outage_without_releasing_it(self):
         self.store.execute("INSERT INTO reservations VALUES('h1','0','r1')")

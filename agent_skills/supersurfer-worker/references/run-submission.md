@@ -121,3 +121,15 @@ Keep the cancelled run's history and evidence. A stop request does not authorize
 restarting it or change the experiment's scientific completion status.
 If the user requested a replacement too, confirm the original is terminal before
 launching that replacement through the normal scoped queue workflow.
+
+## Cluster network policy
+
+Honor the installed SSH fabric policy and shared connection/rate guard. For a
+cluster with InfiniBand, copy datasets/checkpoints directly between compute-node
+InfiniBand addresses; verify the destination route uses the IB interface before
+sending bytes and verify the destination checksum. Do not relay bulk files
+through the workspace host, use Ethernet hostnames as a fallback, bypass the SSH
+guard, or add a new polling loop. A route/setup failure is a transport blocker,
+not permission to weaken the policy. `rsync --address` alone does not choose the
+remote SSH transport route. Keep checkpoint/source identity and the existing
+managed queue request when repairing staging.

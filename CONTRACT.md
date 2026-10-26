@@ -1,3 +1,18 @@
+# SSH contract admission and control progress
+
+Prepared candidate checks use one priority-ordered contract slot per SSH gateway.
+They enter that queue before acquiring either of the gateway's two command slots,
+so a contract backlog cannot occupy both slots ahead of live-job status, fresh
+capacity observations or launch requests. The existing global SSH budget and
+spacing remain in force. Higher native run priority precedes older lower-priority
+contract checks; equal priorities retain arrival order. Cancellation releases both
+queues. Changing a queued run priority refreshes pending CPU contract checks
+that captured the old priority; active source/input transfers continue.
+Once a job receives its allocation, obsolete pending checks on other candidates
+are cancelled; existing transfers are allowed to finish.
+Ready/hold, exact-source review, input verification, GPU occupancy and
+transactional reservations still gate every launch.
+
 # OpenCode backend
 
 OpenCode is a selectable, durable backend for new chats and role defaults. Its
@@ -869,7 +884,7 @@ Planning status is separate from execution state. Active, queued or uncertain ru
 
 A pool submission snapshots per-node placement contracts, the source revision and resource requirements. `{python}` and `{data}` command placeholders resolve for the chosen node. AutoML selects the eligible host/devices, validates allocation-time freshness and prerequisites, and stages verified Git objects without altering a node's worktree. Pool edits do not mutate queued contracts. A pool-capability mismatch fails explicitly instead of silently binding a different host or bypassing the scheduler.
 
-Host observations include `observed_at`, `age_seconds`, `next_refresh_at`, `stale_after_seconds` and `stale`. The client shows age/next refresh and obeys the backend stale flag; its normal state polling does not run node probes. GPU availability excludes unregistered indices and does not become unknown solely because a CPU-only host has no GPU readings. Job-state notification and the backend's ten-second fallback checks are separate from node telemetry probes.
+Host observations include `observed_at`, `age_seconds`, `next_refresh_at`, `stale_after_seconds` and `stale`. The client shows age/next refresh and obeys the backend stale flag; its normal state polling does not run node probes. GPU availability excludes unregistered indices and does not become unknown solely because a CPU-only host has no GPU readings. Job-state notification and the backend's two-minute fallback checks are separate from node telemetry probes.
 
 ## W&B metadata and Results
 
@@ -1039,3 +1054,67 @@ provider-native rules; permitted workspace edits may run without a callback. CLI
 recognized events; raw stdout/stderr and auth output are not logged. Restart and
 unknown delivery never replay prompts. Exact-turn steering and complete patch
 attribution are not advertised for Cursor/Claude.
+
+
+Automated SSH control calls from the bundled scheduler, compute probes, interpreter
+checks and node setup share per-user, per-gateway locks across processes. Trinity
+worker aliases share one gateway budget: at most two active control commands,
+request starts at least three seconds apart, and new destination-master attempts
+at least fifteen seconds apart. Connections use persistent OpenSSH masters
+(600-second persistence); a failed multiplexed client cannot fall back to opening
+an unshared connection. Interactive SSH and local configuration/control queries
+remain available. These limits cover the framework entrypoints, not unrelated
+programs deliberately invoking another SSH executable.
+
+Steady run status checks use a 120-second cadence; starting/cancelling checks use
+10 seconds for a bounded 30-second transition window. Missing static environment,
+repository or storage contracts back off for 30 minutes; known fresh busy nodes
+are not repeatedly prepared. Explicit setup and existing ownership checks remain
+in force. Remote startup/readiness timeouts allow time for shared-budget admission.
+
+Existing queued agent messages are dispatched by a local loop independent of
+remote run-status reconciliation. Slow SSH reads cannot leave an idle eligible
+agent waiting for the GPU scheduler's current status batch. The same per-agent
+turn/native-delivery exclusivity and task dependency checks remain in force;
+this loop does not probe hosts or submit experiments.
+
+CPU monitors use `agent.notify {agent,key,content,requires_attention}`. Healthy
+samples (`requires_attention=false`) do not queue model turns. Attention events
+use a typed `monitor:` notification key and coalesce one pending alert per owner
+and topic; duplicate event content is suppressed. Only still-queued typed alerts
+can be retired by an explicit quiet/recovered update. Ordinary user/root messages
+are not classified by sender name or overwritten by monitor topics.
+
+`message.acknowledge {agent,messages:[{id,sha256}],reason,project?}` retires an
+operator-selected exact queued batch as `acknowledged`, preserving message bodies
+and adding an audit event. All IDs, owner bindings and hashes are validated before
+any change. Active, delivered/completed, foreign or changed messages reject the
+batch. Repeating an already-applied acknowledgement is idempotent. The CLI exposes
+`aml message acknowledge OWNER --messages-file PLAN --reason TEXT`; the file is a
+JSON list of exact id/hash pairs. `aml agent notify OWNER TEXT --key TOPIC
+--attention` submits an attention event; omitting `--attention` stays quiet.
+The daemon's optional `--acknowledge-messages PLAN` applies a full acknowledgement
+request before starting dispatch, for controlled maintenance between model turns.
+
+Monitor policy treats ordinary optimizer progress as telemetry, not an agent
+instruction. First scans/migrations establish a baseline rather than replaying
+historical runs. New failures/completions, newly stalled work and persistent
+transport failures while work is outstanding are actionable edges. Transient
+transport errors and healthy recovery remain quiet. Durable local outboxes retry
+keyed events through the manager without falling back to untyped user chat.
+
+### Admission responsiveness
+
+Completed host probes and candidate contracts wake a dedicated admission loop. Remote run-status reconciliation may remain blocked without delaying a ready run’s transactional reservation and launch. Admission shares one lock with tick-triggered scheduling; exact-source/inputs, ready/hold, fresh observations and GPU occupancy checks remain required. The loop reuses existing coalesced preparation/probe due times and does not add another SSH status poller.
+
+### Optional cluster fabric enforcement
+
+An installed `~/.ssh/supersurfer-infiniband.json` policy pins named compute aliases
+and forwarding destinations to the configured InfiniBand subnet. The SSH guard
+rejects blocked Ethernet addresses, hostname overrides and compute-alias DNS
+fallback before network execution. Accounts without a policy retain their normal
+routing. Host-key verification, persistent connection reuse and the shared
+command/connection rate limits remain required; route failures do not permit an
+Ethernet fallback. Bulk checkpoint staging should stream between compute nodes,
+with hash verification at the destination, rather than relaying through the
+workspace host.

@@ -1,3 +1,45 @@
+# Drop obsolete contract checks after allocation — October 25, 2026
+
+After transactional allocation, pending CPU checks on other candidates are
+cancelled. Source/input transfers, foreign checks and GPU jobs continue. This
+prevents launched jobs' obsolete checks from blocking the next SR42 request.
+
+Validation: 820 Python tests and 49 Node tests passed (5 Node skips). The exact
+staged production runtime passed 35 focused tests. Skills and whitespace checks,
+Linux packaging and isolated sandboxed setup launch passed. Deployment waited
+for no active model messages or candidate staging. No version bump or release.
+
+# Pending contract reprioritization — October 25, 2026
+
+Changing a queued run priority now refreshes only its pending CPU contract checks,
+so requests already waiting use the new priority. Active source/input transfers,
+other runs, unchanged priorities and running GPU jobs are preserved.
+
+All 819 Python tests and 49 Node tests passed (5 Node skips). The staged production
+runtime passed 34 focused tests, including four new reprioritization regressions.
+Capability skills and whitespace checks passed. Linux packaging and the isolated
+sandboxed setup launch passed. The production repair was applied only after
+verifying no active model messages or candidate staging; live GPU jobs continued.
+No version bump, installed-app replacement or release publication is included.
+
+# Contract admission control progress — October 25, 2026
+
+A contract backlog now queues before the two-slot gateway cap, retaining a slot
+for status, probes and launch requests. Native priority orders contract waiters;
+ready/hold, source review, input verification and GPU reservations stay enforced.
+
+Validation: 815 Python tests passed; 49 Node tests passed, 5 skipped. This includes
+four new contract-control tests and twelve existing poll/admission regressions.
+Capability-skill checks and `git diff --check` passed. Locked Node dependencies
+were restored after the initial Node run found missing `ws`; the subsequent Node
+suite passed. The first sandboxed Python attempt lacked local fixture sockets;
+the full Python suite passed with those fixture permissions.
+
+The Linux package rebuilt at `dist/SuperSurfer-0.1.43-linux-x64.tar.gz` and opened
+under Xvfb with an isolated profile, setup ready, renderer sandbox enabled and
+Node integration disabled. No live service was restarted for this source backport;
+no version bump or release publication is included.
+
 # OpenCode provider — October 19, 2026
 
 OpenCode ACP is now selectable in new chats, role defaults and account setup.
@@ -1189,3 +1231,15 @@ draft review fixtures: mixed Accept/Reject, overlapping lines, typing during a
 delayed save, repeated Save and ordinary native saving. Account reconnect and
 desktop tabs/Activity/sidebars pass. 699 backend and 31 enabled Node checks were
 rerun locally; no live provider inference was repeated for this integration pass.
+
+October 25 InfiniBand enforcement: 811 Python and 49 enabled Node tests passed
+(5 Node skips). The real-process nested-relay fixture now uses an isolated HOME,
+so the live account's cluster policy cannot change its simulated SSH endpoints.
+The optional fabric-policy regressions reject blocked IPs, compute-alias hostname
+overrides and forwarding DNS fallback, while preserving ordinary accounts.
+Linux packaging and an isolated packaged Electron startup passed with renderer
+sandbox enabled and no live workspace connection. A separate live campaign
+transfer moved 370,393,801 bytes directly from 172.16.1.77 to 172.16.1.218 and
+matched its retained SHA256. Full-state checkpoint backup on the second node
+verified raw/EMA weights, optimizer moments, rank RNG and exposure on CPU; this
+is an operational receipt, not coverage of arbitrary third-party SSH clients.

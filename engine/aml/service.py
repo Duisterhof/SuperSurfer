@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -21,15 +22,16 @@ from .util import git, name, process_ticks
 ACTIVE_RUNS = ("starting", "running", "unreachable", "orphaned", "cancelling")
 TERMINAL_RUNS = ("succeeded", "failed", "cancelled", "lost")
 TASK_STATES = ("pending", "working", "blocked", "done", "failed", "archived")
-HOST_POLL_TIMEOUT = 4
+HOST_POLL_TIMEOUT = 60
 HOST_POLL_INTERVAL = 300
-ACTIVE_RUN_POLL_INTERVAL = 10
-TRANSITION_POLL_INTERVAL = 1
+ACTIVE_RUN_POLL_INTERVAL = 120
+TRANSITION_POLL_INTERVAL = 10
 TRANSITION_POLL_WINDOW = 30
 HOST_STALE_AFTER = HOST_POLL_INTERVAL + 30
 ALLOCATION_MAX_AGE = 15
 ALLOCATION_PROBE_INTERVAL = 60
 CONTRACT_STALE_AFTER = HOST_POLL_INTERVAL
+INVALID_CONTRACT_RETRY_INTERVAL = 1800
 
 
 class Manager:
@@ -62,6 +64,8 @@ class Manager:
         self.placement_observations = {}
         self.staging_owner = None
         self.tick_lock = asyncio.Lock()
+        self.admission_lock = asyncio.Lock()
+        self.admission_wake = asyncio.Event()
         self.scheduler_wake = asyncio.Event()
         self.run_next_poll = {}
         self.run_transition_polls = {}
@@ -74,6 +78,7 @@ class Manager:
         if run_id is not None:
             self.run_next_poll.pop(run_id, None)
         self.scheduler_wake.set()
+        self.admission_wake.set()
 
     @staticmethod
     def runner_timing(state):
@@ -104,6 +109,7 @@ class Manager:
             "project.update": self.project_update, "task.add": self.task_add,
             "task.list": self.task_list, "task.show": self.task_show, "task.update": self.task_update,
             "agent.add": self.agent_add, "agent.list": self.agent_list,
+            "agent.notify": self.agent_notify, "message.acknowledge": self.message_acknowledge,
             "agent.send": self.agent_send, "agent.pause": self.agent_pause,
             "agent.resume": self.agent_resume, "agent.history": self.agent_history,
             "agent.archive": self.agent_archive,
@@ -333,6 +339,68 @@ class Manager:
         if row["status"] == "archived":
             raise ValueError("Archived agents cannot receive new work")
         return {"id": self.store.message(row["id"], sender, content), "agent_id": row["id"]}
+
+    async def agent_notify(self, agent, key, content, requires_attention=False, project=None):
+        """Monitors publish keyed attention events, never routine progress turns."""
+        row = self.get_agent(agent, project)
+        if (not isinstance(key, str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,120}', key)
+                or type(requires_attention) is not bool):
+            raise ValueError('Expected a stable monitor key and boolean requires_attention')
+        notification_key = 'monitor:' + key
+        pending = self.store.rows("SELECT * FROM messages WHERE agent_id=? AND notification_key=? AND status='queued'",
+                                  (row['id'], notification_key))
+        if any(item['sender'] != 'monitor' for item in pending):
+            raise ValueError('Monitor key collides with a non-monitor message')
+        if not requires_attention:
+            # A recovered state invalidates only its still-queued typed alert.
+            if pending:
+                await self.message_acknowledge(row['id'], [dict(id=item['id'], sha256=hashlib.sha256(
+                    item['content'].encode()).hexdigest()) for item in pending],
+                    'Monitor state no longer requires attention', project=project)
+            return dict(agent_id=row['id'], queued=False, reason='no_attention_required')
+        if not isinstance(content, str) or not content.strip() or len(content) > 4000:
+            raise ValueError('Attention notification needs 1–4000 characters')
+        last = self.store.one("SELECT * FROM messages WHERE agent_id=? AND notification_key=? ORDER BY updated DESC,id DESC LIMIT 1",
+                              (row['id'], notification_key))
+        if last and last['content'] == content and last['status'] not in ('failed', 'interrupted'):
+            return dict(agent_id=row['id'], queued=False, reason='duplicate_attention', id=last['id'])
+        message = self.store.message(row['id'], 'monitor', content, notification_key)
+        return dict(agent_id=row['id'], queued=True, id=message)
+
+    async def message_acknowledge(self, agent, messages, reason, project=None):
+        """Explicitly retire exact queued notifications without erasing history.
+
+        The caller selects IDs and content hashes; validation is atomic. A
+        dispatched/finished message, changed body or foreign agent rejects the
+        whole batch. This never interrupts a model or changes the agent's state.
+        """
+        row = self.get_agent(agent, project)
+        if (not isinstance(messages, list) or not 1 <= len(messages) <= 100
+                or not isinstance(reason, str) or not reason.strip() or len(reason) > 1000):
+            raise ValueError('Expected 1–100 message identities and an acknowledgement reason')
+        selected, seen = [], set()
+        with self.store.transaction():
+            for item in messages:
+                if not isinstance(item, dict) or set(item) != {'id', 'sha256'} or not isinstance(item['id'], str):
+                    raise ValueError('Each message needs its exact id and sha256')
+                if item['id'] in seen:
+                    raise ValueError('Duplicate message identity')
+                seen.add(item['id'])
+                message = self.store.get('messages', item['id'])
+                if (message['agent_id'] != row['id'] or not isinstance(item['sha256'], str)
+                        or hashlib.sha256(message['content'].encode()).hexdigest() != item['sha256']):
+                    raise ValueError('Message agent or content changed; inspect before acknowledging')
+                if message['status'] not in ('queued', 'acknowledged'):
+                    raise ValueError('Only queued messages can be acknowledged; active/history messages are preserved')
+                selected.append(message)
+            changed = [item['id'] for item in selected if item['status'] == 'queued']
+            for identity in changed:
+                self.store.execute("UPDATE messages SET status='acknowledged',response=?,updated=? WHERE id=?",
+                                   (reason, time.time(), identity))
+            if changed:
+                self.store.event('message.acknowledged', dict(ids=changed, reason=reason), row['project_id'], row['id'])
+        return dict(agent_id=row['id'], acknowledged=changed,
+                    already_acknowledged=[item['id'] for item in selected if item['status'] == 'acknowledged'])
 
     async def agent_pause(self, agent, project=None):
         row = self.get_agent(agent, project)
@@ -867,6 +935,17 @@ class Manager:
             self.store.execute("UPDATE runs SET priority=?,updated=? WHERE id=?", (priority, time.time(), row["id"]))
             self.order_by_priority()
             self.store.event("run.priority", {"id": row["id"], "priority": priority}, row["project_id"])
+        if row["priority"] != priority:
+            # Waiting contract requests captured the previous priority. Refresh
+            # only their CPU checks; an active source/input transfer keeps its
+            # ownership and continues. No runner or GPU job is cancelled.
+            pending = self.cancel_pending_contract_checks(row["id"])
+            if pending:
+                await asyncio.gather(*(task for _, task in pending), return_exceptions=True)
+                for key, task in pending:
+                    if self.placement_checks.get(key) is task:
+                        self.placement_checks.pop(key)
+                        self.placement_observations.pop(key, None)
         self.wake_scheduler()
         return await self.run_queue()
 
@@ -1217,6 +1296,16 @@ class Manager:
         else:
             run["placement_state"] = "blocked"
 
+    def cancel_pending_contract_checks(self, run_id):
+        """Drop obsolete CPU checks without interrupting source/input transfers."""
+        pending = []
+        for key, task in list(self.placement_checks.items()):
+            observation = self.placement_observations.get(key, {})
+            if key[0] == run_id and not task.done() and observation.get("state") == "checking":
+                task.cancel()
+                pending.append((key, task))
+        return pending
+
     def cancel_preparations(self, run_id):
         for key, task in self.placement_checks.items():
             if key[0] == run_id and not task.done():
@@ -1231,6 +1320,12 @@ class Manager:
         if not placement.has_contract(run) or not self.preparation_allowed(run["id"]):
             return
         for host_id in placement.candidates(run):
+            reasons, _ = self.host_wait(run, host_id)
+            # Preparing an unusable busy candidate on every run amplifies SSH
+            # load. Explicit node setup remains available independently.
+            codes = {code for code, _ in reasons}
+            if 'gpu_busy' in codes and not codes.intersection({'host_stale', 'host_unknown', 'host_unavailable'}):
+                continue
             key = (run["id"], host_id)
             task = self.placement_checks.get(key)
             if task and not task.done():
@@ -1239,7 +1334,10 @@ class Manager:
             waiting_for_source = observation and observation.get("retry_after_staging")
             if waiting_for_source and self.staging_owner is not None:
                 continue
-            if observation and not waiting_for_source and time.time() - observation["checked_at"] < HOST_POLL_INTERVAL:
+            blocker_codes = {item.get('code') for item in (observation or {}).get('blockers', [])}
+            retry_interval = INVALID_CONTRACT_RETRY_INTERVAL if blocker_codes.intersection(
+                {'environment_missing', 'storage_missing', 'repository_missing'}) else HOST_POLL_INTERVAL
+            if observation and not waiting_for_source and time.time() - observation["checked_at"] < retry_interval:
                 continue
             self.placement_checks[key] = asyncio.create_task(self.check_candidate(run, host_id))
 
@@ -1256,7 +1354,7 @@ class Manager:
             if not mapping and not resolved.get("repo"):
                 raise ValueError("Register this project's repository on candidate " + host["name"])
             spec = {"repo": mapping["path"] if mapping else resolved["repo"], "revision": run["revision"], "root": host["root"], **resolved}
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec, "_admission_priority": run["priority"]}, timeout=60)
             self.record_admission(key, result)
             codes = {item["code"] for item in result["blockers"]}
             if "code_missing" in codes and config.get("stage_source"):
@@ -1272,7 +1370,7 @@ class Manager:
                 await self.transport.stage_source(config["source_repo"], host, spec, timeout=600)
                 if not self.preparation_allowed(run["id"]):
                     raise asyncio.CancelledError()
-                result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+                result = await self.transport.request(host, {"op": "admit", "spec": spec, "_admission_priority": run["priority"]}, timeout=60)
                 self.record_admission(key, result)
                 codes = {item["code"] for item in result["blockers"]}
                 self.staging_owner = None
@@ -1304,7 +1402,7 @@ class Manager:
                 else:
                     source_host = self.store.get("hosts", item["source_host"]) if item["source_host"] else None
                     await self.transport.copy_file(source_host, host, item, storage, timeout=600)
-            result = await self.transport.request(host, {"op": "admit", "spec": spec}, timeout=4)
+            result = await self.transport.request(host, {"op": "admit", "spec": spec, "_admission_priority": run["priority"]}, timeout=60)
             self.record_admission(key, result)
         except asyncio.CancelledError:
             self.placement_observations[key] = {"state": "blocked", "checked_at": time.time(),
@@ -1323,6 +1421,12 @@ class Manager:
         self.wake_scheduler()
 
     async def schedule_runs(self):
+        # Reconciliation and the admission loop may both reach this method.
+        # Serialize reservation + launch delivery without holding tick_lock.
+        async with self.admission_lock:
+            await self._schedule_runs()
+
+    async def _schedule_runs(self):
         attempted = set()
         while not self.stopping:
             queued = self.store.rows("SELECT * FROM runs WHERE status='queued' ORDER BY queue_order,id")
@@ -1359,6 +1463,9 @@ class Manager:
                 self.store.execute("UPDATE runs SET status='starting',host_id=?,job_dir=?,allocated_gpus=?,error='',updated=? WHERE id=?",
                                    (selected_host, job_dir, json.dumps(gpus), time.time(), current["id"]))
                 self.store.event("run.starting", {"id": current["id"], "gpus": gpus}, current["project_id"])
+            # This job owns its allocation now. Other candidates' pending
+            # checks no longer help placement and must not delay later work.
+            self.cancel_pending_contract_checks(current["id"])
             mapping = self.store.one("SELECT path FROM host_repos WHERE host_id=? AND project_id=?",
                                      (host["id"], current["project_id"]))
             spec = {"id": current["id"], "repo": mapping["path"] if mapping else resolved["repo"], "revision": current["revision"],
@@ -1453,6 +1560,41 @@ class Manager:
             await self.schedule_runs()
             self.dispatch_messages()
 
+    async def admission_loop(self, stop):
+        """Use completed probes/contracts immediately, outside remote status ticks.
+
+        Reuses the existing scheduler and its coalesced probe/preparation due
+        times. It adds no host/status polling path and never relaxes freshness,
+        ready/hold, occupancy or transactional reservation checks.
+        """
+        while not stop.is_set():
+            self.admission_wake.clear()
+            try:
+                await self.schedule_runs()
+            except Exception as exc:
+                self.store.event('manager.error', {'error': str(exc), 'phase': 'admission'})
+            try:
+                await asyncio.wait_for(self.admission_wake.wait(), 1)
+            except TimeoutError:
+                pass
+
+    async def message_dispatch_loop(self, stop):
+        """Deliver existing messages without waiting for remote GPU inspections.
+
+        Dispatch is local and single-threaded; existing per-agent turn/native
+        delivery records prevent duplicate starts when tick also dispatches.
+        This loop performs no SSH requests or experiment submissions itself.
+        """
+        while not stop.is_set():
+            try:
+                self.dispatch_messages()
+            except Exception as exc:
+                self.store.event("manager.error", {"error": str(exc), "phase": "message_dispatch"})
+            try:
+                await asyncio.wait_for(stop.wait(), 1)
+            except TimeoutError:
+                pass
+
     async def scheduler_loop(self, stop, interval=HOST_POLL_INTERVAL):
         poll_interval = max(0.01, min(interval, ACTIVE_RUN_POLL_INTERVAL))
         while not stop.is_set():
@@ -1483,7 +1625,7 @@ class Manager:
         self.store.conn.close()
 
 
-async def serve(home, interval=300):
+async def serve(home, interval=300, acknowledge_messages=None):
     home.mkdir(parents=True, exist_ok=True, mode=0o700)
     lock = (home / "manager.lock").open("w")
     try:
@@ -1495,6 +1637,9 @@ async def serve(home, interval=300):
         path.unlink()
     manager = Manager(home)
     await manager.recover_agents()
+    if acknowledge_messages is not None:
+        plan = json.loads(Path(acknowledge_messages).read_text())
+        await manager.message_acknowledge(**plan)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -1534,12 +1679,16 @@ async def serve(home, interval=300):
 
     poll_task = asyncio.create_task(poll_hosts())
     tick_task = asyncio.create_task(manager.scheduler_loop(stop, interval))
+    dispatch_task = asyncio.create_task(manager.message_dispatch_loop(stop))
+    admission_task = asyncio.create_task(manager.admission_loop(stop))
     try:
         await stop.wait()
     finally:
         tick_task.cancel()
         poll_task.cancel()
-        await asyncio.gather(tick_task, poll_task, return_exceptions=True)
+        dispatch_task.cancel()
+        admission_task.cancel()
+        await asyncio.gather(tick_task, poll_task, dispatch_task, admission_task, return_exceptions=True)
         server.close()
         await server.wait_closed()
         for task in list(clients):

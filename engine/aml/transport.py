@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
+import heapq
+import itertools
 import json
 import os
 from pathlib import Path
@@ -12,8 +15,44 @@ import time
 
 MAX_SOURCE_PACK_BYTES = 512 * 1024 * 1024
 
+from .ssh_budget import ssh_command
+
 class HostConfigurationError(RuntimeError):
     """A node trust, interpreter or runner protocol error; other nodes can work."""
+
+
+class ContractGate:
+    """One contract at a time, ordered by native queue priority then arrival.
+
+    A cancelled waiter is removed before releasing the condition. Control
+    requests do not enter this queue and still share the two-command cap.
+    """
+    def __init__(self):
+        self.condition = asyncio.Condition()
+        self.waiters = []
+        self.sequence = itertools.count()
+        self.held = False
+
+    @contextlib.asynccontextmanager
+    async def hold(self, priority=0):
+        ticket = (-priority, next(self.sequence))
+        async with self.condition:
+            heapq.heappush(self.waiters, ticket)
+            try:
+                await self.condition.wait_for(lambda: not self.held and self.waiters[0] == ticket)
+                heapq.heappop(self.waiters)
+                self.held = True
+            except BaseException:
+                self.waiters.remove(ticket)
+                heapq.heapify(self.waiters)
+                self.condition.notify_all()
+                raise
+        try:
+            yield
+        finally:
+            async with self.condition:
+                self.held = False
+                self.condition.notify_all()
 
 
 class Transport:
@@ -32,6 +71,7 @@ class Transport:
                           "exec(compile(s,'aml-runner','exec'),"
                           "{'__name__':'__main__','AML_RUNNER_SOURCE':s})")
         self.gateway_locks = {}
+        self.gateway_contract_locks = {}
         self.gateway_failures = {}
         self.host_failures = {}
         self.connection_failures = {}
@@ -48,17 +88,21 @@ class Transport:
         if host.get("target"):
             command = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", "-o", "ConnectionAttempts=1", "--", host["target"],
                        shlex.join(command)]
-        return command
+        return ssh_command(*command[1:]) if host.get("target") else command
 
     async def request(self, host, payload, timeout=20):
         target = host.get("target")
         if not target:
             return await self._request(host, payload, timeout)
-        # Trinity worker aliases share one SSH gateway. Serialize its control
-        # requests. One unreachable node must not block healthy peers behind it.
+        # Contracts queue separately so queued preparation cannot occupy both
+        # gateway slots ahead of status, allocation probes and launch requests.
         gateway = "trinity" if target.startswith("trinity-") else target
-        lock = self.gateway_locks.setdefault(gateway, asyncio.Lock())
-        async with lock:
+        lock = self.gateway_locks.setdefault(gateway, asyncio.Semaphore(2))
+        async with contextlib.AsyncExitStack() as stack:
+            if payload.get("op") == "admit":
+                contracts = self.gateway_contract_locks.setdefault(gateway, ContractGate())
+                await stack.enter_async_context(contracts.hold(payload.get("_admission_priority", 0)))
+            await stack.enter_async_context(lock)
             host_retry_at, host_error = self.host_failures.get(target, (0, ""))
             if time.monotonic() < host_retry_at:
                 raise HostConfigurationError("Host backoff (five minutes) for " + target + ": " + host_error)
@@ -139,7 +183,7 @@ class Transport:
         source = None
         async def transfer():
             nonlocal source
-            first = await asyncio.wait_for(destination.stdout.readline(), 4)
+            first = await asyncio.wait_for(destination.stdout.readline(), 60)
             if not first or not json.loads(first).get("ready"):
                 error = (await destination.stderr.read()).decode(errors="replace")
                 raise RuntimeError(error.strip() or "Destination refused staging")
@@ -188,7 +232,7 @@ class Transport:
         source = None
         async def transfer():
             nonlocal source
-            first = await asyncio.wait_for(destination.stdout.readline(), 10)
+            first = await asyncio.wait_for(destination.stdout.readline(), 60)
             if not first:
                 _, error = await destination.communicate()
                 raise RuntimeError(error.decode(errors="replace")[-2000:] or "Node refused source staging")
